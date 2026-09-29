@@ -1,0 +1,76 @@
+/* Design tokens. Two visual modes, switched with data-theme on the portal root (SPEC §7). */
+
+:root,
+[data-theme='staff'] {
+  --bg: #f8f9fb;
+  --surface: #ffffff;
+  --rail: #f1f3f6;
+  --border: #e6e8ec;
+  --border-soft: #eceef1;
+  --text: #16181d;
+  --text-muted: #57606a;
+  --accent: #4f46e5;
+  --accent-soft: #eef0ff;
+  --accent-text: #4338ca;
+  --success: #16a34a;
+  --success-soft: #ecfdf3;
+  --success-text: #166534;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --warning-text: #92400e;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-text: #991b1b;
+  --info: #2563eb;
+  /* client-only tokens mapped to neutral staff equivalents */
+  --peach: #fef3c7;
+  --peach-text: #92400e;
+  --sky: #eef0ff;
+  --sky-text: #3730a3;
+  --sun: #fef3c7;
+  --sun-text: #92400e;
+
+  --font-body: 'Golos Text';
+  --font-heading: 'Golos Text';
+  --font-size-base: 13px;
+  --radius-btn: 6px;
+  --radius-card: 10px;
+  --radius-hero: 10px;
+}
+
+[data-theme='client'] {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --rail: #f0eee8;
+  --border: #e8e6df;
+  --border-soft: #f0eee8;
+  --text: #1c2321;
+  --text-muted: #5b6560;
+  --accent: #1f7a5a;
+  --accent-soft: #e3f0ea;
+  --accent-text: #1f7a5a;
+  --peach: #ffe3cf;
+  --peach-text: #8a3d12;
+  --sky: #e3eefc;
+  --sky-text: #1e4b8f;
+  --sun: #fff3c4;
+  --sun-text: #7a5a00;
+  /* status colours reuse the soft client palette */
+  --success: #1f7a5a;
+  --success-soft: #e3f0ea;
+  --success-text: #1f7a5a;
+  --warning: #8a3d12;
+  --warning-soft: #ffe3cf;
+  --warning-text: #8a3d12;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-text: #991b1b;
+  --info: #1e4b8f;
+
+  --font-body: 'Nunito';
+  --font-heading: 'Rubik';
+  --font-size-base: 15px;
+  --radius-btn: 14px;
+  --radius-card: 20px;
+  --radius-hero: 26px;
+}
