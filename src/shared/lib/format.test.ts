@@ -11,7 +11,7 @@ import {
   todayISO,
 } from './format';
 
-const NBSP = ' ';
+const NBSP = '\u00a0';
 const now = new Date('2026-09-29T09:00:00+05:00');
 
 describe('format', () => {

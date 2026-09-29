@@ -214,3 +214,15 @@ describe('seed', () => {
     expect(emp.filter((i) => i.appStatus !== 'active')).toHaveLength(8);
   });
 });
+
+describe('demo insured', () => {
+  it('has dental limit used over 80 %, one approved and one checking claim', async () => {
+    const { sessionId } = await loginInsured();
+    const limits = (await call('/me/limits', { sid: sessionId })).data as unknown as { category: string; used: number; limit: number }[];
+    const dental = limits.find((l) => l.category === 'dental')!;
+    expect(dental.used / dental.limit).toBeGreaterThanOrEqual(0.8);
+    const claims = (await call('/me/claims', { sid: sessionId })).data as unknown as { status: string }[];
+    expect(claims.some((c) => c.status === 'approved')).toBe(true);
+    expect(claims.some((c) => c.status === 'checking')).toBe(true);
+  });
+});

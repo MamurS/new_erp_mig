@@ -12,10 +12,11 @@ export interface ModalProps {
   footer?: ReactNode;
   className?: string;
   wide?: boolean;
+  closeLabel?: string;
 }
 
 /** Accessible modal (Radix: focus trap, Esc, aria). */
-export function Modal({ open, onOpenChange, title, description, children, footer, className, wide }: ModalProps) {
+export function Modal({ open, onOpenChange, title, description, children, footer, className, wide, closeLabel = 'Закрыть' }: ModalProps) {
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
@@ -30,7 +31,7 @@ export function Modal({ open, onOpenChange, title, description, children, footer
         >
           <div className="mb-3 flex items-start justify-between gap-4">
             <D.Title className="font-heading text-[16px] font-bold">{title}</D.Title>
-            <D.Close className="rounded-btn p-1 text-muted hover:bg-rail" aria-label="Закрыть">
+            <D.Close className="rounded-btn p-1 text-muted hover:bg-rail" aria-label={closeLabel}>
               <X className="h-4 w-4" />
             </D.Close>
           </div>

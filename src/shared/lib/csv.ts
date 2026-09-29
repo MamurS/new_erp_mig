@@ -24,7 +24,7 @@ export function exportFileName(kind: string, now: Date = new Date()): string {
 /** Triggers a browser download of text content. */
 export function downloadText(content: string | Blob, fileName: string, mime = 'text/csv;charset=utf-8'): void {
   const blob =
-    typeof content === 'string' ? new Blob(['﻿', content], { type: mime }) : content;
+    typeof content === 'string' ? new Blob(['\ufeff', content], { type: mime }) : content;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

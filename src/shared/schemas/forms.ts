@@ -124,10 +124,11 @@ export const hrEmployeeSchema = z.object({
     (v) => v.split(/\s+/).length >= 2,
     'Укажите фамилию и имя',
   ),
-  birthDate: isoDateInput.refine((v) => {
-    const y = Number(v.slice(0, 4));
-    return y >= 1920 && v <= new Date().toISOString().slice(0, 10);
-  }, 'Проверьте дату рождения'),
+  birthDate: isoDateInput.pipe(
+    z
+      .string()
+      .refine((v) => Number(v.slice(0, 4)) >= 1920 && v <= new Date().toISOString().slice(0, 10), 'Проверьте дату рождения'),
+  ),
   pinfl: pinflInput,
   phone: phoneInput,
   position: text(2, 80),

@@ -44,7 +44,7 @@ export function useImportEmployees() {
       request('/hr/employees/import', {
         method: 'POST',
         query: { commit: v.commit ? 1 : undefined },
-        body: new Blob([v.csv], { type: 'text/csv' }),
+        body: v.csv,
         headers: { 'Content-Type': 'text/csv' },
         schema: S.hrImportResult,
       }),

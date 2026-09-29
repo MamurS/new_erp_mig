@@ -22,7 +22,7 @@ describe('safeUrl', () => {
     '\u0001\u0002javascript:alert(1)',
     'java\nscript:alert(1)',
     'java\tscript:alert(1)',
-    ' javascript:alert(1)',
+    '\u00a0javascript:alert(1)',
     'data:text/html,<script>alert(1)</script>',
     'DATA:image/png;base64,AAAA',
     'vbscript:msgbox(1)',

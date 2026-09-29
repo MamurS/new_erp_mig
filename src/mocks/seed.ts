@@ -501,8 +501,9 @@ export function createSeed(opts: SeedOptions = {}): Db {
         history.push({ at: tzIso(t), actorName: source === 'app' ? 'Застрахованный (приложение)' : source === 'clinic_invoice' ? 'Клиника (счёт)' : 'Оператор', to: 'new' });
         return;
       }
-      t += int(rng, 2, 30) * 3600_000;
-      if (t > now) t = now - int(rng, 5, 60) * 60_000;
+      // Keep events chronological and in the past: spread the remaining steps over the time left.
+      const room = Math.max(60_000, (now - 60_000 - t) / (chain.length - idx + 1));
+      t += Math.min(int(rng, 2, 30) * 3600_000, room);
       const actor = actorFor(to, category, amount);
       const ev: ClaimEvent = { at: tzIso(t), actorName: actor.fullName, from: chain[idx - 1], to };
       if (to === 'approved') {
@@ -577,6 +578,11 @@ export function createSeed(opts: SeedOptions = {}): Db {
   claims.push(makeClaim(demo, 'paid', now - 75 * DAY, 'diagnostics', 640_000, false, 'app'));
   const demoApproved = claims[claims.length - 4]!;
   demoApproved.amountApproved = 245_000;
+  // Dental limit must be > 80 % used: the paid dental claim is approved in full.
+  for (const c of claims.slice(-2)) {
+    c.amountApproved = c.amountClaimed;
+    for (const h of c.history) if (h.to === 'approved') delete h.comment;
+  }
   const demoReview = claims[claims.length - 3]!;
   demoReview.slaDueAt = tzIso(now + 2 * DAY);
 
@@ -736,6 +742,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
   ];
   if (opts.xss) {
     chat.push(
+      // eslint-disable-next-line no-script-url -- XSS probe data, rendered as plain text
       { id: id(), insuredId: demo.id, from: 'operator', text: 'javascript:alert(1)', at: tzIso(now - 4 * DAY), visibleAt: tzIso(now - 4 * DAY) },
       { id: id(), insuredId: demo.id, from: 'operator', text: 'Подробнее: https://example.com', at: tzIso(now - 4 * DAY + 1000), visibleAt: tzIso(now - 4 * DAY + 1000) },
     );

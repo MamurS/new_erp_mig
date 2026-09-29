@@ -177,7 +177,7 @@ export const hrHandlers = [
       const user = requireHr(request);
       const text = await request.text();
       if (text.length > CSV_MAX_BYTES) throw new HttpError(413, 'validation', 'Файл больше 2 МБ');
-      const parsed = Papa.parse<Record<string, string>>(text.replace(/^﻿/, ''), { header: true, skipEmptyLines: true });
+      const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true });
       if (parsed.data.length > CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'В файле больше 1000 строк');
       const header = parsed.meta.fields ?? [];
       const required = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'startDate'];

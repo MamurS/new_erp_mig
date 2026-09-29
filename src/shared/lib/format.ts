@@ -7,20 +7,20 @@ const moneyFmt = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
 /** Normalises the narrow no-break space Intl uses to a regular no-break space. */
 function spaces(s: string): string {
-  return s.replace(/[  ]/g, ' ');
+  return s.replace(/[\u202f\u00a0]/g, '\u00a0');
 }
 
 /** `12 500 000 UZS` */
 export function formatMoney(value: Money, withCurrency = true): string {
   const n = spaces(moneyFmt.format(Math.round(value)));
-  return withCurrency ? `${n} UZS` : n;
+  return withCurrency ? `${n}\u00a0UZS` : n;
 }
 
 /** Compact money for KPIs: `12,5 млн UZS`. */
 export function formatMoneyShort(value: Money): string {
   const abs = Math.abs(value);
-  if (abs >= 1e9) return `${spaces((value / 1e9).toLocaleString('ru-RU', { maximumFractionDigits: 1 }))} млрд UZS`;
-  if (abs >= 1e6) return `${spaces((value / 1e6).toLocaleString('ru-RU', { maximumFractionDigits: 1 }))} млн UZS`;
+  if (abs >= 1e9) return `${spaces((value / 1e9).toLocaleString('ru-RU', { maximumFractionDigits: 1 }))}\u00a0млрд UZS`;
+  if (abs >= 1e6) return `${spaces((value / 1e6).toLocaleString('ru-RU', { maximumFractionDigits: 1 }))}\u00a0млн UZS`;
   return formatMoney(value);
 }
 

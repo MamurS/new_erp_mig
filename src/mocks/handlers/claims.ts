@@ -188,6 +188,8 @@ export const claimHandlers = [
       }
       const clinicId = url.searchParams.get('clinicId');
       if (clinicId) list = list.filter((a) => a.clinicId === clinicId);
+      const insuredId = url.searchParams.get('insuredId');
+      if (insuredId) list = list.filter((a) => a.insuredId === insuredId);
       const term = q(url);
       if (term) list = list.filter((a) => a.insuredName.toLowerCase().includes(term) || a.clinicName.toLowerCase().includes(term));
       const sorted = sortBy(

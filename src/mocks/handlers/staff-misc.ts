@@ -80,7 +80,7 @@ function reportPremiumByMonth(): PremiumByMonthRow[] {
 }
 
 function csvResponse(csv: string, kind: string): Response {
-  return new HttpResponse(`﻿${csv}`, {
+  return new HttpResponse(`\ufeff${csv}`, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${exportFileName(kind)}"`,

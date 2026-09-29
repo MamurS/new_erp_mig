@@ -18,8 +18,8 @@ export const useIntegrations = () =>
   useQuery({ queryKey: qk.integrations, queryFn: () => request('/integrations/status', { schema: S.integrations }) });
 
 // ---- clients ----
-export const useClients = (p: Params) =>
-  useQuery({ queryKey: qk.clients(p), queryFn: () => request('/clients', { query: p, schema: S.clientList }), ...list });
+export const useClients = (p: Params, enabled = true) =>
+  useQuery({ queryKey: qk.clients(p), queryFn: () => request('/clients', { query: p, schema: S.clientList }), enabled, ...list });
 export const useClient = (id: string | undefined) =>
   useQuery({ queryKey: qk.client(id ?? ''), queryFn: () => request(`/clients/${id}`, { schema: S.clientDetail }), enabled: !!id });
 export const useClientInsured = (id: string, p: Params) =>

@@ -100,6 +100,11 @@ export default tseslint.config(
     rules: { 'no-console': 'off' },
   },
   {
+    // Tests feed malicious inputs (javascript: URLs) on purpose.
+    files: ['**/*.test.{ts,tsx}', 'e2e/**/*.ts'],
+    rules: { 'no-script-url': 'off' },
+  },
+  {
     // Node-side tooling and tests may print to stdout and inspect storage.
     files: ['e2e/**/*.ts', 'tests/**/*.ts', '*.config.{js,ts}'],
     rules: { 'no-console': 'off', 'no-restricted-properties': 'off', 'no-restricted-globals': 'off' },

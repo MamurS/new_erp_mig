@@ -9,10 +9,22 @@ export interface OtpInputProps {
   invalid?: boolean;
   large?: boolean;
   autoFocus?: boolean;
+  groupLabel?: string;
+  digitLabel?: (n: number) => string;
 }
 
 /** Six separate boxes with auto-advance and paste support (SPEC §8.1). */
-export function OtpInput({ value, onChange, onComplete, disabled, invalid, large, autoFocus }: OtpInputProps) {
+export function OtpInput({
+  value,
+  onChange,
+  onComplete,
+  disabled,
+  invalid,
+  large,
+  autoFocus,
+  groupLabel = 'Код подтверждения',
+  digitLabel = (n) => `Цифра ${n}`,
+}: OtpInputProps) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? '');
 
@@ -43,7 +55,7 @@ export function OtpInput({ value, onChange, onComplete, disabled, invalid, large
   };
 
   return (
-    <div className="flex gap-2" role="group" aria-label="Код подтверждения">
+    <div className="flex gap-2" role="group" aria-label={groupLabel}>
       {digits.map((d, i) => (
         <input
           key={i}
@@ -55,8 +67,7 @@ export function OtpInput({ value, onChange, onComplete, disabled, invalid, large
           autoFocus={autoFocus && i === 0}
           inputMode="numeric"
           autoComplete={i === 0 ? 'one-time-code' : 'off'}
-          maxLength={1}
-          aria-label={`Цифра ${i + 1}`}
+          aria-label={digitLabel(i + 1)}
           aria-invalid={invalid || undefined}
           onPaste={onPaste}
           onKeyDown={(e) => onKey(i, e)}
