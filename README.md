@@ -112,6 +112,6 @@ e2e/              Playwright-сценарии SPEC §11
 4. Закрыть доступ: Cloudflare Zero Trust → Access → Applications → Self-hosted → домен проекта `*.pages.dev`. Политика: только перечисленные email коллег (вход по одноразовому коду на почту).
 5. После деплоя проверить заголовки на securityheaders.com.
 
-`public/_headers`, `public/_redirects` (SPA-фолбэк) и `public/robots.txt` уже лежат в репозитории.
+`public/_headers` и `public/robots.txt` уже лежат в репозитории. SPA-фолбэк задан в `wrangler.jsonc` (`not_found_handling: single-page-application`); для Cloudflare Pages вместо этого нужен `public/_redirects` с правилом `/*  /index.html  200` — Workers такое правило отклоняют как бесконечный цикл.
 
 Для Cloudflare Workers Builds в корне лежит `wrangler.jsonc` (статические ассеты из `dist`, SPA-режим). Переменные `VITE_USE_MOCKS=true` и `VITE_DEMO_MODE=true` задаются в настройках сборки Worker'а.
