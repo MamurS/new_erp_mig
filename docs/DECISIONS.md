@@ -22,7 +22,7 @@
 - E2E собирают отдельную сборку в `dist-e2e` с `VITE_DEMO_MODE=true VITE_SEED_XSS=true` и поднимают её через `vite preview` на порту 4174.
 - Playwright: в контейнере используется предустановленный Chromium (`/opt/pw-browsers/chromium`), в CI — `playwright install`.
 
-- К репозиторию подключены Cloudflare Workers Builds (а не Pages): добавлен `wrangler.jsonc` — статика из `dist`, SPA-фолбэк, сборка `npm run build`; `_headers` применяются так же, `_redirects` оставлен для Pages.
+- К репозиторию подключены Cloudflare Workers Builds (а не Pages): добавлен `wrangler.jsonc` — статика из `dist`, SPA-фолбэк, сборка `npm run build`; `_headers` применяются так же. `public/_redirects` из SPEC §9.3 удалён: Workers отклоняют правило `/* /index.html 200` (ошибка 100324, «Infinite loop»), а SPA-фолбэк делает `not_found_handling: single-page-application`.
 
 ## Мок-сервер
 
