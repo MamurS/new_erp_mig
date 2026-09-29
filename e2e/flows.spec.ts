@@ -4,16 +4,16 @@ import { api, login, loginStaff } from './helpers';
 test('9. Operator: confirm an appointment in the queue and take a claim to approved', async ({ page }) => {
   await loginStaff(page, 'operator');
   await page.getByRole('tab', { name: 'Записи' }).click();
-  const row = page.locator('tbody tr').filter({ has: page.getByRole('button', { name: 'Подтвердить' }) }).first();
+  const row = page.locator('tbody tr[data-row]').filter({ has: page.getByRole('button', { name: 'Подтвердить' }) }).first();
   const who = (await row.locator('td').nth(1).innerText()).trim();
   await row.getByRole('button', { name: 'Подтвердить' }).click();
   await expect(page.getByText('Запись подтверждена').first()).toBeVisible();
-  const updated = page.locator('tbody tr').filter({ hasText: who }).first();
+  const updated = page.locator('tbody tr[data-row]').filter({ hasText: who }).first();
   await expect(updated).toContainText('Подтверждена');
   await expect(page).toHaveURL(/\/staff$/);
 
   await page.goto('/staff/claims?status=new&category=medicines');
-  await page.locator('tbody tr').first().click();
+  await page.locator('tbody tr[data-row]').first().click();
   await expect(page).toHaveURL(/\/staff\/claims\/[0-9a-f-]{36}$/);
   await page.getByRole('button', { name: 'Взять в работу' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Взять в работу' }).click();
@@ -87,10 +87,10 @@ test('10. Insured: send a receipt; the upload is re-encoded without EXIF; status
 test('11. Four eyes: underwriter cannot approve own limit request', async ({ page }) => {
   await loginStaff(page, 'underwriter');
   await page.goto('/staff/limit-requests?status=pending');
-  const own = page.locator('tbody tr').filter({ hasText: 'Вы' }).first();
+  const own = page.locator('tbody tr[data-row]').filter({ hasText: 'Вы' }).first();
   await expect(own.getByRole('button', { name: 'Подтвердить' })).toBeDisabled();
   await expect(own.getByTestId('four-eyes-hint')).toHaveAttribute('aria-label', 'Нужно подтверждение другого сотрудника');
-  const other = page.locator('tbody tr').filter({ hasNotText: 'Вы' }).first();
+  const other = page.locator('tbody tr[data-row]').filter({ hasNotText: 'Вы' }).first();
   await expect(other.getByRole('button', { name: 'Подтвердить' })).toBeEnabled();
 
   const reqs = (await api(page, 'GET', '/limit-requests?status=pending')).data as { id: string; requestedByName: string }[];
