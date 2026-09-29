@@ -2,7 +2,7 @@
 // Security headers come from public/_headers; VITE_* variables are set in the Cloudflare dashboard.
 {
   "name": "new-erp-mig",
-  "compatibility_date": "2026-09-26",
+  "compatibility_date": "2025-09-01",
   "build": { "command": "npm run build" },
   "assets": {
     "directory": "./dist",
