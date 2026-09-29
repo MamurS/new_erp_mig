@@ -1,0 +1,21 @@
+// Self-hosted fonts (cyrillic + latin subsets only). No CDNs.
+import '@fontsource/golos-text/cyrillic-400.css';
+import '@fontsource/golos-text/latin-400.css';
+import '@fontsource/golos-text/cyrillic-500.css';
+import '@fontsource/golos-text/latin-500.css';
+import '@fontsource/golos-text/cyrillic-600.css';
+import '@fontsource/golos-text/latin-600.css';
+import '@fontsource/golos-text/cyrillic-700.css';
+import '@fontsource/golos-text/latin-700.css';
+import '@fontsource/jetbrains-mono/cyrillic-400.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/rubik/cyrillic-600.css';
+import '@fontsource/rubik/latin-600.css';
+import '@fontsource/nunito/cyrillic-400.css';
+import '@fontsource/nunito/latin-400.css';
+import '@fontsource/nunito/cyrillic-600.css';
+import '@fontsource/nunito/latin-600.css';
+import '@fontsource/nunito/cyrillic-700.css';
+import '@fontsource/nunito/latin-700.css';
+import '@fontsource/nunito/cyrillic-800.css';
+import '@fontsource/nunito/latin-800.css';

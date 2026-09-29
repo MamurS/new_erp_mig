@@ -1,0 +1,285 @@
+import { http } from 'msw';
+import Papa from 'papaparse';
+import { hrEmployeeSchema, hrExcludeSchema, hrInviteSchema } from '@/shared/schemas/forms';
+import type { SessionUser } from '@/shared/types';
+import type { HrImportError, HrImportResult, HrOverview, HrStats } from '@/shared/types/dto';
+import { PROGRAM_LABEL } from '@/shared/domain/labels';
+import { db, type InsuredRow } from '../db';
+import {
+  API,
+  audit,
+  body,
+  forbidden,
+  HttpError,
+  insuredLabel,
+  notFound,
+  paginate,
+  param,
+  q,
+  requireSession,
+  route,
+} from '../http';
+import { randomId } from '../rng';
+import { DAY, parseIso, tzIso } from '../time';
+import { toHrEmployee } from '../views';
+import { DEMO_STAFF } from '../credentials';
+
+export const K_ANON = 10;
+const CSV_MAX_BYTES = 2 * 1024 * 1024;
+const CSV_MAX_ROWS = 1000;
+
+function requireHr(request: Request): SessionUser & { companyId: string } {
+  const { user } = requireSession(request);
+  if (user.role !== 'hr' || !user.companyId) throw forbidden();
+  return user as SessionUser & { companyId: string };
+}
+
+function ownEmployee(user: { companyId: string }, id: string): InsuredRow {
+  const i = db().insured.find((x) => x.id === id);
+  // Another company's employee "does not exist" for this HR.
+  if (!i || i.clientId !== user.companyId) throw notFound();
+  return i;
+}
+
+function kAnon(n: number): number | null {
+  return n >= K_ANON ? n : null;
+}
+
+function addEmployee(user: SessionUser & { companyId: string }, input: ReturnType<typeof hrEmployeeSchema.parse>): InsuredRow {
+  const d = db();
+  const client = d.clients.find((c) => c.id === user.companyId)!;
+  const policy = d.policies.find((p) => p.id === client.activePolicyId);
+  if (!policy) throw new HttpError(409, 'conflict', 'У компании нет действующего полиса');
+  if (d.insured.some((i) => i.pinfl === input.pinfl && i.clientId === client.id && i.status === 'active')) {
+    throw new HttpError(409, 'conflict', 'Сотрудник с таким ПИНФЛ уже застрахован', { pinfl: 'Уже есть в списке' });
+  }
+  const row: InsuredRow = {
+    id: randomId(),
+    userId: randomId(),
+    clientId: client.id,
+    clientName: client.name,
+    policyId: policy.id,
+    fullName: input.fullName.replace(/\s+/g, ' '),
+    position: input.position,
+    birthDate: input.birthDate,
+    pinfl: input.pinfl,
+    phone: input.phone,
+    email: `new${Date.now() % 100000}@client.example.uz`,
+    payoutCard: '8600000000000000',
+    familyMembersCount: 0,
+    appStatus: 'invited',
+    myIdVerified: false,
+    attachedClinicId: d.clinics[0]!.id,
+    insuredFrom: input.startDate,
+    status: 'active',
+    addedAt: tzIso(Date.now()),
+  };
+  d.insured.push(row);
+  return row;
+}
+
+export const hrHandlers = [
+  http.get(
+    `${API}/hr/overview`,
+    route(({ request }) => {
+      const user = requireHr(request);
+      const d = db();
+      const client = d.clients.find((c) => c.id === user.companyId)!;
+      const employees = d.insured.filter((i) => i.clientId === client.id && i.status === 'active');
+      const policy = d.policies.find((p) => p.id === client.activePolicyId);
+      const nextInvoice =
+        d.invoices
+          .filter((i) => i.clientId === client.id && i.status !== 'paid')
+          .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0] ?? null;
+      const manager = d.staff.find((s) => s.id === client.managerId);
+      const out: HrOverview = {
+        companyName: client.name,
+        insuredCount: employees.length,
+        notInApp: employees.filter((i) => i.appStatus !== 'active').length,
+        nextInvoice,
+        policy: policy
+          ? { number: policy.number, program: policy.program, programName: PROGRAM_LABEL[policy.program], startDate: policy.startDate, endDate: policy.endDate }
+          : null,
+        manager: {
+          name: manager?.fullName ?? DEMO_STAFF[1]!.fullName,
+          phone: '+998 71 200 00 00',
+          email: 'dms@mig.example',
+        },
+      };
+      return out;
+    }),
+  ),
+  http.get(
+    `${API}/hr/employees`,
+    route(({ request, url }) => {
+      const user = requireHr(request);
+      const d = db();
+      let list = d.insured.filter((i) => i.clientId === user.companyId);
+      const filter = url.searchParams.get('filter');
+      if (filter === 'not_in_app') list = list.filter((i) => i.appStatus !== 'active' && i.status === 'active');
+      if (filter === 'recent') list = list.filter((i) => Date.now() - parseIso(i.addedAt) <= 30 * DAY);
+      if (filter === 'excluded') list = list.filter((i) => i.status === 'excluded');
+      const term = q(url);
+      if (term) list = list.filter((i) => i.fullName.toLowerCase().includes(term) || i.position.toLowerCase().includes(term));
+      const sort = url.searchParams.get('sort') ?? 'fullName:asc';
+      const [key, dir] = sort.split(':');
+      const mul = dir === 'desc' ? -1 : 1;
+      const getters: Record<string, (i: InsuredRow) => string | number> = {
+        fullName: (i) => i.fullName,
+        insuredFrom: (i) => i.insuredFrom,
+        familyMembersCount: (i) => i.familyMembersCount,
+        appStatus: (i) => i.appStatus,
+        addedAt: (i) => i.addedAt,
+      };
+      const get = getters[key ?? ''] ?? getters.fullName!;
+      list = [...list].sort((a, b) => {
+        const va = get(a);
+        const vb = get(b);
+        return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ru')) * mul;
+      });
+      const page = paginate(list, url);
+      return { ...page, items: page.items.map((i) => toHrEmployee(d, i)) };
+    }),
+  ),
+  http.get(
+    `${API}/hr/employees/:id`,
+    route((ctx) => {
+      const user = requireHr(ctx.request);
+      return toHrEmployee(db(), ownEmployee(user, param(ctx, 'id')));
+    }),
+  ),
+  http.post(
+    `${API}/hr/employees`,
+    route(async ({ request }) => {
+      const user = requireHr(request);
+      const input = await body(request, hrEmployeeSchema);
+      const row = addEmployee(user, input);
+      audit(user, 'hr_add_employee', { targetType: 'insured', targetId: row.id, targetLabel: insuredLabel(row.id) });
+      return toHrEmployee(db(), row);
+    }),
+  ),
+  http.delete(
+    `${API}/hr/employees/:id`,
+    route(async (ctx) => {
+      const user = requireHr(ctx.request);
+      const i = ownEmployee(user, param(ctx, 'id'));
+      const { excludeFrom } = await body(ctx.request, hrExcludeSchema);
+      if (i.status === 'excluded') throw new HttpError(409, 'conflict', 'Сотрудник уже исключён');
+      i.status = 'excluded';
+      i.excludedFrom = excludeFrom;
+      audit(user, 'hr_exclude_employee', { targetType: 'insured', targetId: i.id, targetLabel: insuredLabel(i.id), reason: `С ${excludeFrom.split('-').reverse().join('.')}` });
+      return toHrEmployee(db(), i);
+    }),
+  ),
+  http.post(
+    `${API}/hr/employees/import`,
+    route(async ({ request, url }) => {
+      const user = requireHr(request);
+      const text = await request.text();
+      if (text.length > CSV_MAX_BYTES) throw new HttpError(413, 'validation', 'Файл больше 2 МБ');
+      const parsed = Papa.parse<Record<string, string>>(text.replace(/^﻿/, ''), { header: true, skipEmptyLines: true });
+      if (parsed.data.length > CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'В файле больше 1000 строк');
+      const header = parsed.meta.fields ?? [];
+      const required = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'startDate'];
+      const missing = required.filter((h) => !header.includes(h));
+      if (missing.length) throw new HttpError(422, 'validation', `В файле нет колонок: ${missing.join(', ')}. Скачайте шаблон`);
+      const errors: HrImportError[] = [];
+      const valid: ReturnType<typeof hrEmployeeSchema.parse>[] = [];
+      const seen = new Set<string>();
+      parsed.data.forEach((row, idx) => {
+        const r = hrEmployeeSchema.safeParse(row);
+        if (!r.success) {
+          for (const issue of r.error.issues) errors.push({ row: idx + 2, field: String(issue.path[0] ?? ''), message: issue.message });
+          return;
+        }
+        if (seen.has(r.data.pinfl)) {
+          errors.push({ row: idx + 2, field: 'pinfl', message: 'ПИНФЛ повторяется в файле' });
+          return;
+        }
+        seen.add(r.data.pinfl);
+        valid.push(r.data);
+      });
+      let added = 0;
+      if (url.searchParams.get('commit') === '1') {
+        for (const v of valid) {
+          try {
+            addEmployee(user, v);
+            added += 1;
+          } catch {
+            /* duplicates are skipped */
+          }
+        }
+        audit(user, 'hr_import', { targetType: 'client', targetId: user.companyId, targetLabel: `Импорт: ${added} сотр.` });
+      }
+      const out: HrImportResult = { valid: valid.length, added, errors };
+      return out;
+    }),
+  ),
+  http.post(
+    `${API}/hr/employees/invite`,
+    route(async ({ request }) => {
+      const user = requireHr(request);
+      const { ids } = await body(request, hrInviteSchema);
+      const d = db();
+      const own = d.insured.filter((i) => i.clientId === user.companyId && i.status === 'active');
+      const targets = ids === 'all_not_in_app' ? own.filter((i) => i.appStatus !== 'active') : own.filter((i) => ids.includes(i.id));
+      if (ids !== 'all_not_in_app' && targets.length !== ids.length) throw notFound();
+      for (const t of targets) if (t.appStatus === 'not_invited') t.appStatus = 'invited';
+      return { invited: targets.filter((t) => t.appStatus !== 'active').length };
+    }),
+  ),
+  http.get(
+    `${API}/hr/documents`,
+    route(({ request }) => {
+      const user = requireHr(request);
+      // Internal renewal offers (КП) are not shown to the client's HR.
+      return db().documents.filter((x) => x.clientId === user.companyId && !x.title.startsWith('КП'));
+    }),
+  ),
+  http.get(
+    `${API}/hr/invoices`,
+    route(({ request }) => {
+      const user = requireHr(request);
+      return db()
+        .invoices.filter((i) => i.clientId === user.companyId)
+        .sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1));
+    }),
+  ),
+  http.get(
+    `${API}/hr/stats`,
+    route(({ request }) => {
+      const user = requireHr(request);
+      const d = db();
+      const employees = d.insured.filter((i) => i.clientId === user.companyId && i.status === 'active');
+      const ids = new Set(employees.map((e) => e.id));
+      const now = Date.now();
+      const qStart = new Date(now);
+      qStart.setMonth(Math.floor(qStart.getMonth() / 3) * 3, 1);
+      const claimsQ = d.claims.filter((c) => ids.has(c.insuredId) && parseIso(c.createdAt) >= qStart.getTime()).length;
+      const appUsers = employees.filter((e) => e.appStatus === 'active').length;
+      const client = d.clients.find((c) => c.id === user.companyId)!;
+      const year = new Date(now).getFullYear();
+      const groups: [string, number, number][] = [
+        ['до 30 лет', 0, 29],
+        ['30–44 года', 30, 44],
+        ['45 лет и старше', 45, 200],
+      ];
+      const ageOf = (b: string) => year - Number(b.slice(0, 4));
+      const out: HrStats = {
+        insuredCount: employees.length,
+        appUsers: kAnon(employees.length) === null ? null : appUsers,
+        claimsThisQuarter: kAnon(employees.length) === null ? null : claimsQ,
+        budgetUsedPct: client.lossRatio === null || employees.length < K_ANON ? null : Math.round(client.lossRatio * 100),
+        byAgeGroup: groups.map(([label, a, b]) => ({ label, value: kAnon(employees.filter((e) => ageOf(e.birthDate) >= a && ageOf(e.birthDate) <= b).length) })),
+        byAppStatus: [
+          { label: 'Пользуются приложением', value: kAnon(appUsers) },
+          { label: 'Приглашены', value: kAnon(employees.filter((e) => e.appStatus === 'invited').length) },
+          { label: 'Не приглашены', value: kAnon(employees.filter((e) => e.appStatus === 'not_invited').length) },
+        ],
+        k: K_ANON,
+      };
+      return out;
+    }),
+  ),
+];
+
