@@ -1,7 +1,7 @@
 version: 2
 updates:
-  # Minor and patch updates arrive as one grouped PR per week.
-  # Major versions are ignored: they need code changes and are planned by hand (see docs/DECISIONS.md).
+  # npm: all minor and patch updates arrive together as one PR per week.
+  # Major versions are ignored for now: they need code migrations and are planned by hand (see docs/DECISIONS.md).
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -9,16 +9,19 @@ updates:
     open-pull-requests-limit: 5
     groups:
       npm-minor-and-patch:
+        patterns: ['*']
         update-types: [minor, patch]
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+
+  # GitHub Actions: updates arrive as a separate grouped PR per week; major versions are ignored as well.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     groups:
-      actions:
+      github-actions:
         patterns: ['*']
     ignore:
       - dependency-name: '*'
