@@ -1,0 +1,125 @@
+import { createBrowserRouter, Outlet, type RouteObject } from 'react-router-dom';
+import type { ComponentType } from 'react';
+import { RequireAuth, RequireRole, RootRedirect } from '@/shared/auth/guards';
+import { INSURED_CARD_ROLES, sectionRoles } from '@/features/staff/nav';
+import { RootLayout } from './RootLayout';
+import { ForbiddenPage, NotFoundPage, RouteErrorPage } from './pages';
+
+type Loader = () => Promise<{ default: ComponentType }>;
+const lazy = (load: Loader) => async () => ({ Component: (await load()).default });
+
+const guarded = (path: string, roles: Parameters<typeof RequireRole>[0]['roles'], children: RouteObject[]): RouteObject => ({
+  path,
+  element: (
+    <RequireRole roles={roles}>
+      <Outlet />
+    </RequireRole>
+  ),
+  children,
+});
+
+const staffRoutes: RouteObject[] = [
+  { index: true, lazy: lazy(() => import('@/features/staff/pages/DashboardPage')) },
+  guarded('clients', sectionRoles('/staff/clients'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/pages/ClientsPage')) },
+    { path: ':clientId', lazy: lazy(() => import('@/features/staff/pages/ClientCardPage')) },
+  ]),
+  guarded('insured/:insuredId', INSURED_CARD_ROLES, [{ index: true, lazy: lazy(() => import('@/features/staff/pages/InsuredCardPage')) }]),
+  guarded('policies', sectionRoles('/staff/policies'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/pages/PoliciesPage')) },
+    { path: ':policyId', lazy: lazy(() => import('@/features/staff/pages/PolicyCardPage')) },
+  ]),
+  guarded('claims', sectionRoles('/staff/claims'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/pages/ClaimsPage')) },
+    { path: ':claimId', lazy: lazy(() => import('@/features/staff/pages/ClaimCardPage')) },
+  ]),
+  guarded('appointments', sectionRoles('/staff/appointments'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/AppointmentsPage')) }]),
+  guarded('clinics', sectionRoles('/staff/clinics'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ClinicsPage')) }]),
+  guarded('limit-requests', sectionRoles('/staff/limit-requests'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/LimitRequestsPage')) }]),
+  guarded('reports', sectionRoles('/staff/reports'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ReportsPage')) }]),
+  guarded('audit', sectionRoles('/staff/audit'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/AuditPage')) }]),
+  guarded('admin/users', sectionRoles('/staff/admin/users'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/UsersPage')) }]),
+];
+
+const hrRoutes: RouteObject[] = [
+  { index: true, lazy: lazy(() => import('@/features/hr/pages/EmployeesPage')) },
+  { path: 'employees/new', lazy: lazy(() => import('@/features/hr/pages/AddEmployeePage')) },
+  { path: 'import', lazy: lazy(() => import('@/features/hr/pages/ImportPage')) },
+  { path: 'documents', lazy: lazy(() => import('@/features/hr/pages/DocumentsPage')) },
+  { path: 'stats', lazy: lazy(() => import('@/features/hr/pages/StatsPage')) },
+  { path: 'help', lazy: lazy(() => import('@/features/hr/pages/HelpPage')) },
+];
+
+const appRoutes: RouteObject[] = [
+  { index: true, lazy: lazy(() => import('@/features/insured/pages/HomePage')) },
+  { path: 'card', lazy: lazy(() => import('@/features/insured/pages/CardPage')) },
+  { path: 'booking', lazy: lazy(() => import('@/features/insured/pages/BookingPage')) },
+  { path: 'appointments', lazy: lazy(() => import('@/features/insured/pages/AppointmentsPage')) },
+  { path: 'claims', lazy: lazy(() => import('@/features/insured/pages/ClaimsPage')) },
+  { path: 'claims/new', lazy: lazy(() => import('@/features/insured/pages/NewClaimPage')) },
+  { path: 'claims/:claimId', lazy: lazy(() => import('@/features/insured/pages/ClaimStatusPage')) },
+  { path: 'clinics', lazy: lazy(() => import('@/features/insured/pages/ClinicsPage')) },
+  { path: 'chat', lazy: lazy(() => import('@/features/insured/pages/ChatPage')) },
+  { path: 'profile', lazy: lazy(() => import('@/features/insured/pages/ProfilePage')) },
+];
+
+export const routes: RouteObject[] = [
+  {
+    element: <RootLayout />,
+    errorElement: <RouteErrorPage />,
+    children: [
+      { path: '/', element: <RootRedirect /> },
+      { path: '/login', lazy: lazy(() => import('@/features/auth/LoginPage')) },
+      { path: '/login/otp', lazy: lazy(() => import('@/features/auth/OtpPage')) },
+      {
+        path: '/app',
+        lazy: lazy(() => import('@/features/insured/InsuredRoot')),
+        children: [
+          { path: 'login', lazy: lazy(() => import('@/features/insured/pages/PhoneLoginPage')) },
+          { path: 'login/code', lazy: lazy(() => import('@/features/insured/pages/CodePage')) },
+          {
+            path: 'consent',
+            element: (
+              <RequireAuth portal="app">
+                <Outlet />
+              </RequireAuth>
+            ),
+            children: [{ index: true, lazy: lazy(() => import('@/features/insured/pages/ConsentPage')) }],
+          },
+          {
+            element: (
+              <RequireAuth portal="app">
+                <Outlet />
+              </RequireAuth>
+            ),
+            children: [{ lazy: lazy(() => import('@/features/insured/AppLayout')), children: appRoutes }],
+          },
+        ],
+      },
+      {
+        path: '/staff',
+        element: (
+          <RequireAuth portal="staff">
+            <Outlet />
+          </RequireAuth>
+        ),
+        children: [{ lazy: lazy(() => import('@/features/staff/StaffLayout')), children: staffRoutes }],
+      },
+      {
+        path: '/hr',
+        element: (
+          <RequireAuth portal="hr">
+            <Outlet />
+          </RequireAuth>
+        ),
+        children: [{ lazy: lazy(() => import('@/features/hr/HrLayout')), children: hrRoutes }],
+      },
+      { path: '/403', element: <ForbiddenPage /> },
+      { path: '*', element: <NotFoundPage /> },
+    ],
+  },
+];
+
+export function createRouter() {
+  return createBrowserRouter(routes, { future: { v7_relativeSplatPath: true } });
+}

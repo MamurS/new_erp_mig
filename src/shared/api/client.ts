@@ -85,7 +85,7 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
   const sid = getSessionId();
   if (sid) headers.Authorization = `Bearer ${sid}`;
   let body: BodyInit | undefined;
-  if (opts.body instanceof FormData) body = opts.body;
+  if (opts.body instanceof FormData || opts.body instanceof Blob) body = opts.body;
   else if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(opts.body);

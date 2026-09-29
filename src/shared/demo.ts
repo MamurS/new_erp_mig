@@ -1,0 +1,22 @@
+/*
+ * Registry for the optional demo module. Nothing in the app imports src/demo directly:
+ * main.tsx loads it dynamically only when VITE_DEMO_MODE === 'true'.
+ */
+import type { ComponentType } from 'react';
+
+export interface DemoModule {
+  DemoBanner: ComponentType;
+  StaffLoginHints: ComponentType<{ onPick: (email: string, password: string) => void }>;
+  PhoneLoginHint: ComponentType<{ onPick: (phone: string) => void }>;
+  CodeHint: ComponentType;
+}
+
+let current: DemoModule | null = null;
+
+export function registerDemo(m: DemoModule): void {
+  current = m;
+}
+
+export function getDemo(): DemoModule | null {
+  return current;
+}

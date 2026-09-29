@@ -15,3 +15,9 @@ export function safeNext(next: string | null | undefined, fallback: string): str
     return fallback;
   }
 }
+
+/** Keeps the post-login target inside the role's own portal (e.g. `/staff/...` for staff). */
+export function targetAfterLogin(next: string | null | undefined, home: string): string {
+  const safe = safeNext(next, home);
+  return safe === home || safe.startsWith(`${home}/`) || safe.startsWith(`${home}?`) ? safe : home;
+}

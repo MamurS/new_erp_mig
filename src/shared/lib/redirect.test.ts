@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeNext } from './redirect';
+import { safeNext, targetAfterLogin } from './redirect';
 
 describe('safeNext', () => {
   it.each([
@@ -25,5 +25,14 @@ describe('safeNext', () => {
     const out = safeNext(input, '/fb');
     if (input === '/%0a') expect(out).toBe('/%0a');
     else expect(out).toBe('/fb');
+  });
+});
+
+describe('targetAfterLogin', () => {
+  it('keeps targets inside the portal', () => {
+    expect(targetAfterLogin('/staff/claims', '/staff')).toBe('/staff/claims');
+    expect(targetAfterLogin('/hr', '/staff')).toBe('/staff');
+    expect(targetAfterLogin('/staffer', '/staff')).toBe('/staff');
+    expect(targetAfterLogin('//evil.com', '/app')).toBe('/app');
   });
 });
