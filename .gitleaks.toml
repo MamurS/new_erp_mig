@@ -1,0 +1,7 @@
+# Demo credentials from SPEC §2 are intentionally public and fictional.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fictional demo accounts of the prototype"
+regexes = ['''Demo-2026!''']

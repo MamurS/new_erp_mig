@@ -1,0 +1,57 @@
+import { expect, test } from '@playwright/test';
+import { login, ROLES, HOME } from './helpers';
+
+test.describe('1. Login with every role, MFA, logout', () => {
+  for (const role of ROLES) {
+    test(`${role}: login → home → logout`, async ({ page }) => {
+      await login(page, role);
+      await expect(page).toHaveURL(new RegExp(`${HOME[role]}$`));
+      if (role === 'insured') {
+        await page.goto('/app/profile');
+        await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+        await expect(page).toHaveURL(/\/app\/login/);
+      } else if (role === 'hr') {
+        await page.getByRole('button', { name: 'Меню пользователя' }).click();
+        await page.getByRole('menuitem', { name: 'Выйти' }).click();
+        await expect(page).toHaveURL(/\/login/);
+      } else {
+        await page.getByRole('button', { name: 'Профиль и выход' }).click();
+        await page.getByRole('menuitem', { name: 'Выйти' }).click();
+        await expect(page).toHaveURL(/\/login/);
+      }
+      // Session is gone: protected pages redirect to login again.
+      await page.goto(HOME[role]);
+      await expect(page).toHaveURL(/login/);
+    });
+  }
+
+  test('wrong password shows a generic error', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill('operator@demo.mig.uz');
+    await page.getByLabel('Пароль').fill('wrong-password');
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(page.getByText('Неверный email или пароль')).toBeVisible();
+  });
+
+  test('logout is synchronised between two tabs', async ({ context }) => {
+    const a = await context.newPage();
+    const b = await context.newPage();
+    await login(a, 'operator');
+    await login(b, 'operator');
+    await a.getByRole('button', { name: 'Профиль и выход' }).click();
+    await a.getByRole('menuitem', { name: 'Выйти' }).click();
+    await expect(a).toHaveURL(/\/login/);
+    await expect(b).toHaveURL(/\/login/);
+    await expect(b.getByText('Вы вышли в другой вкладке')).toBeVisible();
+  });
+
+  test('?next= keeps internal targets only', async ({ page }) => {
+    await page.goto('/staff/claims?status=new');
+    await expect(page).toHaveURL(/\/login\?next=/);
+    await page.getByLabel('Email').fill('operator@demo.mig.uz');
+    await page.getByLabel('Пароль').fill('Demo-2026!');
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await page.getByLabel('Цифра 1').fill('000000');
+    await expect(page).toHaveURL(/\/staff\/claims\?status=new$/);
+  });
+});

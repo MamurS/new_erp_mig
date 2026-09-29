@@ -31,11 +31,11 @@ export async function loginAs(role: Role): Promise<void> {
 
 export function renderRoutes(routes: RouteObject[], initialEntry: string, opts: { i18n?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: 0 } } });
-  const router = createMemoryRouter(routes, { initialEntries: [initialEntry] });
+  const router = createMemoryRouter(routes, { initialEntries: [initialEntry], future: { v7_relativeSplatPath: true } });
   const tree: ReactElement = (
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

@@ -57,7 +57,8 @@ describe('BookingPage wizard', () => {
     await loginAs('insured');
     renderRoutes(routes, '/app/booking?specialty=dentist', { i18n: true });
     expect(await screen.findByText('Шаг 2 из 3')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Сегодня' })).toHaveAttribute('aria-pressed', 'true');
+    // Today is preselected, or tomorrow after 17:00 when clinics no longer have free slots.
+    expect(screen.getAllByRole('button', { pressed: true }).some((b) => /Сегодня|Завтра/.test(b.textContent ?? ''))).toBe(true);
   });
 
   it('ignores unsafe entry params and starts at step 1', async () => {

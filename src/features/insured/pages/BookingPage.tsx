@@ -1,3 +1,4 @@
+import { tashkentParts } from '@/shared/lib/format';
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, MapPin } from 'lucide-react';
@@ -94,7 +95,8 @@ export default function BookingPage() {
   const [step, setStep] = useState<0 | 1 | 2 | 3>(entry.specialty ? 1 : 0);
   const [specialty, setSpecialty] = useState<Specialty | null>(entry.specialty);
   const days = useMemo(() => nextDays(4), []);
-  const [day, setDay] = useState<string>(days[0] ?? '');
+  // Clinics take patients until 18:00: late in the day, start with tomorrow.
+  const [day, setDay] = useState<string>(() => (tashkentParts(new Date()).hh >= 17 ? days[1] : days[0]) ?? '');
   const [picked, setPicked] = useState<SlotPick | null>(null);
   const [error, setError] = useState<string | null>(null);
   const book = useBookAppointment();

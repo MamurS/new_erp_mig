@@ -21,7 +21,7 @@ export const CSV_COLUMN_LABEL: Record<CsvColumn, string> = {
 
 /** Template with the header row and one example row of fictional data. */
 export function templateCsv(): string {
-  return toCsv(CSV_COLUMNS, [['Тестов Тест Тестович', '15.03.1990', '31503900000000', '998 90 000 00 00', 'Менеджер', '01.11.2026']]);
+  return toCsv(CSV_COLUMNS, [['Тестов Тест Тестович', '15.03.1990', '31503901234567', '998 90 123 45 67', 'Менеджер', '01.11.2026']]);
 }
 
 /** Returns a human-readable problem with the chosen file, or null when it can be read. */

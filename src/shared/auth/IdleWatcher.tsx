@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
 import { formatCountdown } from '@/shared/lib/format';
@@ -12,13 +12,16 @@ import { useUser } from './session';
 export function IdleWatcher() {
   const user = useUser();
   const [left, setLeft] = useState<number | null>(null);
+  // While the warning is open, background clicks/keys do not count: only «Продолжить работу» does.
+  const warning = useRef(false);
+  const role = user?.role;
 
   useEffect(() => {
-    if (!user) return;
-    const { timeoutMs, warnMs } = idleLimitsFor(user.role);
+    if (!role) return;
+    const { timeoutMs, warnMs } = idleLimitsFor(role);
     markActivity();
     const onActivity = () => {
-      if (left === null) markActivity();
+      if (!warning.current) markActivity();
     };
     window.addEventListener('pointerdown', onActivity);
     window.addEventListener('keydown', onActivity);
@@ -26,11 +29,14 @@ export function IdleWatcher() {
       const idle = Date.now() - lastActivity();
       if (idle >= timeoutMs) {
         clearInterval(t);
+        warning.current = false;
         setLeft(null);
         void logout('Сессия завершена из-за неактивности. Войдите снова');
       } else if (warnMs !== null && idle >= warnMs) {
+        warning.current = true;
         setLeft(Math.ceil((timeoutMs - idle) / 1000));
       } else {
+        warning.current = false;
         setLeft(null);
       }
     }, 1000);
@@ -39,9 +45,10 @@ export function IdleWatcher() {
       window.removeEventListener('pointerdown', onActivity);
       window.removeEventListener('keydown', onActivity);
     };
-  }, [user, left === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [role]);
 
   const stay = () => {
+    warning.current = false;
     markActivity();
     setLeft(null);
     void request('/auth/me').catch(() => undefined);
