@@ -1,0 +1,11 @@
+// Cloudflare Workers static-assets deployment (Workers Builds runs `npx wrangler deploy`).
+// Security headers come from public/_headers; VITE_* variables are set in the Cloudflare dashboard.
+{
+  "name": "new-erp-mig",
+  "compatibility_date": "2026-09-26",
+  "build": { "command": "npm run build" },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

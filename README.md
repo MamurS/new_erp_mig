@@ -113,3 +113,5 @@ e2e/              Playwright-сценарии SPEC §11
 5. После деплоя проверить заголовки на securityheaders.com.
 
 `public/_headers`, `public/_redirects` (SPA-фолбэк) и `public/robots.txt` уже лежат в репозитории.
+
+Для Cloudflare Workers Builds в корне лежит `wrangler.jsonc` (статические ассеты из `dist`, SPA-режим). Переменные `VITE_USE_MOCKS=true` и `VITE_DEMO_MODE=true` задаются в настройках сборки Worker'а.

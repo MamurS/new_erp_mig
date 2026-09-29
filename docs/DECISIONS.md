@@ -22,6 +22,8 @@
 - E2E собирают отдельную сборку в `dist-e2e` с `VITE_DEMO_MODE=true VITE_SEED_XSS=true` и поднимают её через `vite preview` на порту 4174.
 - Playwright: в контейнере используется предустановленный Chromium (`/opt/pw-browsers/chromium`), в CI — `playwright install`.
 
+- К репозиторию подключены Cloudflare Workers Builds (а не Pages): добавлен `wrangler.jsonc` — статика из `dist`, SPA-фолбэк, сборка `npm run build`; `_headers` применяются так же, `_redirects` оставлен для Pages.
+
 ## Мок-сервер
 
 - Состояние мок-сервера (БД и сессии) сохраняется в `sessionStorage` вкладки (`src/mocks/persist.ts`, отдельное исключение в ESLint), чтобы перезагрузка не выкидывала пользователя и не теряла изменения. Это эмуляция серверной БД, а не клиентская сессия; байты загруженных файлов не сохраняются.
