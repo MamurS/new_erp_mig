@@ -15,12 +15,14 @@ import { policyHandlers } from './policies';
 import { meHandlers } from './me';
 import { assistHandlers } from './assist';
 import { staffAssistanceHandlers } from './staff-assistance';
-import { demoHandlers } from './demo';
 import { API, notFound, route } from '../http';
 
+/*
+ * Demo-only endpoints (`./demo`) are not listed here: the browser worker imports them dynamically
+ * with VITE_DEMO_MODE, and the test server adds them itself, so a build without the flag has none of their code.
+ */
 export const handlers = [
   ...authHandlers,
-  ...(import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.MODE === 'test' ? demoHandlers : []),
   ...dashboardHandlers,
   ...policyHandlers,
   ...clientHandlers,

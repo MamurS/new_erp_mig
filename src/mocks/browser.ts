@@ -14,7 +14,9 @@ export async function startMocks(): Promise<void> {
       logger.warn('Mock service worker update skipped');
     }
   });
-  const worker = setupWorker(...handlers);
+  // Demo endpoints exist only in demo builds: without the flag this import is dropped from the bundle.
+  const demo = import.meta.env.VITE_DEMO_MODE === 'true' ? (await import('./handlers/demo')).demoHandlers : [];
+  const worker = setupWorker(...demo, ...handlers);
   await worker.start({
     serviceWorker: { url: '/mockServiceWorker.js' },
     onUnhandledRequest: 'bypass',

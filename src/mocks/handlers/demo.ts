@@ -11,6 +11,8 @@ import { randomToken } from '../rng';
 import { CARD_TOKEN_TTL_MS, formatShortCode, shortCodeFrom } from '@/shared/domain/clinics';
 import { currentAssistance } from '../assistance-core';
 
+const DEMO = { noFailures: true };
+
 export const demoHandlers = [
   http.post(
     `${API}/__demo/reset`,
@@ -20,7 +22,7 @@ export const demoHandlers = [
       const fresh = resetDb();
       fresh.sessions = sessions;
       return { ok: true as const };
-    }),
+    }, DEMO),
   ),
   http.post(
     `${API}/__demo/failures`,
@@ -28,7 +30,7 @@ export const demoHandlers = [
       const { enabled } = await body(request, z.object({ enabled: z.boolean() }));
       mockConfig.failures = enabled;
       return { ok: true as const, enabled };
-    }),
+    }, DEMO),
   ),
   // MIS simulator: a card code of the demo insured person, as if the patient showed the app at the desk.
   http.post(
@@ -48,10 +50,10 @@ export const demoHandlers = [
       const row = { token: randomToken(18), shortCode: shortCodeFrom(bytes), insuredId: me.id, expiresAt: Date.now() + CARD_TOKEN_TTL_MS };
       d.cardTokens.push(row);
       return { shortCode: formatShortCode(row.shortCode) };
-    }),
+    }, DEMO),
   ),
   http.get(
     `${API}/__demo/failures`,
-    route(() => ({ ok: true as const, enabled: mockConfig.failures })),
+    route(() => ({ ok: true as const, enabled: mockConfig.failures }), DEMO),
   ),
 ];
