@@ -9,6 +9,7 @@ import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { EmptyState, QueryState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { KpDownloadButton } from '@/features/kp/KpDownloadButton';
 import { documentPdf, downloadPdf, invoicePdf, pdfFileName } from '../pdf';
 import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
 
@@ -24,6 +25,7 @@ const DOC_KIND: Record<ClientDocument['kind'], string> = {
   invoice: 'Счёт',
   act: 'Акт',
   program: 'Программа',
+  kp: 'Коммерческое предложение',
 };
 
 export default function DocumentsPage() {
@@ -91,13 +93,46 @@ export default function DocumentsPage() {
         />
       </section>
 
+      <HrCard className="mb-8 p-0">
+        <div className="border-b border-border-soft p-5">
+          <HrSectionTitle>Коммерческие предложения</HrSectionTitle>
+        </div>
+        <QueryState query={documents} skeleton={<SkeletonRows rows={2} className="p-5" />}>
+          {(docs) => {
+            const offers = docs.filter((d) => d.kind === 'kp' && d.kpId);
+            return offers.length === 0 ? (
+              <EmptyState title="Предложений пока нет" description="Здесь появятся коммерческие предложения, которые отправит МИГ" />
+            ) : (
+              <ul className="divide-y divide-border-soft" aria-label="Коммерческие предложения">
+                {offers.map((d) => (
+                  <li key={d.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-peach text-peach-text" aria-hidden>
+                      <FileText className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{d.title}</p>
+                      <p className="text-[13px] text-muted">Программа GOLD · {formatDate(d.createdAt)}</p>
+                    </div>
+                    <Button asChild variant="secondary" className="h-11 px-4 text-[14px] font-semibold">
+                      <Link to={`/hr/kp/${d.kpId}`}>Открыть</Link>
+                    </Button>
+                    <KpDownloadButton kpId={d.kpId!} number={d.title} className="h-11 px-4 text-[14px] font-semibold" />
+                  </li>
+                ))}
+              </ul>
+            );
+          }}
+        </QueryState>
+      </HrCard>
+
       <HrCard className="p-0">
         <div className="border-b border-border-soft p-5">
           <HrSectionTitle>Документы полиса</HrSectionTitle>
         </div>
         <QueryState query={documents} skeleton={<SkeletonRows rows={4} className="p-5" />}>
-          {(docs) =>
-            docs.length === 0 ? (
+          {(all) => {
+            const docs = all.filter((d) => d.kind !== 'kp');
+            return docs.length === 0 ? (
               <EmptyState title="Документов пока нет" description="Запросите документы у менеджера МИГ" action={<HelpLink />} />
             ) : (
               <ul className="divide-y divide-border-soft">
@@ -119,8 +154,8 @@ export default function DocumentsPage() {
                   </li>
                 ))}
               </ul>
-            )
-          }
+            );
+          }}
         </QueryState>
       </HrCard>
     </>

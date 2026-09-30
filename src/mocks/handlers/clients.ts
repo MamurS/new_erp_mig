@@ -1,14 +1,13 @@
 import { http } from 'msw';
-import { clientCreateSchema, clientPatchSchema, renewalOfferSchema } from '@/shared/schemas/forms';
+import { clientCreateSchema, clientPatchSchema } from '@/shared/schemas/forms';
 import type { ClientDetail, ClientListResponse, PolicyDetail } from '@/shared/types/dto';
-import type { AuditEntry, ClientDocument, Policy } from '@/shared/types';
+import type { AuditEntry, Policy } from '@/shared/types';
 import { CLAIM_CATEGORY_LABEL } from '@/shared/domain/claims';
-import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { formatMoney } from '@/shared/lib/format';
-import { db, type ClientRow } from '../db';
+import { db, hasLiveKp, type ClientRow } from '../db';
 import { API, body, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
-import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
+import { parseIso, tzIso } from '../time';
 import { toClient, toInsuredListItem } from '../views';
 import { PROGRAMS } from '../programs';
 import { renewalsWithoutOffer } from './dashboard';
@@ -118,7 +117,10 @@ export const clientHandlers = [
       }
       const activity: ClientDetail['activity'] = [];
       const policy = d.policies.find((p) => p.id === c.activePolicyId);
-      if (d.renewalOffers.includes(c.id)) activity.push({ at: tzIso(now - 3600_000), text: 'Подготовлено КП на продление' });
+      for (const k of d.kp.filter((x) => x.clientId === c.id)) {
+        activity.push({ at: k.createdAt, text: `Подготовлено ${k.number}` });
+        if (k.sentAt) activity.push({ at: k.sentAt, text: `${k.number} отправлено клиенту` });
+      }
       const lastClaim = [...claims].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
       if (lastClaim) activity.push({ at: lastClaim.createdAt, text: `Новый убыток ${lastClaim.number}` });
       const lastInv = d.invoices.filter((i) => i.clientId === c.id).sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1))[0];
@@ -133,7 +135,7 @@ export const clientHandlers = [
           ...v,
         })),
         activity: activity.sort((a, b) => (a.at < b.at ? 1 : -1)),
-        hasRenewalOffer: d.renewalOffers.includes(c.id),
+        hasRenewalOffer: hasLiveKp(d, c.id),
       };
       return detail;
     }),
@@ -182,11 +184,12 @@ export const clientHandlers = [
       const d = db();
       const policyIds = new Set(d.policies.filter((p) => p.clientId === c.id).map((p) => p.id));
       const claimIds = new Set(d.claims.filter((x) => x.clientId === c.id).map((x) => x.id));
+      const kpIds = new Set(d.kp.filter((x) => x.clientId === c.id).map((x) => x.id));
       const list: AuditEntry[] = d.audit
         .filter(
           (e) =>
             e.targetId &&
-            (e.targetId === c.id || policyIds.has(e.targetId) || claimIds.has(e.targetId)) &&
+            (e.targetId === c.id || policyIds.has(e.targetId) || claimIds.has(e.targetId) || kpIds.has(e.targetId)) &&
             e.action !== 'reveal_pii' &&
             e.action !== 'open_medical',
         )
@@ -255,28 +258,6 @@ export const clientHandlers = [
         documents: d.documents.filter((x) => x.clientId === p.clientId).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
       };
       return detail;
-    }),
-  ),
-  http.post(
-    `${API}/policies/:id/renewal-offer`,
-    route(async (ctx) => {
-      const { user } = requireSession(ctx.request);
-      requirePermission(user, 'policies.write');
-      const d = db();
-      const p = d.policies.find((x) => x.id === param(ctx, 'id'));
-      if (!p) throw notFound();
-      const input = await body(ctx.request, renewalOfferSchema);
-      const start = Math.max(parseIso(p.endDate) + DAY, startOfDay(Date.now()));
-      const doc: ClientDocument = {
-        id: randomId(),
-        clientId: p.clientId,
-        title: `КП на продление: «${PROGRAM_LABEL[input.program]}», ${formatMoney(input.premium)}, ${input.termMonths} мес. с ${isoDay(start).split('-').reverse().join('.')}`,
-        kind: 'program',
-        createdAt: isoDay(Date.now()),
-      };
-      d.documents.unshift(doc);
-      if (!d.renewalOffers.includes(p.clientId)) d.renewalOffers.push(p.clientId);
-      return doc;
     }),
   ),
 ];

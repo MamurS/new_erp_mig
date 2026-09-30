@@ -25,7 +25,7 @@ import type {
 import { chance, digits, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
 import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from './db';
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './credentials';
-import { at, DAY, isoDay, startOfDay, tzIso } from './time';
+import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
 
 // ---------- dictionaries ----------
@@ -326,7 +326,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
         { id: id(), clientId, title: `Акт сверки за квартал`, kind: 'act', createdAt: isoDay(today - int(rng, 5, 60) * DAY) },
       );
     } else if (status === 'negotiation') {
-      documents.push({ id: id(), clientId, title: 'Коммерческое предложение (черновик)', kind: 'program', createdAt: isoDay(today - int(rng, 3, 30) * DAY) });
+      // Offers are real KP documents now (d.kp); the draw is kept so the rest of the seed stays stable.
+      int(rng, 3, 30);
     }
   });
 
@@ -338,6 +339,14 @@ export function createSeed(opts: SeedOptions = {}): Db {
   // one more HR in another company (used for isolation checks)
   const otherHrClient = clients.find((c, i) => i !== demoIdx && c.status === 'active')!;
   hrUsers.push({ id: id(), email: 'hr@client-b.example.uz', password: DEMO_PASSWORD, fullName: 'Ольга Лебедева', companyId: otherHrClient.id });
+  // HR of the earliest renewal that waits for an offer (the first «Подготовить КП» in the queue).
+  // A fixed id keeps the RNG sequence, and with it the rest of the seed, unchanged.
+  const renewalHrClient = clients
+    .filter((c) => c.id !== demoClient.id && c.activePolicyId && c.renewalDate && parseIso(c.renewalDate) >= today && parseIso(c.renewalDate) - today <= 30 * DAY)
+    .sort((x, y) => (x.renewalDate! < y.renewalDate! ? -1 : 1))[0];
+  if (renewalHrClient) {
+    hrUsers.push({ id: 'b1e2c3d4-5f60-4a71-8b92-a3b4c5d6e7f8', email: 'hr@renewal.example.uz', password: DEMO_PASSWORD, fullName: 'Дилноза Каримова', companyId: renewalHrClient.id });
+  }
 
   // ---------- insured ----------
   const insured: InsuredRow[] = [];
@@ -771,7 +780,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
     grants: [],
     loginFailures: [],
     lockouts: [],
-    renewalOffers: [],
+    kp: [],
+    kpSeq: 122,
     integrationsSeed: int(rng, 1, 1000),
   };
 }

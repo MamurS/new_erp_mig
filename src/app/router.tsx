@@ -1,6 +1,6 @@
 import { createBrowserRouter, Outlet, type RouteObject } from 'react-router-dom';
 import type { ComponentType } from 'react';
-import { RequireAuth, RequireRole, RootRedirect } from '@/shared/auth/guards';
+import { RequireAuth, RequirePermission, RequireRole, RootRedirect } from '@/shared/auth/guards';
 import { INSURED_CARD_ROLES, sectionRoles } from '@/features/staff/nav';
 import { RootLayout } from './RootLayout';
 import { ForbiddenPage, NotFoundPage, RouteErrorPage } from './pages';
@@ -23,7 +23,17 @@ const staffRoutes: RouteObject[] = [
   guarded('clients', sectionRoles('/staff/clients'), [
     { index: true, lazy: lazy(() => import('@/features/staff/pages/ClientsPage')) },
     { path: ':clientId', lazy: lazy(() => import('@/features/staff/pages/ClientCardPage')) },
+    {
+      path: ':clientId/kp/new',
+      element: (
+        <RequirePermission action="kp.create">
+          <Outlet />
+        </RequirePermission>
+      ),
+      children: [{ index: true, lazy: lazy(() => import('@/features/kp/KpPage')) }],
+    },
   ]),
+  guarded('kp/:kpId', sectionRoles('/staff/clients'), [{ index: true, lazy: lazy(() => import('@/features/kp/KpPage')) }]),
   guarded('insured/:insuredId', INSURED_CARD_ROLES, [{ index: true, lazy: lazy(() => import('@/features/staff/pages/InsuredCardPage')) }]),
   guarded('policies', sectionRoles('/staff/policies'), [
     { index: true, lazy: lazy(() => import('@/features/staff/pages/PoliciesPage')) },
@@ -46,6 +56,7 @@ const hrRoutes: RouteObject[] = [
   { path: 'employees/new', lazy: lazy(() => import('@/features/hr/pages/AddEmployeePage')) },
   { path: 'import', lazy: lazy(() => import('@/features/hr/pages/ImportPage')) },
   { path: 'documents', lazy: lazy(() => import('@/features/hr/pages/DocumentsPage')) },
+  { path: 'kp/:kpId', lazy: lazy(() => import('@/features/kp/KpViewPage')) },
   { path: 'stats', lazy: lazy(() => import('@/features/hr/pages/StatsPage')) },
   { path: 'help', lazy: lazy(() => import('@/features/hr/pages/HelpPage')) },
 ];

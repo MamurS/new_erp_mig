@@ -6,6 +6,7 @@ import { insuredHandlers } from './insured';
 import { claimHandlers } from './claims';
 import { staffMiscHandlers } from './staff-misc';
 import { hrHandlers } from './hr';
+import { kpHandlers } from './kp';
 import { meHandlers } from './me';
 import { demoHandlers } from './demo';
 import { API, notFound, route } from '../http';
@@ -18,6 +19,7 @@ export const handlers = [
   ...insuredHandlers,
   ...claimHandlers,
   ...staffMiscHandlers,
+  ...kpHandlers,
   ...hrHandlers,
   ...meHandlers,
   // Unknown API routes behave like a real server: 404.

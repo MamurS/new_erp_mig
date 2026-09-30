@@ -10,6 +10,8 @@ import type {
   ISODateTime,
   Insured,
   Invoice,
+  KpDocument,
+  KpParams,
   LimitCategory,
   LimitUsage,
   Money,
@@ -244,4 +246,10 @@ export interface RecognizeResult {
   amount: Money;
   serviceDate: ISODate;
 }
+/** GET /api/clients/:id/kp-defaults — prefilled parameters plus what the offer letter needs. */
+export interface KpDefaults {
+  params: KpParams;
+  letter: Pick<KpDocument, 'clientName' | 'clientLegalForm' | 'clientInn' | 'policyId' | 'createdByName' | 'createdByEmail'>;
+}
+
 export type { LimitUsage };

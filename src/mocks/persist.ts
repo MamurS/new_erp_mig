@@ -16,13 +16,37 @@ export function loadSnapshot(): Db | null {
     if (!raw) return null;
     const db = JSON.parse(raw) as Snapshot;
     const sessions = JSON.parse(sessionStorage.getItem(SESS_KEY) ?? '[]') as Db['sessions'];
-    return { ...db, sessions };
+    // Snapshots from older builds have no KP tables.
+    return { ...db, kp: db.kp ?? [], kpSeq: db.kpSeq ?? 122, sessions };
   } catch {
     return null;
   }
 }
 
 let dbTimer: ReturnType<typeof setTimeout> | null = null;
+let pending: (() => Db) | null = null;
+
+function writeDb(get: () => Db): void {
+  try {
+    const { sessions: _s, ...rest } = get();
+    const files = rest.files.map(({ bytes: _b, ...f }) => f);
+    sessionStorage.setItem(DB_KEY, JSON.stringify({ ...rest, files }));
+  } catch {
+    /* quota exceeded: state stays in memory only */
+  }
+}
+
+// A reload right after a change must not lose it: flush the pending write when the page goes away.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (!pending) return;
+    if (dbTimer) clearTimeout(dbTimer);
+    dbTimer = null;
+    const get = pending;
+    pending = null;
+    writeDb(get);
+  });
+}
 
 export function saveSessions(db: Db): void {
   try {
@@ -34,19 +58,18 @@ export function saveSessions(db: Db): void {
 
 export function scheduleSaveDb(get: () => Db): void {
   if (dbTimer) clearTimeout(dbTimer);
+  pending = get;
   dbTimer = setTimeout(() => {
     dbTimer = null;
-    try {
-      const { sessions: _s, ...rest } = get();
-      const files = rest.files.map(({ bytes: _b, ...f }) => f);
-      sessionStorage.setItem(DB_KEY, JSON.stringify({ ...rest, files }));
-    } catch {
-      /* quota exceeded: state stays in memory only */
-    }
+    pending = null;
+    writeDb(get);
   }, 400);
 }
 
 export function clearSnapshot(): void {
+  if (dbTimer) clearTimeout(dbTimer);
+  dbTimer = null;
+  pending = null;
   try {
     sessionStorage.removeItem(DB_KEY);
     sessionStorage.removeItem(SESS_KEY);

@@ -1,7 +1,7 @@
 import { http } from 'msw';
 import Papa from 'papaparse';
 import { hrEmployeeSchema, hrExcludeSchema, hrInviteSchema } from '@/shared/schemas/forms';
-import type { SessionUser } from '@/shared/types';
+import type { ClientDocument, SessionUser } from '@/shared/types';
 import type { HrImportError, HrImportResult, HrOverview, HrStats } from '@/shared/types/dto';
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { db, type InsuredRow } from '../db';
@@ -232,8 +232,13 @@ export const hrHandlers = [
     `${API}/hr/documents`,
     route(({ request }) => {
       const user = requireHr(request);
-      // Internal renewal offers (КП) are not shown to the client's HR.
-      return db().documents.filter((x) => x.clientId === user.companyId && !x.title.startsWith('КП'));
+      const d = db();
+      // Offers are shown to HR only once sent; drafts and revoked offers stay internal.
+      const offers: ClientDocument[] = d.kp
+        .filter((k) => k.clientId === user.companyId && k.status === 'sent')
+        .map((k) => ({ id: k.id, clientId: k.clientId, title: `Коммерческое предложение ${k.number}`, kind: 'kp', kpId: k.id, createdAt: (k.sentAt ?? k.createdAt).slice(0, 10) }));
+      const docs = d.documents.filter((x) => x.clientId === user.companyId && x.kind !== 'kp');
+      return [...offers, ...docs];
     }),
   ),
   http.get(

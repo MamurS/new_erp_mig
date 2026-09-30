@@ -16,7 +16,7 @@ import { Card } from '@/shared/ui/page';
 import { EmptyState, ErrorState, Skeleton, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { KpiCard } from '../components/KpiCard';
-import { RenewalOfferDialog } from '../components/RenewalOfferDialog';
+import { kpNewPath } from '@/features/kp/paths';
 import { useTopbar } from '../topbar';
 
 const TABS = [
@@ -49,7 +49,6 @@ export default function DashboardPage() {
   const queue = useQueue(tab);
   const confirm = useConfirmAppointment();
   const [done, setDone] = useState<Map<string, QueueItem>>(new Map());
-  const [offerFor, setOfferFor] = useState<QueueItem | null>(null);
   const [showAll, setShowAll] = useState(false);
   const showMedical = user.role === 'admin' || user.role === 'doctor_expert';
 
@@ -72,7 +71,7 @@ export default function DashboardPage() {
         toast.error(errorMessage(e));
       }
     } else if (row.action === 'prepare_offer') {
-      setOfferFor(row);
+      navigate(kpNewPath(row.entityId, row.policyId));
     } else {
       openRow(row);
     }
@@ -206,14 +205,6 @@ export default function DashboardPage() {
         <IntegrationsCard />
         {showMedical && <MedicalAccessCard />}
       </aside>
-      {offerFor?.policyId && (
-        <RenewalOfferDialog
-          open={!!offerFor}
-          onOpenChange={(o) => !o && setOfferFor(null)}
-          policyId={offerFor.policyId}
-          clientName={offerFor.who}
-        />
-      )}
     </div>
   );
 }

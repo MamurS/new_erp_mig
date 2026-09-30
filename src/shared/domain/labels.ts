@@ -83,6 +83,10 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   hr_add_employee: 'HR: добавлен сотрудник',
   hr_exclude_employee: 'HR: исключён сотрудник',
   hr_import: 'HR: импорт списка',
+  kp_created: 'КП создано',
+  kp_sent: 'КП отправлено клиенту',
+  kp_revoked: 'КП отозвано',
+  kp_downloaded: 'КП скачано',
 };
 
 export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin'] as const;
