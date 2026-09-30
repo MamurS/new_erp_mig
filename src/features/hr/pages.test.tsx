@@ -50,7 +50,7 @@ describe('HR pages', () => {
     expect(rows[1]).toHaveAttribute('data-status', 'invalid');
     expect(screen.getByText('ПИНФЛ: ПИНФЛ — 14 цифр')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Добавить 1 сотрудника' }));
-    expect(await screen.findByText('Добавлено 1 сотрудник, пропущено 1 строка с ошибками')).toBeInTheDocument();
+    expect(await screen.findByText('Отправлено заявок: 1, пропущено 1 строка')).toBeInTheDocument();
   });
 
   it('import: rejects non-CSV files', async () => {

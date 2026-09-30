@@ -45,7 +45,7 @@ describe('AddEmployeePage', () => {
     expect(pinfl).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('masks input, submits a valid employee, shows the toast and returns to the list', async () => {
+  it('masks input, sends a change request for a valid employee, shows the toast and returns to the list', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.type(screen.getByLabelText('ФИО'), 'Тестов Тест Тестович');
@@ -58,6 +58,6 @@ describe('AddEmployeePage', () => {
     await user.type(screen.getByLabelText('Дата начала страхования'), '01112026');
     await user.click(screen.getByRole('button', { name: 'Добавить сотрудника' }));
     expect(await screen.findByText('list')).toBeInTheDocument();
-    expect(screen.getByText('Сотрудник добавлен, приглашение отправлено')).toBeInTheDocument();
+    expect(screen.getByText('Заявка отправлена в МИГ — сотрудник появится в полисе после подтверждения')).toBeInTheDocument();
   });
 });

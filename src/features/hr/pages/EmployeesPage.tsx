@@ -11,7 +11,7 @@ import { formatDate, formatMoney, formatNumber, formatRelativeDays, plural, toda
 import { downloadText, exportFileName } from '@/shared/lib/csv';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button, buttonVariants } from '@/shared/ui/button';
-import { Avatar } from '@/shared/ui/chips';
+import { Avatar, Chip } from '@/shared/ui/chips';
 import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/shared/ui/dropdown';
 import { SearchInput } from '@/shared/ui/search-input';
@@ -30,6 +30,7 @@ const FILTERS = [
   { value: '', label: 'Все' },
   { value: 'not_in_app', label: 'Не в приложении' },
   { value: 'recent', label: 'Добавлены недавно' },
+  { value: 'requests', label: 'Заявки' },
 ] as const;
 
 export default function EmployeesPage() {
@@ -75,6 +76,17 @@ export default function EmployeesPage() {
             <p className="truncate text-[13px] text-muted">
               {e.status === 'excluded' && e.excludedFrom ? `Исключён с ${formatDate(e.excludedFrom)}` : e.position}
             </p>
+            {e.pendingExclusionFrom && (
+              <p className="text-[13px] font-medium text-warning-text" data-testid="pending-exclusion">
+                Исключение с {formatDate(e.pendingExclusionFrom)} ждёт подтверждения МИГ
+              </p>
+            )}
+            {e.status === 'rejected' && e.rejectionReason && <p className="text-[13px] text-danger-text">Причина: {e.rejectionReason}</p>}
+            {e.status === 'active' && e.rejectionReason && (
+              <p className="text-[13px] text-danger-text" data-testid="exclusion-rejected">
+                МИГ отклонил исключение: {e.rejectionReason}
+              </p>
+            )}
           </div>
         </div>
       ),
@@ -92,7 +104,16 @@ export default function EmployeesPage() {
       key: 'app',
       header: 'Приложение',
       sortKey: 'appStatus',
-      cell: (e) => (e.status === 'excluded' ? <span className="text-muted">Исключён</span> : <AppStatusChip status={e.appStatus} />),
+      cell: (e) =>
+        e.status === 'excluded' ? (
+          <span className="text-muted">Исключён</span>
+        ) : e.status === 'pending' ? (
+          <Chip kind="sun">Ждёт подтверждения МИГ</Chip>
+        ) : e.status === 'rejected' ? (
+          <Chip kind="danger">Отклонено МИГ</Chip>
+        ) : (
+          <AppStatusChip status={e.appStatus} />
+        ),
     },
     {
       key: 'menu',
@@ -100,7 +121,7 @@ export default function EmployeesPage() {
       align: 'right',
       className: 'w-14',
       cell: (e) =>
-        e.status === 'excluded' ? null : (
+        e.status !== 'active' ? null : (
           <Menu>
             <MenuTrigger asChild>
               <Button variant="ghost" size="icon-lg" aria-label="Действия с сотрудником">
@@ -112,7 +133,7 @@ export default function EmployeesPage() {
                 <Send className="h-4 w-4" aria-hidden />
                 Пригласить
               </MenuItem>
-              <MenuItem className="min-h-11" danger onSelect={() => setExcluding(e)}>
+              <MenuItem className="min-h-11" danger disabled={!!e.pendingExclusionFrom} onSelect={() => setExcluding(e)}>
                 <UserMinus className="h-4 w-4" aria-hidden />
                 Исключить с даты…
               </MenuItem>
@@ -344,7 +365,7 @@ function ExcludeDialog({ employee, onClose }: { employee: HrEmployee; onClose: (
       { id: employee.id, excludeFrom: parsed.data.excludeFrom },
       {
         onSuccess: () => {
-          toast.success('Сотрудник исключён');
+          toast.success('Заявка на исключение отправлена в МИГ');
           onClose();
         },
         onError: (err) => setError(errorMessage(err)),
@@ -361,11 +382,11 @@ function ExcludeDialog({ employee, onClose }: { employee: HrEmployee; onClose: (
       title="Исключить сотрудника?"
       description={
         <>
-          {employee.fullName} перестанет быть застрахованным с выбранной даты: полис и карточка для клиники перестанут действовать, записи к врачу
-          и новые возмещения станут недоступны. Отменить исключение можно только через менеджера МИГ.
+          Заявка уйдёт в МИГ. После подтверждения {employee.fullName} перестанет быть застрахованным с выбранной даты: полис и карточка для клиники
+          перестанут действовать, записи к врачу и новые возмещения станут недоступны. Возврат премии за оставшийся срок МИГ оформит допсоглашением.
         </>
       }
-      confirmLabel="Исключить"
+      confirmLabel="Отправить заявку"
       danger
       loading={exclude.isPending}
       onConfirm={submit}

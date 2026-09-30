@@ -78,6 +78,8 @@ const DOC_KIND_EN: Record<ClientDocument['kind'], string> = {
   act: 'Act',
   program: 'Insurance program',
   kp: 'Commercial offer',
+  endorsement: 'Policy endorsement',
+  insured_list: 'List of insured persons',
 };
 
 const FOOTER = ['', 'Mosaic Insurance Group - voluntary medical insurance (DMS).', 'Demo document generated in the browser. It contains no personal data of employees.'];

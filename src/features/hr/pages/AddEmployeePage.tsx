@@ -40,7 +40,7 @@ export default function AddEmployeePage() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await add.mutateAsync(values);
-      toast.success('Сотрудник добавлен, приглашение отправлено');
+      toast.success('Заявка отправлена в МИГ — сотрудник появится в полисе после подтверждения');
       navigate('/hr');
     } catch (e) {
       const fields = e instanceof ApiRequestError ? e.fields : undefined;

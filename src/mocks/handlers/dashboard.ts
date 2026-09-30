@@ -257,6 +257,33 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
       });
     }
   }
+  if ((type === 'all' || type === 'policy_change') && can(user, 'policy_changes.decide')) {
+    // One row per client with pending changes of the insured list (POLICY_SPEC §5.2).
+    const byClient = new Map<string, { name: string; count: number; oldest: string; delta: number; firstId: string }>();
+    for (const c of d.policyChanges.filter((x) => x.status === 'pending')) {
+      const g = byClient.get(c.clientId) ?? { name: c.clientName, count: 0, oldest: c.requestedAt, delta: 0, firstId: c.id };
+      g.count += 1;
+      g.delta += c.premiumDelta;
+      if (c.requestedAt <= g.oldest) {
+        g.oldest = c.requestedAt;
+        g.firstId = c.id;
+      }
+      byClient.set(c.clientId, g);
+    }
+    for (const [clientId, g] of byClient) {
+      items.push({
+        id: g.firstId,
+        type: 'policy_change',
+        entityId: clientId,
+        who: g.name,
+        details: `Изменения состава: ${g.count} · ${g.delta >= 0 ? 'доплата' : 'возврат'} ${formatMoney(Math.abs(g.delta))}`,
+        status: 'Ждёт решения',
+        statusTone: 'warning',
+        dueAt: tzIso(parseIso(g.oldest) + 2 * DAY),
+        action: 'open',
+      });
+    }
+  }
   return items.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
 }
 
@@ -283,7 +310,7 @@ export const dashboardHandlers = [
       const { user } = requireSession(request);
       requireStaff(user);
       const t = url.searchParams.get('type');
-      const type = (['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response'] as const).find((x) => x === t) ?? 'all';
+      const type = (['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change'] as const).find((x) => x === t) ?? 'all';
       return queueFor(db(), user, type, Date.now()).slice(0, 50);
     }),
   ),

@@ -223,3 +223,47 @@ export const registryLineDecisionSchema = z.discriminatedUnion('decision', [
   z.object({ decision: z.literal('accept') }),
   z.object({ decision: z.literal('reject'), reason: text(3, 300) }),
 ]);
+
+// ---- policy issuance and changes of the insured list (POLICY_SPEC) ----
+const programInput = z.enum(['basic', 'standard', 'standard_plus', 'premium'], { errorMap: () => ({ message: 'Выберите программу' }) });
+const tariffInput = z.number({ invalid_type_error: 'Укажите тариф' }).int().min(100_000, 'Не меньше 100 000').max(1_000_000_000, 'Слишком большой тариф');
+
+/** One row of the initial list of insured persons (CSV). */
+export const policyListRowSchema = hrEmployeeSchema.omit({ startDate: true }).extend({
+  familyMembers: z
+    .union([z.string(), z.number(), z.undefined()])
+    .transform((v) => (v === undefined || String(v).trim() === '' ? 0 : Number(String(v).trim())))
+    .pipe(z.number({ invalid_type_error: 'Число от 0 до 10' }).int('Число от 0 до 10').min(0, 'Число от 0 до 10').max(10, 'Число от 0 до 10')),
+});
+
+export const policyTermsSchema = z
+  .object({
+    program: programInput,
+    startDate: isoDateInput,
+    endDate: isoDateInput,
+    tariff: z.object({ employee: tariffInput, family: tariffInput }),
+  })
+  .superRefine((v, ctx) => {
+    if (v.endDate < v.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'Окончание раньше начала' });
+  });
+
+export const policyHrInviteSchema = z.object({ fullName: text(5, 120, 'Укажите ФИО'), email: emailInput });
+
+export const policyIssueSchema = z.object({
+  program: programInput,
+  startDate: isoDateInput,
+  endDate: isoDateInput,
+  tariff: z.object({ employee: tariffInput, family: tariffInput }),
+  csv: z.string().min(1, 'Загрузите список застрахованных').max(5 * 1024 * 1024, 'Файл больше 5 МБ'),
+  hr: policyHrInviteSchema.optional(),
+});
+
+export const policyChangeDecisionSchema = z
+  .object({
+    ids: z.array(uuid).min(1, 'Выберите заявки').max(200, 'Не больше 200 заявок за раз'),
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().trim().max(300, 'Не больше 300 символов').optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.decision === 'reject' && (v.reason ?? '').length < 5) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: 'Укажите причину: минимум 5 символов' });
+  });

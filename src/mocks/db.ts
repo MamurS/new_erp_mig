@@ -13,6 +13,7 @@ import type {
   ClinicRole,
   GuaranteeLetter,
   IntegrationClient,
+  PolicyChange,
   PriceListItem,
   Registry,
   Specialty,
@@ -113,6 +114,11 @@ export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMask
   excludedFrom?: string;
   userId: UUID;
 }
+/** Change request of the insured list; personal data of a new person stays on the server only. */
+export interface PolicyChangeRow extends PolicyChange {
+  requestedById: UUID;
+  newPerson?: { birthDate: string; pinfl: string; phone: string };
+}
 export interface ClaimRow extends Claim {
   /** Plain-language reason for the insured person (no internal comments). */
   publicRejectionReason?: string;
@@ -205,6 +211,7 @@ export interface Db {
   clinicEvents: ClinicEventRow[];
   misSlots: { clinicId: UUID; specialty: Specialty; startsAt: string; durationMin: number; doctorRef?: string }[];
   integrationsSeed: number;
+  policyChanges: PolicyChangeRow[];
 }
 
 let current: Db | null = null;

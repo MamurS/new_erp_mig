@@ -5,9 +5,9 @@ import { api, login } from './helpers';
 const FORBIDDEN_ROUTES: Record<Role, string[]> = {
   operator: ['/staff/reports', '/staff/audit', '/staff/admin/users', '/hr', '/app'],
   underwriter: ['/staff/claims', '/staff/appointments', '/staff/audit', '/staff/admin/users', '/hr'],
-  doctor_expert: ['/staff/clients', '/staff/policies', '/staff/reports', '/staff/audit', '/staff/limit-requests'],
+  doctor_expert: ['/staff/clients', '/staff/policies', '/staff/reports', '/staff/audit', '/staff/limit-requests', '/staff/policy-changes'],
   accountant: ['/staff/insured/00000000-0000-4000-8000-000000000000', '/staff/appointments', '/staff/clinics', '/staff/audit', '/staff/limit-requests'],
-  admin: ['/staff/claims', '/staff/policies', '/staff/appointments', '/staff/reports', '/staff/insured/00000000-0000-4000-8000-000000000000'],
+  admin: ['/staff/claims', '/staff/policies', '/staff/appointments', '/staff/reports', '/staff/insured/00000000-0000-4000-8000-000000000000', '/staff/policy-changes'],
   hr: ['/staff', '/staff/clients', '/app', '/clinic'],
   clinic_registrar: ['/staff', '/staff/clinics', '/hr', '/app', '/clinic/integration', '/clinic/registries', '/clinic/users'],
   clinic_admin: ['/staff', '/staff/registries', '/hr', '/app'],

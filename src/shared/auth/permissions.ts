@@ -96,6 +96,9 @@ export const PERMISSIONS = {
   'kp.send': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
   'kp.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
   'hr.employees.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
+  'policy_changes.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
+  'policy_changes.request': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
+  'policy_changes.decide': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
   // ---- clinics (CLINIC_SPEC §8) ----
   'clinic.check_patient': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own' },
   'clinic.appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own' },

@@ -99,6 +99,9 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   integration_key_created: 'Создан ключ API клиники',
   integration_key_revoked: 'Отозван ключ API клиники',
   webhook_created: 'Создан вебхук клиники',
+  policy_issued: 'Оформлен полис',
+  policy_change_requested: 'HR: заявка на изменение состава',
+  policy_change_decided: 'Решение по изменению состава',
 };
 
 export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin'] as const;

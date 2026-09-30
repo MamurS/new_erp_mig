@@ -1,18 +1,4 @@
-import {
-  LayoutDashboard,
-  Building2,
-  FileText,
-  Receipt,
-  CalendarClock,
-  Hospital,
-  SlidersHorizontal,
-  BarChart3,
-  ScrollText,
-  Users,
-  FileCheck,
-  ClipboardList,
-  type LucideIcon,
-} from 'lucide-react';
+import { BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FileText, Hospital, LayoutDashboard, Receipt, ScrollText, SlidersHorizontal, type LucideIcon, UserPlus, Users } from 'lucide-react';
 import type { StaffRole } from '@/shared/types';
 
 export interface StaffSection {
@@ -36,6 +22,7 @@ export const STAFF_SECTIONS: StaffSection[] = [
   { path: '/staff/clinics', label: 'Клиники', icon: Hospital, roles: ['operator', 'underwriter', 'doctor_expert', 'admin'], inNav: true },
   { path: '/staff/guarantees', label: 'Гарантийные письма', icon: FileCheck, roles: ['operator', 'doctor_expert'], inNav: true },
   { path: '/staff/registries', label: 'Реестры клиник', icon: ClipboardList, roles: ['operator', 'accountant'], inNav: true },
+  { path: '/staff/policy-changes', label: 'Изменения состава', icon: UserPlus, roles: ['operator', 'underwriter', 'accountant'], inNav: true },
   { path: '/staff/limit-requests', label: 'Изменения лимитов', icon: SlidersHorizontal, roles: ['operator', 'underwriter'], inNav: true },
   { path: '/staff/reports', label: 'Отчёты', icon: BarChart3, roles: ['underwriter', 'accountant'], inNav: true },
   { path: '/staff/audit', label: 'Журнал аудита', icon: ScrollText, roles: ['admin'], inNav: true },

@@ -2,9 +2,10 @@ import { http } from 'msw';
 import Papa from 'papaparse';
 import { hrEmployeeSchema, hrExcludeSchema, hrInviteSchema } from '@/shared/schemas/forms';
 import type { ClientDocument, SessionUser } from '@/shared/types';
-import type { HrImportError, HrImportResult, HrOverview, HrStats } from '@/shared/types/dto';
+import type { HrEmployee, HrImportError, HrImportResult, HrOverview, HrStats } from '@/shared/types/dto';
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
-import { db, type InsuredRow } from '../db';
+import { db, type InsuredRow, type PolicyChangeRow } from '../db';
+import { requestChange } from '../policy-core';
 import {
   API,
   audit,
@@ -19,8 +20,7 @@ import {
   requireSession,
   route,
 } from '../http';
-import { randomId } from '../rng';
-import { DAY, parseIso, tzIso } from '../time';
+import { DAY, parseIso } from '../time';
 import { toHrEmployee } from '../views';
 import { DEMO_STAFF } from '../credentials';
 
@@ -45,37 +45,50 @@ function kAnon(n: number): number | null {
   return n >= K_ANON ? n : null;
 }
 
-function addEmployee(user: SessionUser & { companyId: string }, input: ReturnType<typeof hrEmployeeSchema.parse>): InsuredRow {
+function clientOfHr(user: { companyId: string }) {
+  return db().clients.find((c) => c.id === user.companyId)!;
+}
+
+/** HR adds a person: a change request for MIG, not a new insured person (POLICY_SPEC §5.1). */
+function requestAdd(user: SessionUser & { companyId: string }, input: ReturnType<typeof hrEmployeeSchema.parse>): PolicyChangeRow {
   const d = db();
-  const client = d.clients.find((c) => c.id === user.companyId)!;
-  const policy = d.policies.find((p) => p.id === client.activePolicyId);
-  if (!policy) throw new HttpError(409, 'conflict', 'У компании нет действующего полиса');
+  const client = clientOfHr(user);
   if (d.insured.some((i) => i.pinfl === input.pinfl && i.clientId === client.id && i.status === 'active')) {
     throw new HttpError(409, 'conflict', 'Сотрудник с таким ПИНФЛ уже застрахован', { pinfl: 'Уже есть в списке' });
   }
-  const row: InsuredRow = {
-    id: randomId(),
-    userId: randomId(),
-    clientId: client.id,
-    clientName: client.name,
-    policyId: policy.id,
-    fullName: input.fullName.replace(/\s+/g, ' '),
+  return requestChange(d, user, client, 'add', {
+    effectiveDate: input.startDate,
+    fullName: input.fullName,
     position: input.position,
-    birthDate: input.birthDate,
-    pinfl: input.pinfl,
-    phone: input.phone,
-    email: `new${Date.now() % 100000}@client.example.uz`,
-    payoutCard: '8600000000000000',
-    familyMembersCount: 0,
-    appStatus: 'invited',
-    myIdVerified: false,
-    attachedClinicId: d.clinics[0]!.id,
-    insuredFrom: input.startDate,
-    status: 'active',
-    addedAt: tzIso(Date.now()),
+    familyMembers: 0,
+    newPerson: { birthDate: input.birthDate, pinfl: input.pinfl, phone: input.phone },
+  });
+}
+
+function requestRow(d: ReturnType<typeof db>, r: PolicyChangeRow): HrEmployee {
+  const policy = d.policies.find((p) => p.id === r.policyId);
+  return {
+    id: r.id,
+    fullName: r.fullName,
+    position: r.position,
+    program: policy?.program ?? 'standard',
+    insuredFrom: r.effectiveDate,
+    familyMembersCount: r.familyMembers,
+    appStatus: 'not_invited',
+    status: r.status === 'rejected' ? 'rejected' : 'pending',
+    addedAt: r.requestedAt,
+    rejectionReason: r.rejectionReason,
   };
-  d.insured.push(row);
-  return row;
+}
+
+function employeeView(d: ReturnType<typeof db>, i: InsuredRow): HrEmployee {
+  const pending = d.policyChanges.find((c) => c.kind === 'exclude' && c.status === 'pending' && c.insuredId === i.id);
+  // The latest exclusion rejected in the last 30 days: HR sees why (POLICY_SPEC §5.1).
+  const rejected =
+    !pending && i.status === 'active'
+      ? d.policyChanges.find((c) => c.kind === 'exclude' && c.status === 'rejected' && c.insuredId === i.id && Date.now() - parseIso(c.decidedAt ?? c.requestedAt) <= 30 * DAY)
+      : undefined;
+  return { ...toHrEmployee(d, i), ...(pending ? { pendingExclusionFrom: pending.effectiveDate } : {}), ...(rejected ? { rejectionReason: rejected.rejectionReason } : {}) };
 }
 
 export const hrHandlers = [
@@ -114,17 +127,30 @@ export const hrHandlers = [
     route(({ request, url }) => {
       const user = requireHr(request);
       const d = db();
-      let list = d.insured.filter((i) => i.clientId === user.companyId);
+      const own = d.insured.filter((i) => i.clientId === user.companyId);
+      const monthAgo = Date.now() - 30 * DAY;
+      const requests = d.policyChanges.filter(
+        (c) => c.clientId === user.companyId && c.kind === 'add' && (c.status === 'pending' || (c.status === 'rejected' && parseIso(c.decidedAt ?? c.requestedAt) >= monthAgo)),
+      );
       const filter = url.searchParams.get('filter');
-      if (filter === 'not_in_app') list = list.filter((i) => i.appStatus !== 'active' && i.status === 'active');
-      if (filter === 'recent') list = list.filter((i) => Date.now() - parseIso(i.addedAt) <= 30 * DAY);
-      if (filter === 'excluded') list = list.filter((i) => i.status === 'excluded');
+      let list: HrEmployee[];
+      if (filter === 'requests') {
+        list = [...requests.map((r) => requestRow(d, r)), ...own.map((i) => employeeView(d, i)).filter((e) => e.pendingExclusionFrom)];
+      } else {
+        let people = own;
+        if (filter === 'not_in_app') people = people.filter((i) => i.appStatus !== 'active' && i.status === 'active');
+        if (filter === 'recent') people = people.filter((i) => Date.now() - parseIso(i.addedAt) <= 30 * DAY);
+        if (filter === 'excluded') people = people.filter((i) => i.status === 'excluded');
+        list = people.map((i) => employeeView(d, i));
+        // Requests are visible in the full list right away (POLICY_SPEC §5.1).
+        if (!filter) list = [...requests.map((r) => requestRow(d, r)), ...list];
+      }
       const term = q(url);
       if (term) list = list.filter((i) => i.fullName.toLowerCase().includes(term) || i.position.toLowerCase().includes(term));
       const sort = url.searchParams.get('sort') ?? 'fullName:asc';
       const [key, dir] = sort.split(':');
       const mul = dir === 'desc' ? -1 : 1;
-      const getters: Record<string, (i: InsuredRow) => string | number> = {
+      const getters: Record<string, (i: HrEmployee) => string | number> = {
         fullName: (i) => i.fullName,
         insuredFrom: (i) => i.insuredFrom,
         familyMembersCount: (i) => i.familyMembersCount,
@@ -137,15 +163,15 @@ export const hrHandlers = [
         const vb = get(b);
         return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ru')) * mul;
       });
-      const page = paginate(list, url);
-      return { ...page, items: page.items.map((i) => toHrEmployee(d, i)) };
+      return paginate(list, url);
     }),
   ),
   http.get(
     `${API}/hr/employees/:id`,
     route((ctx) => {
       const user = requireHr(ctx.request);
-      return toHrEmployee(db(), ownEmployee(user, param(ctx, 'id')));
+      const d = db();
+      return employeeView(d, ownEmployee(user, param(ctx, 'id')));
     }),
   ),
   http.post(
@@ -153,9 +179,9 @@ export const hrHandlers = [
     route(async ({ request }) => {
       const user = requireHr(request);
       const input = await body(request, hrEmployeeSchema);
-      const row = addEmployee(user, input);
-      audit(user, 'hr_add_employee', { targetType: 'insured', targetId: row.id, targetLabel: insuredLabel(row.id) });
-      return toHrEmployee(db(), row);
+      const row = requestAdd(user, input);
+      audit(user, 'policy_change_requested', { targetType: 'policy', targetId: row.policyId, targetLabel: `${row.policyNumber}: прикрепление` });
+      return requestRow(db(), row);
     }),
   ),
   http.delete(
@@ -165,10 +191,10 @@ export const hrHandlers = [
       const i = ownEmployee(user, param(ctx, 'id'));
       const { excludeFrom } = await body(ctx.request, hrExcludeSchema);
       if (i.status === 'excluded') throw new HttpError(409, 'conflict', 'Сотрудник уже исключён');
-      i.status = 'excluded';
-      i.excludedFrom = excludeFrom;
-      audit(user, 'hr_exclude_employee', { targetType: 'insured', targetId: i.id, targetLabel: insuredLabel(i.id), reason: `С ${excludeFrom.split('-').reverse().join('.')}` });
-      return toHrEmployee(db(), i);
+      const d = db();
+      const row = requestChange(d, user, clientOfHr(user), 'exclude', { effectiveDate: excludeFrom, fullName: i.fullName, position: i.position, familyMembers: i.familyMembersCount, insured: i });
+      audit(user, 'policy_change_requested', { targetType: 'policy', targetId: row.policyId, targetLabel: `${row.policyNumber}: исключение ${insuredLabel(i.id)}` });
+      return employeeView(d, i);
     }),
   ),
   http.post(
@@ -199,19 +225,19 @@ export const hrHandlers = [
         seen.add(r.data.pinfl);
         valid.push(r.data);
       });
-      let added = 0;
+      let requested = 0;
       if (url.searchParams.get('commit') === '1') {
         for (const v of valid) {
           try {
-            addEmployee(user, v);
-            added += 1;
+            requestAdd(user, v);
+            requested += 1;
           } catch {
-            /* duplicates are skipped */
+            /* already insured, already requested or outside the policy period: skipped */
           }
         }
-        audit(user, 'hr_import', { targetType: 'client', targetId: user.companyId, targetLabel: `Импорт: ${added} сотр.` });
+        audit(user, 'hr_import', { targetType: 'client', targetId: user.companyId, targetLabel: `Импорт: ${requested} заявок` });
       }
-      const out: HrImportResult = { valid: valid.length, added, errors };
+      const out: HrImportResult = { valid: valid.length, added: 0, requested, errors };
       return out;
     }),
   ),

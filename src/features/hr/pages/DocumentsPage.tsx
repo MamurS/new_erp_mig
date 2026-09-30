@@ -26,6 +26,8 @@ const DOC_KIND: Record<ClientDocument['kind'], string> = {
   act: 'Акт',
   program: 'Программа',
   kp: 'Коммерческое предложение',
+  endorsement: 'Допсоглашение',
+  insured_list: 'Список застрахованных',
 };
 
 export default function DocumentsPage() {

@@ -28,6 +28,7 @@ import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './creden
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
 import { seedClinics } from './seed-clinics';
+import { seedPolicyChanges } from './seed-policies';
 import { CLINIC_RESPONSE_SLA_MINUTES } from '@/shared/domain/clinics';
 
 // ---------- dictionaries ----------
@@ -762,6 +763,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
   }
 
   const insuredDocuments: InsuredDocRow[] = [];
+  const policySeed = seedPolicyChanges({ clients, policies, insured, staff, hrUsers }, { now });
+  documents.push(...policySeed.documents);
   const { demoClinicId: _demoClinicId, ...clinicSeed } = seedClinics({ clinics, insured, policies, staff, appointments }, { xss: opts.xss, now });
 
   return {
@@ -795,5 +798,6 @@ export function createSeed(opts: SeedOptions = {}): Db {
     idempotency: [],
     apiCalls: [],
     integrationsSeed: int(rng, 1, 1000),
+    policyChanges: policySeed.policyChanges,
   };
 }

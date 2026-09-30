@@ -59,6 +59,39 @@ export interface Policy {
   status: PolicyStatus;
   premium: Money;
   insuredCount: number;
+  tariff?: PolicyTariff;                   // годовые тарифы полиса (POLICY_SPEC §3)
+  familyCount?: number;                    // застрахованных членов семьи
+}
+
+export interface PolicyTariff {
+  employee: Money;                         // годовой тариф на сотрудника
+  family: Money;                           // годовой тариф на члена семьи
+}
+
+export type PolicyChangeKind = 'add' | 'exclude';
+export type PolicyChangeStatus = 'pending' | 'approved' | 'rejected';
+
+/** Заявка на изменение состава застрахованных (POLICY_SPEC §6). Без ПИНФЛ, телефона и даты рождения. */
+export interface PolicyChange {
+  id: UUID;
+  clientId: UUID;
+  clientName: string;
+  policyId: UUID;
+  policyNumber: string;
+  kind: PolicyChangeKind;
+  insuredId?: UUID;
+  fullName: string;
+  position: string;
+  familyMembers: number;
+  effectiveDate: ISODate;
+  premiumDelta: Money;                     // + доплата, − возврат
+  status: PolicyChangeStatus;
+  requestedAt: ISODateTime;
+  requestedByName: string;
+  decidedAt?: ISODateTime;
+  decidedByName?: string;
+  rejectionReason?: string;
+  endorsementId?: UUID;
 }
 
 export type AppStatus = 'active' | 'invited' | 'not_invited';
@@ -213,7 +246,8 @@ export type AuditAction =
   | 'clinic_check_patient' | 'clinic_check_failed'
   | 'guarantee_requested' | 'guarantee_decided'
   | 'registry_submitted' | 'registry_line_decided' | 'registry_paid'
-  | 'integration_key_created' | 'integration_key_revoked' | 'webhook_created';
+  | 'integration_key_created' | 'integration_key_revoked' | 'webhook_created'
+  | 'policy_issued' | 'policy_change_requested' | 'policy_change_decided';
 
 export interface AuditEntry {
   id: UUID;
@@ -259,7 +293,7 @@ export interface ClientDocument {
   id: UUID;
   clientId: UUID;
   title: string;
-  kind: 'policy' | 'contract' | 'invoice' | 'act' | 'program' | 'kp';
+  kind: 'policy' | 'contract' | 'invoice' | 'act' | 'program' | 'kp' | 'endorsement' | 'insured_list';
   createdAt: ISODate;
   kpId?: UUID;                             // для kind === 'kp'
 }

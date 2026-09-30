@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { InsuredListItem } from '@/shared/types/dto';
-import type { LimitCategory } from '@/shared/types';
+import type { LimitCategory, PolicyChange } from '@/shared/types';
+import { usePolicyChanges } from '@/shared/api/queries/policies';
+import { POLICY_CHANGE_KIND_LABEL, POLICY_CHANGE_STATUS_LABEL } from '@/shared/domain/policies';
 import { useClientInsured, usePolicy } from '@/shared/api/queries/staff';
 import { useCan } from '@/shared/auth/guards';
 import { useUser } from '@/shared/auth/session';
@@ -31,6 +33,7 @@ export default function PolicyCardPage() {
   const navigate = useNavigate();
   const canLimit = useCan('limits.request_change');
   const canInsured = useCan('insured.read');
+  const canChanges = useCan('policy_changes.read');
   const [limit, setLimit] = useState(false);
   if (q.isLoading) return <SkeletonRows rows={10} />;
   if (q.isError || !p) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -68,6 +71,14 @@ export default function PolicyCardPage() {
               <span className="num">{formatMoney(p.premium)}</span>
             </Kv>
             <Kv label="Застрахованных">{formatNumber(p.insuredCount)}</Kv>
+            {p.familyCount ? <Kv label="Членов семьи">{formatNumber(p.familyCount)}</Kv> : null}
+            {p.tariff && (
+              <Kv label="Тарифы в год">
+                <span className="num">
+                  {formatMoney(p.tariff.employee)} / {formatMoney(p.tariff.family)}
+                </span>
+              </Kv>
+            )}
           </dl>
         </Card>
         <Card title={`Лимиты программы «${p.programInfo.name}»`}>
@@ -81,12 +92,39 @@ export default function PolicyCardPage() {
           <p className="mt-2 text-[12px] text-muted">Лимиты указаны на одного застрахованного на период полиса.</p>
         </Card>
       </div>
+      {canChanges && <PolicyChangesBlock policyId={p.id} clientId={p.clientId} />}
       {canInsured && <PolicyInsured clientId={p.clientId} />}
       <Card title="Документы" bodyClassName="p-0">
         <DocumentsList docs={p.documents} />
       </Card>
       <LimitRequestDialog open={limit} onOpenChange={setLimit} policyId={p.id} currentLimits={p.programInfo.limits} />
     </div>
+  );
+}
+
+function PolicyChangesBlock({ policyId, clientId }: { policyId: string; clientId: string }) {
+  const q = usePolicyChanges({ policyId });
+  const rows = (q.data ?? []).slice(0, 5);
+  const pending = (q.data ?? []).filter((c) => c.status === 'pending').length;
+  const cols: Column<PolicyChange>[] = [
+    { key: 'kind', header: 'Тип', cell: (c) => POLICY_CHANGE_KIND_LABEL[c.kind] },
+    { key: 'who', header: 'Сотрудник', cell: (c) => <span className="font-medium">{c.fullName}</span> },
+    { key: 'date', header: 'С даты', cell: (c) => <span className="num">{formatDate(c.effectiveDate)}</span> },
+    { key: 'delta', header: 'Доплата / возврат', align: 'right', cell: (c) => <span className="num">{c.premiumDelta ? `${c.premiumDelta > 0 ? '+' : '−'}${formatMoney(Math.abs(c.premiumDelta))}` : '—'}</span> },
+    { key: 'status', header: 'Статус', cell: (c) => <StatusDot tone={c.status === 'approved' ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'}>{POLICY_CHANGE_STATUS_LABEL[c.status]}</StatusDot> },
+  ];
+  return (
+    <Card
+      title={`Изменения состава${pending ? ` · ждут решения: ${pending}` : ''}`}
+      actions={
+        <Link to={`/staff/policy-changes?clientId=${clientId}`} className="text-[13px] text-accent-text hover:underline">
+          Все заявки клиента
+        </Link>
+      }
+      bodyClassName="p-0"
+    >
+      <DataTable caption="Изменения состава по полису" columns={cols} rows={rows} rowKey={(c) => c.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty={<p className="p-4 text-muted">Изменений состава ещё не было</p>} />
+    </Card>
   );
 }
 
