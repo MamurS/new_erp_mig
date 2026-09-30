@@ -3,5 +3,6 @@
 useDefault = true
 
 [allowlist]
-description = "Fictional demo accounts of the prototype"
-regexes = ['''Demo-2026!''']
+description = "Fictional demo accounts and test fixtures of the prototype"
+# abcdefghijklmnop_123: a made-up card token in src/shared/integration/integration.test.ts
+regexes = ['''Demo-2026!''', '''abcdefghijklmnop_123''']
