@@ -8,6 +8,10 @@ test.describe('1. Login with every role, MFA, logout', () => {
       await expect(page).toHaveURL(new RegExp(`${HOME[role]}$`));
       if (role === 'insured') {
         await page.goto('/app/profile');
+        // Wait for the profile data and the web fonts: until then the text above re-flows and the
+        // buttons move, so a click aimed at «Выйти» could land next to it.
+        await expect(page.getByText('Каримов Азиз Бахромович')).toBeVisible();
+        await page.evaluate(() => document.fonts.ready.then(() => undefined));
         await page.getByRole('button', { name: 'Выйти', exact: true }).click();
         await expect(page).toHaveURL(/\/app\/login/);
       } else if (role === 'hr' || role === 'clinic_registrar' || role === 'clinic_admin') {

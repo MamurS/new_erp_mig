@@ -10,6 +10,7 @@ import { kpHandlers } from './kp';
 import { clinicHandlers } from './clinic';
 import { integrationHandlers } from './integration';
 import { staffClinicHandlers } from './staff-clinics';
+import { policyHandlers } from './policies';
 import { meHandlers } from './me';
 import { demoHandlers } from './demo';
 import { API, notFound, route } from '../http';
@@ -18,6 +19,7 @@ export const handlers = [
   ...authHandlers,
   ...(import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.MODE === 'test' ? demoHandlers : []),
   ...dashboardHandlers,
+  ...policyHandlers,
   ...clientHandlers,
   ...insuredHandlers,
   ...claimHandlers,

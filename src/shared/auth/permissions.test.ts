@@ -32,6 +32,13 @@ const TABLE = `
 | \`kp.read\` (просмотр и скачивание) | ✓ | ✓ | ✗ | ✓ | ✓ | свои | ✗ | ✗ | ✗ |
 `;
 
+/** POLICY_SPEC §2, verbatim (new rows only; `policies.write` is in the SPEC table). Last column: both clinic roles. */
+const POLICY_TABLE = `
+| \`policy_changes.read\` | ✓ | ✓ | ✗ | ✓ | ✗ | своя компания | ✗ | ✗ |
+| \`policy_changes.request\` | ✗ | ✗ | ✗ | ✗ | ✗ | своя компания | ✗ | ✗ |
+| \`policy_changes.decide\` | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+`;
+
 const ROLES: Role[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured', 'clinic_registrar', 'clinic_admin'];
 const STATUSES: ClaimStatus[] = ['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid'];
 
@@ -91,10 +98,11 @@ const parse = (table: string) =>
     .map(([action, ...cells]) => ({ action: /`([^`]+)`/.exec(action!)![1] as Action, cells }));
 const rows = parse(TABLE);
 const clinicRows = parse(CLINIC_TABLE);
+const policyRows = parse(POLICY_TABLE);
 
 describe('permissions matrix (SPEC §4)', () => {
   it('covers every action exactly', () => {
-    expect([...rows, ...clinicRows].map((r) => r.action).sort()).toEqual([...ACTIONS].sort());
+    expect([...rows, ...clinicRows, ...policyRows].map((r) => r.action).sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -185,4 +193,30 @@ describe('clinic permissions matrix (CLINIC_SPEC §8)', () => {
         expect(can(userFor(role), action, { insuredId: INSURED })).toBe(false);
       }
   });
+});
+
+describe('policy permissions matrix (POLICY_SPEC §2)', () => {
+  const columns: Role[][] = [['operator'], ['underwriter'], ['doctor_expert'], ['accountant'], ['admin'], ['hr'], ['insured'], ['clinic_registrar', 'clinic_admin']];
+  for (const { action, cells } of policyRows) {
+    columns.forEach((roles, i) => {
+      const cell = cells[i]!;
+      for (const role of roles) {
+        it(`${action} × ${role} = ${cell}`, () => {
+          const user = userFor(role);
+          if (cell === '✗') {
+            expect(can(user, action)).toBe(false);
+            expect(can(user, action, { companyId: COMPANY })).toBe(false);
+            return;
+          }
+          if (cell === '✓') {
+            expect(can(user, action)).toBe(true);
+            return;
+          }
+          expect(cell).toBe('своя компания');
+          expect(can(user, action, { companyId: COMPANY })).toBe(true);
+          expect(can(user, action, { companyId: OTHER_COMPANY })).toBe(false);
+        });
+      }
+    });
+  }
 });

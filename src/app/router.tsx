@@ -32,6 +32,15 @@ const staffRoutes: RouteObject[] = [
       ),
       children: [{ index: true, lazy: lazy(() => import('@/features/kp/KpPage')) }],
     },
+    {
+      path: ':clientId/policies/new',
+      element: (
+        <RequirePermission action="policies.write">
+          <Outlet />
+        </RequirePermission>
+      ),
+      children: [{ index: true, lazy: lazy(() => import('@/features/staff/policies/PolicyIssuePage')) }],
+    },
   ]),
   guarded('kp/:kpId', sectionRoles('/staff/clients'), [{ index: true, lazy: lazy(() => import('@/features/kp/KpPage')) }]),
   guarded('insured/:insuredId', INSURED_CARD_ROLES, [{ index: true, lazy: lazy(() => import('@/features/staff/pages/InsuredCardPage')) }]),
@@ -53,6 +62,7 @@ const staffRoutes: RouteObject[] = [
     { index: true, lazy: lazy(() => import('@/features/staff/clinics/RegistriesPage')) },
     { path: ':registryId', lazy: lazy(() => import('@/features/staff/clinics/RegistryReviewPage')) },
   ]),
+  guarded('policy-changes', sectionRoles('/staff/policy-changes'), [{ index: true, lazy: lazy(() => import('@/features/staff/policies/PolicyChangesPage')) }]),
   guarded('limit-requests', sectionRoles('/staff/limit-requests'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/LimitRequestsPage')) }]),
   guarded('reports', sectionRoles('/staff/reports'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ReportsPage')) }]),
   guarded('audit', sectionRoles('/staff/audit'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/AuditPage')) }]),

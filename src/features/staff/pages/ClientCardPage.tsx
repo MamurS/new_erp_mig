@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
-import { Mail } from 'lucide-react';
+import { Mail, FilePlus2 } from 'lucide-react';
 import type { InsuredListItem } from '@/shared/types/dto';
 import type { Policy } from '@/shared/types';
 import { useClient, useClientHistory, useClientInsured, usePolicies } from '@/shared/api/queries/staff';
@@ -38,6 +38,7 @@ export default function ClientCardPage() {
   useDocumentTitle('Карточка клиента');
   useTopbar([{ label: 'Клиенты', to: '/staff/clients' }, { label: c?.name ?? 'Клиент' }]);
   const canOffer = useCan('kp.create');
+  const canIssue = useCan('policies.write');
   const canPolicies = useCan('policies.read');
   const canInsured = useCan('insured.read');
   const navigate = useNavigate();
@@ -66,6 +67,11 @@ export default function ClientCardPage() {
           <Button variant="secondary" onClick={() => setLetterOpen(true)}>
             <Mail className="h-3.5 w-3.5" aria-hidden /> Письмо HR
           </Button>
+          {canIssue && (!c.activePolicyId || c.status === 'expired') && (
+            <Button variant="secondary" onClick={() => navigate(`/staff/clients/${c.id}/policies/new`)}>
+              <FilePlus2 className="h-3.5 w-3.5" aria-hidden /> Оформить полис
+            </Button>
+          )}
           {canOffer && <Button onClick={() => navigate(kpNewPath(c.id, c.activePolicyId))}>Подготовить КП</Button>}
         </div>
       </div>

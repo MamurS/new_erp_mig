@@ -73,7 +73,7 @@ const clientDocument: z.ZodType<T.ClientDocument> = z.object({
   id: uuid,
   clientId: uuid,
   title: z.string(),
-  kind: z.enum(['policy', 'contract', 'invoice', 'act', 'program', 'kp']),
+  kind: z.enum(['policy', 'contract', 'invoice', 'act', 'program', 'kp', 'endorsement', 'insured_list']),
   createdAt: isoDate,
   kpId: uuid.optional(),
 });
@@ -100,6 +100,8 @@ export const policy: z.ZodType<T.Policy> = z.object({
   status: z.enum(['draft', 'active', 'expired', 'cancelled']),
   premium: money,
   insuredCount: z.number(),
+  tariff: z.object({ employee: money, family: money }).optional(),
+  familyCount: z.number().optional(),
 });
 export const policyPage = page(policy);
 export const policyDetail: z.ZodType<D.PolicyDetail> = z.intersection(
@@ -321,6 +323,9 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'integration_key_created',
     'integration_key_revoked',
     'webhook_created',
+    'policy_issued',
+    'policy_change_requested',
+    'policy_change_decided',
   ]),
   targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration']),
   targetId: uuid.optional(),
@@ -402,7 +407,7 @@ export const dashboard: z.ZodType<D.DashboardSummary> = z.object({
 export const queueItems = z.array(
   z.object({
     id: uuid,
-    type: z.enum(['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response']),
+    type: z.enum(['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change']),
     entityId: uuid,
     who: z.string(),
     details: z.string(),
@@ -450,14 +455,17 @@ export const hrEmployee: z.ZodType<D.HrEmployee> = z.object({
   insuredFrom: isoDate,
   familyMembersCount: z.number(),
   appStatus,
-  status: z.enum(['active', 'excluded']),
+  status: z.enum(['active', 'excluded', 'pending', 'rejected']),
   excludedFrom: isoDate.optional(),
   addedAt: isoDateTime,
+  pendingExclusionFrom: isoDate.optional(),
+  rejectionReason: z.string().optional(),
 });
 export const hrEmployeePage = page(hrEmployee);
 export const hrImportResult: z.ZodType<D.HrImportResult> = z.object({
   valid: z.number(),
   added: z.number(),
+  requested: z.number().optional(),
   errors: z.array(z.object({ row: z.number(), field: z.string(), message: z.string() })),
 });
 const slice = z.object({ label: z.string(), value: z.number().nullable() });
@@ -546,3 +554,36 @@ export const kpDefaults: z.ZodType<D.KpDefaults> = z.object({
     createdByEmail: z.string(),
   }),
 });
+
+// ---- policy issuance and changes of the insured list (POLICY_SPEC) ----
+const importErrors = z.array(z.object({ row: z.number(), field: z.string(), message: z.string() }));
+export const policyListCheck: z.ZodType<D.PolicyListCheck> = z.object({
+  total: z.number(),
+  valid: z.number(),
+  employees: z.number(),
+  familyMembers: z.number(),
+  errors: importErrors,
+});
+export const policyChange: z.ZodType<T.PolicyChange> = z.object({
+  id: uuid,
+  clientId: uuid,
+  clientName: z.string(),
+  policyId: uuid,
+  policyNumber: z.string(),
+  kind: z.enum(['add', 'exclude']),
+  insuredId: uuid.optional(),
+  fullName: z.string(),
+  position: z.string(),
+  familyMembers: z.number(),
+  effectiveDate: isoDate,
+  premiumDelta: money,
+  status: z.enum(['pending', 'approved', 'rejected']),
+  requestedAt: isoDateTime,
+  requestedByName: z.string(),
+  decidedAt: isoDateTime.optional(),
+  decidedByName: z.string().optional(),
+  rejectionReason: z.string().optional(),
+  endorsementId: uuid.optional(),
+});
+export const policyChanges = z.array(policyChange);
+export const policyChangeDecisionResult: z.ZodType<D.PolicyChangeDecisionResult> = z.object({ approved: z.number(), rejected: z.number(), endorsements: z.number() });

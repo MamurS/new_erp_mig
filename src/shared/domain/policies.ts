@@ -1,0 +1,96 @@
+/* Policy issuance and changes of the insured list (POLICY_SPEC §3): tariffs, premium, pro-rata. */
+import type { ISODate, Money, Policy, PolicyChangeKind, PolicyChangeStatus, PolicyTariff, ProgramCode } from '@/shared/types';
+
+/** Demo annual tariff per employee. A family member costs FAMILY_SHARE of it. */
+export const BASE_TARIFF: Record<ProgramCode, Money> = {
+  basic: 2_500_000,
+  standard: 3_800_000,
+  standard_plus: 5_200_000,
+  premium: 7_000_000,
+};
+export const FAMILY_SHARE = 0.8;
+export const POLICY_CSV_MAX_ROWS = 5000;
+export const POLICY_CSV_MAX_BYTES = 5 * 1024 * 1024;
+export const POLICY_CSV_HEADER = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'familyMembers'] as const;
+/** A policy that starts later than this is issued as a draft. */
+export const DRAFT_IF_STARTS_IN_DAYS = 30;
+export const MAX_POLICY_MONTHS = 12;
+
+export const POLICY_CHANGE_KIND_LABEL: Record<PolicyChangeKind, string> = { add: 'Прикрепление', exclude: 'Исключение' };
+export const POLICY_CHANGE_STATUS_LABEL: Record<PolicyChangeStatus, string> = { pending: 'Ждёт решения', approved: 'Подтверждено', rejected: 'Отклонено' };
+
+const DAY = 86_400_000;
+const round1000 = (v: number) => Math.round(v / 1000) * 1000;
+const dayNumber = (d: ISODate) => Math.round(Date.parse(`${d}T00:00:00Z`) / DAY);
+
+export function defaultTariff(program: ProgramCode): PolicyTariff {
+  const employee = BASE_TARIFF[program];
+  return { employee, family: round1000(employee * FAMILY_SHARE) };
+}
+
+export function policyPremium(tariff: PolicyTariff, employees: number, familyMembers: number): Money {
+  return round1000(tariff.employee * employees + tariff.family * familyMembers);
+}
+
+/** Days of the period, both ends included. */
+export function daysInclusive(from: ISODate, to: ISODate): number {
+  return dayNumber(to) - dayNumber(from) + 1;
+}
+
+/** End date by default: one year minus one day after the start. */
+export function defaultEndDate(start: ISODate): ISODate {
+  const [y, m, d] = start.split('-').map(Number) as [number, number, number];
+  const next = new Date(Date.UTC(y + 1, m - 1, d) - DAY);
+  return next.toISOString().slice(0, 10);
+}
+
+/** Tariff of a policy; policies without a stored tariff fall back to premium per insured person. */
+export function tariffOf(p: Pick<Policy, 'tariff' | 'premium' | 'insuredCount' | 'program'>): PolicyTariff {
+  if (p.tariff) return p.tariff;
+  if (p.premium > 0 && p.insuredCount > 0) {
+    const employee = round1000(p.premium / p.insuredCount);
+    return { employee, family: round1000(employee * FAMILY_SHARE) };
+  }
+  return defaultTariff(p.program);
+}
+
+/**
+ * Pro-rata change of the premium when a person is added (+) or excluded (−) from `effective`
+ * until the end of the policy, both days included. Outside the period the change is 0.
+ */
+export function proRataDelta(
+  policy: Pick<Policy, 'startDate' | 'endDate'>,
+  tariff: PolicyTariff,
+  kind: PolicyChangeKind,
+  effective: ISODate,
+  familyMembers = 0,
+): Money {
+  if (effective < policy.startDate || effective > policy.endDate) return 0;
+  const total = daysInclusive(policy.startDate, policy.endDate);
+  const left = daysInclusive(effective, policy.endDate);
+  const annual = tariff.employee + tariff.family * familyMembers;
+  const delta = round1000((annual * left) / total);
+  return kind === 'add' ? delta : -delta;
+}
+
+/** Why a change date does not fit the policy, or null. */
+export function changeDateProblem(
+  policy: Pick<Policy, 'startDate' | 'endDate'>,
+  kind: PolicyChangeKind,
+  effective: ISODate,
+  insuredFrom?: ISODate,
+): string | null {
+  if (effective < policy.startDate || effective > policy.endDate) return 'Дата должна быть в пределах срока полиса';
+  if (kind === 'exclude' && insuredFrom && effective < insuredFrom) return 'Дата исключения раньше даты прикрепления';
+  return null;
+}
+
+/** Validity of the policy period from the issuance form. */
+export function policyPeriodProblem(start: ISODate, end: ISODate): string | null {
+  if (end < start) return 'Окончание раньше начала';
+  const [y, m, d] = start.split('-').map(Number) as [number, number, number];
+  const maxEnd = new Date(Date.UTC(y, m - 1 + MAX_POLICY_MONTHS, d) - DAY).toISOString().slice(0, 10);
+  if (end > maxEnd) return `Срок полиса — не больше ${MAX_POLICY_MONTHS} месяцев`;
+  if (daysInclusive(start, end) < 28) return 'Срок полиса — не меньше месяца';
+  return null;
+}

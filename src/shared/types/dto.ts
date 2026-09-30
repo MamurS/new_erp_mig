@@ -54,7 +54,7 @@ export interface Kpi {
   tone?: 'default' | 'warning' | 'danger';
   to?: string;
 }
-export type QueueType = 'appointment' | 'claim' | 'renewal' | 'guarantee' | 'registry' | 'clinic_no_response';
+export type QueueType = 'appointment' | 'claim' | 'renewal' | 'guarantee' | 'registry' | 'clinic_no_response' | 'policy_change';
 export interface QueueItem {
   id: UUID;
   type: QueueType;
@@ -199,9 +199,12 @@ export interface HrEmployee {
   insuredFrom: ISODate;
   familyMembersCount: number;
   appStatus: AppStatus;
-  status: 'active' | 'excluded';
+  /** pending / rejected: a request of HR that MIG has not approved (POLICY_SPEC §5.1). */
+  status: 'active' | 'excluded' | 'pending' | 'rejected';
   excludedFrom?: ISODate;
   addedAt: ISODateTime;
+  pendingExclusionFrom?: ISODate;
+  rejectionReason?: string;
 }
 export interface HrImportError {
   row: number;
@@ -211,6 +214,8 @@ export interface HrImportError {
 export interface HrImportResult {
   valid: number;
   added: number;
+  /** Change requests sent to MIG (POLICY_SPEC §5.1). */
+  requested?: number;
   errors: HrImportError[];
 }
 export interface HrStatsSlice {
@@ -342,4 +347,18 @@ export interface ClinicCard {
   keys: IntegrationClient[];
   webhooks: { endpoints: number; retrying: number; failed24h: number };
   apiErrors24h: number;
+}
+
+/** Preview of the initial list of insured persons (POLICY_SPEC §4). */
+export interface PolicyListCheck {
+  total: number;
+  valid: number;
+  employees: number;
+  familyMembers: number;
+  errors: HrImportError[];
+}
+export interface PolicyChangeDecisionResult {
+  approved: number;
+  rejected: number;
+  endorsements: number;
 }

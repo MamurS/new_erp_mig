@@ -35,7 +35,7 @@ export default function ProfilePage() {
     <div>
       <ScreenHeader title={t('profile.title')} />
       {me.isLoading ? (
-        <Skeleton className="h-64 w-full rounded-card" />
+        <Skeleton className="h-[290px] w-full rounded-card" />
       ) : me.isError || !me.data ? (
         <LoadError error={me.error} onRetry={() => void me.refetch()} />
       ) : (

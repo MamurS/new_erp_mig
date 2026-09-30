@@ -27,6 +27,7 @@ const TABS = [
   { key: 'renewal', label: 'Продления' },
   { key: 'guarantee', label: 'ГП', action: 'guarantees.decide' },
   { key: 'registry', label: 'Реестры', action: 'registries.review' },
+  { key: 'policy_change', label: 'Состав', action: 'policy_changes.decide' },
 ] as const;
 
 const TYPE_CHIP: Record<QueueItem['type'], { kind: string; label: string }> = {
@@ -36,6 +37,7 @@ const TYPE_CHIP: Record<QueueItem['type'], { kind: string; label: string }> = {
   guarantee: { kind: 'sky', label: 'ГП' },
   registry: { kind: 'peach', label: 'Реестр' },
   clinic_no_response: { kind: 'danger', label: 'Клиника не ответила' },
+  policy_change: { kind: 'accent', label: 'Состав полиса' },
 };
 
 function greeting(now = new Date()): string {
@@ -88,6 +90,7 @@ export default function DashboardPage() {
     else if (row.type === 'renewal') navigate(`/staff/clients/${row.entityId}`);
     else if (row.type === 'guarantee') navigate('/staff/guarantees');
     else if (row.type === 'registry') navigate(`/staff/registries/${row.entityId}`);
+    else if (row.type === 'policy_change') navigate(`/staff/policy-changes?clientId=${row.entityId}`);
     else navigate(`/staff/appointments?status=${done.has(row.id) ? 'confirmed' : 'requested'}`);
   };
 

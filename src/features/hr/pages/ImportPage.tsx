@@ -17,7 +17,6 @@ import {
   checkCsvFile,
   checkParsedCsv,
   employeesAcc,
-  employeesNom,
   fieldLabel,
   groupErrorsByRow,
   parseCsv,
@@ -92,8 +91,9 @@ export default function ImportPage() {
       { csv: stage.csv, commit: true },
       {
         onSuccess: (r) => {
-          toast.success(`Добавлено: ${employeesNom(r.added)}`);
-          setStage({ kind: 'done', total: stage.rows.length, added: r.added });
+          const sent = r.requested ?? r.added;
+          toast.success(`Отправлено заявок: ${sent}`);
+          setStage({ kind: 'done', total: stage.rows.length, added: sent });
         },
         onError: (err) => toast.error(errorMessage(err)),
       },
@@ -163,9 +163,9 @@ export default function ImportPage() {
         <HrCard className="flex flex-col items-center gap-4 py-10 text-center">
           <CheckCircle2 className="h-12 w-12 text-success" aria-hidden />
           <HrSectionTitle className="text-[22px]">
-            Добавлено {employeesNom(stage.added)}, пропущено {rowsNom(stage.total - stage.added)} с ошибками
+            Отправлено заявок: {stage.added}, пропущено {rowsNom(stage.total - stage.added)}
           </HrSectionTitle>
-          <p className="text-muted">Новые сотрудники получат приглашение в приложение по SMS.</p>
+          <p className="text-muted">МИГ подтвердит изменения состава и оформит допсоглашение. После этого сотрудники получат приглашение в приложение по SMS.</p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link to="/hr" className={cn(buttonVariants({ variant: 'primary' }), HR_BTN)}>
               К списку сотрудников
