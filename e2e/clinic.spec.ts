@@ -12,7 +12,7 @@ const AS = {
   registrar: [/^Регистратор клиники/, /\/clinic$/],
   clinicAdmin: [/^Администратор клиники/, /\/clinic$/],
   doctor: [/^Врач-эксперт/, /\/staff$/],
-  operator: [/^Оператор ДМС/, /\/staff$/],
+  operator: [/^Куратор ДМС/, /\/staff$/],
   accountant: [/^Бухгалтер/, /\/staff$/],
 } as const satisfies Record<string, readonly [RegExp, RegExp]>;
 const as = (page: Page, who: keyof typeof AS) => switchTo(page, AS[who][0], AS[who][1]);

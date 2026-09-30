@@ -8,7 +8,7 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoDateTime = z.string().min(10);
 const money = z.number();
 
-export const role = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured', 'clinic_registrar', 'clinic_admin']);
+export const role = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured', 'clinic_registrar', 'clinic_admin', 'asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin']);
 export const staffRole = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin']);
 export const programCode = z.enum(['basic', 'standard', 'standard_plus', 'premium']);
 export const limitCategory = z.enum(['outpatient', 'dental', 'medicines', 'inpatient']);
@@ -34,6 +34,7 @@ export const sessionUser: z.ZodType<T.SessionUser> = z.object({
   companyId: uuid.optional(),
   insuredId: uuid.optional(),
   clinicId: uuid.optional(),
+  assistanceId: uuid.optional(),
   consentGivenAt: isoDateTime.optional(),
 });
 
@@ -55,6 +56,7 @@ export const client: z.ZodType<T.Client> = z.object({
   managerName: z.string(),
   hrContact: z.object({ name: z.string(), phoneMasked: z.string(), emailMasked: z.string() }),
   activePolicyId: uuid.optional(),
+  assistanceId: uuid.nullable().optional(),
   program: programCode.optional(),
   insuredCount: z.number(),
   premium: money,
@@ -102,6 +104,7 @@ export const policy: z.ZodType<T.Policy> = z.object({
   insuredCount: z.number(),
   tariff: z.object({ employee: money, family: money }).optional(),
   familyCount: z.number().optional(),
+  assistanceId: uuid.nullable().optional(),
 });
 export const policyPage = page(policy);
 export const policyDetail: z.ZodType<D.PolicyDetail> = z.intersection(
@@ -148,7 +151,7 @@ export const insuredDetail: z.ZodType<D.InsuredDetail> = insuredBase.extend({
   policyEnd: isoDate,
   emailMasked: z.string(),
 });
-export const limitUsage: z.ZodType<T.LimitUsage> = z.object({ category: limitCategory, limit: money, used: money });
+export const limitUsage: z.ZodType<T.LimitUsage> = z.object({ category: limitCategory, limit: money, used: money, reserved: money.optional() });
 export const limitUsages = z.array(limitUsage);
 export const reveal: z.ZodType<D.RevealResponse> = z.object({ value: z.string(), expiresInSec: z.number() });
 export const medicalGrant: z.ZodType<D.MedicalGrant> = z.object({ grantId: z.string(), expiresAt: isoDateTime });
@@ -200,7 +203,7 @@ const claimBase = z.object({
   clientId: uuid,
   clientName: z.string(),
   category: claimCategory,
-  source: z.enum(['app', 'clinic_invoice', 'operator']),
+  source: z.enum(['app', 'clinic_invoice', 'operator', 'assistance']),
   amountClaimed: money,
   amountApproved: money.optional(),
   providerName: z.string(),
@@ -326,11 +329,20 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'policy_issued',
     'policy_change_requested',
     'policy_change_decided',
+    'assistance_assigned',
+    'case_created',
+    'guarantee_escalated',
+    'clinic_payment_recorded',
+    'rebill_submitted',
+    'rebill_line_decided',
+    'rebill_paid',
+    'qa_reviewed',
   ]),
-  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration']),
+  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill']),
   targetId: uuid.optional(),
   targetLabel: z.string().optional(),
   reason: z.string().optional(),
+  assistanceId: uuid.optional(),
 });
 export const auditPage = page(auditEntry);
 export const auditList = z.array(auditEntry);

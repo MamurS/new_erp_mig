@@ -5,7 +5,8 @@ export type Money = number;        // целые сумы UZS
 
 export type StaffRole = 'operator' | 'underwriter' | 'doctor_expert' | 'accountant' | 'admin';
 export type ClinicRole = 'clinic_registrar' | 'clinic_admin';
-export type Role = StaffRole | 'hr' | 'insured' | ClinicRole;
+export type AssistanceRole = 'asst_operator' | 'asst_doctor' | 'asst_billing' | 'asst_admin';
+export type Role = StaffRole | 'hr' | 'insured' | ClinicRole | AssistanceRole;
 
 export interface SessionUser {
   id: UUID;
@@ -14,6 +15,7 @@ export interface SessionUser {
   companyId?: UUID;        // для hr
   insuredId?: UUID;        // для insured
   clinicId?: UUID;         // для clinic_registrar и clinic_admin
+  assistanceId?: UUID;     // для ролей ассистанса
   consentGivenAt?: ISODateTime; // для insured
 }
 
@@ -38,6 +40,7 @@ export interface Client {
   managerName: string;
   hrContact: { name: string; phoneMasked: string; emailMasked: string };
   activePolicyId?: UUID;
+  assistanceId?: UUID | null;              // текущий ассистанс (для списков), null — без ассистанса
   program?: ProgramCode;
   insuredCount: number;
   premium: Money;
@@ -60,6 +63,7 @@ export interface Policy {
   premium: Money;
   insuredCount: number;
   tariff?: PolicyTariff;                   // годовые тарифы полиса (POLICY_SPEC §3)
+  assistanceId?: UUID | null;              // текущий ассистанс полиса (ASSISTANCE_SPEC §3)
   familyCount?: number;                    // застрахованных членов семьи
 }
 
@@ -120,11 +124,12 @@ export interface LimitUsage {
   category: LimitCategory;
   limit: Money;
   used: Money;
+  reserved?: Money;                        // резерв одобренных ГП (ASSISTANCE_SPEC §5.2)
 }
 
 export type ClaimStatus = 'new' | 'review' | 'medical_review' | 'approved' | 'rejected' | 'to_pay' | 'paid';
 export type ClaimCategory = 'medicines' | 'doctor_visit' | 'diagnostics' | 'dental' | 'inpatient';
-export type ClaimSource = 'app' | 'clinic_invoice' | 'operator';
+export type ClaimSource = 'app' | 'clinic_invoice' | 'operator' | 'assistance';
 
 export interface Attachment {
   id: UUID;
@@ -247,7 +252,9 @@ export type AuditAction =
   | 'guarantee_requested' | 'guarantee_decided'
   | 'registry_submitted' | 'registry_line_decided' | 'registry_paid'
   | 'integration_key_created' | 'integration_key_revoked' | 'webhook_created'
-  | 'policy_issued' | 'policy_change_requested' | 'policy_change_decided';
+  | 'policy_issued' | 'policy_change_requested' | 'policy_change_decided'
+  | 'assistance_assigned' | 'case_created' | 'guarantee_escalated' | 'clinic_payment_recorded'
+  | 'rebill_submitted' | 'rebill_line_decided' | 'rebill_paid' | 'qa_reviewed';
 
 export interface AuditEntry {
   id: UUID;
@@ -256,10 +263,11 @@ export interface AuditEntry {
   actorName: string;
   actorRole: Role;
   action: AuditAction;
-  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration';
+  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill';
   targetId?: UUID;
   targetLabel?: string;                    // без ПДн: номер полиса или убытка, либо «Застрахованный #a1b2»
   reason?: string;
+  assistanceId?: UUID;                     // действие пользователя ассистанса (фильтр в журнале)
 }
 
 export interface LimitChangeRequest {
@@ -411,6 +419,11 @@ export interface GuaranteeLetter {
   comment?: string;            // комментарий врача клиники к запросу
   attachments: Attachment[];
   createdAt: ISODateTime;
+  assistanceId?: UUID | null;  // кто решает: ассистанс застрахованного или МИГ (null)
+  assistanceName?: string;
+  escalated?: boolean;         // ассистанс передал решение в МИГ (выше полномочий)
+  assistanceOpinion?: string;  // заключение врача ассистанса при эскалации
+  decidedBy?: 'assistance' | 'mig';
 }
 
 export type RegistryStatus = 'draft' | 'submitted' | 'in_review' | 'partially_accepted' | 'accepted' | 'paid';
@@ -431,6 +444,8 @@ export interface RegistryLine {
   status: RegistryLineStatus;
   rejectionReason?: string;
   disputeComment?: string;
+  payer?: Payer;                           // кто проверяет и оплачивает строку (ASSISTANCE_SPEC §5.3)
+  payment?: { paidAt: ISODate; amount: Money; orderNumber: string };
 }
 
 export interface Registry {
@@ -455,11 +470,16 @@ export interface PriceListItem {
 
 export type IntegrationScope =
   | 'coverage:check' | 'appointments:read' | 'appointments:write' | 'slots:write'
-  | 'guarantees:read' | 'guarantees:write' | 'registries:read' | 'registries:write' | 'payments:read';
+  | 'guarantees:read' | 'guarantees:write' | 'registries:read' | 'registries:write' | 'payments:read'
+  | 'roster:read' | 'cases:write' | 'guarantees:decide' | 'registries:review' | 'payments:write' | 'rebills:write';
+
+export type PartnerType = 'clinic' | 'assistance';
 
 export interface IntegrationClient {
   id: UUID;
+  /** Id of the partner: a clinic, or an assistance company when partnerType is 'assistance'. */
   clinicId: UUID;
+  partnerType?: PartnerType;
   name: string;
   clientId: string;
   secretLast4: string;
@@ -473,11 +493,16 @@ export interface IntegrationClient {
 export type WebhookEvent =
   | 'appointment.requested' | 'appointment.cancelled'
   | 'guarantee.decided' | 'guarantee.documents_requested'
-  | 'registry.reviewed' | 'registry.paid';
+  | 'registry.reviewed' | 'registry.paid'
+  // ассистанс-компании (ASSISTANCE_SPEC §8)
+  | 'insured.added' | 'insured.excluded' | 'policy.assigned' | 'policy.unassigned'
+  | 'guarantee.requested' | 'registry.received' | 'rebill.reviewed' | 'rebill.paid' | 'qa.disagreement';
 
 export interface WebhookEndpoint {
   id: UUID;
+  /** Id of the partner (see IntegrationClient.clinicId). */
   clinicId: UUID;
+  partnerType?: PartnerType;
   url: string;
   events: WebhookEvent[];
   secretLast4: string;
@@ -503,4 +528,111 @@ export interface ApiCallLog {
   pathTemplate: string;        // '/guarantees/{id}' — без значений
   status: number;
   latencyMs: number;
+}
+
+// ---------- ассистанс-компании (ASSISTANCE_SPEC §4, §11) ----------
+export type FeeModel = 'pepm' | 'percent_of_claims' | 'per_case';
+export type IntegrationModeOf = 'portal' | 'api' | 'hybrid';
+
+export interface AssistanceKpi {
+  appointmentResponseMinutesAvg: number;
+  guaranteesOnTimeShare: number;           // доля ГП, решённых в срок
+  qaAgreementShare: number;                // доля решений, подтверждённых контрольной выборкой МИГ
+  complaintsPer1000: number;
+  lossRatio: number | null;                // по портфелю ассистанса
+}
+
+export interface AssistanceCompany {
+  id: UUID;
+  name: string;
+  phone24x7: string;                       // показывается застрахованным
+  integrationMode: IntegrationModeOf;
+  contract: {
+    number: string;
+    validFrom: ISODate;
+    validTo: ISODate;
+    feeModel: FeeModel;
+    feeValue: number;                      // PEPM: сум за застрахованного в месяц; percent: доля 0..1; per_case: сум за обращение
+    guaranteeAuthorityLimit: Money;        // ГП до этой суммы ассистанс одобряет сам
+    rebillPaymentDays: number;             // срок оплаты счёта МИГ
+  };
+  kpi?: AssistanceKpi;
+}
+
+export interface AssistanceAssignment {
+  policyId: UUID;
+  assistanceId: UUID | null;
+  from: ISODate;
+  to?: ISODate;
+  setById: UUID;
+  setAt: ISODateTime;
+}
+
+export type AssistanceCaseType = 'appointment' | 'consultation' | 'guarantee' | 'complaint' | 'emergency';
+export type AssistanceCaseStatus = 'open' | 'in_progress' | 'waiting' | 'resolved';
+
+export interface AssistanceCase {
+  id: UUID;
+  number: string;                          // 'ОБР-2026-012345'
+  assistanceId: UUID;
+  insuredId: UUID;
+  insuredName: string;
+  type: AssistanceCaseType;
+  channel: 'phone' | 'chat' | 'app' | 'clinic';
+  status: AssistanceCaseStatus;
+  slaDueAt: ISODateTime;
+  description: string;
+  resolution?: string;
+  links: { appointmentId?: UUID; guaranteeId?: UUID; claimId?: UUID };
+  createdAt: ISODateTime;
+}
+
+export type Payer = 'mig' | UUID;          // UUID = assistanceId
+
+export interface ClinicContract {
+  clinicId: UUID;
+  payer: Payer;
+  priceList: PriceListItem[];
+}
+
+export type RebillStatus = 'draft' | 'submitted' | 'in_review' | 'partially_accepted' | 'accepted' | 'paid';
+export type RebillCheckCode = 'not_paid_to_clinic' | 'policy_inactive' | 'not_assigned' | 'over_limit' | 'no_guarantee' | 'duplicate' | 'price_mismatch';
+
+export interface RebillLine {
+  id: UUID;
+  registryLineId: UUID;
+  clinicName: string;
+  insuredName: string;
+  serviceDate: ISODate;
+  serviceName: string;
+  amount: Money;
+  checks: { code: RebillCheckCode; message: string }[];
+  status: 'pending' | 'accepted' | 'rejected' | 'disputed';
+  rejectionReason?: string;
+  disputeComment?: string;
+}
+
+export interface Rebill {
+  id: UUID;
+  number: string;                          // 'СЧА-2026-09-A1'
+  assistanceId: UUID;
+  period: string;                          // 'YYYY-MM'
+  lines: RebillLine[];
+  fee: { model: FeeModel; base: number; value: number; amount: Money; formula: string };
+  totals: { claims: Money; fee: Money; total: Money; accepted: Money; rejected: Money };
+  status: RebillStatus;
+  acceptedById?: UUID;
+  paidById?: UUID;
+  submittedAt?: ISODateTime;
+  paidAt?: ISODateTime;
+}
+
+export interface QaSample {
+  id: UUID;
+  assistanceId: UUID;
+  subject: { type: 'guarantee' | 'registry_line'; id: UUID; label: string };
+  verdict?: 'agree' | 'disagree';
+  comment?: string;
+  reviewedById?: UUID;
+  createdAt: ISODateTime;
 }

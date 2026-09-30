@@ -29,6 +29,7 @@ import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
 import { seedClinics } from './seed-clinics';
 import { seedPolicyChanges } from './seed-policies';
+import { seedAssistance } from './seed-assistance';
 import { CLINIC_RESPONSE_SLA_MINUTES } from '@/shared/domain/clinics';
 
 // ---------- dictionaries ----------
@@ -767,7 +768,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
   documents.push(...policySeed.documents);
   const { demoClinicId: _demoClinicId, ...clinicSeed } = seedClinics({ clinics, insured, policies, staff, appointments }, { xss: opts.xss, now });
 
-  return {
+  const out: Db = {
     staff,
     hrUsers,
     clients,
@@ -799,5 +800,15 @@ export function createSeed(opts: SeedOptions = {}): Db {
     apiCalls: [],
     integrationsSeed: int(rng, 1, 1000),
     policyChanges: policySeed.policyChanges,
+    assistances: [],
+    assignments: [],
+    assistUsers: [],
+    cases: [],
+    caseSeq: 0,
+    clinicContracts: [],
+    rebills: [],
+    qaSamples: [],
   };
+  seedAssistance(out, { now });
+  return out;
 }

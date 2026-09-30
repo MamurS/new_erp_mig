@@ -10,7 +10,7 @@ import type {
 } from '@/shared/types';
 
 export const ROLE_LABEL: Record<Role, string> = {
-  operator: 'Оператор ДМС',
+  operator: 'Куратор ДМС',
   underwriter: 'Андеррайтер',
   doctor_expert: 'Врач-эксперт',
   accountant: 'Бухгалтер',
@@ -19,6 +19,10 @@ export const ROLE_LABEL: Record<Role, string> = {
   insured: 'Застрахованный',
   clinic_registrar: 'Регистратор клиники',
   clinic_admin: 'Администратор клиники',
+  asst_operator: 'Оператор ассистанса',
+  asst_doctor: 'Врач ассистанса',
+  asst_billing: 'Финансист ассистанса',
+  asst_admin: 'Администратор ассистанса',
 };
 
 export const PROGRAM_LABEL: Record<ProgramCode, string> = {
@@ -102,10 +106,22 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   policy_issued: 'Оформлен полис',
   policy_change_requested: 'HR: заявка на изменение состава',
   policy_change_decided: 'Решение по изменению состава',
+  assistance_assigned: 'Назначен ассистанс',
+  case_created: 'Ассистанс: обращение',
+  guarantee_escalated: 'Ассистанс: эскалация ГП',
+  clinic_payment_recorded: 'Ассистанс: оплата клинике',
+  rebill_submitted: 'Ассистанс: счёт МИГ отправлен',
+  rebill_line_decided: 'Решение по строке счёта ассистанса',
+  rebill_paid: 'Счёт ассистанса оплачен',
+  qa_reviewed: 'Контроль качества',
 };
 
 export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin'] as const;
 export const CLINIC_ROLES = ['clinic_registrar', 'clinic_admin'] as const;
+export const ASSISTANCE_ROLES = ['asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin'] as const;
+export function isAssistRole(role: Role): role is (typeof ASSISTANCE_ROLES)[number] {
+  return (ASSISTANCE_ROLES as readonly string[]).includes(role);
+}
 export function isClinicRole(role: Role): role is (typeof CLINIC_ROLES)[number] {
   return (CLINIC_ROLES as readonly string[]).includes(role);
 }

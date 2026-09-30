@@ -100,6 +100,12 @@ export const SCOPE_LABEL: Record<IntegrationScope, string> = {
   'registries:read': 'Реестры: чтение',
   'registries:write': 'Реестры: отправка',
   'payments:read': 'Оплаты',
+  'roster:read': 'Список застрахованных',
+  'cases:write': 'Обращения',
+  'guarantees:decide': 'ГП: решения',
+  'registries:review': 'Реестры: проверка',
+  'payments:write': 'Оплаты клиникам',
+  'rebills:write': 'Счета МИГ',
 };
 export const WEBHOOK_EVENT_LABEL: Record<WebhookEvent, string> = {
   'appointment.requested': 'Новая заявка на запись',
@@ -108,6 +114,15 @@ export const WEBHOOK_EVENT_LABEL: Record<WebhookEvent, string> = {
   'guarantee.documents_requested': 'По ГП нужны документы',
   'registry.reviewed': 'Реестр проверен',
   'registry.paid': 'Реестр оплачен',
+  'insured.added': 'Застрахованный добавлен',
+  'insured.excluded': 'Застрахованный исключён',
+  'policy.assigned': 'Полис закреплён',
+  'policy.unassigned': 'Полис откреплён',
+  'guarantee.requested': 'Запрос ГП',
+  'registry.received': 'Получен реестр клиники',
+  'rebill.reviewed': 'Счёт МИГ проверен',
+  'rebill.paid': 'Счёт МИГ оплачен',
+  'qa.disagreement': 'Расхождение контроля качества',
 };
 
 // ---- coverage ----

@@ -25,7 +25,11 @@ export const INTEGRATION_SCOPES = [
   'registries:write',
   'payments:read',
 ] as const;
+/** Scopes of assistance keys (ASSISTANCE_SPEC §8). `appointments:write` is shared with clinics. */
+export const ASSIST_SCOPES = ['roster:read', 'cases:write', 'appointments:write', 'guarantees:decide', 'registries:review', 'payments:write', 'rebills:write'] as const;
+export const ALL_SCOPES = [...new Set([...INTEGRATION_SCOPES, ...ASSIST_SCOPES])] as [string, ...string[]];
 export const integrationScope = z.enum(INTEGRATION_SCOPES);
+export const anyScope = z.enum(ALL_SCOPES as unknown as readonly [(typeof INTEGRATION_SCOPES)[number] | (typeof ASSIST_SCOPES)[number], ...((typeof INTEGRATION_SCOPES)[number] | (typeof ASSIST_SCOPES)[number])[]]);
 
 export const WEBHOOK_EVENTS = [
   'appointment.requested',
@@ -35,7 +39,21 @@ export const WEBHOOK_EVENTS = [
   'registry.reviewed',
   'registry.paid',
 ] as const;
-export const webhookEvent = z.enum(WEBHOOK_EVENTS);
+/** Thin events for assistance companies (ASSISTANCE_SPEC §8). */
+export const ASSIST_WEBHOOK_EVENTS = [
+  'insured.added',
+  'insured.excluded',
+  'policy.assigned',
+  'policy.unassigned',
+  'appointment.requested',
+  'guarantee.requested',
+  'registry.received',
+  'rebill.reviewed',
+  'rebill.paid',
+  'qa.disagreement',
+] as const;
+const ALL_EVENTS = [...new Set([...WEBHOOK_EVENTS, ...ASSIST_WEBHOOK_EVENTS])] as [(typeof WEBHOOK_EVENTS)[number] | (typeof ASSIST_WEBHOOK_EVENTS)[number], ...((typeof WEBHOOK_EVENTS)[number] | (typeof ASSIST_WEBHOOK_EVENTS)[number])[]];
+export const webhookEvent = z.enum(ALL_EVENTS);
 
 export const icd10 = z
   .string()
@@ -177,6 +195,11 @@ export const guaranteeLetter = z.object({
   comment: z.string().optional(),
   attachments: z.array(attachment),
   createdAt: isoDateTime,
+  assistanceId: uuid.nullable().optional(),
+  assistanceName: z.string().optional(),
+  escalated: z.boolean().optional(),
+  assistanceOpinion: z.string().optional(),
+  decidedBy: z.enum(['assistance', 'mig']).optional(),
 });
 
 // ---------- registries & payments ----------
@@ -211,6 +234,9 @@ export const registryLine = z.object({
   status: z.enum(['pending', 'accepted', 'rejected', 'disputed']),
   rejectionReason: z.string().optional(),
   disputeComment: z.string().optional(),
+  /** 'mig' or the id of the assistance company that checks and pays the line. */
+  payer: z.union([z.literal('mig'), uuid]).optional(),
+  payment: z.object({ paidAt: isoDate, amount: z.number().int(), orderNumber: z.string() }).optional(),
 });
 export const registry = z.object({
   id: uuid,
@@ -313,7 +339,7 @@ export const webhookUrl = z
 const ipEntry = z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^[0-9a-fA-F:]+(\/\d{1,3})?$/, 'IP-адрес или подсеть');
 export const keyCreateRequest = z.object({
   name: text(2, 60),
-  scopes: z.array(integrationScope).min(1, 'Выберите хотя бы одну область доступа'),
+  scopes: z.array(anyScope).min(1, 'Выберите хотя бы одну область доступа'),
   ipAllowlist: z
     .string()
     .max(1000)

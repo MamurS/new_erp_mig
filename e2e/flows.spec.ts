@@ -65,7 +65,7 @@ test('10. Insured: send a receipt; the upload is re-encoded without EXIF; status
 
   // Inspect the stored upload as staff (same in-page mock server).
   await page.getByRole('button', { name: 'Войти как…' }).click();
-  await page.getByRole('menuitem', { name: /Оператор/ }).click();
+  await page.getByRole('menuitem', { name: /^Куратор ДМС/ }).click();
   await expect(page).toHaveURL(/\/staff$/);
   const claim = (await api(page, 'GET', `/claims/${claimId}`)).data as { attachments: { url: string; mime: string }[] };
   expect(claim.attachments).toHaveLength(1);
