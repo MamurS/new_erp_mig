@@ -25,6 +25,7 @@ import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 type InviteForm = z.input<typeof clinicAdminInviteSchema>;
 
@@ -74,6 +75,7 @@ export default function ClinicCardPage() {
   const { clinicId = '' } = useParams();
   const navigate = useNavigate();
   const q = useClinicCard(clinicId);
+  const responseNorm = useDmsParam('clinicResponseMinutes');
   useDocumentTitle('Клиника');
   useTopbar([{ label: 'Клиники', to: '/staff/clinics' }, { label: q.data?.clinic.name ?? 'Клиника' }]);
   const [f, setF] = useUrlFilters(['tab'] as const);
@@ -212,7 +214,7 @@ export default function ClinicCardPage() {
               <div className="grid gap-2 sm:grid-cols-3" data-testid="clinic-metrics">
                 <Kv label="Среднее время ответа на запись">
                   {card.metrics.avgResponseMinutes === null ? '—' : `${card.metrics.avgResponseMinutes} мин`}
-                  <span className="block text-[12px] text-muted">норматив {c.responseSlaMinutes} мин</span>
+                  <span className="block text-[12px] text-muted">норматив {c.responseSlaMinutes ?? responseNorm} мин</span>
                 </Kv>
                 <Kv label="Доля отклонённых строк">{card.metrics.rejectedLineShare === null ? '—' : formatPercent(card.metrics.rejectedLineShare, 1)}</Kv>
                 <Kv label="Сумма к оплате">

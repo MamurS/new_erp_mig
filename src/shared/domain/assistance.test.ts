@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AssistanceAssignment } from '@/shared/types';
 import { assistanceOn, assistanceScope, feeFor, inQaSample, limitLeft, payerOn, qaSample, rebillChecks, splitByPayer, type RebillLineFacts } from './assistance';
+import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 
 const P = 'pol';
 const A1 = 'a1';
@@ -83,8 +84,8 @@ describe('limits and reserves (§5.2)', () => {
 describe('quality-control sample (§5.6)', () => {
   const ids = Array.from({ length: 4000 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
   it('is deterministic and about 5%', () => {
-    const a = qaSample(ids.map((id) => ({ id })), '2026-09');
-    const b = qaSample(ids.map((id) => ({ id })), '2026-09');
+    const a = qaSample(ids.map((id) => ({ id })), '2026-09', DMS_DEFAULTS.qaSampleShare);
+    const b = qaSample(ids.map((id) => ({ id })), '2026-09', DMS_DEFAULTS.qaSampleShare);
     expect(a).toEqual(b);
     expect(a.length / ids.length).toBeGreaterThan(0.035);
     expect(a.length / ids.length).toBeLessThan(0.065);
@@ -92,8 +93,8 @@ describe('quality-control sample (§5.6)', () => {
     expect(inQaSample(ids[0]!, '2026-09', 0)).toBe(false);
   });
   it('another month gives another sample', () => {
-    const a = qaSample(ids.map((id) => ({ id })), '2026-09').map((x) => x.id);
-    const b = qaSample(ids.map((id) => ({ id })), '2026-10').map((x) => x.id);
+    const a = qaSample(ids.map((id) => ({ id })), '2026-09', DMS_DEFAULTS.qaSampleShare).map((x) => x.id);
+    const b = qaSample(ids.map((id) => ({ id })), '2026-10', DMS_DEFAULTS.qaSampleShare).map((x) => x.id);
     expect(a).not.toEqual(b);
   });
 });

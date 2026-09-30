@@ -139,7 +139,7 @@ export const useResolveComplaint = () =>
 export const useCreateAssistance = () =>
   useStaffAssistMutation((body: z.input<typeof assistanceCreateSchema>) => request('/assistance', { method: 'POST', body, schema: A.assistanceListItem }));
 export const useUpdateContract = () =>
-  useStaffAssistMutation((v: { id: string; body: { feeModel: string; feeValue: number; guaranteeAuthorityLimit: number; rebillPaymentDays: number } }) =>
+  useStaffAssistMutation((v: { id: string; body: { feeModel: string; feeValue: number; guaranteeAuthorityLimit?: number; rebillPaymentDays: number } }) =>
     request(`/assistance/${v.id}/contract`, { method: 'PATCH', body: v.body, schema: A.assistanceCompany }),
   );
 export const useRevokeAssistKey = () =>

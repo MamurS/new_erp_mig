@@ -30,6 +30,7 @@ import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, p
 import type { ClaimRow, Db, InsuredRow } from './db';
 import { conflict, HttpError, notFound } from './http';
 import { randomId } from './rng';
+import { dmsParam } from './params';
 import { DAY, isoDay, parseIso, tzIso } from './time';
 import { limitsFor } from './views';
 
@@ -389,7 +390,7 @@ export function ensureQaSample(d: Db, now = Date.now()): void {
         .filter((r) => (r.submittedAt ?? '').startsWith(month))
         .flatMap((r) => r.lines.filter((l) => l.payer === a.id && l.status === 'accepted').map((l) => ({ id: l.id, type: 'registry_line' as const, label: `${r.period}: ${l.serviceName}`, at: r.submittedAt! }))),
     ];
-    for (const x of qaSample(decisions, month)) {
+    for (const x of qaSample(decisions, month, dmsParam('qaSampleShare'))) {
       if (known.has(x.id)) continue;
       d.qaSamples.unshift({ id: randomId(), assistanceId: a.id, subject: { type: x.type, id: x.id, label: x.label }, createdAt: tzIso(now) });
     }
@@ -405,3 +406,8 @@ export async function notifyAssistance(d: Db, assistanceId: UUID | null | undefi
 }
 
 export const monthOf = (iso: string) => iso.slice(0, 7);
+
+/** Authority of the assistance on guarantee letters: the individual contract value or the DMS parameter. */
+export function authorityLimitOf(a: Pick<AssistanceCompany, 'contract'>): number {
+  return a.contract.guaranteeAuthorityLimit ?? dmsParam('assistanceGuaranteeAuthority');
+}

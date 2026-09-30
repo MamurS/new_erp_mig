@@ -7,10 +7,9 @@ import { API, audit, body, HttpError, requireSession, route, sessionUserFor } fr
 import { randomToken } from '../rng';
 import { DEMO_CODE } from '../credentials';
 import { tzIso } from '../time';
+import { dmsParam } from '../params';
 
-const WINDOW = 10 * 60_000;
-const LOCK = 5 * 60_000;
-const MAX_FAILS = 5;
+// Attempt limits are DMS parameters: loginMaxAttempts, loginWindowMinutes, loginLockMinutes.
 const CHALLENGE_TTL = 5 * 60_000;
 const NIL = '00000000-0000-4000-8000-000000000000';
 
@@ -22,17 +21,17 @@ function checkLock(key: string): void {
   const now = Date.now();
   d.lockouts = d.lockouts.filter((l) => l.until > now);
   if (d.lockouts.some((l) => l.key === key)) {
-    throw new HttpError(429, 'rate_limited', 'Слишком много попыток. Вход заблокирован на 5 минут');
+    throw new HttpError(429, 'rate_limited', `Слишком много попыток. Вход заблокирован на ${dmsParam('loginLockMinutes')} мин`);
   }
 }
 
 function recordFailure(key: string): void {
   const d = db();
   const now = Date.now();
-  d.loginFailures = d.loginFailures.filter((f) => now - f.at < WINDOW);
+  d.loginFailures = d.loginFailures.filter((f) => now - f.at < dmsParam('loginWindowMinutes') * 60_000);
   d.loginFailures.push({ key, at: now });
-  if (d.loginFailures.filter((f) => f.key === key).length >= MAX_FAILS) {
-    d.lockouts.push({ key, until: now + LOCK });
+  if (d.loginFailures.filter((f) => f.key === key).length >= dmsParam('loginMaxAttempts')) {
+    d.lockouts.push({ key, until: now + dmsParam('loginLockMinutes') * 60_000 });
     d.loginFailures = d.loginFailures.filter((f) => f.key !== key);
   }
 }
@@ -54,7 +53,7 @@ function verify(challengeId: string, code: string): SessionResponse {
   if (code !== DEMO_CODE || c.userId === NIL) {
     c.attempts += 1;
     recordFailure(lockKey);
-    if (c.attempts >= MAX_FAILS) d.challenges = d.challenges.filter((x) => x !== c);
+    if (c.attempts >= dmsParam('loginMaxAttempts')) d.challenges = d.challenges.filter((x) => x !== c);
     throw invalidCode();
   }
   d.challenges = d.challenges.filter((x) => x !== c);

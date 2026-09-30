@@ -1,5 +1,7 @@
 /* Screen-level DTOs. Part of the API contract, alongside ./index.ts. */
 import type {
+  DmsParamChange,
+  DmsParameter,
   AppStatus,
   AuditEntry,
   Claim,
@@ -537,4 +539,10 @@ export interface AssistanceReportRow {
   lossRatio: number | null;
   fee: Money;
   feePerInsured: Money | null;
+}
+
+/** GET /api/params: current values of the DMS parameters and the latest change requests. */
+export interface DmsParamsView {
+  parameters: DmsParameter[];
+  changes: DmsParamChange[];
 }

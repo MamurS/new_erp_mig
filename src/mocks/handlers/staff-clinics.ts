@@ -7,7 +7,8 @@ import type { Clinic, Registry, SessionUser } from '@/shared/types';
 import type { ClinicCard, ClinicUserView } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
-import { approvalOutcome, CLINIC_RESPONSE_SLA_MINUTES, registryStatusAfterReview } from '@/shared/domain/clinics';
+import { approvalOutcome, registryStatusAfterReview } from '@/shared/domain/clinics';
+import { dmsParam } from '../params';
 import { clinicAdminInviteSchema, clinicCreateSchema, clinicModeSchema, guaranteeDecisionSchema, registryLineDecisionSchema } from '@/shared/schemas/forms';
 import { db, type ClinicUserRow, type Db } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
@@ -86,7 +87,6 @@ export const staffClinicHandlers = [
         onlineBooking: true,
         apiStatus: input.integrationMode === 'portal' ? 'manual' : 'online',
         contractUntil: isoDay(Date.now() + 365 * DAY),
-        responseSlaMinutes: CLINIC_RESPONSE_SLA_MINUTES,
       };
       d.clinics.push(clinic);
       d.priceLists.push({ clinicId: clinic.id, items: (d.priceLists[0]?.items ?? []).map((i) => ({ ...i })) });
@@ -185,7 +185,7 @@ export const staffClinicHandlers = [
       const at = tzIso(Date.now());
       g.decidedBy = 'mig';
       if (input.action === 'approve') {
-        const outcome = approvalOutcome(g, input.amount, user.id);
+        const outcome = approvalOutcome(g, input.amount, user.id, dmsParam('guaranteeDualApprovalThreshold'));
         if (outcome === 'same_doctor') throw new HttpError(409, 'conflict', 'Второе одобрение должен дать другой врач-эксперт (правило четырёх глаз)');
         g.approvals.push({ byId: user.id, byName: user.displayName, at });
         g.approvedAmount = input.amount;

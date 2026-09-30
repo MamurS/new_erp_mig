@@ -36,7 +36,7 @@ import { validate } from '../http';
 import { randomId } from '../rng';
 import { isoDay, parseIso, tzIso } from '../time';
 import { limitsFor } from '../views';
-import { assistanceOf, linesOf, requireAssistanceScope, requireInsuredOf, rosterOf, subStatus, subTotals, todayIso, upsertDraftRebill } from '../assistance-core';
+import { assistanceOf, authorityLimitOf, linesOf, requireAssistanceScope, requireInsuredOf, rosterOf, subStatus, subTotals, todayIso, upsertDraftRebill } from '../assistance-core';
 import { isOverdueRequest, refreshGuarantee, respondToAppointment, toGuaranteeLetter } from '../clinic-core';
 import { ApiProblem, apiRoute, BASE, page, pathParam, readJson, toIntegrationAppointment, type ApiCtx, type Handler } from './integration';
 import { decideAsAssistance, decideLine, disputeRebillLine, recordPayment, submitRebill } from './assist';
@@ -232,7 +232,7 @@ export const integrationAssistanceHandlers = [
           : input.decision === 'reject'
             ? { action: 'reject' as const, reason: input.reason! }
             : { action: 'escalate' as const, reason: input.reason! };
-      await decideAsAssistance(ctx.d, g, actor, decision, a.contract.guaranteeAuthorityLimit, tzIso(Date.now()));
+      await decideAsAssistance(ctx.d, g, actor, decision, authorityLimitOf(a), tzIso(Date.now()));
       return { body: guaranteeLetter.parse(toGuaranteeLetter(g)) };
     }),
   ),

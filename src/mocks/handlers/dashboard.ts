@@ -4,12 +4,13 @@ import type { AttentionItem, DashboardSummary, IntegrationStatus, Kpi, QueueItem
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole, SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims';
-import { formatMoney } from '@/shared/lib/format';
+import { formatMoney, formatPercent } from '@/shared/lib/format';
 import { db, hasLiveKp, type Db } from '../db';
 import { isOverdueRequest } from '../clinic-core';
 import { assistanceName, currentAssistance, linesOf, subTotals } from '../assistance-core';
 import { API, forbidden, requireSession, route } from '../http';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
+import { dmsParam } from '../params';
 
 export function requireStaff(user: SessionUser): void {
   if (!isStaffRole(user.role)) throw forbidden();
@@ -108,7 +109,7 @@ function kpisFor(d: Db, user: SessionUser, now: number): Kpi[] {
     }
     case 'underwriter': {
       const soon = d.clients.filter((c) => c.renewalDate && parseIso(c.renewalDate) - now <= 30 * DAY && parseIso(c.renewalDate) >= startOfDay(now));
-      const loss = d.clients.filter((c) => (c.lossRatio ?? 0) >= 0.8);
+      const loss = d.clients.filter((c) => (c.lossRatio ?? 0) >= dmsParam('lossRatioWarn'));
       return [
         { key: 'policies', label: 'Активные полисы', value: activePolicies, format: 'number', to: '/staff/policies?status=active' },
         { key: 'renewals', label: 'Продления за 30 дней', value: soon.length, format: 'number', to: '/staff/clients?view=renewals' },
@@ -146,7 +147,7 @@ function attentionFor(d: Db, user: SessionUser, now: number): AttentionItem[] {
   const out: AttentionItem[] = [];
   if (can(user, 'clients.read')) {
     out.push({ key: 'renewals_no_offer', label: 'Продления < 30 дн без КП', count: renewalsWithoutOffer(d, now).length, to: '/staff/clients?view=renewals' });
-    out.push({ key: 'high_loss_ratio', label: 'Убыточность выше 80%', count: d.clients.filter((c) => (c.lossRatio ?? 0) >= 0.8).length, to: '/staff/clients?view=loss' });
+    out.push({ key: 'high_loss_ratio', label: `Убыточность от ${formatPercent(dmsParam('lossRatioWarn'))}`, count: d.clients.filter((c) => (c.lossRatio ?? 0) >= dmsParam('lossRatioWarn')).length, to: '/staff/clients?view=loss' });
   }
   if (can(user, 'claims.read')) {
     out.push({ key: 'sla_overdue', label: 'Убытки с просроченным SLA', count: d.claims.filter((c) => isOverdue(c, now)).length, to: '/staff/claims?overdue=1' });

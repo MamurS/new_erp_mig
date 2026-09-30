@@ -22,9 +22,6 @@ import type {
 } from '@/shared/types';
 import type { GuaranteeView, RegistrySummary, RegistryView } from '@/shared/types/dto';
 import {
-  CHECK_FAILS_BEFORE_LOCK,
-  CHECK_LOCK_MS,
-  CHECKS_PER_HOUR,
   coverageStatus,
   limitState,
   needsSecondApproval,
@@ -37,6 +34,7 @@ import {
 } from '@/shared/domain/clinics';
 import { signWebhook } from '@/shared/integration/webhook';
 import { db, type ClaimRow, type Db, type InsuredRow, type GuaranteeRow, type WebhookDeliveryRow, type WebhookEndpointRow } from './db';
+import { dmsParam } from './params';
 import { audit, conflict, HttpError, insuredLabel, notFound } from './http';
 import { PROGRAMS } from './programs';
 import { randomId } from './rng';
@@ -81,7 +79,7 @@ export function priceListOf(d: Db, clinicId: UUID, payer: Payer = 'mig'): PriceL
 // ---------------------------------------------------------------- visits & coverage
 
 const tooManyChecks = () => new HttpError(429, 'rate_limited', 'Слишком много проверок. Повторите позже');
-const lockedChecks = () => new HttpError(429, 'rate_limited', 'Слишком много неудачных проверок. Проверки заблокированы на 15 минут');
+const lockedChecks = () => new HttpError(429, 'rate_limited', `Слишком много неудачных проверок. Проверки заблокированы на ${dmsParam('pinflLockMinutes')} мин`);
 const staleCode = () => new HttpError(410, 'conflict', 'Код устарел, попросите пациента обновить карточку');
 const noPolicy = () => new HttpError(404, 'not_found', 'Полис не найден или ПИНФЛ не совпадает');
 
@@ -98,7 +96,7 @@ export function coverageFor(d: Db, visit: Visit): CoverageCheckResult {
   const limits = limitsFor(d, i);
   const stateOf = (c: ServiceCategory) => {
     const l = limits.find((x) => x.category === (c === 'diagnostics_advanced' ? 'outpatient' : c));
-    return l ? limitState(l.limit, l.used) : 'exhausted';
+    return l ? limitState(l.limit, l.used, dmsParam('limitLowShare')) : 'exhausted';
   };
   return {
     visitId: visit.id,
@@ -114,8 +112,8 @@ export function coverageFor(d: Db, visit: Visit): CoverageCheckResult {
 }
 
 /**
- * Checks a patient and opens a visit (CLINIC_SPEC §3). Policy+PINFL checks are limited to 30 an hour
- * per user or key; 10 failures in a row lock checks for 15 minutes. Every check is audited.
+ * Checks a patient and opens a visit (CLINIC_SPEC §3). Policy+PINFL checks per user or key are limited
+ * by the DMS parameters `pinflChecksPerHour`, `pinflFailsBeforeLock` and `pinflLockMinutes`. Every check is audited.
  */
 export function checkPatient(input: CheckInput, actor: ClinicActor, channel: 'portal' | 'api'): CoverageCheckResult {
   const d = db();
@@ -131,7 +129,7 @@ export function checkPatient(input: CheckInput, actor: ClinicActor, channel: 'po
       const recent = d.checkAttempts.filter((a) => a.userId === actor.id);
       let streak = 0;
       for (let k = recent.length - 1; k >= 0 && !recent[k]!.ok; k--) streak++;
-      if (streak >= CHECK_FAILS_BEFORE_LOCK) d.checkLocks.push({ userId: actor.id, until: now + CHECK_LOCK_MS });
+      if (streak >= dmsParam('pinflFailsBeforeLock')) d.checkLocks.push({ userId: actor.id, until: now + dmsParam('pinflLockMinutes') * 60_000 });
     }
     audit(actor, 'clinic_check_failed', { targetType: 'clinic', targetId: actor.clinicId, reason });
     throw error;
@@ -147,7 +145,7 @@ export function checkPatient(input: CheckInput, actor: ClinicActor, channel: 'po
     insuredId = row.insuredId;
     method = channel === 'api' ? 'api' : 'qr';
   } else {
-    if (mine.length >= CHECKS_PER_HOUR) throw tooManyChecks();
+    if (mine.length >= dmsParam('pinflChecksPerHour')) throw tooManyChecks();
     const policy = d.policies.find((p) => p.number === input.policyNumber);
     const person = policy && d.insured.find((i) => i.policyId === policy.id && i.pinfl === input.pinfl && i.status === 'active');
     if (!person) return fail('Полис и ПИНФЛ не совпали', noPolicy(), true);
@@ -245,12 +243,15 @@ export async function createAppointment(d: Db, who: InsuredRow, input: { clinicI
   return a;
 }
 
+/** Response time of a clinic to a request, minutes: its individual norm or the DMS parameter. */
+export function clinicResponseMinutes(d: Db, clinicId: UUID): number {
+  return d.clinics.find((c) => c.id === clinicId)?.responseSlaMinutes ?? dmsParam('clinicResponseMinutes');
+}
+
 /** Requests without an answer longer than the clinic's response time (they go to the MIG operator). */
 export function isOverdueRequest(d: Db, a: Appointment, now = Date.now()): boolean {
   if (a.status !== 'requested' || a.proposedStartsAt) return false;
-  const clinic = d.clinics.find((c) => c.id === a.clinicId);
-  const sla = (clinic?.responseSlaMinutes ?? 120) * 60_000;
-  return now - parseIso(a.createdAt) > sla;
+  return now - parseIso(a.createdAt) > clinicResponseMinutes(d, a.clinicId) * 60_000;
 }
 
 // ---------------------------------------------------------------- guarantees
@@ -264,7 +265,7 @@ export function toGuaranteeView(d: Db, g: GuaranteeRow): GuaranteeView {
   refreshGuarantee(g);
   const { insuredId: _i, ...rest } = g;
   const amount = g.approvedAmount ?? g.estimatedCost;
-  const required = needsSecondApproval(amount) ? 2 : 1;
+  const required = needsSecondApproval(amount, dmsParam('guaranteeDualApprovalThreshold')) ? 2 : 1;
   return {
     ...rest,
     clinicName: d.clinics.find((c) => c.id === g.clinicId)?.name ?? '—',

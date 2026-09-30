@@ -10,6 +10,8 @@ import { EmptyState, QueryState, Skeleton } from '@/shared/ui/states';
 import { buttonVariants } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/cn';
 import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
+import { useDmsParam } from '@/shared/api/queries/params';
+import { limitWarnRatio } from '@/shared/config/dmsParameters';
 
 const TOO_FEW = 'Слишком мало данных для показа';
 
@@ -52,6 +54,7 @@ function Slices({ title, slices, total }: { title: string; slices: HrStatsSlice[
 }
 
 function StatsView({ s }: { s: HrStats }) {
+  const lowShare = useDmsParam('limitLowShare');
   if (s.insuredCount === 0) {
     return (
       <HrCard>
@@ -86,7 +89,7 @@ function StatsView({ s }: { s: HrStats }) {
           ) : (
             <>
               <p className="font-heading text-[32px] font-semibold leading-none num">{s.budgetUsedPct}%</p>
-              <ProgressBar value={s.budgetUsedPct} max={100} warn={s.budgetUsedPct >= 80} label="Использование бюджета" className="mt-1 h-2.5" />
+              <ProgressBar value={s.budgetUsedPct} max={100} warn={s.budgetUsedPct >= limitWarnRatio({ limitLowShare: lowShare }) * 100} label="Использование бюджета" className="mt-1 h-2.5" />
             </>
           )}
         </HrCard>

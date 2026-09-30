@@ -4,16 +4,18 @@ import { formatMoney } from '@/shared/lib/format';
 import { isNearLimit } from '@/shared/domain/limits';
 import { limitLeft } from '@/shared/domain/assistance';
 import { cn } from '@/shared/lib/cn';
+import { useDmsParam } from '@/shared/api/queries/params';
 
-/** «Сколько осталось»: remaining per category, peach when ≥ 80 % used. */
+/** «Сколько осталось»: remaining per category, peach when the limit is running low (DMS parameter `limitLowShare`). */
 export function LimitsList({ limits }: { limits: LimitUsage[] }) {
   const { t } = useI18n();
+  const lowShare = useDmsParam('limitLowShare');
   return (
     <ul className="flex flex-col gap-2.5">
       {limits.map((l) => {
         // Approved guarantee letters reserve the limit until the clinic's line is accepted (ASSISTANCE_SPEC §5.2).
         const reserved = l.reserved ?? 0;
-        const near = isNearLimit(l.used + reserved, l.limit);
+        const near = isNearLimit(l.used + reserved, l.limit, lowShare);
         const left = limitLeft(l.limit, l.used, reserved);
         const pct = l.limit > 0 ? Math.min(100, Math.round(((l.used + reserved) / l.limit) * 100)) : 0;
         return (

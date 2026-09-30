@@ -34,6 +34,7 @@ import { kpNewPath } from '@/features/kp/paths';
 import { useTopbar } from '../topbar';
 import { HrLetterDialog } from '../components/HrLetterDialog';
 import { LossBar, RenewalCell } from '../components/cells';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 const VIEWS = [
   { key: '', label: 'Все' },
@@ -246,6 +247,7 @@ export default function ClientsPage() {
 
 function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void; onOpen: () => void }) {
   const q = useClient(id);
+  const lossWarn = useDmsParam('lossRatioWarn');
   const canOffer = useCan('kp.create');
   const navigate = useNavigate();
   const [letterOpen, setLetterOpen] = useState(false);
@@ -265,7 +267,7 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
           <div className="grid grid-cols-2 gap-2">
             <MiniKpi label="Застрахованных" value={formatNumber(c.insuredCount)} />
             <MiniKpi label="Премия" value={c.premium ? formatMoneyShort(c.premium) : '—'} />
-            <MiniKpi label="Убыточность" value={c.lossRatio === null ? '—' : formatPercent(c.lossRatio)} tone={(c.lossRatio ?? 0) >= 0.8 ? 'warning' : 'default'} />
+            <MiniKpi label="Убыточность" value={c.lossRatio === null ? '—' : formatPercent(c.lossRatio)} tone={(c.lossRatio ?? 0) >= lossWarn ? 'warning' : 'default'} />
             <MiniKpi label="Программа" value={c.program ? PROGRAM_LABEL[c.program] : '—'} />
           </div>
           <section>

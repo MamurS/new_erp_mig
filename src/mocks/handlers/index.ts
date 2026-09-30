@@ -15,6 +15,7 @@ import { policyHandlers } from './policies';
 import { meHandlers } from './me';
 import { assistHandlers } from './assist';
 import { staffAssistanceHandlers } from './staff-assistance';
+import { paramHandlers } from './params';
 import { API, notFound, route } from '../http';
 
 /*
@@ -38,6 +39,7 @@ export const handlers = [
   ...meHandlers,
   ...assistHandlers,
   ...staffAssistanceHandlers,
+  ...paramHandlers,
   // Unknown API routes behave like a real server: 404.
   http.all(
     `${API}/*`,

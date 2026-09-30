@@ -77,6 +77,7 @@ const staffRoutes: RouteObject[] = [
   guarded('reports', sectionRoles('/staff/reports'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ReportsPage')) }]),
   guarded('audit', sectionRoles('/staff/audit'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/AuditPage')) }]),
   guarded('admin/users', sectionRoles('/staff/admin/users'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/UsersPage')) }]),
+  guarded('admin/parameters', sectionRoles('/staff/admin/parameters'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ParametersPage')) }]),
 ];
 
 const hrRoutes: RouteObject[] = [

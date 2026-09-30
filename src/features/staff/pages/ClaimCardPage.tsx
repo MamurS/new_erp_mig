@@ -26,6 +26,8 @@ import { Tooltip } from '@/shared/ui/tooltip';
 import { SlaCell } from '../components/cells';
 import { CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
+import { useDmsParam } from '@/shared/api/queries/params';
+import { isNearLimit } from '@/shared/domain/limits';
 
 const SOURCE_LABEL = { app: 'Приложение', clinic_invoice: 'Счёт клиники', operator: 'Куратор МИГ', assistance: 'Счёт ассистанса' } as const;
 
@@ -154,6 +156,7 @@ function TransitionButtons({ claim, onPick }: { claim: ClaimDetail; onPick: (to:
 }
 
 function LimitCheckCard({ claim }: { claim: ClaimDetail }) {
+  const lowShare = useDmsParam('limitLowShare');
   const l = claim.limitCheck;
   const payout = claim.amountApproved ?? claim.amountClaimed;
   const exceeds = payout > l.remaining;
@@ -165,7 +168,7 @@ function LimitCheckCard({ claim }: { claim: ClaimDetail }) {
         <span className="num font-semibold">{formatMoney(l.limit)}</span>, после выплаты останется{' '}
         <span className={cn('num font-semibold', l.remainingAfter < 0 && 'text-danger-text')}>{formatMoney(Math.max(0, l.remainingAfter))}</span>
       </p>
-      <ProgressBar className="mt-3 h-3" value={l.used + Math.min(payout, l.remaining)} max={l.limit} warn={(l.used + payout) / l.limit >= 0.8} label={`Лимит «${label}»`} />
+      <ProgressBar className="mt-3 h-3" value={l.used + Math.min(payout, l.remaining)} max={l.limit} warn={isNearLimit(l.used + payout, l.limit, lowShare)} label={`Лимит «${label}»`} />
       <div className="mt-2 flex justify-between text-[12px] text-muted">
         <span>Использовано + эта выплата</span>
         <span className="num">{formatMoney(l.used + payout, false)} / {formatMoney(l.limit)}</span>

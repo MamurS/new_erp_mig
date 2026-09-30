@@ -11,6 +11,7 @@ import { parseIso, tzIso } from '../time';
 import { toClient, toInsuredListItem } from '../views';
 import { PROGRAMS } from '../programs';
 import { renewalsWithoutOffer } from './dashboard';
+import { dmsParam } from '../params';
 
 function findClient(id: string): ClientRow {
   const c = db().clients.find((x) => x.id === id);
@@ -41,7 +42,7 @@ export const clientHandlers = [
         const y = new Date(now).getFullYear();
         list = list.filter((c) => c.renewalDate && c.renewalDate >= `${y}-10-01` && c.renewalDate <= `${y}-12-31`);
       }
-      if (view === 'loss') list = list.filter((c) => (c.lossRatio ?? 0) >= 0.8);
+      if (view === 'loss') list = list.filter((c) => (c.lossRatio ?? 0) >= dmsParam('lossRatioWarn'));
       if (view === 'renewals') {
         const ids = new Set(renewalsWithoutOffer(d, now).map((c) => c.id));
         list = list.filter((c) => ids.has(c.id));

@@ -8,7 +8,7 @@ import { errorMessage } from '@/shared/api/client';
 import { downloadFile } from '@/shared/api/files';
 import { useUser } from '@/shared/auth/session';
 import { can } from '@/shared/auth/permissions';
-import { GUARANTEE_DUAL_APPROVAL_THRESHOLD, GUARANTEE_STATUS_CHIP, GUARANTEE_STATUS_LABEL, needsSecondApproval } from '@/shared/domain/clinics';
+import { GUARANTEE_STATUS_CHIP, GUARANTEE_STATUS_LABEL, needsSecondApproval } from '@/shared/domain/clinics';
 import { guaranteeDecisionSchema } from '@/shared/schemas/forms';
 import { addDaysISO, formatDate, formatDateTime, formatMoney, todayISO } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
@@ -22,6 +22,7 @@ import { EmptyState } from '@/shared/ui/states';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 const TABS: [string, string][] = [
   ['requested', 'Ждут решения'],
@@ -36,13 +37,15 @@ type Mode = 'approve' | 'reject' | 'request_info';
 function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void }) {
   const user = useUser()!;
   const decide = useDecideGuarantee();
+  const threshold = useDmsParam('guaranteeDualApprovalThreshold');
+  const validityDays = useDmsParam('guaranteeValidityDays');
   // MIG decides escalations and letters of clients without an assistance (ASSISTANCE_SPEC §9.1).
   const canDecide = can(user, 'guarantees.decide') && can(user, 'assist.guarantees.decide', { assistanceId: g.assistanceId ?? null, escalated: g.escalated === true }) && g.status === 'requested';
   const firstApproval = g.approvals[0];
   const alreadyApprovedByMe = g.approvals.some((a) => a.byId === user.id);
   const [mode, setMode] = useState<Mode>('approve');
   const [amount, setAmount] = useState(String(g.approvedAmount ?? g.estimatedCost));
-  const [validUntil, setValidUntil] = useState(g.validUntil ?? addDaysISO(todayISO(), 30));
+  const [validUntil, setValidUntil] = useState(g.validUntil ?? addDaysISO(todayISO(), validityDays));
   const [reason, setReason] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const amountNum = Number(amount.replace(/\s/g, ''));
@@ -134,7 +137,7 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
       )}
       {firstApproval && g.status === 'requested' && (
         <p className="mt-3 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="four-eyes-note">
-          Первое одобрение: {firstApproval.byName}, {formatDateTime(firstApproval.at)}. Сумма выше {formatMoney(GUARANTEE_DUAL_APPROVAL_THRESHOLD)} — нужно одобрение второго врача-эксперта.
+          Первое одобрение: {firstApproval.byName}, {formatDateTime(firstApproval.at)}. Сумма выше {formatMoney(threshold)} — нужно одобрение второго врача-эксперта.
           {alreadyApprovedByMe && ' Вы уже одобрили это письмо.'}
         </p>
       )}
@@ -156,7 +159,7 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
           </div>
           {mode === 'approve' ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Сумма, UZS" error={errors.amount} hint={needsSecondApproval(amountNum) ? 'Выше порога — понадобится второй врач-эксперт' : undefined}>
+              <Field label="Сумма, UZS" error={errors.amount} hint={needsSecondApproval(amountNum, threshold) ? 'Выше порога — понадобится второй врач-эксперт' : undefined}>
                 {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={amount} onChange={(e) => setAmount(e.target.value)} />}
               </Field>
               <Field label="Действует до" error={errors.validUntil}>
@@ -176,6 +179,7 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
 
 export default function GuaranteesQueuePage() {
   useDocumentTitle('Гарантийные письма');
+  const threshold = useDmsParam('guaranteeDualApprovalThreshold');
   useTopbar([{ label: 'Гарантийные письма' }]);
   const [f, setF] = useUrlFilters(['status', 'clinicId', 'scope'] as const);
   const status = TABS.some(([k]) => k === f.status) ? f.status : 'requested';
@@ -216,7 +220,7 @@ export default function GuaranteesQueuePage() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-[22px] font-bold">Гарантийные письма</h1>
         <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted">
-          <span>МИГ решает эскалации ассистансов и письма клиентов без ассистанса. Выше {formatMoney(GUARANTEE_DUAL_APPROVAL_THRESHOLD)} письмо одобряют два врача-эксперта</span>
+          <span>МИГ решает эскалации ассистансов и письма клиентов без ассистанса. Выше {formatMoney(threshold)} письмо одобряют два врача-эксперта</span>
           <label className="flex items-center gap-1.5 text-text">
             <input type="checkbox" checked={f.scope === 'all'} onChange={(e) => setF({ scope: e.target.checked ? 'all' : null })} />
             Показать решения ассистансов

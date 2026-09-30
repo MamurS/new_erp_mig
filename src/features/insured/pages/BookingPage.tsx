@@ -17,6 +17,7 @@ import { toast } from '@/shared/ui/toast';
 import { BIG, CardSkeletons, ChoiceChip, Empty, LoadError, ScreenHeader, SPECIALTY_ICON, WizardSteps } from '../components';
 import { dayLabel, isSpecialty, isUuid, limitForSpecialty, nextDays, SPECIALTIES } from '../lib';
 import { limitLeft } from '@/shared/domain/assistance';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 interface SlotPick {
   clinicId: string;
@@ -257,7 +258,8 @@ function StepWhere(p: {
   const limits = useMeLimits();
   const cat = limitForSpecialty(p.specialty);
   const usage = limits.data?.find((l) => l.category === cat);
-  const warn = usage && isNearLimit(usage.used, usage.limit);
+  const lowShare = useDmsParam('limitLowShare');
+  const warn = usage && isNearLimit(usage.used, usage.limit, lowShare);
 
   const list = useMemo(() => {
     const all = clinics.data ?? [];

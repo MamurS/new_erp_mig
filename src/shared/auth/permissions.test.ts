@@ -116,7 +116,14 @@ const parse = (table: string) =>
     .split('\n')
     .map((line) => line.split('|').slice(1, -1).map((c) => c.trim()))
     .map(([action, ...cells]) => ({ action: /`([^`]+)`/.exec(action!)![1] as Action, cells }));
+/** DMS business parameters (DECISIONS: «Параметры ДМС»). Columns: all 13 roles. */
+const PARAMS_TABLE = `
+| \`dms_params.read\` | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`dms_params.propose\` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`dms_params.approve\` | ✗ | ✓, кроме своих | ✗ | ✗ | ✓, кроме своих | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+`;
 const rows = parse(TABLE);
+const paramRows = parse(PARAMS_TABLE);
 const clinicRows = parse(CLINIC_TABLE);
 const policyRows = parse(POLICY_TABLE);
 /** A row may name several actions (`a`, `b`): one entry per action. */
@@ -130,7 +137,7 @@ const ASSIST_ROLES: Role[] = ['asst_operator', 'asst_doctor', 'asst_billing', 'a
 
 describe('permissions matrix (SPEC §4)', () => {
   it('covers every action exactly', () => {
-    expect([...rows, ...clinicRows, ...policyRows, ...assistRows].map((r) => r.action).sort()).toEqual([...ACTIONS].sort());
+    expect([...rows, ...clinicRows, ...policyRows, ...assistRows, ...paramRows].map((r) => r.action).sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -320,4 +327,28 @@ describe('assistance permissions matrix (ASSISTANCE_SPEC §10)', () => {
         expect(can(userFor(role), action, { companyId: COMPANY, insuredId: INSURED, clinicId: CLINIC })).toBe(false);
       }
   });
+});
+
+describe('DMS parameters permissions', () => {
+  const columns: Role[] = [...ROLES, ...ASSIST_ROLES];
+  for (const { action, cells } of paramRows) {
+    columns.forEach((role, i) => {
+      const cell = cells[i]!;
+      it(`${action} × ${role} = ${cell}`, () => {
+        const user = userFor(role);
+        if (cell === '✗') {
+          expect(can(user, action)).toBe(false);
+          expect(can(user, action, { createdById: '99999999-9999-4999-8999-999999999999' })).toBe(false);
+          return;
+        }
+        if (cell === '✓') {
+          expect(can(user, action)).toBe(true);
+          return;
+        }
+        expect(cell).toBe('✓, кроме своих');
+        expect(can(user, action, { createdById: '99999999-9999-4999-8999-999999999999' })).toBe(true);
+        expect(can(user, action, { createdById: user.id })).toBe(false);
+      });
+    });
+  }
 });

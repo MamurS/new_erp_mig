@@ -14,6 +14,7 @@ import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requ
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
+import { dmsParam } from '../params';
 
 const DEFAULT_SUM = 200_000_000;
 const DEFAULT_PREMIUM = 5_000_000;
@@ -83,7 +84,7 @@ export const kpHandlers = [
         familyMembers: active.reduce((s, i) => s + i.familyMembersCount, 0),
         coverageStart: isoDay(start),
         coverageEnd: isoDay(end.getTime() - DAY),
-        validUntil: isoDay(today + 30 * DAY),
+        validUntil: isoDay(today + dmsParam('kpValidityDays') * DAY),
         paymentTerms: 'quarterly',
         assistanceId: policy ? currentAssistance(d, policy.id) : null,
       };

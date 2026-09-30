@@ -4,9 +4,11 @@ import { LIMIT_CATEGORY_LABEL } from '@/shared/domain/labels';
 import { isNearLimit } from '@/shared/domain/limits';
 import { formatMoney } from '@/shared/lib/format';
 import { ProgressBar } from '@/shared/ui/chips';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 export function LimitBars({ limits }: { limits: LimitUsage[] }) {
-  const near = limits.filter((l) => isNearLimit(l.used, l.limit));
+  const lowShare = useDmsParam('limitLowShare');
+  const near = limits.filter((l) => isNearLimit(l.used, l.limit, lowShare));
   return (
     <div className="flex flex-col gap-3">
       {near.length > 0 && (
@@ -19,7 +21,7 @@ export function LimitBars({ limits }: { limits: LimitUsage[] }) {
         </div>
       )}
       {limits.map((l) => {
-        const warn = isNearLimit(l.used, l.limit);
+        const warn = isNearLimit(l.used, l.limit, lowShare);
         return (
           <div key={l.category}>
             <div className="mb-1 flex justify-between gap-2">

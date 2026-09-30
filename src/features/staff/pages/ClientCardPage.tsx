@@ -26,6 +26,7 @@ import { useTopbar } from '../topbar';
 import { ClientDocumentsTable } from '../components/ClientDocumentsTable';
 import { HrLetterDialog } from '../components/HrLetterDialog';
 import { AssistanceBlock } from '../assistance/AssistanceBlock';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 const TAB_KEYS = ['tab', 'highlight'] as const;
 const TABS = ['overview', 'insured', 'policies', 'claims', 'documents', 'history'];
@@ -35,6 +36,7 @@ const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'и�
 export default function ClientCardPage() {
   const { clientId = '' } = useParams();
   const q = useClient(clientId);
+  const lossWarn = useDmsParam('lossRatioWarn');
   const c = q.data;
   useDocumentTitle('Карточка клиента');
   useTopbar([{ label: 'Клиенты', to: '/staff/clients' }, { label: c?.name ?? 'Клиент' }]);
@@ -89,7 +91,7 @@ export default function ClientCardPage() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <MiniKpi label="Застрахованных" value={formatNumber(c.insuredCount)} />
             <MiniKpi label="Премия" value={c.premium ? formatMoneyShort(c.premium) : '—'} />
-            <MiniKpi label="Убыточность" value={c.lossRatio === null ? '—' : formatPercent(c.lossRatio)} tone={(c.lossRatio ?? 0) >= 0.8 ? 'warning' : 'default'} />
+            <MiniKpi label="Убыточность" value={c.lossRatio === null ? '—' : formatPercent(c.lossRatio)} tone={(c.lossRatio ?? 0) >= lossWarn ? 'warning' : 'default'} />
             <div className="rounded-btn bg-rail px-3 py-2">
               <div className="text-[12px] text-muted">Продление</div>
               <div className="font-bold">

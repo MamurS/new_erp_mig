@@ -18,11 +18,14 @@ import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { PageHeader } from '@/shared/ui/page';
 import { useTopbar } from '../topbar';
+import { useDmsParam } from '@/shared/api/queries/params';
+import { formatMoney } from '@/shared/lib/format';
 
 function CreateDialog({ onClose }: { onClose: () => void }) {
+  const defaultLimit = useDmsParam('assistanceGuaranteeAuthority');
   const create = useCreateAssistance();
   const navigate = useNavigate();
-  const [v, setV] = useState({ name: '', phone24x7: '', integrationMode: 'portal', contractNumber: '', feeModel: 'pepm', feeValue: '15000', limit: '10000000', days: '10', adminName: '', adminEmail: '' });
+  const [v, setV] = useState({ name: '', phone24x7: '', integrationMode: 'portal', contractNumber: '', feeModel: 'pepm', feeValue: '15000', limit: '', days: '10', adminName: '', adminEmail: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }));
   const submit = async () => {
@@ -34,7 +37,8 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
       contract: {
         feeModel: v.feeModel,
         feeValue: Number(v.feeValue.replace(/\s/g, '').replace(',', '.')),
-        guaranteeAuthorityLimit: Number(v.limit.replace(/\s/g, '')),
+        // Empty: no individual value, the DMS parameter applies.
+        guaranteeAuthorityLimit: v.limit.trim() ? Number(v.limit.replace(/\s/g, '')) : undefined,
         rebillPaymentDays: Number(v.days),
       },
       admin: { fullName: v.adminName, email: v.adminEmail },
@@ -106,7 +110,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
         <Field label={v.feeModel === 'percent_of_claims' ? 'Доля (0,07 = 7%)' : 'Сумма, UZS'} error={errors['contract.feeValue']}>
           {(a) => <Input {...a} inputMode="decimal" maxLength={14} value={v.feeValue} onChange={set('feeValue')} />}
         </Field>
-        <Field label="Полномочия по ГП, UZS" error={errors['contract.guaranteeAuthorityLimit']}>
+        <Field label="Полномочия по ГП, UZS" error={errors['contract.guaranteeAuthorityLimit']} hint={`Пусто — по параметру ДМС (${formatMoney(defaultLimit)})`}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={v.limit} onChange={set('limit')} />}
         </Field>
         <Field label="Срок оплаты счёта, дней" error={errors['contract.rebillPaymentDays']}>

@@ -221,7 +221,7 @@ export interface Clinic {
   contractUntil: ISODate;
   distanceKm?: number;                     // заполняется для /api/me/... (вымышленное)
   integrationMode: IntegrationMode;
-  responseSlaMinutes: number;              // срок ответа клиники на заявку
+  responseSlaMinutes?: number;             // индивидуальный срок ответа на заявку; нет — параметр ДМС clinicResponseMinutes
 }
 
 export interface Slot {
@@ -254,7 +254,8 @@ export type AuditAction =
   | 'integration_key_created' | 'integration_key_revoked' | 'webhook_created'
   | 'policy_issued' | 'policy_change_requested' | 'policy_change_decided'
   | 'assistance_assigned' | 'case_created' | 'guarantee_escalated' | 'clinic_payment_recorded'
-  | 'rebill_submitted' | 'rebill_line_decided' | 'rebill_paid' | 'qa_reviewed' | 'complaint_resolved';
+  | 'rebill_submitted' | 'rebill_line_decided' | 'rebill_paid' | 'qa_reviewed' | 'complaint_resolved'
+  | 'dms_param_proposed' | 'dms_param_changed' | 'dms_param_rejected';
 
 export interface AuditEntry {
   id: UUID;
@@ -263,7 +264,7 @@ export interface AuditEntry {
   actorName: string;
   actorRole: Role;
   action: AuditAction;
-  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill';
+  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill' | 'parameter';
   targetId?: UUID;
   targetLabel?: string;                    // без ПДн: номер полиса или убытка, либо «Застрахованный #a1b2»
   reason?: string;
@@ -554,7 +555,7 @@ export interface AssistanceCompany {
     validTo: ISODate;
     feeModel: FeeModel;
     feeValue: number;                      // PEPM: сум за застрахованного в месяц; percent: доля 0..1; per_case: сум за обращение
-    guaranteeAuthorityLimit: Money;        // ГП до этой суммы ассистанс одобряет сам
+    guaranteeAuthorityLimit?: Money;       // ГП до этой суммы ассистанс одобряет сам; нет — параметр ДМС assistanceGuaranteeAuthority
     rebillPaymentDays: number;             // срок оплаты счёта МИГ
   };
   kpi?: AssistanceKpi;
@@ -636,4 +637,53 @@ export interface QaSample {
   comment?: string;
   reviewedById?: UUID;
   createdAt: ISODateTime;
+}
+
+// ---------- DMS business parameters (src/shared/config/dmsParameters.ts) ----------
+export type DmsParamKey =
+  | 'assistanceGuaranteeAuthority'
+  | 'guaranteeDualApprovalThreshold'
+  | 'guaranteeValidityDays'
+  | 'qaSampleShare'
+  | 'rebillReviewWorkdays'
+  | 'subRegistryReviewDays'
+  | 'clinicResponseMinutes'
+  | 'limitLowShare'
+  | 'lossRatioWarn'
+  | 'kpValidityDays'
+  | 'loginMaxAttempts'
+  | 'loginWindowMinutes'
+  | 'loginLockMinutes'
+  | 'pinflChecksPerHour'
+  | 'pinflFailsBeforeLock'
+  | 'pinflLockMinutes';
+
+export type DmsParamValues = Record<DmsParamKey, number>;
+
+export interface DmsParameter {
+  key: DmsParamKey;
+  value: number;
+  /** Never changed since the seed: the value is a demo value MIG still has to confirm. */
+  isDemo: boolean;
+  changedAt?: ISODateTime;
+  changedByName?: string;
+}
+
+export type DmsParamChangeStatus = 'pending' | 'applied' | 'rejected';
+
+/** A change is applied only after a second person (admin or underwriter) confirms it: four-eyes. */
+export interface DmsParamChange {
+  id: UUID;
+  key: DmsParamKey;
+  from: number;
+  to: number;
+  reason: string;
+  status: DmsParamChangeStatus;
+  proposedById: UUID;
+  proposedByName: string;
+  proposedAt: ISODateTime;
+  decidedById?: UUID;
+  decidedByName?: string;
+  decidedAt?: ISODateTime;
+  rejectReason?: string;
 }

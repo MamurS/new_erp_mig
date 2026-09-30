@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { approvalOutcome, limitState, parseCardInput, registryLineProblems, coverageStatus } from '@/shared/domain/clinics';
 import { hmacSha256Hex, parseSignatureHeader, signWebhook, verifyWebhook } from './webhook';
 import { keyCreateRequest, webhookUrl, webhookUrlProblem } from './schemas';
+import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 
 describe('webhook signature (HMAC-SHA256)', () => {
   it('matches the RFC 4231 / well-known test vectors', async () => {
@@ -70,9 +71,9 @@ describe('clinic domain rules', () => {
   });
 
   it('limit state and coverage without amounts', () => {
-    expect(limitState(1000, 100)).toBe('available');
-    expect(limitState(1000, 850)).toBe('low');
-    expect(limitState(1000, 1000)).toBe('exhausted');
+    expect(limitState(1000, 100, DMS_DEFAULTS.limitLowShare)).toBe('available');
+    expect(limitState(1000, 850, DMS_DEFAULTS.limitLowShare)).toBe('low');
+    expect(limitState(1000, 1000, DMS_DEFAULTS.limitLowShare)).toBe('exhausted');
     expect(coverageStatus('basic', 'dental')).toBe('not_covered');
     expect(coverageStatus('premium', 'inpatient')).toBe('needs_guarantee');
     expect(coverageStatus('standard', 'outpatient')).toBe('covered');
@@ -93,10 +94,10 @@ describe('clinic domain rules', () => {
   });
 
   it('four-eyes: above the threshold the same doctor cannot give the second approval', () => {
-    expect(approvalOutcome({ approvals: [] }, 5_000_000, 'd1')).toBe('approved');
-    expect(approvalOutcome({ approvals: [] }, 25_000_000, 'd1')).toBe('first_of_two');
-    expect(approvalOutcome({ approvals: [{ byId: 'd1', byName: '', at: '' }] }, 25_000_000, 'd1')).toBe('same_doctor');
-    expect(approvalOutcome({ approvals: [{ byId: 'd1', byName: '', at: '' }] }, 25_000_000, 'd2')).toBe('approved');
+    expect(approvalOutcome({ approvals: [] }, 5_000_000, 'd1', DMS_DEFAULTS.guaranteeDualApprovalThreshold)).toBe('approved');
+    expect(approvalOutcome({ approvals: [] }, 25_000_000, 'd1', DMS_DEFAULTS.guaranteeDualApprovalThreshold)).toBe('first_of_two');
+    expect(approvalOutcome({ approvals: [{ byId: 'd1', byName: '', at: '' }] }, 25_000_000, 'd1', DMS_DEFAULTS.guaranteeDualApprovalThreshold)).toBe('same_doctor');
+    expect(approvalOutcome({ approvals: [{ byId: 'd1', byName: '', at: '' }] }, 25_000_000, 'd2', DMS_DEFAULTS.guaranteeDualApprovalThreshold)).toBe('approved');
   });
 
   it('key form: scopes required, IP list parsed', () => {
