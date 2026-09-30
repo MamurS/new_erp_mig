@@ -13,7 +13,7 @@ import { StatusDot } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Card, Kv } from '@/shared/ui/page';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
-import { RenewalOfferDialog } from '../components/RenewalOfferDialog';
+import { kpNewPath } from '@/features/kp/paths';
 import { LimitRequestDialog } from '../components/LimitRequestDialog';
 import { RenewalCell } from '../components/cells';
 import { POLICY_TONE } from '../components/tones';
@@ -27,10 +27,10 @@ export default function PolicyCardPage() {
   const p = q.data;
   useDocumentTitle('Карточка полиса');
   useTopbar([{ label: 'Полисы', to: '/staff/policies' }, { label: p?.number ?? 'Полис' }]);
-  const canWrite = useCan('policies.write');
+  const canOffer = useCan('kp.create');
+  const navigate = useNavigate();
   const canLimit = useCan('limits.request_change');
   const canInsured = useCan('insured.read');
-  const [offer, setOffer] = useState(false);
   const [limit, setLimit] = useState(false);
   if (q.isLoading) return <SkeletonRows rows={10} />;
   if (q.isError || !p) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -53,7 +53,7 @@ export default function PolicyCardPage() {
               Запросить изменение лимита
             </Button>
           )}
-          {canWrite && p.status !== 'cancelled' && <Button onClick={() => setOffer(true)}>Подготовить КП на продление</Button>}
+          {canOffer && p.status !== 'cancelled' && <Button onClick={() => navigate(kpNewPath(p.clientId, p.id))}>Подготовить КП</Button>}
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -85,7 +85,6 @@ export default function PolicyCardPage() {
       <Card title="Документы" bodyClassName="p-0">
         <DocumentsList docs={p.documents} />
       </Card>
-      <RenewalOfferDialog open={offer} onOpenChange={setOffer} policyId={p.id} program={p.program} premium={p.premium} clientName={p.clientName} />
       <LimitRequestDialog open={limit} onOpenChange={setLimit} policyId={p.id} currentLimits={p.programInfo.limits} />
     </div>
   );

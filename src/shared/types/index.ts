@@ -198,7 +198,8 @@ export type AuditAction =
   | 'limit_change_request' | 'limit_change_approve' | 'limit_change_reject'
   | 'claim_transition' | 'export'
   | 'role_change' | 'user_deactivate'
-  | 'hr_add_employee' | 'hr_exclude_employee' | 'hr_import';
+  | 'hr_add_employee' | 'hr_exclude_employee' | 'hr_import'
+  | 'kp_created' | 'kp_sent' | 'kp_revoked' | 'kp_downloaded';
 
 export interface AuditEntry {
   id: UUID;
@@ -207,7 +208,7 @@ export interface AuditEntry {
   actorName: string;
   actorRole: Role;
   action: AuditAction;
-  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session';
+  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp';
   targetId?: UUID;
   targetLabel?: string;                    // без ПДн: номер полиса или убытка, либо «Застрахованный #a1b2»
   reason?: string;
@@ -244,8 +245,9 @@ export interface ClientDocument {
   id: UUID;
   clientId: UUID;
   title: string;
-  kind: 'policy' | 'contract' | 'invoice' | 'act' | 'program';
+  kind: 'policy' | 'contract' | 'invoice' | 'act' | 'program' | 'kp';
   createdAt: ISODate;
+  kpId?: UUID;                             // для kind === 'kp'
 }
 
 export interface ChatMessage {
@@ -275,4 +277,44 @@ export interface ApiError {
   code: 'unauthorized' | 'forbidden' | 'not_found' | 'validation' | 'conflict' | 'rate_limited' | 'server';
   message: string;                         // безопасный текст для показа пользователю
   fields?: Record<string, string>;         // ошибки валидации по полям
+}
+
+// ---------- Коммерческое предложение (KP_SPEC §4) ----------
+export type KpVariant = 'white' | 'grey' | 'black';
+export type KpLang = 'ru' | 'en';
+export type KpStatus = 'draft' | 'sent' | 'revoked';
+export type KpPaymentTerms = 'single' | 'quarterly' | 'monthly';
+
+export interface KpParams {
+  templateId: 'gold';
+  lang: KpLang;
+  variant: KpVariant;
+  sumInsured: Money;          // страховая сумма на одного застрахованного
+  premiumEmployee: Money;     // премия за сотрудника
+  premiumFamily: Money;       // премия за члена семьи
+  employees: number;          // число сотрудников
+  familyMembers: number;      // число членов семей
+  coverageStart: ISODate;
+  coverageEnd: ISODate;
+  validUntil: ISODate;        // срок действия предложения
+  paymentTerms: KpPaymentTerms;
+}
+
+export interface KpDocument {
+  id: UUID;
+  number: string;             // 'КП-2026-000123'
+  clientId: UUID;
+  clientName: string;
+  clientLegalForm: Client['legalForm'];   // для страницы-письма
+  clientInn: string;                      // для страницы-письма (не ПДн)
+  policyId?: UUID;
+  params: KpParams;
+  templateVersion: string;    // 'GOLD 09/26' — фиксируется на момент создания
+  totalPremium: Money;        // employees*premiumEmployee + familyMembers*premiumFamily
+  status: KpStatus;
+  createdById: UUID;
+  createdByName: string;
+  createdByEmail: string;     // рабочая почта андеррайтера для страницы-письма
+  createdAt: ISODateTime;
+  sentAt?: ISODateTime;
 }

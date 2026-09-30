@@ -5,7 +5,7 @@ import { can } from '@/shared/auth/permissions';
 import { isStaffRole, SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims';
 import { formatMoney } from '@/shared/lib/format';
-import { db, type Db } from '../db';
+import { db, hasLiveKp, type Db } from '../db';
 import { API, forbidden, requireSession, route } from '../http';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 
@@ -34,7 +34,7 @@ export function renewalsWithoutOffer(d: Db, now: number) {
       c.renewalDate &&
       parseIso(c.renewalDate) >= startOfDay(now) &&
       parseIso(c.renewalDate) - now <= 30 * DAY &&
-      !d.renewalOffers.includes(c.id),
+      !hasLiveKp(d, c.id),
   );
 }
 
@@ -198,7 +198,7 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
       if (!c.renewalDate || !c.activePolicyId) continue;
       const until = parseIso(c.renewalDate) - now;
       if (until > 45 * DAY || until < -DAY) continue;
-      const hasOffer = d.renewalOffers.includes(c.id);
+      const hasOffer = hasLiveKp(d, c.id);
       items.push({
         id: c.id,
         type: 'renewal',
@@ -209,7 +209,7 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
         status: hasOffer ? 'КП готово' : 'Нет КП',
         statusTone: hasOffer ? 'success' : until <= 30 * DAY ? 'warning' : 'default',
         dueAt: tzIso(parseIso(c.renewalDate)),
-        action: can(user, 'policies.write') && !hasOffer ? 'prepare_offer' : 'open',
+        action: can(user, 'kp.create') && !hasOffer ? 'prepare_offer' : 'open',
       });
     }
   }

@@ -72,8 +72,9 @@ const clientDocument: z.ZodType<T.ClientDocument> = z.object({
   id: uuid,
   clientId: uuid,
   title: z.string(),
-  kind: z.enum(['policy', 'contract', 'invoice', 'act', 'program']),
+  kind: z.enum(['policy', 'contract', 'invoice', 'act', 'program', 'kp']),
   createdAt: isoDate,
+  kpId: uuid.optional(),
 });
 export const clientDocuments = z.array(clientDocument);
 
@@ -298,8 +299,12 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'hr_add_employee',
     'hr_exclude_employee',
     'hr_import',
+    'kp_created',
+    'kp_sent',
+    'kp_revoked',
+    'kp_downloaded',
   ]),
-  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session']),
+  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp']),
   targetId: uuid.optional(),
   targetLabel: z.string().optional(),
   reason: z.string().optional(),
@@ -476,3 +481,50 @@ export const consentResult = z.object({ consentGivenAt: isoDateTime });
 export const ok = z.object({ ok: z.literal(true) });
 export const idResult = z.object({ id: uuid });
 export const inviteResult = z.object({ invited: z.number() });
+
+// ---- commercial offers ----
+const legalForm = z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']);
+export const kpParams: z.ZodType<T.KpParams> = z.object({
+  templateId: z.literal('gold'),
+  lang: z.enum(['ru', 'en']),
+  variant: z.enum(['white', 'grey', 'black']),
+  sumInsured: z.number().int().nonnegative(),
+  premiumEmployee: z.number().int().nonnegative(),
+  premiumFamily: z.number().int().nonnegative(),
+  employees: z.number().int().nonnegative(),
+  familyMembers: z.number().int().nonnegative(),
+  coverageStart: isoDate,
+  coverageEnd: isoDate,
+  validUntil: isoDate,
+  paymentTerms: z.enum(['single', 'quarterly', 'monthly']),
+});
+export const kpDocument: z.ZodType<T.KpDocument> = z.object({
+  id: uuid,
+  number: z.string(),
+  clientId: uuid,
+  clientName: z.string(),
+  clientLegalForm: legalForm,
+  clientInn: z.string(),
+  policyId: uuid.optional(),
+  params: kpParams,
+  templateVersion: z.string(),
+  totalPremium: z.number().int().nonnegative(),
+  status: z.enum(['draft', 'sent', 'revoked']),
+  createdById: uuid,
+  createdByName: z.string(),
+  createdByEmail: z.string(),
+  createdAt: isoDateTime,
+  sentAt: isoDateTime.optional(),
+});
+export const kpDocuments = z.array(kpDocument);
+export const kpDefaults: z.ZodType<D.KpDefaults> = z.object({
+  params: kpParams,
+  letter: z.object({
+    clientName: z.string(),
+    clientLegalForm: legalForm,
+    clientInn: z.string(),
+    policyId: uuid.optional(),
+    createdByName: z.string(),
+    createdByEmail: z.string(),
+  }),
+});

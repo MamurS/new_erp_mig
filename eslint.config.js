@@ -22,6 +22,11 @@ const htmlSinks = [
     message: 'String-based timers are forbidden.',
   },
 ];
+// HTML strings may be rendered only by src/features/kp/KpFrame.tsx (sandboxed iframe, see DECISIONS.md).
+const srcDocSink = {
+  selector: "JSXAttribute[name.name='srcDoc'], Property[key.name='srcdoc'], AssignmentExpression[left.property.name='srcdoc']",
+  message: 'srcDoc is allowed only in src/features/kp/KpFrame.tsx (sandboxed KP frame).',
+};
 
 const storageLocal = [
   { object: 'window', property: 'localStorage', message: 'Use src/shared/lib/storage.ts' },
@@ -44,6 +49,8 @@ export default tseslint.config(
       'playwright-report',
       'test-results',
       'coverage',
+      // Approved third-party brochure generator, kept verbatim as the reference copy.
+      'vendor',
     ],
   },
   js.configs.recommended,
@@ -65,13 +72,22 @@ export default tseslint.config(
       'no-implied-eval': 'error',
       'no-new-func': 'error',
       'no-script-url': 'error',
-      'no-restricted-syntax': ['error', ...htmlSinks],
+      'no-restricted-syntax': ['error', ...htmlSinks, srcDocSink],
       'no-restricted-properties': ['error', ...storageLocal, ...storageSession],
       'no-restricted-globals': ['error', localGlobal, sessionGlobal],
       'no-console': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
+  },
+  {
+    // The single place allowed to render an HTML string: a sandboxed iframe without scripts.
+    files: ['src/features/kp/KpFrame.tsx'],
+    rules: { 'no-restricted-syntax': ['error', ...htmlSinks] },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
   },
   {
     files: ['src/shared/lib/storage.ts'],

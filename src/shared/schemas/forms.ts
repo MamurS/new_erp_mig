@@ -3,7 +3,8 @@
  * Every string is trimmed and length-limited; inputs are normalised (phones, dates, digits).
  */
 import { z } from 'zod';
-import { claimCategory, claimStatus, limitCategory, programCode, specialty, staffRole } from '@/shared/api/schemas';
+import { claimCategory, claimStatus, limitCategory, specialty, staffRole } from '@/shared/api/schemas';
+import { todayISO } from '@/shared/lib/format';
 import { digitsOnly, parseRuDate } from '@/shared/lib/masks';
 
 const text = (min: number, max: number, msg?: string) =>
@@ -92,11 +93,44 @@ export const limitRequestSchema = z.object({
   justification: text(10, 1000, 'Обоснование: минимум 10 символов'),
 });
 export const rejectLimitSchema = z.object({ comment: text(3, 500) });
-export const renewalOfferSchema = z.object({
-  program: programCode,
-  premium: z.number({ invalid_type_error: 'Укажите премию' }).int().positive('Премия должна быть больше нуля').max(100_000_000_000),
-  termMonths: z.number().int().min(1).max(36),
-});
+const kpMoney = (label: string) =>
+  z
+    .number({ required_error: `Укажите ${label}`, invalid_type_error: `Укажите ${label}` })
+    .int('Только целые суммы')
+    .min(1, 'Сумма должна быть больше нуля')
+    .max(1_000_000_000_000, 'Не больше 10¹² UZS');
+const kpCount = z
+  .number({ required_error: 'Укажите количество', invalid_type_error: 'Укажите количество' })
+  .int('Только целое число')
+  .min(0, 'Не меньше 0')
+  .max(100_000, 'Не больше 100 000');
+
+/** Commercial offer parameters (KP_SPEC §4). `today` is injectable for tests. */
+export const makeKpParamsSchema = (today: () => string = () => todayISO()) =>
+  z
+    .object({
+      templateId: z.literal('gold'),
+      lang: z.enum(['ru', 'en']),
+      variant: z.enum(['white', 'grey', 'black']),
+      sumInsured: kpMoney('страховую сумму'),
+      premiumEmployee: kpMoney('премию'),
+      premiumFamily: kpMoney('премию'),
+      employees: kpCount.min(1, 'Нужен хотя бы один сотрудник'),
+      familyMembers: kpCount,
+      coverageStart: isoDateInput,
+      coverageEnd: isoDateInput,
+      validUntil: isoDateInput,
+      paymentTerms: z.enum(['single', 'quarterly', 'monthly']),
+    })
+    .superRefine((v, ctx) => {
+      if (v.coverageEnd <= v.coverageStart) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coverageEnd'], message: 'Окончание должно быть позже начала' });
+      }
+      if (v.validUntil < today()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['validUntil'], message: 'Срок действия не может быть в прошлом' });
+      }
+    });
+export const kpParamsSchema = makeKpParamsSchema();
 export const clientCreateSchema = z.object({
   legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
   name: text(2, 120),

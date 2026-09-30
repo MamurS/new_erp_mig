@@ -1,7 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { z } from 'zod';
 import type { ClaimStatus, LimitCategory, PiiField, Specialty, StaffRole } from '@/shared/types';
-import type { renewalOfferSchema } from '@/shared/schemas/forms';
 import { request } from '../client';
 import * as S from '../schemas';
 import { qk, type Params } from './keys';
@@ -52,24 +50,6 @@ export const usePolicies = (p: Params, enabled = true) =>
   useQuery({ queryKey: qk.policies(p), queryFn: () => request('/policies', { query: p, schema: S.policyPage }), enabled, ...list });
 export const usePolicy = (id: string | undefined) =>
   useQuery({ queryKey: qk.policy(id ?? ''), queryFn: () => request(`/policies/${id}`, { schema: S.policyDetail }), enabled: !!id });
-export function useRenewalOffer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (v: { policyId: string } & z.input<typeof renewalOfferSchema>) =>
-      request(`/policies/${v.policyId}/renewal-offer`, {
-        method: 'POST',
-        body: { program: v.program, premium: v.premium, termMonths: v.termMonths },
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['client'] });
-      void qc.invalidateQueries({ queryKey: ['clients'] });
-      void qc.invalidateQueries({ queryKey: ['policy'] });
-      void qc.invalidateQueries({ queryKey: ['queue'] });
-      void qc.invalidateQueries({ queryKey: qk.dashboard });
-    },
-  });
-}
-
 // ---- insured ----
 export const useInsuredList = (p: Params, enabled = true) =>
   useQuery({ queryKey: qk.insuredList(p), queryFn: () => request('/insured', { query: p, schema: S.insuredPage }), enabled, ...list });

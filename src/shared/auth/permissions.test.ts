@@ -26,6 +26,9 @@ const TABLE = `
 | \`audit.read\` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | \`users.manage\` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | \`hr.employees.manage\` | ✗ | ✗ | ✗ | ✗ | ✗ | свои | ✗ |
+| \`kp.create\` (создать, изменить черновик) | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`kp.send\` (отправить, отозвать) | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`kp.read\` (просмотр и скачивание) | ✓ | ✓ | ✗ | ✓ | ✓ | свои | ✗ |
 `;
 
 const ROLES: Role[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured'];

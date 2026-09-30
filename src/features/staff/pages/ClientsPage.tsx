@@ -30,7 +30,7 @@ import { toast } from '@/shared/ui/toast';
 import { CLIENT_TONE } from '../components/tones';
 import { ExportButton } from '../components/ExportButton';
 import { MiniKpi } from '../components/KpiCard';
-import { RenewalOfferDialog } from '../components/RenewalOfferDialog';
+import { kpNewPath } from '@/features/kp/paths';
 import { useTopbar } from '../topbar';
 import { HrLetterDialog } from '../components/HrLetterDialog';
 import { LossBar, RenewalCell } from '../components/cells';
@@ -246,8 +246,8 @@ export default function ClientsPage() {
 
 function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void; onOpen: () => void }) {
   const q = useClient(id);
-  const canOffer = useCan('policies.write');
-  const [offerOpen, setOfferOpen] = useState(false);
+  const canOffer = useCan('kp.create');
+  const navigate = useNavigate();
   const [letterOpen, setLetterOpen] = useState(false);
   const c = q.data;
   return (
@@ -281,9 +281,7 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
               )}
             </p>
             <div className="flex flex-wrap gap-2">
-              {canOffer && c.activePolicyId && (
-                <Button onClick={() => setOfferOpen(true)}>Подготовить КП</Button>
-              )}
+              {canOffer && <Button onClick={() => navigate(kpNewPath(c.id, c.activePolicyId))}>Подготовить КП</Button>}
               <Button variant="secondary" onClick={() => setLetterOpen(true)}>
                 <Mail className="h-3.5 w-3.5" aria-hidden /> Письмо HR
               </Button>
@@ -311,9 +309,6 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
           <Button variant="secondary" onClick={onOpen}>
             Открыть карточку
           </Button>
-          {c.activePolicyId && (
-            <RenewalOfferDialog open={offerOpen} onOpenChange={setOfferOpen} policyId={c.activePolicyId} program={c.program} premium={c.premium} clientName={c.name} />
-          )}
           <HrLetterDialog open={letterOpen} onOpenChange={setLetterOpen} clientId={c.id} clientName={c.name} />
         </div>
       )}

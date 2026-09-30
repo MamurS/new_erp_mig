@@ -4,12 +4,12 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip,
 import { Mail } from 'lucide-react';
 import type { InsuredListItem } from '@/shared/types/dto';
 import type { Policy } from '@/shared/types';
-import { useClient, useClientDocuments, useClientHistory, useClientInsured, usePolicies } from '@/shared/api/queries/staff';
+import { useClient, useClientHistory, useClientInsured, usePolicies } from '@/shared/api/queries/staff';
 import { useCan } from '@/shared/auth/guards';
 import { useUser } from '@/shared/auth/session';
 import { AUDIT_ACTION_LABEL, CLIENT_STATUS_LABEL, POLICY_STATUS_LABEL, PROGRAM_LABEL } from '@/shared/domain/labels';
 import { formatDate, formatDateTime, formatMoney, formatMoneyShort, formatNumber, formatPercent } from '@/shared/lib/format';
-import { useDebounced, useDocumentTitle } from '@/shared/lib/hooks';
+import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Avatar, Chip, StatusDot } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
@@ -19,12 +19,15 @@ import { EmptyState, ErrorState, QueryState, SkeletonRows } from '@/shared/ui/st
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { CLIENT_TONE, POLICY_TONE } from '../components/tones';
 import { MiniKpi } from '../components/KpiCard';
-import { RenewalOfferDialog } from '../components/RenewalOfferDialog';
+import { kpNewPath } from '@/features/kp/paths';
 import { RenewalCell } from '../components/cells';
 import { INSURED_CARD_ROLES } from '../nav';
 import { useTopbar } from '../topbar';
-import { DocumentsList } from '../components/DocumentsList';
+import { ClientDocumentsTable } from '../components/ClientDocumentsTable';
 import { HrLetterDialog } from '../components/HrLetterDialog';
+
+const TAB_KEYS = ['tab', 'highlight'] as const;
+const TABS = ['overview', 'insured', 'policies', 'claims', 'documents', 'history'];
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -34,11 +37,13 @@ export default function ClientCardPage() {
   const c = q.data;
   useDocumentTitle('Карточка клиента');
   useTopbar([{ label: 'Клиенты', to: '/staff/clients' }, { label: c?.name ?? 'Клиент' }]);
-  const canOffer = useCan('policies.write');
+  const canOffer = useCan('kp.create');
   const canPolicies = useCan('policies.read');
   const canInsured = useCan('insured.read');
-  const [offerOpen, setOfferOpen] = useState(false);
+  const navigate = useNavigate();
+  const [{ tab, highlight }, setF] = useUrlFilters(TAB_KEYS);
   const [letterOpen, setLetterOpen] = useState(false);
+  const visibleTabs = TABS.filter((t) => (t !== 'insured' || canInsured) && (t !== 'policies' || canPolicies));
 
   if (q.isLoading) return <SkeletonRows rows={10} />;
   if (q.isError || !c) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -61,10 +66,10 @@ export default function ClientCardPage() {
           <Button variant="secondary" onClick={() => setLetterOpen(true)}>
             <Mail className="h-3.5 w-3.5" aria-hidden /> Письмо HR
           </Button>
-          {canOffer && c.activePolicyId && <Button onClick={() => setOfferOpen(true)}>Подготовить КП</Button>}
+          {canOffer && <Button onClick={() => navigate(kpNewPath(c.id, c.activePolicyId))}>Подготовить КП</Button>}
         </div>
       </div>
-      <Tabs defaultValue="overview">
+      <Tabs value={visibleTabs.includes(tab) ? tab : 'overview'} onValueChange={(v) => setF({ tab: v === 'overview' ? null : v, highlight: null })}>
         <TabsList>
           <TabsTrigger value="overview">Обзор</TabsTrigger>
           {canInsured && <TabsTrigger value="insured">Застрахованные</TabsTrigger>}
@@ -138,15 +143,12 @@ export default function ClientCardPage() {
           </Card>
         </TabsContent>
         <TabsContent value="documents">
-          <DocumentsTab clientId={c.id} />
+          <ClientDocumentsTable clientId={c.id} highlightId={highlight || undefined} />
         </TabsContent>
         <TabsContent value="history">
           <HistoryTab clientId={c.id} />
         </TabsContent>
       </Tabs>
-      {c.activePolicyId && (
-        <RenewalOfferDialog open={offerOpen} onOpenChange={setOfferOpen} policyId={c.activePolicyId} program={c.program} premium={c.premium} clientName={c.name} />
-      )}
       <HrLetterDialog open={letterOpen} onOpenChange={setLetterOpen} clientId={c.id} clientName={c.name} />
     </div>
   );
@@ -213,15 +215,6 @@ function PoliciesTab({ clientId }: { clientId: string }) {
         onRowClick={(p) => navigate(`/staff/policies/${p.id}`)}
         empty={<EmptyState title="Полисов нет" description="Полис появится после подписания договора" />}
       />
-    </Card>
-  );
-}
-
-function DocumentsTab({ clientId }: { clientId: string }) {
-  const q = useClientDocuments(clientId);
-  return (
-    <Card bodyClassName="p-0">
-      <QueryState query={q}>{(docs) => <DocumentsList docs={docs} />}</QueryState>
     </Card>
   );
 }

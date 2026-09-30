@@ -11,6 +11,7 @@ import type {
   Clinic,
   Insured,
   Invoice,
+  KpDocument,
   LimitChangeRequest,
   Policy,
   Role,
@@ -108,7 +109,8 @@ export interface Db {
   grants: GrantRow[];
   loginFailures: { key: string; at: number }[];
   lockouts: { key: string; until: number }[];
-  renewalOffers: UUID[]; // client ids with a prepared renewal offer
+  kp: KpDocument[];
+  kpSeq: number;
   integrationsSeed: number;
 }
 
@@ -129,6 +131,11 @@ export function db(): Db {
 
 export function replaceDb(next: Db): void {
   current = next;
+}
+
+/** A client has a live commercial offer (draft or sent). */
+export function hasLiveKp(d: Db, clientId: UUID): boolean {
+  return d.kp.some((k) => k.clientId === clientId && k.status !== 'revoked');
 }
 
 export function resetDb(): Db {

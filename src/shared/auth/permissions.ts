@@ -80,6 +80,9 @@ export const PERMISSIONS = {
   'exports.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no },
   'audit.read': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no },
   'users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no },
+  'kp.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no },
+  'kp.send': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no },
+  'kp.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: 'own', insured: no },
   'hr.employees.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no },
 } as const satisfies Record<string, Row>;
 
