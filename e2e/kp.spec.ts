@@ -178,3 +178,29 @@ test('KP 5. A sent offer cannot be changed: PATCH returns 409, the screen is rea
   await expect(page).toHaveURL(new RegExp(`/staff/clients/${clientId}/kp/new\\?from=${kp.id}$`));
   await expect(page.getByLabel('Сотрудников')).toBeEnabled();
 });
+
+test('KP 6. Page order: brochure cover first, the offer letter second — in the preview and in a saved offer', async ({ page }) => {
+  await loginStaff(page, 'underwriter');
+  const list = (await api(page, 'GET', '/clients?q=Агрологистика')).data as { items: { id: string; name: string }[] };
+  const client = list.items[0]!;
+  await page.goto(`/staff/clients/${client.id}/kp/new`);
+  const pages = kpFrame(page).locator('.page');
+  await expect(pages).toHaveCount(PAGES);
+  const checkOrder = async () => {
+    await expect(pages.nth(0)).toContainText('Что важно знать, прежде чем сделать выбор.');
+    await expect(pages.nth(0)).not.toContainText('Коммерческое предложение');
+    await expect(pages.nth(1)).toContainText('Коммерческое предложение');
+    await expect(pages.nth(1)).toContainText(client.name);
+    // the brochure keeps its own page numbers: its page 2 comes third
+    await expect(pages.nth(2)).toContainText('Это не только про болезнь.');
+  };
+  await checkOrder();
+  await expect(page.getByTestId('kp-page-counter')).toHaveText(`Страница 1 из ${PAGES}`);
+
+  await page.getByRole('button', { name: 'Сохранить черновик' }).click();
+  await expect(page).toHaveURL(/tab=documents/);
+  const kpId = new URL(page.url()).searchParams.get('highlight')!;
+  await page.goto(`/staff/kp/${kpId}`);
+  await expect(pages).toHaveCount(PAGES);
+  await checkOrder();
+});

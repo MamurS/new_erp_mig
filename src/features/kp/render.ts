@@ -36,6 +36,20 @@ function substitute(page: string, values: Record<string, string>): string {
   return out;
 }
 
+/**
+ * THE page order of a commercial offer — preview, page counter, print/PDF and saved offers all use it:
+ * 1. brochure cover, 2. offer letter, 3–17. brochure pages 2–16 in their original order.
+ * The brochure keeps its own printed page numbers (its texts refer to them, e.g. «на стр. 6»).
+ */
+function kpPageOrder(brochure: readonly string[], letter: string): string[] {
+  const [cover, ...inner] = brochure;
+  if (cover === undefined) throw new Error('Brochure template has no pages');
+  return [cover, letter, ...inner];
+}
+
+/** Index of the offer letter in `pagesHtml` (for tests and page labels). */
+export const KP_LETTER_PAGE_INDEX = 1;
+
 export function renderKp(params: KpParams, ctx: KpRenderContext): KpRenderResult {
   const template = KP_TEMPLATES[params.templateId];
   const pages = template.pages[`${params.lang}-${params.variant}`];
@@ -48,7 +62,7 @@ export function renderKp(params: KpParams, ctx: KpRenderContext): KpRenderResult
   };
   return {
     title: kpDocumentTitle(ctx.number, ctx.clientName),
-    pagesHtml: [offerLetterPage(params, ctx), ...pages.map((p) => substitute(p, values))],
+    pagesHtml: kpPageOrder(pages.map((p) => substitute(p, values)), offerLetterPage(params, ctx)),
   };
 }
 
