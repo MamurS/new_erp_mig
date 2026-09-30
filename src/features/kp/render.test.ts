@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { KpLang, KpParams, KpVariant } from '@/shared/types';
 import { kpDocumentTitle, kpTotalPremium } from '@/shared/domain/kp';
 import { escapeHtml, formatKpMoney, groupDigits } from './format';
-import { kpSrcdoc, renderKp, type KpRenderContext } from './render';
+import { KP_LETTER_PAGE_INDEX, kpSrcdoc, renderKp, type KpRenderContext } from './render';
+import { GOLD_TEMPLATES } from './templates/gold';
 
 const PARAMS: KpParams = {
   templateId: 'gold',
@@ -46,10 +47,37 @@ describe('renderKp', () => {
         expect(all).toContain(escapeHtml(formatKpMoney(5_000_000, lang)));
         expect(all).not.toMatch(/<script/i);
       });
+
+      it(`${lang}-${variant}: page 1 is the brochure cover, page 2 the letter, then brochure pages 2–16 in order`, () => {
+        const { pagesHtml } = renderKp({ ...PARAMS, lang, variant }, CTX);
+        const brochure = GOLD_TEMPLATES[`${lang}-${variant}`];
+        const noPlaceholders = (p: string) => p.replace(/\{\{[A-Z_]+\}\}/g, '');
+        // the cover has no placeholders, so it is the template page verbatim
+        expect(pagesHtml[0]).toBe(brochure[0]);
+        const letter = pagesHtml[KP_LETTER_PAGE_INDEX]!;
+        expect(KP_LETTER_PAGE_INDEX).toBe(1);
+        expect(letter).toContain(lang === 'ru' ? 'Коммерческое предложение' : 'Commercial offer');
+        expect(letter).toContain('Ташкент Агрологистика');
+        expect(brochure.join('')).not.toContain('Ташкент Агрологистика');
+        // pages 3–17 are brochure pages 2–16: same markup once the placeholders are taken out
+        const rest = pagesHtml.slice(2);
+        expect(rest).toHaveLength(15);
+        rest.forEach((page, i) => {
+          const tpl = brochure[i + 1]!;
+          const [head = '', ...parts] = tpl.split(/\{\{[A-Z_]+\}\}/);
+          expect(page.startsWith(head), `page ${i + 3}`).toBe(true);
+          for (const part of parts) expect(page, `page ${i + 3}`).toContain(part);
+          if (!/\{\{/.test(tpl)) expect(page).toBe(noPlaceholders(tpl));
+        });
+        // the brochure keeps its own printed page numbers; the letter has none
+        expect(rest[0]).toMatch(/bottom: 30px;[^>]*>2<\/div>/);
+        expect(letter).not.toMatch(/bottom: 30px/);
+        expect(pagesHtml.filter((p) => p.includes(lang === 'ru' ? 'Коммерческое предложение' : 'Commercial offer'))).toHaveLength(1);
+      });
     }
 
-  it('page 1 is the offer letter with client, table and total; RU and EN', () => {
-    const ru = renderKp(PARAMS, CTX).pagesHtml[0]!;
+  it('the offer letter has client, table and total; RU and EN', () => {
+    const ru = renderKp(PARAMS, CTX).pagesHtml[1]!;
     expect(ru).toContain('Коммерческое предложение');
     expect(ru).toContain('КП-2026-000123');
     expect(ru).toContain('30.10.2026');
@@ -63,7 +91,7 @@ describe('renderKp', () => {
     expect(ru).toContain('Поквартально');
     expect(ru).toContain('underwriter@demo.mig.uz');
     expect(ru).toContain('Подробные условия программы GOLD — на следующих страницах');
-    const en = renderKp({ ...PARAMS, lang: 'en', paymentTerms: 'monthly' }, CTX).pagesHtml[0]!;
+    const en = renderKp({ ...PARAMS, lang: 'en', paymentTerms: 'monthly' }, CTX).pagesHtml[1]!;
     expect(en).toContain('Commercial offer');
     expect(en).toContain('Valid until');
     expect(en).toContain('735,000,000 UZS');
@@ -74,7 +102,7 @@ describe('renderKp', () => {
   it('escapes the client name, the underwriter name and other text: no markup gets through', () => {
     const evil = '<img src=x onerror=alert(1)>';
     const { pagesHtml, title } = renderKp(PARAMS, { ...CTX, clientName: evil, underwriterName: `"><script>alert(1)</script>`, clientInn: '<b>1</b>' });
-    const letter = pagesHtml[0]!;
+    const letter = pagesHtml[1]!;
     expect(letter).not.toContain('<img src=x');
     expect(letter).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(letter).not.toContain('<script>');
@@ -96,6 +124,19 @@ describe('renderKp', () => {
     expect(html).toContain('print-color-adjust: exact');
     expect(html).toContain('<title>КП-2026-000123 — Ташкент Агрологистика</title>');
     expect(html.match(/<div class="page">/g)).toHaveLength(17);
+  });
+
+  it('the letter is laid out as an inner brochure page: page-2 header, legal line, black edition colours', () => {
+    const grey = renderKp(PARAMS, CTX).pagesHtml[1]!;
+    const page2Header = GOLD_TEMPLATES['ru-grey'][1]!.split('<div style="height: 22px;')[0]!;
+    expect(grey.startsWith(page2Header)).toBe(true);
+    expect(grey).toContain('<div data-legal');
+    expect(grey).toContain('GOLD 09/26 · ');
+    const black = renderKp({ ...PARAMS, variant: 'black' }, CTX).pagesHtml[1]!;
+    expect(black.startsWith(GOLD_TEMPLATES['ru-black'][1]!.split('<div style="height: 22px;')[0]!)).toBe(true);
+    expect(black).not.toContain('#3A4248');
+    const en = renderKp({ ...PARAMS, lang: 'en' }, CTX).pagesHtml[1]!;
+    expect(en.startsWith(GOLD_TEMPLATES['en-grey'][1]!.split('<div style="height: 22px;')[0]!)).toBe(true);
   });
 });
 

@@ -4,7 +4,7 @@ import type { KpParams, Money } from '@/shared/types';
 /** Current version of each brochure (kept equal to templates/*.ts by a unit test). */
 export const KP_TEMPLATE_VERSION = { gold: 'GOLD 09/26' } as const;
 
-export const KP_PAGE_COUNT = 17; // offer letter + 16 brochure pages
+export const KP_PAGE_COUNT = 17; // brochure cover, offer letter, brochure pages 2–16
 
 export function kpTotalPremium(p: Pick<KpParams, 'employees' | 'premiumEmployee' | 'familyMembers' | 'premiumFamily'>): Money {
   return p.employees * p.premiumEmployee + p.familyMembers * p.premiumFamily;
