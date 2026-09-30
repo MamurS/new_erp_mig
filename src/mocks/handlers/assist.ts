@@ -41,6 +41,7 @@ import {
   clinicPaymentSchema,
   declineAppointmentSchema,
   medicalAccessSchema,
+  piiField,
   rebillCreateSchema,
   rebillDisputeSchema,
   revealSchema,
@@ -317,6 +318,16 @@ export const assistHandlers = [
       audit(user, 'reveal_pii', { targetType: 'insured', targetId: i.id, targetLabel: insuredLabel(i.id), reason: `${fieldLabel(field)}: ${reason}` });
       const out: RevealResponse = { value, expiresInSec: 30 };
       return out;
+    }),
+  ),
+  http.post(
+    `${A}/insured/:id/reveal-copied`,
+    route(async (ctx) => {
+      const { user, assistanceId, d } = requireAssist(ctx.request, 'assist.insured.reveal_pii');
+      const { i } = requireInsuredOf(d, assistanceId, param(ctx, 'id'));
+      const { field } = await body(ctx.request, z.object({ field: piiField }));
+      audit(user, 'reveal_pii', { targetType: 'insured', targetId: i.id, targetLabel: insuredLabel(i.id), reason: `Копирование: ${fieldLabel(field)}` });
+      return { ok: true as const };
     }),
   ),
   http.post(
@@ -644,6 +655,7 @@ export const assistHandlers = [
         clinicId: c.id,
         clinicName: c.name,
         city: c.district,
+        specialties: c.specialties,
         ownPrices: d.clinicContracts.some((x) => x.clinicId === c.id && x.payer === assistanceId),
         priceList: priceListOf(d, c.id, assistanceId),
       }));

@@ -535,6 +535,7 @@ export const kpParams: z.ZodType<T.KpParams> = z.object({
   coverageEnd: isoDate,
   validUntil: isoDate,
   paymentTerms: z.enum(['single', 'quarterly', 'monthly']),
+  assistanceId: uuid.nullable().optional(),
 });
 export const kpDocument: z.ZodType<T.KpDocument> = z.object({
   id: uuid,

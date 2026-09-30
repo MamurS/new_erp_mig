@@ -18,6 +18,12 @@ import { buildPdf, downloadPdf } from '@/features/hr/pdf';
 import { FilesPicker, GuaranteeChip, PageTitle, Panel } from '../components';
 
 /** Client-side PDF stub of an approved letter; no patient data in the file or its name. */
+/** Who decides the letter (ASSISTANCE_SPEC §7): the patient's assistance, or MIG for escalations and clients without one. */
+function decisionOwner(g: { assistanceId?: string | null; assistanceName?: string; escalated?: boolean }): string {
+  if (!g.assistanceId) return 'МИГ';
+  return g.escalated ? `МИГ (эскалация от ${g.assistanceName ?? 'ассистанса'})` : (g.assistanceName ?? 'Ассистанс');
+}
+
 function guaranteePdf(g: GuaranteeView): string {
   return buildPdf(
     [
@@ -76,6 +82,8 @@ function GuaranteeDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void
         <dd className="num">{g.icd10}</dd>
         <dt className="text-muted">Стоимость</dt>
         <dd className="num">{formatMoney(g.estimatedCost)}</dd>
+        <dt className="text-muted">Решение принимает</dt>
+        <dd data-testid="decision-owner">{decisionOwner(g)}</dd>
         {g.approvedAmount !== undefined && g.status !== 'requested' && (
           <>
             <dt className="text-muted">Одобрено</dt>
@@ -96,7 +104,7 @@ function GuaranteeDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void
         )}
         {g.reason && (
           <>
-            <dt className="text-muted">{g.status === 'rejected' ? 'Причина отказа' : 'Запрос МИГ'}</dt>
+            <dt className="text-muted">{g.status === 'rejected' ? 'Причина отказа' : `Запрос ${g.assistanceId && !g.escalated ? 'ассистанса' : 'МИГ'}`}</dt>
             <dd className="whitespace-pre-wrap">{g.reason}</dd>
           </>
         )}
@@ -144,6 +152,7 @@ export default function GuaranteesPage() {
     { key: 'service', header: 'Услуга', cell: (g) => <span className="text-muted">{g.serviceName}</span> },
     { key: 'amount', header: 'Сумма', align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
     { key: 'status', header: 'Статус', cell: (g) => <GuaranteeChip status={g.status} /> },
+    { key: 'owner', header: 'Решение принимает', cell: (g) => <span className="text-muted">{decisionOwner(g)}</span> },
     { key: 'date', header: 'Запрошено', cell: (g) => <span className="num whitespace-nowrap text-muted">{formatDate(g.createdAt)}</span> },
   ];
   const current = open ? (q.data ?? []).find((g) => g.id === open.id) ?? open : null;

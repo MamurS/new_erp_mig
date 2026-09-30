@@ -118,7 +118,7 @@ export interface FeeBase {
   casesCount: number;
 }
 
-const money = (v: number) => new Intl.NumberFormat('ru-RU').format(v).replace(/[  ]/g, ' ');
+const money = (v: number) => new Intl.NumberFormat('ru-RU').format(v).replace(/[\u00a0\u202f]/g, ' ');
 
 export function feeFor(model: FeeModel, value: number, base: FeeBase): { model: FeeModel; base: number; value: number; amount: Money; formula: string } {
   if (model === 'pepm') {

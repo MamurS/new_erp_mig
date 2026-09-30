@@ -22,6 +22,7 @@ import { POLICY_TONE } from '../components/tones';
 import { INSURED_CARD_ROLES } from '../nav';
 import { useTopbar } from '../topbar';
 import { DocumentsList } from '../components/DocumentsList';
+import { AssistanceBlock } from '../assistance/AssistanceBlock';
 
 export default function PolicyCardPage() {
   const { policyId = '' } = useParams();
@@ -92,6 +93,7 @@ export default function PolicyCardPage() {
           <p className="mt-2 text-[12px] text-muted">Лимиты указаны на одного застрахованного на период полиса.</p>
         </Card>
       </div>
+      <AssistanceBlock policyId={p.id} />
       {canChanges && <PolicyChangesBlock policyId={p.id} clientId={p.clientId} />}
       {canInsured && <PolicyInsured clientId={p.clientId} />}
       <Card title="Документы" bodyClassName="p-0">

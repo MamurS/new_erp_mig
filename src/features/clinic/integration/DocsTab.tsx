@@ -4,6 +4,7 @@ import { fetchPublicJson } from '@/shared/api/client';
 import { cn } from '@/shared/lib/cn';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
 import { Panel } from '../components';
+import { usePartner } from './partner';
 
 interface Operation {
   summary?: string;
@@ -95,13 +96,14 @@ function Code({ children }: { children: string }) {
 }
 
 export function DocsTab() {
+  const partner = usePartner();
   const q = useQuery({ queryKey: ['clinic', 'openapi'], queryFn: () => fetchPublicJson('/docs/integration/openapi.json') as Promise<OpenApiDoc>, staleTime: Infinity });
   return (
     <QueryState query={q} skeleton={<SkeletonRows rows={8} />}>
       {(doc) => {
         const base = doc.servers?.[0]?.url ?? '/api/integration/v1';
         const ops = Object.entries(doc.paths).flatMap(([path, methods]) => Object.entries(methods).map(([method, op]) => ({ path, method, op })));
-        const tags = [...new Set(ops.flatMap((o) => o.op.tags ?? ['Прочее']))];
+        const tags = [...new Set(ops.flatMap((o) => o.op.tags ?? ['Прочее']))].filter(partner.docsTag);
         return (
           <div className="flex flex-col gap-4" data-testid="api-docs">
             <Panel title={`${doc.info.title} · v${doc.info.version}`}>

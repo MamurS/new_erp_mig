@@ -16,6 +16,7 @@ import { Skeleton } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { BIG, CardSkeletons, ChoiceChip, Empty, LoadError, ScreenHeader, SPECIALTY_ICON, WizardSteps } from '../components';
 import { dayLabel, isSpecialty, isUuid, limitForSpecialty, nextDays, SPECIALTIES } from '../lib';
+import { limitLeft } from '@/shared/domain/assistance';
 
 interface SlotPick {
   clinicId: string;
@@ -271,7 +272,7 @@ function StepWhere(p: {
         <div role="note" className="mb-4 flex gap-2 rounded-card bg-peach px-4 py-3 text-[14px] font-semibold text-peach-text">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            {t('booking.limitWarn', { category: t(`limitAcc.${cat}`), amount: formatMoney(Math.max(0, usage.limit - usage.used)) })}
+            {t('booking.limitWarn', { category: t(`limitAcc.${cat}`), amount: formatMoney(limitLeft(usage.limit, usage.used, usage.reserved ?? 0)) })}
           </span>
         </div>
       )}

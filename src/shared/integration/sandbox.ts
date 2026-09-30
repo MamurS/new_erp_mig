@@ -19,7 +19,7 @@ export interface SandboxParam {
 
 export interface SandboxMethod {
   id: string;
-  method: 'GET' | 'POST' | 'PUT';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH';
   path: string;
   label: string;
   params: SandboxParam[];
@@ -121,6 +121,119 @@ export const SANDBOX_METHODS: SandboxMethod[] = [
       { name: 'period', in: 'query', kind: 'text' },
       { name: 'cursor', in: 'query', kind: 'text' },
       { name: 'limit', in: 'query', kind: 'number' },
+    ],
+  },
+];
+
+/** Methods of the assistance section (ASSISTANCE_SPEC §8). */
+export const ASSIST_SANDBOX_METHODS: SandboxMethod[] = [
+  {
+    id: 'roster',
+    method: 'GET',
+    path: '/assistance/roster',
+    label: 'Список застрахованных',
+    params: [
+      { name: 'updatedSince', in: 'query', kind: 'text', hint: 'ISO 8601, например 2026-09-01T00:00:00+05:00' },
+      { name: 'cursor', in: 'query', kind: 'text' },
+      { name: 'limit', in: 'query', kind: 'number', example: '20' },
+    ],
+  },
+  { id: 'limits', method: 'GET', path: '/assistance/insured/{id}/limits', label: 'Лимиты застрахованного', params: [{ name: 'id', in: 'path', kind: 'uuid', required: true }] },
+  {
+    id: 'case-create',
+    method: 'POST',
+    path: '/assistance/cases',
+    label: 'Создать обращение',
+    params: [
+      { name: 'insuredId', in: 'body', kind: 'uuid', required: true },
+      { name: 'type', in: 'body', kind: 'select', options: ['appointment', 'consultation', 'guarantee', 'complaint', 'emergency'], example: 'consultation', required: true },
+      { name: 'description', in: 'body', kind: 'text', required: true, example: 'Вопрос о покрытии анализов' },
+    ],
+  },
+  {
+    id: 'case-update',
+    method: 'PATCH',
+    path: '/assistance/cases/{id}',
+    label: 'Изменить обращение',
+    params: [
+      { name: 'id', in: 'path', kind: 'uuid', required: true },
+      { name: 'status', in: 'body', kind: 'select', options: ['open', 'in_progress', 'waiting', 'resolved'], example: 'in_progress', required: true },
+      { name: 'resolution', in: 'body', kind: 'text' },
+    ],
+  },
+  {
+    id: 'assist-appointments',
+    method: 'GET',
+    path: '/assistance/appointments',
+    label: 'Записи застрахованных',
+    params: [
+      { name: 'status', in: 'query', kind: 'select', options: ['', 'requested', 'confirmed', 'declined', 'completed', 'cancelled'], example: 'requested' },
+      { name: 'limit', in: 'query', kind: 'number', example: '20' },
+    ],
+  },
+  {
+    id: 'assist-guarantees',
+    method: 'GET',
+    path: '/assistance/guarantees',
+    label: 'Гарантийные письма',
+    params: [{ name: 'status', in: 'query', kind: 'select', options: ['', 'requested', 'approved', 'rejected', 'info_requested'], example: 'requested' }],
+  },
+  {
+    id: 'guarantee-decide',
+    method: 'POST',
+    path: '/assistance/guarantees/{id}/decide',
+    label: 'Решение по ГП',
+    params: [
+      { name: 'id', in: 'path', kind: 'uuid', required: true },
+      { name: 'decision', in: 'body', kind: 'select', options: ['approve', 'reject', 'escalate'], example: 'approve', required: true },
+      { name: 'amount', in: 'body', kind: 'number' },
+      { name: 'validUntil', in: 'body', kind: 'date' },
+      { name: 'reason', in: 'body', kind: 'text' },
+    ],
+  },
+  {
+    id: 'assist-registries',
+    method: 'GET',
+    path: '/assistance/registries',
+    label: 'Подреестры клиник',
+    params: [{ name: 'status', in: 'query', kind: 'select', options: ['', 'submitted', 'in_review', 'partially_accepted', 'accepted', 'paid'] }],
+  },
+  {
+    id: 'line-decide',
+    method: 'POST',
+    path: '/assistance/registries/{id}/lines/{lineId}/decide',
+    label: 'Решение по строке реестра',
+    params: [
+      { name: 'id', in: 'path', kind: 'uuid', required: true },
+      { name: 'lineId', in: 'path', kind: 'uuid', required: true },
+      { name: 'decision', in: 'body', kind: 'select', options: ['accept', 'reject'], example: 'accept', required: true },
+      { name: 'reason', in: 'body', kind: 'text' },
+    ],
+  },
+  {
+    id: 'clinic-payment',
+    method: 'POST',
+    path: '/assistance/registries/{id}/payments',
+    label: 'Оплата клинике',
+    params: [
+      { name: 'id', in: 'path', kind: 'uuid', required: true },
+      { name: 'lineIds', in: 'body', kind: 'json', required: true, example: '["<lineId>"]' },
+      { name: 'paidAt', in: 'body', kind: 'date', required: true },
+      { name: 'amount', in: 'body', kind: 'number', required: true },
+      { name: 'paymentOrderNumber', in: 'body', kind: 'text', required: true, example: 'ПП-10452' },
+    ],
+  },
+  { id: 'rebill-create', method: 'POST', path: '/assistance/rebills', label: 'Выставить счёт МИГ', params: [{ name: 'period', in: 'body', kind: 'text', required: true, example: '2026-09' }] },
+  { id: 'rebill', method: 'GET', path: '/assistance/rebills/{id}', label: 'Счёт МИГ', params: [{ name: 'id', in: 'path', kind: 'uuid', required: true }] },
+  {
+    id: 'rebill-dispute',
+    method: 'POST',
+    path: '/assistance/rebills/{id}/lines/{lineId}/dispute',
+    label: 'Оспорить строку счёта',
+    params: [
+      { name: 'id', in: 'path', kind: 'uuid', required: true },
+      { name: 'lineId', in: 'path', kind: 'uuid', required: true },
+      { name: 'comment', in: 'body', kind: 'text', required: true },
     ],
   },
 ];

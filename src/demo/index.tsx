@@ -17,6 +17,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/shared/ui/dropdown';
 import { toast } from '@/shared/ui/toast';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
 import { MisSimulator } from './MisSimulator';
+import { AssistSimulator } from './AssistSimulator';
 import { DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from '@/mocks/credentials';
 
 const ACCOUNTS: { role: Role; login: string }[] = [
@@ -205,4 +206,4 @@ function CodeHint() {
   );
 }
 
-export const demoModule: DemoModule = { DemoBanner, StaffLoginHints, PhoneLoginHint, CodeHint, MisSimulator };
+export const demoModule: DemoModule = { DemoBanner, StaffLoginHints, PhoneLoginHint, CodeHint, MisSimulator, AssistSimulator };

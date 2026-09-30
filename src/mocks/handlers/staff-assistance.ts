@@ -207,7 +207,7 @@ export const staffAssistanceHandlers = [
     `${API}/policies/:id/assistance`,
     route((ctx) => {
       const user = requireStaff(ctx.request);
-      requirePermission(user, 'policies.read');
+      if (!can(user, 'policies.read') && !can(user, 'clients.read')) throw forbidden();
       const d = db();
       const p = d.policies.find((x) => x.id === param(ctx, 'id'));
       if (!p) throw notFound();

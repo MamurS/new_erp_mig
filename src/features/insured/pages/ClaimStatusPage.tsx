@@ -12,6 +12,7 @@ import { Button } from '@/shared/ui/button';
 import { Skeleton } from '@/shared/ui/states';
 import { BIG, Empty, LoadError, ScreenHeader, Section } from '../components';
 import { isUuid } from '../lib';
+import { limitLeft } from '@/shared/domain/assistance';
 
 const HERO: Record<MyClaim['status'], { icon: LucideIcon; tone: string }> = {
   received: { icon: Inbox, tone: 'bg-sky text-sky-text' },
@@ -134,7 +135,7 @@ export default function ClaimStatusPage() {
           </dl>
           {usage && (
             <p className="mt-3 rounded-card bg-sky px-4 py-3 font-semibold text-sky-text">
-              {t('status.left', { category: t(`limitAcc.${limitCat}`), amount: formatMoney(Math.max(0, usage.limit - usage.used)) })}
+              {t('status.left', { category: t(`limitAcc.${limitCat}`), amount: formatMoney(limitLeft(usage.limit, usage.used, usage.reserved ?? 0)) })}
             </p>
           )}
         </Section>

@@ -157,7 +157,7 @@ export interface IntegrationCallResult {
  * demo MIS simulator only.
  */
 export async function integrationCall(
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH',
   path: string,
   opts: { token?: string; body?: unknown; form?: boolean; headers?: Record<string, string> } = {},
 ): Promise<IntegrationCallResult> {

@@ -3,6 +3,7 @@ import { Lock, Stethoscope } from 'lucide-react';
 import { useMedicalAccess, useMedicalRecords } from '@/shared/api/queries/staff';
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
+import type { Action } from '@/shared/auth/permissions';
 import { SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { formatCountdown, formatDate } from '@/shared/lib/format';
 import { useCountdown } from '@/shared/lib/hooks';
@@ -17,12 +18,12 @@ import { toast } from '@/shared/ui/toast';
  * Medical record block. Closed for roles without `medical.read`. The doctor states a reason and gets a
  * 15-minute grant kept only in this component's memory; the block closes itself when it expires.
  */
-export function MedicalCard({ insuredId }: { insuredId: string }) {
-  const allowed = useCan('medical.read');
+export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { insuredId: string; apiBase?: string; action?: Action }) {
+  const allowed = useCan(action);
   const [grant, setGrant] = useState<{ id: string; until: number } | null>(null);
   const [open, setOpen] = useState(false);
   const left = useCountdown(grant?.until ?? null);
-  const records = useMedicalRecords(insuredId, grant?.id ?? null);
+  const records = useMedicalRecords(insuredId, grant?.id ?? null, apiBase);
 
   useEffect(() => {
     if (!grant) return;
@@ -103,6 +104,7 @@ export function MedicalCard({ insuredId }: { insuredId: string }) {
         open={open}
         onOpenChange={setOpen}
         insuredId={insuredId}
+        apiBase={apiBase}
         onGranted={(id, until) => setGrant({ id, until })}
       />
     </Card>
@@ -114,15 +116,17 @@ function MedicalReasonModal({
   onOpenChange,
   insuredId,
   onGranted,
+  apiBase,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   insuredId: string;
   onGranted: (grantId: string, until: number) => void;
+  apiBase?: string;
 }) {
   const [reason, setReason] = useState('');
   const [touched, setTouched] = useState(false);
-  const access = useMedicalAccess();
+  const access = useMedicalAccess(apiBase);
   const error = reason.trim().length < 10 ? 'Опишите причину: минимум 10 символов' : undefined;
   useEffect(() => {
     if (open) {

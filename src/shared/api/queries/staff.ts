@@ -65,33 +65,33 @@ export const useInsuredAccessLog = (id: string) =>
   useQuery({ queryKey: qk.insuredAccessLog(id), queryFn: () => request(`/insured/${id}/access-log`, { schema: S.auditList }) });
 
 /** Reveal is a mutation on purpose: the value never enters the query cache. */
-export function useReveal() {
+export function useReveal(base = '/insured') {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { insuredId: string; field: PiiField; reason: string }) =>
-      request(`/insured/${v.insuredId}/reveal`, { method: 'POST', body: { field: v.field, reason: v.reason }, schema: S.reveal }),
+      request(`${base}/${v.insuredId}/reveal`, { method: 'POST', body: { field: v.field, reason: v.reason }, schema: S.reveal }),
     onSuccess: (_d, v) => void qc.invalidateQueries({ queryKey: qk.insuredAccessLog(v.insuredId) }),
   });
 }
-export function useRevealCopied() {
+export function useRevealCopied(base = '/insured') {
   return useMutation({
     mutationFn: (v: { insuredId: string; field: PiiField }) =>
-      request(`/insured/${v.insuredId}/reveal-copied`, { method: 'POST', body: { field: v.field }, schema: S.ok }),
+      request(`${base}/${v.insuredId}/reveal-copied`, { method: 'POST', body: { field: v.field }, schema: S.ok }),
   });
 }
-export function useMedicalAccess() {
+export function useMedicalAccess(base = '/insured') {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { insuredId: string; reason: string }) =>
-      request(`/insured/${v.insuredId}/medical-access`, { method: 'POST', body: { reason: v.reason }, schema: S.medicalGrant }),
+      request(`${base}/${v.insuredId}/medical-access`, { method: 'POST', body: { reason: v.reason }, schema: S.medicalGrant }),
     onSuccess: (_d, v) => void qc.invalidateQueries({ queryKey: qk.insuredAccessLog(v.insuredId) }),
   });
 }
-export const useMedicalRecords = (insuredId: string, grantId: string | null) =>
+export const useMedicalRecords = (insuredId: string, grantId: string | null, base = '/insured') =>
   useQuery({
-    queryKey: qk.medical(insuredId, grantId ?? ''),
+    queryKey: [...qk.medical(insuredId, grantId ?? ''), base],
     queryFn: () =>
-      request(`/insured/${insuredId}/medical`, { headers: { 'X-Medical-Grant': grantId ?? '' }, schema: S.medicalRecords }),
+      request(`${base}/${insuredId}/medical`, { headers: { 'X-Medical-Grant': grantId ?? '' }, schema: S.medicalRecords }),
     enabled: !!grantId,
     gcTime: 0,
     staleTime: 0,

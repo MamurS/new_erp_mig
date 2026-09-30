@@ -354,6 +354,7 @@ export interface KpParams {
   coverageEnd: ISODate;
   validUntil: ISODate;        // срок действия предложения
   paymentTerms: KpPaymentTerms;
+  assistanceId?: UUID | null; // ассистанс на период продления (ASSISTANCE_SPEC §7); null — обслуживает МИГ
 }
 
 export interface KpDocument {

@@ -29,6 +29,12 @@ export function LimitBars({ limits }: { limits: LimitUsage[] }) {
               </span>
             </div>
             <ProgressBar value={l.used} max={l.limit} warn={warn} label={`Лимит «${LIMIT_CATEGORY_LABEL[l.category]}»`} />
+            {(l.reserved ?? 0) > 0 && (
+              <div className="mt-0.5 flex justify-between gap-2 text-[12px] text-muted" data-testid={`reserved-${l.category}`}>
+                <span>Резерв по одобренным ГП</span>
+                <span className="num">{formatMoney(l.reserved ?? 0)} · остаток {formatMoney(Math.max(0, l.limit - l.used - (l.reserved ?? 0)))}</span>
+              </div>
+            )}
           </div>
         );
       })}

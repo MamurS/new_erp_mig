@@ -36,7 +36,8 @@ type Mode = 'approve' | 'reject' | 'request_info';
 function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void }) {
   const user = useUser()!;
   const decide = useDecideGuarantee();
-  const canDecide = can(user, 'guarantees.decide') && g.status === 'requested';
+  // MIG decides escalations and letters of clients without an assistance (ASSISTANCE_SPEC §9.1).
+  const canDecide = can(user, 'guarantees.decide') && can(user, 'assist.guarantees.decide', { assistanceId: g.assistanceId ?? null, escalated: g.escalated === true }) && g.status === 'requested';
   const firstApproval = g.approvals[0];
   const alreadyApprovedByMe = g.approvals.some((a) => a.byId === user.id);
   const [mode, setMode] = useState<Mode>('approve');
@@ -108,6 +109,15 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
           </Kv>
         )}
       </div>
+      <p className="mt-3 text-[13px]" data-testid="decision-owner">
+        Решение принимает: <span className="font-semibold">{g.assistanceId && !g.escalated ? g.assistanceName : 'МИГ'}</span>
+        {g.escalated && g.assistanceName ? ` · эскалация от ${g.assistanceName}` : ''}
+      </p>
+      {g.escalated && g.assistanceOpinion && (
+        <p className="mt-2 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="assistance-opinion">
+          Заключение врача ассистанса: {g.assistanceOpinion}
+        </p>
+      )}
       {g.comment && <p className="mt-3 rounded-btn bg-rail px-3 py-2 text-[13px]">Комментарий клиники: {g.comment}</p>}
       {g.infoComment && <p className="mt-2 rounded-btn bg-rail px-3 py-2 text-[13px]">Ответ клиники на запрос документов: {g.infoComment}</p>}
       {g.reason && <p className="mt-2 text-[13px] text-muted">Причина решения: {g.reason}</p>}
@@ -167,15 +177,27 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
 export default function GuaranteesQueuePage() {
   useDocumentTitle('Гарантийные письма');
   useTopbar([{ label: 'Гарантийные письма' }]);
-  const [f, setF] = useUrlFilters(['status', 'clinicId'] as const);
+  const [f, setF] = useUrlFilters(['status', 'clinicId', 'scope'] as const);
   const status = TABS.some(([k]) => k === f.status) ? f.status : 'requested';
-  const list = useStaffGuarantees({ ...(status === 'all' ? {} : { status }), ...(f.clinicId ? { clinicId: f.clinicId } : {}) });
+  const list = useStaffGuarantees({ ...(status === 'all' ? {} : { status }), ...(f.clinicId ? { clinicId: f.clinicId } : {}), ...(f.scope === 'all' ? { scope: 'all' } : {}) });
   const [open, setOpen] = useState<GuaranteeView | null>(null);
   const cols: Column<GuaranteeView>[] = [
     { key: 'num', header: 'Номер', cell: (g) => <span className="num font-medium">{g.number}</span> },
     { key: 'created', header: 'Создано', cell: (g) => <span className="num text-muted">{formatDateTime(g.createdAt)}</span> },
     { key: 'clinic', header: 'Клиника', cell: (g) => g.clinicName },
     { key: 'patient', header: 'Пациент', cell: (g) => g.insuredName },
+    {
+      key: 'owner',
+      header: 'Решает',
+      cell: (g) =>
+        g.escalated ? (
+          <Chip kind="warning">Эскалация · {g.assistanceName}</Chip>
+        ) : g.assistanceId ? (
+          <span className="text-muted">{g.assistanceName}</span>
+        ) : (
+          <span>МИГ</span>
+        ),
+    },
     { key: 'service', header: 'Услуга', cell: (g) => <span className="line-clamp-2">{g.serviceName}</span> },
     { key: 'cost', header: 'Сумма', align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
     {
@@ -193,7 +215,13 @@ export default function GuaranteesQueuePage() {
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-[22px] font-bold">Гарантийные письма</h1>
-        <p className="text-[12px] text-muted">Выше {formatMoney(GUARANTEE_DUAL_APPROVAL_THRESHOLD)} письмо одобряют два врача-эксперта</p>
+        <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted">
+          <span>МИГ решает эскалации ассистансов и письма клиентов без ассистанса. Выше {formatMoney(GUARANTEE_DUAL_APPROVAL_THRESHOLD)} письмо одобряют два врача-эксперта</span>
+          <label className="flex items-center gap-1.5 text-text">
+            <input type="checkbox" checked={f.scope === 'all'} onChange={(e) => setF({ scope: e.target.checked ? 'all' : null })} />
+            Показать решения ассистансов
+          </label>
+        </div>
       </div>
       <Tabs value={status} onValueChange={(v) => setF({ status: v === 'requested' ? null : v })}>
         <TabsList>

@@ -479,6 +479,7 @@ export interface AssistClinic {
   clinicId: UUID;
   clinicName: string;
   city: string;
+  specialties: Clinic['specialties'];
   ownPrices: boolean;
   priceList: PriceListItem[];
 }

@@ -4,12 +4,13 @@
  */
 import { http } from 'msw';
 import { kpParamsSchema } from '@/shared/schemas/forms';
+import { currentAssistance } from '../assistance-core';
 import type { KpDocument, KpParams, SessionUser } from '@/shared/types';
 import type { KpDefaults } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
 import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
 import { db, type ClientRow } from '../db';
-import { API, audit, body, conflict, forbidden, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
+import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
@@ -84,6 +85,7 @@ export const kpHandlers = [
         coverageEnd: isoDay(end.getTime() - DAY),
         validUntil: isoDay(today + 30 * DAY),
         paymentTerms: 'quarterly',
+        assistanceId: policy ? currentAssistance(d, policy.id) : null,
       };
       const res: KpDefaults = {
         params,
@@ -119,6 +121,7 @@ export const kpHandlers = [
       const d = db();
       const client = findClient(param(ctx, 'id'));
       const params = await body(ctx.request, kpParamsSchema);
+      if (params.assistanceId && !db().assistances.some((a) => a.id === params.assistanceId)) throw new HttpError(422, 'validation', 'Ассистанс не найден', { assistanceId: 'Выберите ассистанс из списка' });
       const now = Date.now();
       d.kpSeq += 1;
       const kp: KpDocument = {
@@ -157,6 +160,7 @@ export const kpHandlers = [
       const kp = writableKp(user, ctx, 'kp.create');
       if (kp.status !== 'draft') throw conflict('Отправленное или отозванное КП нельзя изменить. Создайте новую версию');
       const params = await body(ctx.request, kpParamsSchema);
+      if (params.assistanceId && !db().assistances.some((a) => a.id === params.assistanceId)) throw new HttpError(422, 'validation', 'Ассистанс не найден', { assistanceId: 'Выберите ассистанс из списка' });
       kp.params = params;
       kp.totalPremium = kpTotalPremium(params);
       return kp;

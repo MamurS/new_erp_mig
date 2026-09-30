@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import type { IntegrationClient } from '@/shared/types';
-import { INTEGRATION_SCOPES, keyCreateRequest } from '@/shared/integration/schemas';
+import { keyCreateRequest } from '@/shared/integration/schemas';
+import type { IntegrationScope } from '@/shared/types';
+import { usePartner } from './partner';
 import { useCreateKey, useIntegrationKeys, useRevokeKey } from '@/shared/api/queries/clinic';
 import { errorMessage } from '@/shared/api/client';
 import { SCOPE_LABEL } from '@/shared/domain/clinics';
@@ -22,8 +24,9 @@ import { SecretReveal } from './SecretReveal';
 type KeyForm = z.input<typeof keyCreateRequest>;
 
 function CreateKeyDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (v: { clientId: string; clientSecret: string }) => void }) {
-  const create = useCreateKey();
-  const form = useForm<KeyForm, unknown, z.output<typeof keyCreateRequest>>({ resolver: zodResolver(keyCreateRequest), defaultValues: { name: '', scopes: ['coverage:check'], ipAllowlist: '' } });
+  const partner = usePartner();
+  const create = useCreateKey(partner.base);
+  const form = useForm<KeyForm, unknown, z.output<typeof keyCreateRequest>>({ resolver: zodResolver(keyCreateRequest), defaultValues: { name: '', scopes: [partner.defaultScope as IntegrationScope], ipAllowlist: '' } });
   const e = form.formState.errors;
   const submit = form.handleSubmit(async (v) => {
     try {
@@ -56,7 +59,7 @@ function CreateKeyDialog({ onClose, onCreated }: { onClose: () => void; onCreate
         <fieldset>
           <legend className="mb-1 text-[12px] font-medium text-muted">Области доступа</legend>
           <div className="grid gap-1.5 sm:grid-cols-2">
-            {INTEGRATION_SCOPES.map((s) => (
+            {(partner.scopes as IntegrationScope[]).map((s) => (
               <label key={s} className="flex items-center gap-2">
                 <input type="checkbox" value={s} {...form.register('scopes')} />
                 <span>
@@ -80,8 +83,9 @@ function CreateKeyDialog({ onClose, onCreated }: { onClose: () => void; onCreate
 }
 
 export function KeysTab() {
-  const q = useIntegrationKeys();
-  const revoke = useRevokeKey();
+  const partner = usePartner();
+  const q = useIntegrationKeys(partner.base);
+  const revoke = useRevokeKey(partner.base);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<{ clientId: string; clientSecret: string } | null>(null);
   const [revoking, setRevoking] = useState<IntegrationClient | null>(null);
@@ -101,7 +105,7 @@ export function KeysTab() {
     { key: 'name', header: 'Название', cell: (k) => <span className="font-medium">{k.name}</span> },
     { key: 'id', header: 'client_id', cell: (k) => <code className="text-[12px]">{k.clientId}</code> },
     { key: 'secret', header: 'Секрет', cell: (k) => <code className="text-[12px] text-muted">••••{k.secretLast4}</code> },
-    { key: 'scopes', header: 'Области', cell: (k) => <span className="text-[12px] text-muted">{k.scopes.length === INTEGRATION_SCOPES.length ? 'все' : k.scopes.join(', ')}</span> },
+    { key: 'scopes', header: 'Области', cell: (k) => <span className="text-[12px] text-muted">{k.scopes.length === partner.scopes.length ? 'все' : k.scopes.join(', ')}</span> },
     { key: 'created', header: 'Создан', cell: (k) => <span className="num text-muted">{formatDateTime(k.createdAt)}</span> },
     { key: 'used', header: 'Последнее использование', cell: (k) => <span className="num text-muted">{k.lastUsedAt ? formatDateTime(k.lastUsedAt) : '—'}</span> },
     {

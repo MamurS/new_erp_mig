@@ -8,6 +8,7 @@ import { WebhooksTab } from './WebhooksTab';
 import { LogsTab } from './LogsTab';
 import { DocsTab } from './DocsTab';
 import { SandboxTab } from './SandboxTab';
+import { usePartner } from './partner';
 
 const TABS = [
   ['overview', 'Обзор'],
@@ -25,7 +26,7 @@ export default function IntegrationPage() {
   const tab = TABS.some(([k]) => k === f.tab) ? f.tab : 'overview';
   return (
     <>
-      <PageTitle title="Интеграция" subtitle="Подключение медицинской информационной системы клиники к МИГ по API" />
+      <PageTitle title="Интеграция" subtitle={`Подключение ${usePartner().systemName} к МИГ по API`} />
       <Tabs value={tab} onValueChange={(v) => setF({ tab: v === 'overview' ? null : v })}>
         <TabsList>
           {TABS.map(([k, label]) => (

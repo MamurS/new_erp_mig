@@ -13,6 +13,7 @@ import type { KpDefaults } from '@/shared/types/dto';
 import { kpParamsSchema } from '@/shared/schemas/forms';
 import { useClient } from '@/shared/api/queries/staff';
 import { useCreateKp, useKp, useKpAction, useKpDefaults, useKpDownloaded, useUpdateKp } from '@/shared/api/queries/kp';
+import { useAssistances } from '@/shared/api/queries/assist';
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { KP_STATUS_CHIP, KP_STATUS_LABEL, KP_TEMPLATE_VERSION, kpTotalPremium } from '@/shared/domain/kp';
@@ -42,7 +43,7 @@ const safeId = (v: string | null | undefined) => (v && UUID_RE.test(v) ? v : und
 const isoToRu = (iso: string) => iso.split('-').reverse().join('.');
 
 function toForm(p: KpParams): FormIn {
-  return { ...p, coverageStart: isoToRu(p.coverageStart), coverageEnd: isoToRu(p.coverageEnd), validUntil: isoToRu(p.validUntil) };
+  return { ...p, coverageStart: isoToRu(p.coverageStart), coverageEnd: isoToRu(p.coverageEnd), validUntil: isoToRu(p.validUntil), assistanceId: p.assistanceId ?? '' };
 }
 
 export default function KpPage() {
@@ -88,6 +89,7 @@ function KpEditor({ clientId, policyId, initial, letter, kp }: { clientId: strin
   useDocumentTitle(kp ? 'Коммерческое предложение' : 'Новое КП');
   useTopbar([{ label: 'Клиенты', to: '/staff/clients' }, { label: letter.clientName, to: `/staff/clients/${clientId}` }, { label: title }]);
 
+  const assistances = useAssistances();
   const form = useForm<FormIn, unknown, KpParams>({
     resolver: zodResolver(kpParamsSchema),
     defaultValues: toForm(initial),
@@ -299,6 +301,18 @@ function KpEditor({ clientId, policyId, initial, letter, kp }: { clientId: strin
                     <option value="single">Единовременно</option>
                     <option value="quarterly">Поквартально</option>
                     <option value="monthly">Помесячно</option>
+                  </Select>
+                )}
+              </Field>
+              <Field label="Ассистанс на период продления" hint="Кто будет обслуживать застрахованных: запись, ГП, реестры клиник">
+                {(a) => (
+                  <Select {...a} {...form.register('assistanceId')}>
+                    <option value="">Без ассистанса (обслуживает МИГ)</option>
+                    {(assistances.data ?? []).map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>

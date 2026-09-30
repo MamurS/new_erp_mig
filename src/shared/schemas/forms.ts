@@ -121,6 +121,7 @@ export const makeKpParamsSchema = (today: () => string = () => todayISO()) =>
       coverageEnd: isoDateInput,
       validUntil: isoDateInput,
       paymentTerms: z.enum(['single', 'quarterly', 'monthly']),
+      assistanceId: z.preprocess((v) => (v === '' ? null : v), uuid.nullable()).optional(),
     })
     .superRefine((v, ctx) => {
       if (v.coverageEnd <= v.coverageStart) {

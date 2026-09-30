@@ -20,7 +20,6 @@ const ck = {
   registry: (id: string) => ['clinic', 'registry', id] as const,
   documents: ['clinic', 'documents'] as const,
   users: ['clinic', 'users'] as const,
-  integration: ['clinic', 'integration'] as const,
 };
 
 // ---------------- cabinet ----------------
@@ -143,23 +142,25 @@ export function usePatchClinicUser() {
   });
 }
 
-// ---- integration ----
-export const useIntegrationOverview = () => useQuery({ queryKey: [...ck.integration, 'overview'], queryFn: () => request('/clinic/integration/overview', { schema: C.integrationOverview }) });
-export const useIntegrationKeys = () => useQuery({ queryKey: [...ck.integration, 'keys'], queryFn: () => request('/clinic/integration/keys', { schema: C.integrationClients }) });
-export const useWebhooks = () => useQuery({ queryKey: [...ck.integration, 'webhooks'], queryFn: () => request('/clinic/integration/webhooks', { schema: C.webhookEndpoints }) });
-export const useDeliveries = () => useQuery({ queryKey: [...ck.integration, 'deliveries'], queryFn: () => request('/clinic/integration/deliveries', { schema: C.webhookDeliveries }) });
-export const useApiLogs = () => useQuery({ queryKey: [...ck.integration, 'logs'], queryFn: () => request('/clinic/integration/logs', { schema: C.apiLogs }) });
-function useIntegrationMutation<V, R>(fn: (v: V) => Promise<R>) {
+// ---- integration (the partner framework: clinic cabinet or assistance portal) ----
+const CLINIC_BASE = '/clinic/integration';
+const ik = (base: string) => ['integration', base] as const;
+export const useIntegrationOverview = (base = CLINIC_BASE) => useQuery({ queryKey: [...ik(base), 'overview'], queryFn: () => request(`${base}/overview`, { schema: C.integrationOverview }) });
+export const useIntegrationKeys = (base = CLINIC_BASE) => useQuery({ queryKey: [...ik(base), 'keys'], queryFn: () => request(`${base}/keys`, { schema: C.integrationClients }) });
+export const useWebhooks = (base = CLINIC_BASE) => useQuery({ queryKey: [...ik(base), 'webhooks'], queryFn: () => request(`${base}/webhooks`, { schema: C.webhookEndpoints }) });
+export const useDeliveries = (base = CLINIC_BASE) => useQuery({ queryKey: [...ik(base), 'deliveries'], queryFn: () => request(`${base}/deliveries`, { schema: C.webhookDeliveries }) });
+export const useApiLogs = (base = CLINIC_BASE) => useQuery({ queryKey: [...ik(base), 'logs'], queryFn: () => request(`${base}/logs`, { schema: C.apiLogs }) });
+function useIntegrationMutation<V, R>(base: string, fn: (v: V) => Promise<R>) {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: fn, onSuccess: () => void qc.invalidateQueries({ queryKey: ck.integration }) });
+  return useMutation({ mutationFn: fn, onSuccess: () => void qc.invalidateQueries({ queryKey: ik(base) }) });
 }
-export const useCreateKey = () =>
-  useIntegrationMutation((body: { name: string; scopes: string[]; ipAllowlist: string }) => request('/clinic/integration/keys', { method: 'POST', body, schema: C.keyCreated }));
-export const useRevokeKey = () => useIntegrationMutation((id: string) => request(`/clinic/integration/keys/${id}/revoke`, { method: 'POST', schema: C.integrationClient }));
-export const useCreateWebhook = () =>
-  useIntegrationMutation((body: { url: string; events: string[] }) => request('/clinic/integration/webhooks', { method: 'POST', body, schema: C.webhookCreated }));
-export const useTestWebhook = () => useIntegrationMutation((id: string) => request(`/clinic/integration/webhooks/${id}/test`, { method: 'POST', schema: C.webhookDelivery }));
-export const useRetryDelivery = () => useIntegrationMutation((id: string) => request(`/clinic/integration/deliveries/${id}/retry`, { method: 'POST', schema: C.webhookDelivery }));
+export const useCreateKey = (base = CLINIC_BASE) =>
+  useIntegrationMutation(base, (body: { name: string; scopes: string[]; ipAllowlist: string }) => request(`${base}/keys`, { method: 'POST', body, schema: C.keyCreated }));
+export const useRevokeKey = (base = CLINIC_BASE) => useIntegrationMutation(base, (id: string) => request(`${base}/keys/${id}/revoke`, { method: 'POST', schema: C.integrationClient }));
+export const useCreateWebhook = (base = CLINIC_BASE) =>
+  useIntegrationMutation(base, (body: { url: string; events: string[] }) => request(`${base}/webhooks`, { method: 'POST', body, schema: C.webhookCreated }));
+export const useTestWebhook = (base = CLINIC_BASE) => useIntegrationMutation(base, (id: string) => request(`${base}/webhooks/${id}/test`, { method: 'POST', schema: C.webhookDelivery }));
+export const useRetryDelivery = (base = CLINIC_BASE) => useIntegrationMutation(base, (id: string) => request(`${base}/deliveries/${id}/retry`, { method: 'POST', schema: C.webhookDelivery }));
 
 // ---------------- staff ----------------
 const sk = {
