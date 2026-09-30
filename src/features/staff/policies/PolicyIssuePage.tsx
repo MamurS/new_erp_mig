@@ -12,6 +12,7 @@ import { PROGRAMS } from '@/shared/domain/programs';
 import { defaultEndDate, defaultTariff, POLICY_CSV_HEADER, POLICY_CSV_MAX_BYTES, POLICY_CSV_MAX_ROWS, policyPeriodProblem, policyPremium } from '@/shared/domain/policies';
 import { policyHrInviteSchema, policyTermsSchema } from '@/shared/schemas/forms';
 import { downloadText, toCsv } from '@/shared/lib/csv';
+import { groupErrorsByRow, parseCsv } from '@/features/hr/importCsv';
 import { addDaysISO, formatDate, formatMoney, formatNumber, todayISO } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
@@ -34,6 +35,47 @@ interface Terms {
 }
 
 const toNumber = (v: string) => Number(v.replace(/\s/g, ''));
+const PREVIEW_ROWS = 200;
+
+/** Rows of the file with the server's verdict: valid ones green, invalid ones red. No PINFL or phone on screen. */
+function ListPreview({ csv, result }: { csv: string; result: PolicyListCheck }) {
+  const rows = parseCsv(csv).rows;
+  const byRow = groupErrorsByRow(result.errors);
+  return (
+    <div className="mt-3 max-h-[420px] overflow-auto rounded-btn border border-border">
+      <table className="w-full border-collapse text-left text-[13px]">
+        <caption className="sr-only">Строки файла со списком застрахованных</caption>
+        <thead className="sticky top-0 bg-surface">
+          <tr className="border-b border-border text-[12px] text-muted">
+            <th className="px-2 py-1.5 font-normal">Строка</th>
+            <th className="px-2 py-1.5 font-normal">ФИО</th>
+            <th className="px-2 py-1.5 font-normal">Должность</th>
+            <th className="px-2 py-1.5 font-normal">Семья</th>
+            <th className="px-2 py-1.5 font-normal">Проверка</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, PREVIEW_ROWS).map((r, i) => {
+            const line = i + 2;
+            const errs = byRow.get(line);
+            return (
+              <tr key={line} data-status={errs ? 'invalid' : 'valid'} className={cn('border-b border-border-soft align-top', errs ? 'bg-danger-soft' : 'bg-success-soft')}>
+                <td className="num px-2 py-1.5">{line}</td>
+                <td className="px-2 py-1.5">{r.fullName}</td>
+                <td className="px-2 py-1.5">{r.position}</td>
+                <td className="num px-2 py-1.5">{r.familyMembers || '0'}</td>
+                <td className={cn('px-2 py-1.5', errs ? 'text-danger-text' : 'text-success-text')}>
+                  {errs ? errs.map((e) => `${e.field ? `${e.field}: ` : ''}${e.message}`).join('; ') : 'Корректно'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {rows.length > PREVIEW_ROWS && <p className="px-2 py-1.5 text-[12px] text-muted">Показаны первые {PREVIEW_ROWS} строк из {rows.length}; итоги выше посчитаны по всему файлу.</p>}
+    </div>
+  );
+}
 
 function Steps({ step }: { step: number }) {
   return (
@@ -245,16 +287,7 @@ export default function PolicyIssuePage() {
               <p className="text-muted">
                 Сотрудников: {preview.employees}, членов семьи: {preview.familyMembers}
               </p>
-              {preview.errors.length > 0 && (
-                <ul className="mt-2 max-h-56 overflow-auto rounded-btn bg-danger-soft p-2 text-[13px] text-danger-text">
-                  {preview.errors.slice(0, 200).map((e, i) => (
-                    <li key={`${e.row}-${e.field}-${i}`}>
-                      Строка {e.row}
-                      {e.field ? `, ${e.field}` : ''}: {e.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {csv && <ListPreview csv={csv} result={preview} />}
               {preview.errors.length > 0 && <p className="mt-2 text-[13px] text-muted">Строки с ошибками не попадут в полис — исправьте их в файле и загрузите снова.</p>}
             </div>
           )}
@@ -285,6 +318,11 @@ export default function PolicyIssuePage() {
               <Kv label="Премия">
                 <span className="num font-semibold">{formatMoney(premium)}</span>
               </Kv>
+              {(Object.keys(PROGRAMS[terms.program].limits) as LimitCategory[]).map((cat) => (
+                <Kv key={cat} label={`Лимит: ${LIMIT_CATEGORY_LABEL[cat].toLowerCase()}`}>
+                  <span className="num">{formatMoney(PROGRAMS[terms.program].limits[cat])}</span>
+                </Kv>
+              ))}
             </dl>
           </Card>
           <Card title="HR клиента">

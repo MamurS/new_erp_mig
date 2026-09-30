@@ -31,10 +31,16 @@ test('1. Underwriter issues a policy from a CSV of 3 employees and invites HR, w
     'Алиев Тимур Рашидович,15.03.1990,31503900000011,+998901112233,Инженер,2',
     'Каримова Нигора Алишеровна,01.07.1988,30107880000022,901112244,Бухгалтер,0',
     'Сидоров Пётр Ильич,20.11.1979,32011790000033,901112255,Директор,1',
+    'Ошибкин Ош,01.01.1990,123,901112266,Водитель,0',
   ].join('\n');
   await page.getByLabel('Файл со списком застрахованных').setInputFiles({ name: 'staff.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') });
   await expect(page.getByTestId('policy-list-preview')).toContainText('корректных: 3');
   await expect(page.getByTestId('policy-list-preview')).toContainText('членов семьи: 3');
+  // Row preview: valid rows green, the broken one red with the reason; no PINFL on screen.
+  const preview = page.getByTestId('policy-list-preview');
+  await expect(preview.locator('tr[data-status="valid"]')).toHaveCount(3);
+  await expect(preview.locator('tr[data-status="invalid"]')).toContainText('pinfl');
+  await expect(preview).not.toContainText('31503900000011');
   await page.getByRole('button', { name: 'Далее' }).click();
 
   await expect(page.getByTestId('policy-summary')).toContainText('Стандарт+');
@@ -79,7 +85,8 @@ test('2. HR adds an employee → pending; the underwriter approves; HR sees them
   const req = pending.find((c) => c.fullName === 'Заявкин Заяв Заявович')!;
   const before = ((await api(page, 'GET', `/policies/${req.policyId}`)).data as { premium: number }).premium;
   await page.goto('/staff/policy-changes');
-  await page.getByRole('button', { name: 'Подтвердить: Заявкин Заяв Заявович' }).click();
+  await page.getByRole('button', { name: 'Действия: Заявкин Заяв Заявович' }).click();
+  await page.getByRole('menuitem', { name: 'Подтвердить' }).click();
   await expect(page.getByText(/Подтверждено заявок: 1/)).toBeVisible();
   const after = (await api(page, 'GET', `/policies/${req.policyId}`)).data as { premium: number; documents: { title: string }[] };
   expect(after.premium).toBe(before + req.premiumDelta);
@@ -106,7 +113,8 @@ test('3. HR requests an exclusion, the underwriter rejects it with a reason, HR 
 
   await asUnderwriter(page);
   await page.goto('/staff/policy-changes');
-  await page.getByRole('button', { name: `Отклонить: ${name}` }).click();
+  await page.getByRole('button', { name: `Действия: ${name}` }).click();
+  await page.getByRole('menuitem', { name: 'Отклонить…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Отклонить заявку' });
   await dialog.getByLabel('Причина').fill('Нет приказа об увольнении');
   await dialog.getByRole('button', { name: 'Отклонить' }).click();
@@ -124,7 +132,8 @@ test('4. The operator sees the queue but cannot decide: no buttons, and the API 
   await page.goto('/staff/policy-changes');
   await expect(page.getByRole('table', { name: 'Заявки на изменение состава' })).toBeVisible();
   await expect(page.getByRole('row').nth(1)).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Подтвердить/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Действия:/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Подтвердить выбранные' })).toHaveCount(0);
   const pending = (await api(page, 'GET', '/policy-changes?status=pending')).data as { id: string }[];
   expect(pending.length).toBeGreaterThan(0);
   expect((await api(page, 'POST', '/policy-changes/decision', { ids: [pending[0]!.id], decision: 'approve' })).status).toBe(403);

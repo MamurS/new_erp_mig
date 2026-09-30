@@ -1,6 +1,7 @@
 /* Queue of insured-list changes (POLICY_SPEC §5.2): underwriters approve or reject HR requests. */
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Check, MoreHorizontal, X } from 'lucide-react';
 import type { PolicyChange } from '@/shared/types';
 import { useDecidePolicyChanges, usePolicyChanges } from '@/shared/api/queries/policies';
 import { errorMessage } from '@/shared/api/client';
@@ -11,6 +12,7 @@ import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Checkbox } from '@/shared/ui/checkbox';
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/shared/ui/dropdown';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Modal } from '@/shared/ui/dialog';
@@ -177,14 +179,21 @@ export default function PolicyChangesPage() {
             header: '',
             align: 'right' as const,
             cell: (r: PolicyChange) => (
-              <span className="flex justify-end gap-1">
-                <Button size="sm" variant="secondary" aria-label={`Подтвердить: ${r.fullName}`} onClick={() => void approve([r.id])}>
-                  Подтвердить
-                </Button>
-                <Button size="sm" variant="ghost" aria-label={`Отклонить: ${r.fullName}`} onClick={() => setRejecting([r.id])}>
-                  Отклонить
-                </Button>
-              </span>
+              <Menu>
+                <MenuTrigger asChild>
+                  <Button size="icon" variant="ghost" aria-label={`Действия: ${r.fullName}`}>
+                    <MoreHorizontal className="h-4 w-4" aria-hidden />
+                  </Button>
+                </MenuTrigger>
+                <MenuContent>
+                  <MenuItem onSelect={() => void approve([r.id])}>
+                    <Check className="h-4 w-4" aria-hidden /> Подтвердить
+                  </MenuItem>
+                  <MenuItem danger onSelect={() => setRejecting([r.id])}>
+                    <X className="h-4 w-4" aria-hidden /> Отклонить…
+                  </MenuItem>
+                </MenuContent>
+              </Menu>
             ),
           } satisfies Column<PolicyChange>,
         ]
