@@ -189,3 +189,37 @@ export const myAppointmentSchema = z.object({
   startsAt: z.string().trim().min(10).max(40),
 });
 export const chatSchema = z.object({ text: text(1, 1000, 'Напишите сообщение') });
+
+// ---------- clinics (CLINIC_SPEC) ----------
+const emailInput = z.string().trim().toLowerCase().min(1, 'Укажите email').max(254).email('Некорректный email');
+const clinicRole = z.enum(['clinic_registrar', 'clinic_admin']);
+
+export const clinicUserInviteSchema = z.object({ email: emailInput, fullName: text(3, 120), role: clinicRole });
+export const clinicUserPatchSchema = z
+  .object({ role: clinicRole.optional(), active: z.boolean().optional() })
+  .refine((v) => v.role !== undefined || v.active !== undefined, 'Нечего менять');
+export const clinicAdminInviteSchema = z.object({ email: emailInput, fullName: text(3, 120) });
+export const clinicCreateSchema = z.object({
+  name: text(3, 120),
+  address: text(5, 200),
+  district: text(2, 60),
+  specialties: z.array(specialty).min(1, 'Выберите специальности'),
+  integrationMode: z.enum(['portal', 'api', 'hybrid']),
+});
+export const clinicModeSchema = z.object({ integrationMode: z.enum(['portal', 'api', 'hybrid']) });
+export const registryBuildSchema = z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Период ГГГГ-ММ') });
+export const guaranteeAnswerSchema = z.object({ comment: text(3, 1000) });
+
+export const guaranteeDecisionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('approve'),
+    amount: z.number({ invalid_type_error: 'Укажите сумму' }).int().min(1, 'Сумма должна быть больше нуля').max(10_000_000_000),
+    validUntil: isoDateInput,
+  }),
+  z.object({ action: z.literal('reject'), reason: text(5, 500) }),
+  z.object({ action: z.literal('request_info'), reason: text(5, 500) }),
+]);
+export const registryLineDecisionSchema = z.discriminatedUnion('decision', [
+  z.object({ decision: z.literal('accept') }),
+  z.object({ decision: z.literal('reject'), reason: text(3, 300) }),
+]);

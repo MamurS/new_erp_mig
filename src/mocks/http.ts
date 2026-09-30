@@ -90,6 +90,12 @@ export function sessionUserFor(d: Db, userId: string, role: Role): SessionUser |
     const h = d.hrUsers.find((u) => u.id === userId);
     return h ? { id: h.id, role, displayName: h.fullName, companyId: h.companyId } : null;
   }
+  if (role === 'clinic_registrar' || role === 'clinic_admin') {
+    const u = d.clinicUsers.find((x) => x.id === userId);
+    if (!u || !u.active) return null;
+    // Role and clinic always come from the server-side record.
+    return { id: u.id, role: u.role, displayName: u.fullName, clinicId: u.clinicId };
+  }
   if (role === 'insured') {
     const i = d.insured.find((x) => x.userId === userId);
     if (!i || i.status !== 'active') return null;

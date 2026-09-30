@@ -17,6 +17,8 @@ export const ROLE_LABEL: Record<Role, string> = {
   admin: 'Администратор',
   hr: 'HR клиента',
   insured: 'Застрахованный',
+  clinic_registrar: 'Регистратор клиники',
+  clinic_admin: 'Администратор клиники',
 };
 
 export const PROGRAM_LABEL: Record<ProgramCode, string> = {
@@ -87,9 +89,24 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   kp_sent: 'КП отправлено клиенту',
   kp_revoked: 'КП отозвано',
   kp_downloaded: 'КП скачано',
+  clinic_check_patient: 'Клиника: проверка пациента',
+  clinic_check_failed: 'Клиника: неудачная проверка',
+  guarantee_requested: 'Запрошено гарантийное письмо',
+  guarantee_decided: 'Решение по гарантийному письму',
+  registry_submitted: 'Отправлен реестр клиники',
+  registry_line_decided: 'Решение по строке реестра',
+  registry_paid: 'Реестр оплачен',
+  integration_key_created: 'Создан ключ API клиники',
+  integration_key_revoked: 'Отозван ключ API клиники',
+  webhook_created: 'Создан вебхук клиники',
 };
 
 export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin'] as const;
+export const CLINIC_ROLES = ['clinic_registrar', 'clinic_admin'] as const;
+export function isClinicRole(role: Role): role is (typeof CLINIC_ROLES)[number] {
+  return (CLINIC_ROLES as readonly string[]).includes(role);
+}
+
 export function isStaffRole(role: Role): role is (typeof STAFF_ROLES)[number] {
   return (STAFF_ROLES as readonly string[]).includes(role);
 }

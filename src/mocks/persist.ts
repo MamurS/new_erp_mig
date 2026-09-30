@@ -16,8 +16,9 @@ export function loadSnapshot(): Db | null {
     if (!raw) return null;
     const db = JSON.parse(raw) as Snapshot;
     const sessions = JSON.parse(sessionStorage.getItem(SESS_KEY) ?? '[]') as Db['sessions'];
-    // Snapshots from older builds have no KP tables.
-    return { ...db, kp: db.kp ?? [], kpSeq: db.kpSeq ?? 122, sessions };
+    // A snapshot from an older build lacks newer tables: start from a fresh seed instead.
+    if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries)) return null;
+    return { ...db, sessions };
   } catch {
     return null;
   }

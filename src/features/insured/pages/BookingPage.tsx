@@ -78,6 +78,7 @@ function ClinicSlots({ clinic, day, picked, onPick }: { clinic: Clinic; day: str
                 </ChoiceChip>
               );
             })}
+            {slots.data.some((s) => s.fromClinicSystem) && <p className="w-full text-[12px] text-muted">{t('booking.fromClinic')}</p>}
           </div>
         ) : (
           <p className="text-[14px] text-muted">{t('booking.noSlots')}</p>

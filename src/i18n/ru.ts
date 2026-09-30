@@ -232,6 +232,14 @@ export const ru = {
   'profile.fullName': 'ФИО',
   'profile.consentMissing': 'не дано',
   'card.qrAlt': 'QR-код для клиники',
+  'card.shortCode': 'Если QR не считывается, продиктуйте код',
+  'appt.byClinic': 'Подтвердила клиника',
+  'appt.byOperator': 'Подтвердил оператор МИГ',
+  'appt.proposed': 'Клиника предлагает другое время: {date}, {time}',
+  'appt.acceptProposal': 'Принять новое время',
+  'appt.proposalAccepted': 'Время изменено, запись подтверждена',
+  'appt.declineReason': 'Причина: {reason}',
+  'booking.fromClinic': 'Время из расписания клиники',
   'offline': 'Нет соединения с интернетом',
 } as const;
 

@@ -160,6 +160,20 @@ export const claimHandlers = [
       const d = db();
       const f = d.files.find((x) => x.id === param(ctx, 'id'));
       if (!f) throw notFound();
+      if (f.guaranteeId) {
+        // Guarantee-letter attachments: the clinic that uploaded them and MIG staff with guarantees.read.
+        if (!can(user, 'guarantees.read', { clinicId: f.clinicId })) throw notFound();
+        if (!f.bytes) throw notFound();
+        return new HttpResponse(f.bytes, {
+          headers: {
+            'Content-Type': f.mime,
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+            // PDFs are never rendered inline in the app: download only (CLINIC_SPEC §9.7).
+            ...(f.mime === 'application/pdf' ? { 'Content-Disposition': `attachment; filename="${f.fileName ?? 'document.pdf'}"` } : {}),
+          },
+        });
+      }
       if (user.role === 'insured') {
         if (!f.insuredId || f.insuredId !== user.insuredId) throw notFound();
       } else if (!can(user, 'claims.read') || !isStaffRole(user.role)) {
@@ -217,7 +231,11 @@ export const claimHandlers = [
       const a = db().appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a) throw notFound();
       if (a.status !== 'requested') throw conflict('Запись уже обработана');
+      // The operator answers as a fallback when the clinic does not (CLINIC_SPEC §4.3).
       a.status = 'confirmed';
+      a.respondedBy = 'operator';
+      a.respondedAt = tzIso(Date.now());
+      a.proposedStartsAt = undefined;
       return a;
     }),
   ),
@@ -229,9 +247,13 @@ export const claimHandlers = [
       if (!isStaffRole(user.role)) throw notFound();
       const a = db().appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a) throw notFound();
-      await body(ctx.request, declineAppointmentSchema);
+      const { reason } = await body(ctx.request, declineAppointmentSchema);
       if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('Запись уже обработана');
       a.status = 'declined';
+      a.declineReason = reason;
+      a.respondedBy = 'operator';
+      a.respondedAt = tzIso(Date.now());
+      a.proposedStartsAt = undefined;
       return a;
     }),
   ),

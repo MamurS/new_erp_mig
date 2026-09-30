@@ -27,6 +27,8 @@ import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRo
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './credentials';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
+import { seedClinics } from './seed-clinics';
+import { CLINIC_RESPONSE_SLA_MINUTES } from '@/shared/domain/clinics';
 
 // ---------- dictionaries ----------
 const UZ_MALE = ['Азиз', 'Бахтиёр', 'Жасур', 'Отабек', 'Шерзод', 'Фаррух', 'Улугбек', 'Санжар', 'Дилшод', 'Рустам', 'Тимур', 'Мансур', 'Бобур', 'Анвар'];
@@ -234,6 +236,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
       onlineBooking: chance(rng, 0.7),
       apiStatus: pick(rng, ['online', 'online', 'online', 'offline', 'manual'] as const),
       contractUntil: isoDay(today + int(rng, 60, 700) * DAY),
+      integrationMode: 'portal',
+      responseSlaMinutes: CLINIC_RESPONSE_SLA_MINUTES,
     });
   }
 
@@ -758,6 +762,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
   }
 
   const insuredDocuments: InsuredDocRow[] = [];
+  const { demoClinicId: _demoClinicId, ...clinicSeed } = seedClinics({ clinics, insured, policies, staff, appointments }, { xss: opts.xss, now });
 
   return {
     staff,
@@ -782,6 +787,13 @@ export function createSeed(opts: SeedOptions = {}): Db {
     lockouts: [],
     kp: [],
     kpSeq: 122,
+    ...clinicSeed,
+    cardTokens: [],
+    checkAttempts: [],
+    checkLocks: [],
+    accessTokens: [],
+    idempotency: [],
+    apiCalls: [],
     integrationsSeed: int(rng, 1, 1000),
   };
 }

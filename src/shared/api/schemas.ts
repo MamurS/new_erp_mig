@@ -8,7 +8,7 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoDateTime = z.string().min(10);
 const money = z.number();
 
-export const role = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured']);
+export const role = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured', 'clinic_registrar', 'clinic_admin']);
 export const staffRole = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin']);
 export const programCode = z.enum(['basic', 'standard', 'standard_plus', 'premium']);
 export const limitCategory = z.enum(['outpatient', 'dental', 'medicines', 'inpatient']);
@@ -33,6 +33,7 @@ export const sessionUser: z.ZodType<T.SessionUser> = z.object({
   displayName: z.string(),
   companyId: uuid.optional(),
   insuredId: uuid.optional(),
+  clinicId: uuid.optional(),
   consentGivenAt: isoDateTime.optional(),
 });
 
@@ -259,6 +260,11 @@ export const appointment: z.ZodType<T.Appointment> = z.object({
   startsAt: isoDateTime,
   status: z.enum(['requested', 'confirmed', 'declined', 'completed', 'cancelled']),
   createdAt: isoDateTime,
+  respondedBy: z.enum(['clinic', 'operator']).optional(),
+  respondedAt: isoDateTime.optional(),
+  proposedStartsAt: isoDateTime.optional(),
+  declineReason: z.string().optional(),
+  fromClinicSystem: z.boolean().optional(),
 });
 export const appointmentPage = page(appointment);
 export const appointments = z.array(appointment);
@@ -273,9 +279,11 @@ export const clinic: z.ZodType<T.Clinic> = z.object({
   apiStatus: z.enum(['online', 'offline', 'manual']),
   contractUntil: isoDate,
   distanceKm: z.number().optional(),
+  integrationMode: z.enum(['portal', 'api', 'hybrid']),
+  responseSlaMinutes: z.number(),
 });
 export const clinics = z.array(clinic);
-export const slots = z.array(z.object({ clinicId: uuid, startsAt: isoDateTime }) satisfies z.ZodType<T.Slot>);
+export const slots = z.array(z.object({ clinicId: uuid, startsAt: isoDateTime, fromClinicSystem: z.boolean().optional() }) satisfies z.ZodType<T.Slot>);
 
 export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
   id: uuid,
@@ -303,8 +311,18 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'kp_sent',
     'kp_revoked',
     'kp_downloaded',
+    'clinic_check_patient',
+    'clinic_check_failed',
+    'guarantee_requested',
+    'guarantee_decided',
+    'registry_submitted',
+    'registry_line_decided',
+    'registry_paid',
+    'integration_key_created',
+    'integration_key_revoked',
+    'webhook_created',
   ]),
-  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp']),
+  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration']),
   targetId: uuid.optional(),
   targetLabel: z.string().optional(),
   reason: z.string().optional(),
@@ -384,7 +402,7 @@ export const dashboard: z.ZodType<D.DashboardSummary> = z.object({
 export const queueItems = z.array(
   z.object({
     id: uuid,
-    type: z.enum(['appointment', 'claim', 'renewal']),
+    type: z.enum(['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response']),
     entityId: uuid,
     who: z.string(),
     details: z.string(),
@@ -471,7 +489,7 @@ export const mePolicy: z.ZodType<D.MePolicy> = z.object({
   endDate: isoDate,
   limits: limitsRecord,
 });
-export const cardToken: z.ZodType<D.CardToken> = z.object({ token: z.string(), expiresAt: isoDateTime });
+export const cardToken: z.ZodType<D.CardToken> = z.object({ token: z.string(), shortCode: z.string(), expiresAt: isoDateTime });
 export const recognizeResult: z.ZodType<D.RecognizeResult> = z.object({
   providerName: z.string(),
   amount: money,

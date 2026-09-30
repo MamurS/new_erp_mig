@@ -58,14 +58,21 @@ function verify(challengeId: string, code: string): SessionResponse {
     throw invalidCode();
   }
   d.challenges = d.challenges.filter((x) => x !== c);
-  const role = c.kind === 'hr' ? 'hr' : c.kind === 'insured' ? 'insured' : d.staff.find((s) => s.id === c.userId)?.role;
+  const role =
+    c.kind === 'hr'
+      ? 'hr'
+      : c.kind === 'insured'
+        ? 'insured'
+        : c.kind === 'clinic'
+          ? d.clinicUsers.find((u) => u.id === c.userId)?.role
+          : d.staff.find((s) => s.id === c.userId)?.role;
   if (!role) throw invalidCode();
   const user = sessionUserFor(d, c.userId, role);
   if (!user) throw invalidCode();
   const sessionId = randomToken(32);
   const now = Date.now();
   d.sessions.push({ id: sessionId, userId: user.id, role: user.role, createdAt: now, lastActivity: now });
-  const staffRow = d.staff.find((s) => s.id === user.id);
+  const staffRow = d.staff.find((s) => s.id === user.id) ?? d.clinicUsers.find((u) => u.id === user.id);
   if (staffRow) staffRow.lastLoginAt = tzIso(now);
   audit(user, 'login', { targetType: 'session' });
   return { sessionId, user };
@@ -81,7 +88,8 @@ export const authHandlers = [
       const d = db();
       const staff = d.staff.find((s) => s.email === email && s.active);
       const hr = d.hrUsers.find((h) => h.email === email);
-      const account = staff ?? hr;
+      const clinicUser = d.clinicUsers.find((u) => u.email === email && u.active);
+      const account = staff ?? hr ?? clinicUser;
       if (!account || account.password !== password) {
         recordFailure(key);
         audit({ id: NIL, displayName: 'Неизвестный', role: staff?.role ?? 'operator' }, 'login_failed', {
@@ -89,7 +97,7 @@ export const authHandlers = [
         });
         throw invalidCreds();
       }
-      return newChallenge(account.id, staff ? 'staff' : 'hr');
+      return newChallenge(account.id, staff ? 'staff' : clinicUser ? 'clinic' : 'hr');
     }),
   ),
   http.post(

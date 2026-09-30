@@ -9,6 +9,8 @@ import {
   BarChart3,
   ScrollText,
   Users,
+  FileCheck,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 import type { StaffRole } from '@/shared/types';
@@ -32,6 +34,8 @@ export const STAFF_SECTIONS: StaffSection[] = [
   { path: '/staff/claims', label: 'Убытки', icon: Receipt, roles: ['operator', 'doctor_expert', 'accountant'], inNav: true },
   { path: '/staff/appointments', label: 'Записи к врачу', icon: CalendarClock, roles: ['operator', 'doctor_expert'], inNav: true },
   { path: '/staff/clinics', label: 'Клиники', icon: Hospital, roles: ['operator', 'underwriter', 'doctor_expert', 'admin'], inNav: true },
+  { path: '/staff/guarantees', label: 'Гарантийные письма', icon: FileCheck, roles: ['operator', 'doctor_expert'], inNav: true },
+  { path: '/staff/registries', label: 'Реестры клиник', icon: ClipboardList, roles: ['operator', 'accountant'], inNav: true },
   { path: '/staff/limit-requests', label: 'Изменения лимитов', icon: SlidersHorizontal, roles: ['operator', 'underwriter'], inNav: true },
   { path: '/staff/reports', label: 'Отчёты', icon: BarChart3, roles: ['underwriter', 'accountant'], inNav: true },
   { path: '/staff/audit', label: 'Журнал аудита', icon: ScrollText, roles: ['admin'], inNav: true },

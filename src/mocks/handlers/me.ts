@@ -3,6 +3,8 @@ import { chatSchema, consentSchema, myAppointmentSchema, myClaimSchema } from '@
 import type { Appointment, SessionUser } from '@/shared/types';
 import type { CardToken, MePolicy, MeProfile, RecognizeResult } from '@/shared/types/dto';
 import { detectMime, RECEIPT_LIMITS } from '@/shared/lib/image';
+import { CARD_TOKEN_TTL_MS, formatShortCode, shortCodeFrom } from '@/shared/domain/clinics';
+import { emitWebhook, pushEvent } from '../clinic-core';
 import { db, type ClaimRow, type InsuredRow } from '../db';
 import { API, body, conflict, forbidden, HttpError, notFound, param, requireSession, route, validate } from '../http';
 import { maskCard, maskPhone, maskPinfl } from '../mask';
@@ -95,8 +97,16 @@ export const meHandlers = [
   http.get(
     `${API}/me/card-token`,
     route(({ request }) => {
-      requireInsured(request);
-      const out: CardToken = { token: randomToken(18), expiresAt: tzIso(Date.now() + 60_000) };
+      const { me } = requireInsured(request);
+      const d = db();
+      const now = Date.now();
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      const row = { token: randomToken(18), shortCode: shortCodeFrom(bytes), insuredId: me.id, expiresAt: now + CARD_TOKEN_TTL_MS };
+      // One-time tokens: the previous ones of this person stop working as soon as a new one is issued.
+      d.cardTokens = d.cardTokens.filter((t) => t.expiresAt > now && t.insuredId !== me.id);
+      d.cardTokens.push(row);
+      const out: CardToken = { token: row.token, shortCode: formatShortCode(row.shortCode), expiresAt: tzIso(row.expiresAt) };
       return out;
     }),
   ),
@@ -219,19 +229,41 @@ export const meHandlers = [
         startsAt: iso,
         status: 'requested',
         createdAt: tzIso(Date.now()),
+        ...(clinic.integrationMode === 'api' ? { fromClinicSystem: true } : {}),
       };
       d.appointments.push(a);
+      await emitWebhook(d, clinic.id, 'appointment.requested', a.id);
+      pushEvent(d, clinic.id, 'Новая заявка на запись');
       return a;
     }),
   ),
   http.post(
     `${API}/me/appointments/:id/cancel`,
-    route((ctx) => {
+    route(async (ctx) => {
       const { me } = requireInsured(ctx.request);
-      const a = db().appointments.find((x) => x.id === param(ctx, 'id'));
+      const d = db();
+      const a = d.appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a || a.insuredId !== me.id) throw notFound();
       if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('Эту запись уже нельзя отменить');
       a.status = 'cancelled';
+      a.proposedStartsAt = undefined;
+      await emitWebhook(d, a.clinicId, 'appointment.cancelled', a.id);
+      pushEvent(d, a.clinicId, 'Пациент отменил запись');
+      return a;
+    }),
+  ),
+  http.post(
+    `${API}/me/appointments/:id/accept-proposal`,
+    route((ctx) => {
+      const { me } = requireInsured(ctx.request);
+      const d = db();
+      const a = d.appointments.find((x) => x.id === param(ctx, 'id'));
+      if (!a || a.insuredId !== me.id) throw notFound();
+      if (a.status !== 'requested' || !a.proposedStartsAt) throw conflict('Клиника не предлагала другое время');
+      a.startsAt = a.proposedStartsAt;
+      a.proposedStartsAt = undefined;
+      a.status = 'confirmed';
+      pushEvent(d, a.clinicId, 'Пациент принял предложенное время');
       return a;
     }),
   ),

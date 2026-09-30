@@ -49,7 +49,15 @@ export default function CardPage() {
         ) : (
           <Skeleton className="h-[280px] w-[280px] max-w-full rounded-card" />
         )}
-        <p className="mt-3 text-[14px] font-semibold text-muted" aria-live="off">
+        {token.data?.shortCode && (
+          <div className="mt-3">
+            <p className="text-[12px] text-muted">{t('card.shortCode')}</p>
+            <p className="num font-heading text-[28px] font-bold tracking-[0.12em]" data-testid="card-short-code">
+              {token.data.shortCode}
+            </p>
+          </div>
+        )}
+        <p className="mt-2 text-[14px] font-semibold text-muted" aria-live="off">
           {t('card.refresh', { sec: left })}
         </p>
         <div className="mt-4 w-full border-t border-border-soft pt-4">

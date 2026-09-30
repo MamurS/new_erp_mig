@@ -129,8 +129,14 @@ export const staffMiscHandlers = [
       if (!clinic) throw notFound();
       const date = ctx.url.searchParams.get('date') ?? isoDay(Date.now());
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
-      const taken = new Set(db().appointments.filter((a) => a.clinicId === clinic.id && a.status !== 'cancelled' && a.status !== 'declined').map((a) => a.startsAt));
-      return clinicSlots(clinic, date).filter((s) => !taken.has(s.startsAt));
+      const d = db();
+      const taken = new Set(d.appointments.filter((a) => a.clinicId === clinic.id && a.status !== 'cancelled' && a.status !== 'declined').map((a) => a.startsAt));
+      // Slots passed by the clinic MIS (PUT /slots) win; API-mode clinics always count as «from the clinic system».
+      const fromMis = d.misSlots.filter((s) => s.clinicId === clinic.id && isoDay(parseIso(s.startsAt)) === date);
+      const list: Slot[] = fromMis.length ? fromMis.map((s) => ({ clinicId: clinic.id, startsAt: s.startsAt, fromClinicSystem: true })) : clinicSlots(clinic, date);
+      return list
+        .filter((s) => !taken.has(s.startsAt))
+        .map((s) => (clinic.integrationMode === 'api' ? { ...s, fromClinicSystem: true } : s));
     }),
   ),
   // ---- limit change requests ----

@@ -1,0 +1,1547 @@
+openapi: "3.1.0"
+info:
+  title: "MIG ДМС — API интеграции клиник"
+  version: "1.0.0"
+  description: "API для медицинских информационных систем клиник. JSON по HTTPS, ошибки в формате application/problem+json (RFC 9457), каждый ответ содержит X-Request-Id, POST принимает Idempotency-Key, лимит 60 запросов в минуту на ключ. Данные пациента доступны только через визит клиники. Сущности соответствуют ресурсам HL7 FHIR: Patient, Coverage, Appointment, Claim."
+servers:
+  - url: "/api/integration/v1"
+tags:
+  - name: "Авторизация"
+  - name: "Пациенты"
+  - name: "Записи"
+  - name: "Гарантийные письма"
+  - name: "Реестры"
+  - name: "Оплаты"
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: "/api/integration/v1/oauth/token"
+          scopes:
+            "coverage:check": "coverage:check"
+            "appointments:read": "appointments:read"
+            "appointments:write": "appointments:write"
+            "slots:write": "slots:write"
+            "guarantees:read": "guarantees:read"
+            "guarantees:write": "guarantees:write"
+            "registries:read": "registries:read"
+            "registries:write": "registries:write"
+            "payments:read": "payments:read"
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - type
+        - title
+        - status
+    CoverageCheckResult:
+      type: object
+      properties:
+        visitId:
+          type: string
+          format: uuid
+        person:
+          type: object
+          properties:
+            fullName:
+              type: string
+            birthYear:
+              type: integer
+          required:
+            - fullName
+            - birthYear
+        policy:
+          type: object
+          properties:
+            number:
+              type: string
+            programName:
+              type: string
+            validTo:
+              type: string
+              pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+            active:
+              type: boolean
+          required:
+            - number
+            - programName
+            - validTo
+            - active
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                anyOf:
+                  - type: string
+                    enum:
+                      - outpatient
+                      - dental
+                      - medicines
+                      - inpatient
+                  - type: string
+                    enum:
+                      - diagnostics_advanced
+              status:
+                type: string
+                enum:
+                  - covered
+                  - needs_guarantee
+                  - not_covered
+              limitState:
+                type: string
+                enum:
+                  - available
+                  - low
+                  - exhausted
+            required:
+              - category
+              - status
+              - limitState
+      required:
+        - visitId
+        - person
+        - policy
+        - categories
+    Visit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clinicId:
+          type: string
+          format: uuid
+        insuredId:
+          type: string
+          format: uuid
+        openedById:
+          type: string
+          format: uuid
+        method:
+          type: string
+          enum:
+            - qr
+            - policy
+            - api
+        openedAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+        expiresAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+      required:
+        - id
+        - clinicId
+        - insuredId
+        - openedById
+        - method
+        - openedAt
+        - expiresAt
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clinicId:
+          type: string
+          format: uuid
+        insuredName:
+          type: string
+        specialty:
+          type: string
+          enum:
+            - therapist
+            - pediatrician
+            - dentist
+            - cardiologist
+            - gynecologist
+            - ent
+            - neurologist
+            - ophthalmologist
+        startsAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+        status:
+          type: string
+          enum:
+            - requested
+            - confirmed
+            - declined
+            - completed
+            - cancelled
+        createdAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+        respondedBy:
+          type: string
+          enum:
+            - clinic
+            - operator
+        proposedStartsAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+      required:
+        - id
+        - clinicId
+        - insuredName
+        - specialty
+        - startsAt
+        - status
+        - createdAt
+    AppointmentList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              clinicId:
+                type: string
+                format: uuid
+              insuredName:
+                type: string
+              specialty:
+                type: string
+                enum:
+                  - therapist
+                  - pediatrician
+                  - dentist
+                  - cardiologist
+                  - gynecologist
+                  - ent
+                  - neurologist
+                  - ophthalmologist
+              startsAt:
+                type: string
+                pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+              status:
+                type: string
+                enum:
+                  - requested
+                  - confirmed
+                  - declined
+                  - completed
+                  - cancelled
+              createdAt:
+                type: string
+                pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+              respondedBy:
+                type: string
+                enum:
+                  - clinic
+                  - operator
+              proposedStartsAt:
+                type: string
+                pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+            required:
+              - id
+              - clinicId
+              - insuredName
+              - specialty
+              - startsAt
+              - status
+              - createdAt
+        nextCursor:
+          type:
+            - string
+            - "null"
+      required:
+        - items
+        - nextCursor
+    GuaranteeLetter:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        clinicId:
+          type: string
+          format: uuid
+        visitId:
+          type: string
+          format: uuid
+        insuredName:
+          type: string
+        serviceCode:
+          type: string
+        serviceName:
+          type: string
+        icd10:
+          type: string
+        estimatedCost:
+          type: integer
+        approvedAmount:
+          type: integer
+        validUntil:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        status:
+          type: string
+          enum:
+            - requested
+            - info_requested
+            - approved
+            - rejected
+            - used
+            - expired
+        approvals:
+          type: array
+          items:
+            type: object
+            properties:
+              byId:
+                type: string
+                format: uuid
+              byName:
+                type: string
+              at:
+                type: string
+                pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+            required:
+              - byId
+              - byName
+              - at
+        reason:
+          type: string
+        comment:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              kind:
+                type: string
+                enum:
+                  - receipt
+                  - invoice
+                  - referral
+                  - other
+              fileName:
+                type: string
+              mime:
+                type: string
+                enum:
+                  - image/jpeg
+                  - image/png
+                  - image/webp
+                  - application/pdf
+              sizeBytes:
+                type: integer
+              url:
+                type: string
+            required:
+              - id
+              - kind
+              - fileName
+              - mime
+              - sizeBytes
+              - url
+        createdAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+      required:
+        - id
+        - number
+        - clinicId
+        - visitId
+        - insuredName
+        - serviceCode
+        - serviceName
+        - icd10
+        - estimatedCost
+        - status
+        - approvals
+        - attachments
+        - createdAt
+    Registry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clinicId:
+          type: string
+          format: uuid
+        period:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - submitted
+            - in_review
+            - partially_accepted
+            - accepted
+            - paid
+        source:
+          type: string
+          enum:
+            - portal
+            - csv
+            - api
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              visitId:
+                type: string
+                format: uuid
+              insuredName:
+                type: string
+              serviceDate:
+                type: string
+                pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+              serviceCode:
+                type: string
+              serviceName:
+                type: string
+              icd10:
+                type: string
+              quantity:
+                type: integer
+              price:
+                type: integer
+              amount:
+                type: integer
+              guaranteeNumber:
+                type: string
+              status:
+                type: string
+                enum:
+                  - pending
+                  - accepted
+                  - rejected
+                  - disputed
+              rejectionReason:
+                type: string
+              disputeComment:
+                type: string
+            required:
+              - id
+              - insuredName
+              - serviceDate
+              - serviceCode
+              - serviceName
+              - icd10
+              - quantity
+              - price
+              - amount
+              - status
+        totals:
+          type: object
+          properties:
+            claimed:
+              type: integer
+            accepted:
+              type: integer
+            rejected:
+              type: integer
+            paid:
+              type: integer
+          required:
+            - claimed
+            - accepted
+            - rejected
+            - paid
+        submittedAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+        paidAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+      required:
+        - id
+        - clinicId
+        - period
+        - status
+        - source
+        - lines
+        - totals
+    PaymentList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              registryId:
+                type: string
+                format: uuid
+              period:
+                type: string
+              amount:
+                type: integer
+              paidAt:
+                type: string
+                pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+            required:
+              - registryId
+              - period
+              - amount
+              - paidAt
+        nextCursor:
+          type:
+            - string
+            - "null"
+      required:
+        - items
+        - nextCursor
+    WebhookEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - appointment.requested
+            - appointment.cancelled
+            - guarantee.decided
+            - guarantee.documents_requested
+            - registry.reviewed
+            - registry.paid
+        createdAt:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+        objectId:
+          type: string
+          format: uuid
+      required:
+        - id
+        - type
+        - createdAt
+        - objectId
+  parameters: {}
+paths:
+  "/oauth/token":
+    post:
+      summary: "Получить токен доступа (OAuth 2.0 client credentials)"
+      tags:
+        - "Авторизация"
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                grant_type:
+                  type: string
+                  enum:
+                    - client_credentials
+                client_id:
+                  type: string
+                  minLength: 8
+                  maxLength: 64
+                client_secret:
+                  type: string
+                  minLength: 16
+                  maxLength: 128
+                scope:
+                  type: string
+                  maxLength: 500
+              required:
+                - grant_type
+                - client_id
+                - client_secret
+          application/json:
+            schema:
+              type: object
+              properties:
+                grant_type:
+                  type: string
+                  enum:
+                    - client_credentials
+                client_id:
+                  type: string
+                  minLength: 8
+                  maxLength: 64
+                client_secret:
+                  type: string
+                  minLength: 16
+                  maxLength: 128
+                scope:
+                  type: string
+                  maxLength: 500
+              required:
+                - grant_type
+                - client_id
+                - client_secret
+              example:
+                grant_type: client_credentials
+                client_id: "mig_…"
+                client_secret: "…"
+      responses:
+        "200":
+          description: "Токен на 15 минут"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    enum:
+                      - Bearer
+                  expires_in:
+                    type: integer
+                  scope:
+                    type: string
+                required:
+                  - access_token
+                  - token_type
+                  - expires_in
+                  - scope
+        "400":
+          description: "Некорректный запрос"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/coverage/check":
+    post:
+      summary: "Проверить пациента и открыть визит на 24 часа"
+      description: "По одноразовому коду карты из приложения (QR, `MIG-DMS:{token}` или 8 символов) либо по номеру полиса и ПИНФЛ. Суммы лимитов и история обращений не возвращаются."
+      tags:
+        - "Пациенты"
+      security:
+        - oauth2:
+            - "coverage:check"
+      parameters:
+        - schema:
+            type: string
+            maxLength: 128
+            description: "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+          required: false
+          name: Idempotency-Key
+          in: header
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - type: object
+                  properties:
+                    qrToken:
+                      type: string
+                      minLength: 8
+                      maxLength: 200
+                  required:
+                    - qrToken
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    policyNumber:
+                      type: string
+                      pattern: "^ДМС-\\d{4}-\\d{6}$"
+                    pinfl:
+                      type: string
+                      pattern: "^\\d{14}$"
+                  required:
+                    - policyNumber
+                    - pinfl
+                  additionalProperties: false
+              example:
+                qrToken: K7P4-QX2M
+      responses:
+        "200":
+          description: "Покрытие по категориям"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CoverageCheckResult"
+        "400":
+          description: "Некорректный запрос"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "403":
+          description: "Нет области доступа или IP не в списке"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "410":
+          description: "Код устарел или уже использован"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "422":
+          description: "Ошибка проверки данных"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "429":
+          description: "Превышен лимит 60 запросов в минуту (заголовок Retry-After)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/visits/{visitId}":
+    get:
+      summary: "Визит"
+      tags:
+        - "Пациенты"
+      security:
+        - oauth2:
+            - "coverage:check"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            example: "5b9f3c2e-8a41-4d0b-9f6e-2d7c1a4e8b10"
+          required: true
+          name: visitId
+          in: path
+      responses:
+        "200":
+          description: "Визит"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Visit"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/appointments":
+    get:
+      summary: "Записи в клинику"
+      tags:
+        - "Записи"
+      security:
+        - oauth2:
+            - "appointments:read"
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - requested
+              - confirmed
+              - declined
+              - completed
+              - cancelled
+          required: false
+          name: status
+          in: query
+        - schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+          required: false
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+          required: false
+          name: to
+          in: query
+        - schema:
+            type: string
+            maxLength: 200
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: "Страница записей (курсорная пагинация)"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AppointmentList"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "403":
+          description: "Нет области доступа или IP не в списке"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "422":
+          description: "Ошибка проверки данных"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/appointments/{id}/confirm":
+    post:
+      summary: "Подтвердить запись"
+      tags:
+        - "Записи"
+      security:
+        - oauth2:
+            - "appointments:write"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+            maxLength: 128
+            description: "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+          required: false
+          name: Idempotency-Key
+          in: header
+      responses:
+        "200":
+          description: "Запись"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Appointment"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "409":
+          description: "На заявку уже ответили"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/appointments/{id}/reschedule":
+    post:
+      summary: "Предложить другое время"
+      tags:
+        - "Записи"
+      security:
+        - oauth2:
+            - "appointments:write"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+            maxLength: 128
+            description: "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+          required: false
+          name: Idempotency-Key
+          in: header
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startsAt:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+              required:
+                - startsAt
+              additionalProperties: false
+              example:
+                startsAt: "2026-10-02T10:30:00+05:00"
+      responses:
+        "200":
+          description: "Запись"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Appointment"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "409":
+          description: "На заявку уже ответили"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/appointments/{id}/decline":
+    post:
+      summary: "Отклонить запись"
+      tags:
+        - "Записи"
+      security:
+        - oauth2:
+            - "appointments:write"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+            maxLength: 128
+            description: "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+          required: false
+          name: Idempotency-Key
+          in: header
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 300
+              required:
+                - reason
+              additionalProperties: false
+              example:
+                reason: "Врач в отпуске"
+      responses:
+        "200":
+          description: "Запись"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Appointment"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "409":
+          description: "На заявку уже ответили"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/slots":
+    put:
+      summary: "Заменить слоты расписания на период"
+      tags:
+        - "Записи"
+      security:
+        - oauth2:
+            - "slots:write"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slots:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      specialty:
+                        type: string
+                        enum:
+                          - therapist
+                          - pediatrician
+                          - dentist
+                          - cardiologist
+                          - gynecologist
+                          - ent
+                          - neurologist
+                          - ophthalmologist
+                      startsAt:
+                        type: string
+                        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+                      durationMin:
+                        type: integer
+                        minimum: 5
+                        maximum: 240
+                      doctorRef:
+                        type: string
+                        maxLength: 64
+                    required:
+                      - specialty
+                      - startsAt
+                      - durationMin
+                  maxItems: 5000
+              required:
+                - slots
+              additionalProperties: false
+              example:
+                slots:
+                  - specialty: therapist
+                    startsAt: "2026-10-02T09:00:00+05:00"
+                    durationMin: 30
+                    doctorRef: dr-17
+      responses:
+        "200":
+          description: "Слоты заменены"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  replaced:
+                    type: integer
+                  from:
+                    type:
+                      - string
+                      - "null"
+                    pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  to:
+                    type:
+                      - string
+                      - "null"
+                    pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                required:
+                  - replaced
+                  - from
+                  - to
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "422":
+          description: "Ошибка проверки данных"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/guarantees":
+    post:
+      summary: "Запросить гарантийное письмо (только по визиту клиники)"
+      tags:
+        - "Гарантийные письма"
+      security:
+        - oauth2:
+            - "guarantees:write"
+      parameters:
+        - schema:
+            type: string
+            maxLength: 128
+            description: "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+          required: false
+          name: Idempotency-Key
+          in: header
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visitId:
+                  type: string
+                  format: uuid
+                serviceCode:
+                  type: string
+                  pattern: "^[A-Z]{1,4}-\\d{2,5}$"
+                icd10:
+                  type: string
+                  pattern: "^[A-Z]\\d{2}(\\.\\d{1,2})?$"
+                estimatedCost:
+                  type: integer
+                  minimum: 1
+                  maximum: 10000000000
+                comment:
+                  type: string
+                  maxLength: 1000
+              required:
+                - visitId
+                - serviceCode
+                - icd10
+                - estimatedCost
+              additionalProperties: false
+              example:
+                visitId: "5b9f3c2e-8a41-4d0b-9f6e-2d7c1a4e8b10"
+                serviceCode: DG-310
+                icd10: G43.9
+                estimatedCost: 1800000
+                comment: "Мигрень, показано МРТ"
+      responses:
+        "201":
+          description: "Запрос создан"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/GuaranteeLetter"
+        "400":
+          description: "Некорректный запрос"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "403":
+          description: "Нет области доступа или IP не в списке"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "422":
+          description: "Ошибка проверки данных"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "429":
+          description: "Превышен лимит 60 запросов в минуту (заголовок Retry-After)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/guarantees/{id}":
+    get:
+      summary: "Гарантийное письмо"
+      tags:
+        - "Гарантийные письма"
+      security:
+        - oauth2:
+            - "guarantees:read"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: "Письмо"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/GuaranteeLetter"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/guarantees/{id}/documents":
+    post:
+      summary: "Догрузить документы (PDF, JPEG, PNG до 10 МБ)"
+      tags:
+        - "Гарантийные письма"
+      security:
+        - oauth2:
+            - "guarantees:write"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                comment:
+                  type: string
+                  maxLength: 1000
+              required:
+                - files
+      responses:
+        "200":
+          description: "Письмо"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/GuaranteeLetter"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "422":
+          description: "Ошибка проверки данных"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/registries":
+    post:
+      summary: "Отправить реестр за месяц"
+      description: "Проверки: цена не выше прайса договора, номер ГП для услуг, которые его требуют, дата услуги в пределах полиса и визита. Ошибки по строкам — в `errors` (`lines[i]`)."
+      tags:
+        - "Реестры"
+      security:
+        - oauth2:
+            - "registries:write"
+      parameters:
+        - schema:
+            type: string
+            maxLength: 128
+            description: "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+          required: false
+          name: Idempotency-Key
+          in: header
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                period:
+                  type: string
+                  pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      visitId:
+                        type: string
+                        format: uuid
+                      serviceDate:
+                        type: string
+                        pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                      serviceCode:
+                        type: string
+                        pattern: "^[A-Z]{1,4}-\\d{2,5}$"
+                      icd10:
+                        type: string
+                        pattern: "^[A-Z]\\d{2}(\\.\\d{1,2})?$"
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        maximum: 999
+                      price:
+                        type: integer
+                        minimum: 1
+                        maximum: 10000000000
+                      guaranteeNumber:
+                        type: string
+                        pattern: "^ГП-\\d{4}-\\d{6}$"
+                    required:
+                      - visitId
+                      - serviceDate
+                      - serviceCode
+                      - icd10
+                      - quantity
+                      - price
+                    additionalProperties: false
+                  minItems: 1
+                  maxItems: 5000
+              required:
+                - period
+                - lines
+              additionalProperties: false
+              example:
+                period: "2026-09"
+                lines:
+                  - visitId: "5b9f3c2e-8a41-4d0b-9f6e-2d7c1a4e8b10"
+                    serviceDate: "2026-09-30"
+                    serviceCode: TH-101
+                    icd10: J06.9
+                    quantity: 1
+                    price: 180000
+      responses:
+        "201":
+          description: "Реестр отправлен"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Registry"
+        "400":
+          description: "Некорректный запрос"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "403":
+          description: "Нет области доступа или IP не в списке"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "422":
+          description: "Ошибка проверки данных"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "429":
+          description: "Превышен лимит 60 запросов в минуту (заголовок Retry-After)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/registries/{id}":
+    get:
+      summary: "Реестр со статусами строк"
+      tags:
+        - "Реестры"
+      security:
+        - oauth2:
+            - "registries:read"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: "Реестр"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Registry"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/registries/{id}/lines/{lineId}/dispute":
+    post:
+      summary: "Оспорить отклонённую строку"
+      tags:
+        - "Реестры"
+      security:
+        - oauth2:
+            - "registries:write"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: lineId
+          in: path
+        - schema:
+            type: string
+            maxLength: 128
+            description: "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+          required: false
+          name: Idempotency-Key
+          in: header
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  minLength: 3
+                  maxLength: 1000
+              required:
+                - comment
+              additionalProperties: false
+              example:
+                comment: "Направление было, прикладываем"
+      responses:
+        "200":
+          description: "Реестр"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Registry"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "404":
+          description: "Не найдено (в том числе объект другой клиники или визит без действия)"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+        "409":
+          description: "Строку нельзя оспорить"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+  "/payments":
+    get:
+      summary: "Оплаты реестров"
+      tags:
+        - "Оплаты"
+      security:
+        - oauth2:
+            - "payments:read"
+      parameters:
+        - schema:
+            type: string
+            pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+          required: false
+          name: period
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: "Оплаты"
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentList"
+        "401":
+          description: "Нет токена, токен истёк или ключ отозван"
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
+webhooks: {}

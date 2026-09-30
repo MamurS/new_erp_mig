@@ -8,8 +8,10 @@ const FORBIDDEN_ROUTES: Record<Role, string[]> = {
   doctor_expert: ['/staff/clients', '/staff/policies', '/staff/reports', '/staff/audit', '/staff/limit-requests'],
   accountant: ['/staff/insured/00000000-0000-4000-8000-000000000000', '/staff/appointments', '/staff/clinics', '/staff/audit', '/staff/limit-requests'],
   admin: ['/staff/claims', '/staff/policies', '/staff/appointments', '/staff/reports', '/staff/insured/00000000-0000-4000-8000-000000000000'],
-  hr: ['/staff', '/staff/clients', '/app'],
-  insured: ['/staff', '/hr', '/staff/claims'],
+  hr: ['/staff', '/staff/clients', '/app', '/clinic'],
+  clinic_registrar: ['/staff', '/staff/clinics', '/hr', '/app', '/clinic/integration', '/clinic/registries', '/clinic/users'],
+  clinic_admin: ['/staff', '/staff/registries', '/hr', '/app'],
+  insured: ['/staff', '/hr', '/staff/claims', '/clinic'],
 };
 
 test.describe('2. Route matrix: forbidden routes lead to /403', () => {
@@ -31,8 +33,10 @@ const FORBIDDEN_API: Record<Role, [string, string, unknown?][]> = {
   doctor_expert: [['GET', '/clients'], ['GET', '/policies'], ['GET', '/reports/loss-ratio-by-client'], ['GET', '/admin/users']],
   accountant: [['GET', '/audit'], ['GET', '/appointments'], ['GET', '/clinics'], ['POST', '/limit-requests', {}]],
   admin: [['GET', '/claims'], ['GET', '/policies'], ['GET', '/appointments'], ['GET', '/reports/loss-ratio-by-client']],
-  hr: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/audit'], ['GET', '/me/claims'], ['POST', '/exports', { type: 'clients' }]],
-  insured: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/hr/employees'], ['GET', '/audit'], ['GET', '/dashboard']],
+  hr: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/audit'], ['GET', '/me/claims'], ['POST', '/exports', { type: 'clients' }], ['GET', '/clinic/overview']],
+  insured: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/hr/employees'], ['GET', '/audit'], ['GET', '/dashboard'], ['GET', '/clinic/overview']],
+  clinic_registrar: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/guarantees'], ['GET', '/registries'], ['GET', '/clinic/integration/keys'], ['GET', '/clinic/registries'], ['GET', '/clinic/users'], ['GET', '/me/policy'], ['GET', '/dashboard']],
+  clinic_admin: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/audit'], ['GET', '/guarantees'], ['GET', '/registries'], ['GET', '/hr/employees'], ['POST', '/clinics', {}]],
 };
 
 test.describe('3. API matrix: forbidden endpoints answer 403/404', () => {

@@ -10,7 +10,7 @@ test.describe('1. Login with every role, MFA, logout', () => {
         await page.goto('/app/profile');
         await page.getByRole('button', { name: 'Выйти', exact: true }).click();
         await expect(page).toHaveURL(/\/app\/login/);
-      } else if (role === 'hr') {
+      } else if (role === 'hr' || role === 'clinic_registrar' || role === 'clinic_admin') {
         await page.getByRole('button', { name: 'Меню пользователя' }).click();
         await page.getByRole('menuitem', { name: 'Выйти' }).click();
         await expect(page).toHaveURL(/\/login/);
@@ -53,5 +53,13 @@ test.describe('1. Login with every role, MFA, logout', () => {
     await page.getByRole('button', { name: 'Войти', exact: true }).click();
     await page.getByLabel('Цифра 1').fill('000000');
     await expect(page).toHaveURL(/\/staff\/claims\?status=new$/);
+  });
+
+  test('a signed-in user is not sent to another portal by ?next= (no 403 after a role switch)', async ({ page }) => {
+    await login(page, 'doctor_expert');
+    await page.goto('/login?next=%2Fclinic%2Fguarantees');
+    await expect(page).toHaveURL(/\/staff$/);
+    await page.goto('/login?next=%2Fstaff%2Fclaims');
+    await expect(page).toHaveURL(/\/staff\/claims$/);
   });
 });

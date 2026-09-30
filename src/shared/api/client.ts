@@ -119,7 +119,8 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
     } catch {
       /* non-JSON error body */
     }
-    if (res.status === 401 && !AUTH_PATHS.includes(path)) onUnauthorized();
+    // A 401 for a request sent with an older session (e.g. in flight during a role switch) must not end the new one.
+    if (res.status === 401 && !AUTH_PATHS.includes(path) && sid === getSessionId()) onUnauthorized();
     throw new ApiRequestError(res.status, err);
   }
 
@@ -141,4 +142,58 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiRequestError) return e.message;
   return 'Что-то пошло не так. Повторите попытку';
+}
+
+export interface IntegrationCallResult {
+  status: number;
+  requestId: string | null;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+/**
+ * Call of the clinic integration API (/api/integration/v1) on behalf of a MIS: OAuth access token,
+ * never the user's session, and a 401 here must not log the user out. Used by the sandbox and the
+ * demo MIS simulator only.
+ */
+export async function integrationCall(
+  method: 'GET' | 'POST' | 'PUT',
+  path: string,
+  opts: { token?: string; body?: unknown; form?: boolean; headers?: Record<string, string> } = {},
+): Promise<IntegrationCallResult> {
+  markActivity();
+  const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+  let body: string | undefined;
+  if (opts.body !== undefined) {
+    if (opts.form) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      body = new URLSearchParams(opts.body as Record<string, string>).toString();
+    } else {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(opts.body);
+    }
+  }
+  const res = await fetch(`${API_BASE}/integration/v1${path}`, { method, headers, body, credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
+  const text = await res.text();
+  let parsed: unknown = text;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    /* not json */
+  }
+  const picked: Record<string, string> = {};
+  for (const h of ['content-type', 'x-request-id', 'retry-after', 'idempotency-replayed', 'www-authenticate']) {
+    const v = res.headers.get(h);
+    if (v) picked[h] = v;
+  }
+  return { status: res.status, requestId: res.headers.get('x-request-id'), headers: picked, body: parsed };
+}
+
+/** Static JSON shipped with the app (e.g. the OpenAPI document of the integration API). */
+export async function fetchPublicJson(path: string): Promise<unknown> {
+  if (!/^\/docs\/[a-z0-9/_-]+\.json$/.test(path)) throw new Error('Unexpected static path');
+  const res = await fetch(path, { credentials: 'omit', cache: 'no-cache', referrerPolicy: 'no-referrer' });
+  if (!res.ok) throw new ApiRequestError(res.status, { code: codeFromStatus(res.status), message: 'Документация недоступна' });
+  return res.json();
 }
