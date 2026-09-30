@@ -1,10 +1,11 @@
 import { delay, http } from 'msw';
 import { chatSchema, consentSchema, myAppointmentSchema, myClaimSchema } from '@/shared/schemas/forms';
-import type { Appointment, SessionUser } from '@/shared/types';
-import type { CardToken, MePolicy, MeProfile, RecognizeResult } from '@/shared/types/dto';
+import type { SessionUser } from '@/shared/types';
+import type { AssistanceBrief, CardToken, MePolicy, MeProfile, RecognizeResult } from '@/shared/types/dto';
 import { detectMime, RECEIPT_LIMITS } from '@/shared/lib/image';
 import { CARD_TOKEN_TTL_MS, formatShortCode, shortCodeFrom } from '@/shared/domain/clinics';
-import { emitWebhook, pushEvent } from '../clinic-core';
+import { createAppointment, emitWebhook, pushEvent } from '../clinic-core';
+import { currentAssistance } from '../assistance-core';
 import { db, type ClaimRow, type InsuredRow } from '../db';
 import { API, body, conflict, forbidden, HttpError, notFound, param, requireSession, route, validate } from '../http';
 import { maskCard, maskPhone, maskPinfl } from '../mask';
@@ -212,31 +213,7 @@ export const meHandlers = [
     route(async ({ request }) => {
       const { me } = requireInsured(request);
       const input = await body(request, myAppointmentSchema);
-      const d = db();
-      const clinic = d.clinics.find((c) => c.id === input.clinicId);
-      if (!clinic || !clinic.specialties.includes(input.specialty)) throw notFound();
-      const starts = parseIso(input.startsAt);
-      if (Number.isNaN(starts) || starts < Date.now()) throw conflict('Это время уже прошло. Выберите другое');
-      const iso = tzIso(starts);
-      if (d.appointments.some((a) => a.clinicId === clinic.id && a.startsAt === iso && a.status !== 'cancelled' && a.status !== 'declined')) {
-        throw conflict('Это время уже заняли. Выберите другое');
-      }
-      const a: Appointment = {
-        id: randomId(),
-        insuredId: me.id,
-        insuredName: me.fullName,
-        clientName: me.clientName,
-        clinicId: clinic.id,
-        clinicName: clinic.name,
-        specialty: input.specialty,
-        startsAt: iso,
-        status: 'requested',
-        createdAt: tzIso(Date.now()),
-        ...(clinic.integrationMode === 'api' ? { fromClinicSystem: true } : {}),
-      };
-      d.appointments.push(a);
-      await emitWebhook(d, clinic.id, 'appointment.requested', a.id);
-      pushEvent(d, clinic.id, 'Новая заявка на запись');
+      const a = await createAppointment(db(), me, input);
       return a;
     }),
   ),
@@ -268,6 +245,18 @@ export const meHandlers = [
       a.status = 'confirmed';
       pushEvent(d, a.clinicId, 'Пациент принял предложенное время');
       return a;
+    }),
+  ),
+  // «Ваш ассистанс 24/7» on the home screen (ASSISTANCE_SPEC §5.1); null — MIG serves the client.
+  http.get(
+    `${API}/me/assistance`,
+    route(({ request }) => {
+      const { me } = requireInsured(request);
+      const d = db();
+      const id = currentAssistance(d, me.policyId);
+      const a = id ? d.assistances.find((x) => x.id === id) : undefined;
+      const out: { assistance: AssistanceBrief | null } = { assistance: a ? { id: a.id, name: a.name, phone24x7: a.phone24x7, integrationMode: a.integrationMode } : null };
+      return out;
     }),
   ),
   http.get(

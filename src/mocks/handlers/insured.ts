@@ -44,7 +44,7 @@ const SUMMARIES = [
 const ICD = ['J06.9', 'K29.7', 'M54.5', 'I10', 'H52.1', 'K02.1', 'J20.9', 'R51', 'L30.9', 'Z00.0'];
 
 /** Fictional medical history, derived deterministically from the insured id (not stored). */
-function medicalRecords(i: InsuredRow): MedicalRecordEntry[] {
+export function medicalRecords(i: InsuredRow): MedicalRecordEntry[] {
   const rng = mulberry32(hashString(i.id));
   const d = db();
   const n = int(rng, 2, 6);
@@ -215,6 +215,6 @@ export const insuredHandlers = [
   ),
 ];
 
-function fieldLabel(f: string): string {
+export function fieldLabel(f: string): string {
   return f === 'pinfl' ? 'ПИНФЛ' : f === 'phone' ? 'Телефон' : f === 'birthDate' ? 'Дата рождения' : 'Email';
 }

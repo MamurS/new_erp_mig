@@ -72,6 +72,8 @@ export interface GuaranteeRow extends GuaranteeLetter {
   /** Policy of the patient: the payer is resolved on the date of the request (ASSISTANCE_SPEC §5.2). */
   policyId?: UUID;
   infoComment?: string; // clinic's answer to «нужны документы»
+  /** Time of the final decision (KPI «ГП решены в срок»). */
+  decidedAt?: string;
 }
 export interface IntegrationClientRow extends IntegrationClient {
   secretHash: string; // SHA-256 hex; the secret itself is never stored
@@ -116,6 +118,7 @@ export interface AssistUserRow {
 export interface AssistanceCaseRow extends AssistanceCase {
   policyId: UUID;
   createdById?: UUID;
+  resolvedAt?: string;
 }
 export interface ClinicEventRow {
   id: UUID;

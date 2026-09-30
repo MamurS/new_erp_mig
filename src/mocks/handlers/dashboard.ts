@@ -7,6 +7,7 @@ import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims
 import { formatMoney } from '@/shared/lib/format';
 import { db, hasLiveKp, type Db } from '../db';
 import { isOverdueRequest } from '../clinic-core';
+import { assistanceName, currentAssistance, linesOf, subTotals } from '../assistance-core';
 import { API, forbidden, requireSession, route } from '../http';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 
@@ -153,11 +154,13 @@ function attentionFor(d: Db, user: SessionUser, now: number): AttentionItem[] {
   return out;
 }
 
-export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now: number): QueueItem[] {
+export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all' | 'assistance', now: number): QueueItem[] {
   const items: QueueItem[] = [];
   if ((type === 'all' || type === 'appointment' || type === 'clinic_no_response') && can(user, 'appointments.read')) {
+    // Requests of people served by an assistance go to that assistance (ASSISTANCE_SPEC §5.1, §9.3).
+    const served = new Set(d.insured.filter((i) => currentAssistance(d, i.policyId)).map((i) => i.id));
     for (const a of d.appointments) {
-      if (a.status !== 'requested' || parseIso(a.startsAt) < now - 3600_000) continue;
+      if (a.status !== 'requested' || parseIso(a.startsAt) < now - 3600_000 || served.has(a.insuredId)) continue;
       // A clinic that did not answer in time hands the request to the MIG operator (CLINIC_SPEC §4.3).
       const noResponse = isOverdueRequest(d, a, now);
       if (type === 'clinic_no_response' && !noResponse) continue;
@@ -217,17 +220,19 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
       });
     }
   }
-  if ((type === 'all' || type === 'guarantee') && can(user, 'guarantees.decide')) {
+  if ((type === 'all' || type === 'guarantee' || type === 'escalation') && can(user, 'guarantees.decide')) {
     for (const g of d.guarantees) {
       if (g.status !== 'requested' || g.approvals.some((x) => x.byId === user.id)) continue;
+      // MIG decides only escalations and letters of clients without an assistance (§9.1).
+      if (g.assistanceId && !g.escalated) continue;
       const second = g.approvals.length > 0;
       items.push({
         id: g.id,
-        type: 'guarantee',
+        type: g.escalated ? 'escalation' : 'guarantee',
         entityId: g.id,
         who: g.insuredName,
         details: `${g.number} · ${g.serviceName} · ${formatMoney(g.approvedAmount ?? g.estimatedCost)}`,
-        status: second ? 'Нужно второе одобрение' : 'Нужно решение',
+        status: second ? 'Нужно второе одобрение' : g.escalated ? `Эскалация: ${g.assistanceName ?? 'ассистанс'}` : 'Нужно решение',
         statusTone: second ? 'warning' : 'info',
         dueAt: tzIso(parseIso(g.createdAt) + DAY),
         action: 'open',
@@ -238,10 +243,14 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
     const review = can(user, 'registries.review');
     const pay = can(user, 'registries.pay');
     for (const r of d.registries) {
-      const pending = r.lines.filter((l) => l.status === 'pending').length;
-      const disputed = r.lines.filter((l) => l.status === 'disputed').length;
-      const toReview = review && (r.status === 'submitted' || r.status === 'in_review' || disputed > 0);
-      const toPay = pay && (r.status === 'accepted' || r.status === 'partially_accepted') && disputed === 0;
+      // MIG handles only its own sub-registry: lines of clients without an assistance (§9.2).
+      const mine = linesOf(r, 'mig');
+      if (!mine.length || r.status === 'draft') continue;
+      const pending = mine.filter((l) => l.status === 'pending').length;
+      const disputed = mine.filter((l) => l.status === 'disputed').length;
+      const unpaid = mine.filter((l) => l.status === 'accepted' && !l.payment).length;
+      const toReview = review && (pending > 0 || disputed > 0);
+      const toPay = pay && r.status !== 'paid' && pending === 0 && disputed === 0 && unpaid > 0;
       if (!toReview && !toPay) continue;
       const clinic = d.clinics.find((c) => c.id === r.clinicId);
       items.push({
@@ -249,7 +258,7 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
         type: 'registry',
         entityId: r.id,
         who: clinic?.name ?? 'Клиника',
-        details: `Реестр за ${r.period} · ${formatMoney(toPay ? r.totals.accepted : r.totals.claimed)}`,
+        details: `Реестр за ${r.period} · ${formatMoney(toPay ? subTotals(mine).accepted : subTotals(mine).claimed)}`,
         status: toPay ? 'К оплате' : disputed && !pending ? `Оспорено строк: ${disputed}` : `На проверке: ${pending + disputed}`,
         statusTone: toPay ? 'success' : 'warning',
         dueAt: tzIso(parseIso(r.submittedAt ?? tzIso(now)) + 5 * DAY),
@@ -284,6 +293,60 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
       });
     }
   }
+  const assistanceTab = type === 'all' || type === 'assistance';
+  if ((assistanceTab || type === 'rebill') && (can(user, 'rebills.review') || can(user, 'rebills.pay'))) {
+    for (const b of d.rebills) {
+      const toReview = can(user, 'rebills.review') && (b.status === 'submitted' || b.status === 'in_review');
+      const toPay = can(user, 'rebills.pay') && (b.status === 'accepted' || b.status === 'partially_accepted') && b.acceptedById !== user.id;
+      if (!toReview && !toPay) continue;
+      const flagged = b.lines.filter((l) => l.checks.length && l.status !== 'accepted' && l.status !== 'rejected').length;
+      items.push({
+        id: b.id,
+        type: 'rebill',
+        entityId: b.id,
+        who: assistanceName(d, b.assistanceId) ?? 'Ассистанс',
+        details: `${b.number} · ${formatMoney(toPay ? b.totals.accepted + b.totals.fee : b.totals.total)}`,
+        status: toPay ? 'К оплате' : flagged ? `Флагов проверки: ${flagged}` : 'На проверке',
+        statusTone: toPay ? 'success' : flagged ? 'warning' : 'info',
+        dueAt: tzIso(parseIso(b.submittedAt ?? tzIso(now)) + 14 * DAY),
+        action: 'open',
+      });
+    }
+  }
+  if ((assistanceTab || type === 'assistance_sla' || type === 'complaint') && can(user, 'rebills.review')) {
+    for (const a of d.assistances) {
+      const breached = d.cases.filter((c) => c.assistanceId === a.id && c.status !== 'resolved' && parseIso(c.slaDueAt) < now);
+      if (breached.length && type !== 'complaint') {
+        items.push({
+          id: breached[0]!.id,
+          type: 'assistance_sla',
+          entityId: a.id,
+          who: a.name,
+          details: `Обращений с нарушенным SLA: ${breached.length}`,
+          status: 'SLA нарушен',
+          statusTone: 'danger',
+          dueAt: breached.map((c) => c.slaDueAt).sort()[0]!,
+          action: 'open',
+        });
+      }
+    }
+    if (type !== 'assistance_sla') {
+      for (const c of d.cases) {
+        if (c.type !== 'complaint' || c.status === 'resolved') continue;
+        items.push({
+          id: c.id,
+          type: 'complaint',
+          entityId: c.assistanceId,
+          who: c.insuredName,
+          details: `${c.number} · ${assistanceName(d, c.assistanceId) ?? 'Ассистанс'} · ${c.description.slice(0, 60)}`,
+          status: 'Жалоба',
+          statusTone: 'danger',
+          dueAt: c.slaDueAt,
+          action: 'open',
+        });
+      }
+    }
+  }
   return items.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
 }
 
@@ -310,7 +373,7 @@ export const dashboardHandlers = [
       const { user } = requireSession(request);
       requireStaff(user);
       const t = url.searchParams.get('type');
-      const type = (['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change'] as const).find((x) => x === t) ?? 'all';
+      const type = (['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change', 'escalation', 'rebill', 'assistance_sla', 'complaint', 'assistance'] as const).find((x) => x === t) ?? 'all';
       return queueFor(db(), user, type, Date.now()).slice(0, 50);
     }),
   ),

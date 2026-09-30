@@ -12,6 +12,8 @@ import { integrationHandlers } from './integration';
 import { staffClinicHandlers } from './staff-clinics';
 import { policyHandlers } from './policies';
 import { meHandlers } from './me';
+import { assistHandlers } from './assist';
+import { staffAssistanceHandlers } from './staff-assistance';
 import { demoHandlers } from './demo';
 import { API, notFound, route } from '../http';
 
@@ -30,6 +32,8 @@ export const handlers = [
   ...staffClinicHandlers,
   ...hrHandlers,
   ...meHandlers,
+  ...assistHandlers,
+  ...staffAssistanceHandlers,
   // Unknown API routes behave like a real server: 404.
   http.all(
     `${API}/*`,

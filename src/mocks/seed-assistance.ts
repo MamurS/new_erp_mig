@@ -15,6 +15,8 @@ import type {
   Visit,
 } from '@/shared/types';
 import { feeFor, payerOn, CASE_SLA_MINUTES } from '@/shared/domain/assistance';
+import { formatMoney } from '@/shared/lib/format';
+import { claimsFromRebill } from './assistance-core';
 import { guaranteeNumber, registryTotals } from '@/shared/domain/clinics';
 import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_INSURED_PHONE, DEMO_PASSWORD } from './credentials';
 import type { AssistanceCaseRow, AssistUserRow, Db, GuaranteeRow, IntegrationClientRow, WebhookEndpointRow } from './db';
@@ -113,6 +115,9 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
   const clinicContracts: ClinicContract[] = [
     { clinicId: demoClinicId, payer: A1.id, priceList: migPrices.map((i) => ({ ...i, price: Math.round((i.price * 0.95) / 1000) * 1000 })) },
   ];
+  d.clinicContracts = clinicContracts;
+  d.assignments = assignments;
+  d.assistances = assistances;
   const priceOf = (payer: string, code: string) => (payer === A1.id ? clinicContracts[0]!.priceList : migPrices).find((i) => i.code === code);
 
   // ---- existing letters and registry lines get their payer on the date of the event ----
@@ -136,6 +141,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
       g.decidedBy = 'assistance';
       g.approvals = g.status === 'rejected' ? [] : [{ byId: a1doctor.id, byName: a1doctor.fullName, at: g.approvals[0]?.at ?? g.createdAt }];
     }
+    if (g.decidedBy) g.decidedAt = g.approvals[0]?.at ?? tzIso(parseIso(g.createdAt) + int(rng, 2, 30) * 3600_000);
   }
   const visitById = new Map(d.visits.map((v) => [v.id, v]));
   for (const r of d.registries) {
@@ -188,12 +194,13 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
   const cheap = migPrices.filter((p) => p.requiresGuarantee && p.price <= 10_000_000);
   const costly = migPrices.filter((p) => p.requiresGuarantee && p.price > 10_000_000);
   addLetter(other(0), cheap[0]!.code, 'requested', {}, 3);
-  addLetter(other(1), cheap[1 % cheap.length]!.code, 'approved', { decidedBy: 'assistance', approvedAmount: priceOf(A1.id, cheap[1 % cheap.length]!.code)!.price, validUntil: isoDay(now + 30 * DAY), approvals: [{ byId: a1doctor.id, byName: a1doctor.fullName, at: tzIso(now - 20 * 3600_000) }] }, 26);
-  addLetter(other(2), cheap[2 % cheap.length]!.code, 'rejected', { decidedBy: 'assistance', reason: 'Нет показаний: сначала амбулаторное лечение' }, 50);
+  addLetter(other(1), cheap[1 % cheap.length]!.code, 'approved', { decidedBy: 'assistance', decidedAt: tzIso(now - 20 * 3600_000), approvedAmount: priceOf(A1.id, cheap[1 % cheap.length]!.code)!.price, validUntil: isoDay(now + 30 * DAY), approvals: [{ byId: a1doctor.id, byName: a1doctor.fullName, at: tzIso(now - 20 * 3600_000) }] }, 26);
+  addLetter(other(2), cheap[2 % cheap.length]!.code, 'rejected', { decidedBy: 'assistance', decidedAt: tzIso(now - 30 * 3600_000), reason: 'Нет показаний: сначала амбулаторное лечение' }, 50);
   if (costly.length) {
     addLetter(other(3), costly[0]!.code, 'requested', { escalated: true, assistanceOpinion: 'Показана плановая операция; сумма выше полномочий ассистанса' }, 6);
     const done = addLetter(other(4), costly[costly.length - 1]!.code, 'approved', { escalated: true, decidedBy: 'mig', assistanceOpinion: 'Операция показана, прошу одобрить' }, 70);
     done.approvedAmount = done.estimatedCost;
+    done.decidedAt = tzIso(now - 58 * 3600_000);
     done.validUntil = isoDay(now + 30 * DAY);
     const doctors = d.staff.filter((s) => s.role === 'doctor_expert');
     done.approvals = doctors.slice(0, done.estimatedCost > 20_000_000 ? 2 : 1).map((s, k) => ({ byId: s.id, byName: s.fullName, at: tzIso(now - (60 - k) * 3600_000) }));
@@ -286,14 +293,23 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
   }
   if (lastMonth[0]) {
     const l = lastMonth[0];
-    l.status = 'disputed';
-    l.checks = [{ code: 'over_limit', message: `Сумма ${l.amount} больше остатка лимита ${Math.round(l.amount / 2)}` }];
+    l.status = 'rejected';
+    l.checks = [{ code: 'over_limit', message: `Сумма ${formatMoney(l.amount)} больше остатка лимита ${formatMoney(Math.round(l.amount / 2000) * 1000)}` }];
     l.rejectionReason = 'Превышен лимит по амбулаторной помощи';
-    l.disputeComment = 'Лимит пересчитан после возврата по другому делу, прикладываем расчёт';
   }
   if (lastMonth.length) rebills.push(makeRebill(1, lastMonth, 'partially_accepted', 'A1'));
   const thisMonth = (regOf(1)?.lines ?? []).filter((l) => l.payer === A1.id && l.payment).map((l) => toRebillLine(l, 'pending'));
   rebills.push(makeRebill(0, thisMonth, 'draft', 'A1'));
+  // Accepted lines of reviewed rebills are MIG claims with the `assistance` source.
+  d.rebills = rebills;
+  for (const b of rebills) {
+    if (b.status === 'draft') continue;
+    claimsFromRebill(d, b, operator.fullName);
+    if (b.status === 'paid') {
+      const ids = new Set(b.lines.map((l) => l.registryLineId));
+      for (const c of d.claims) if (c.registryLineId && ids.has(c.registryLineId)) c.status = 'paid';
+    }
+  }
 
   // ---- cases (§5.1): A1 in every status; the moved client has old A2 cases ----
   let caseSeq = 12_300;
@@ -383,7 +399,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
   };
   d.webhooks.push(hook);
 
-  Object.assign(d, { assistances, assignments, assistUsers, cases, caseSeq, clinicContracts, rebills, qaSamples });
+  Object.assign(d, { assistances, assignments, assistUsers, cases, caseSeq, qaSamples });
 }
 
 function payerOrNull(assignments: readonly AssistanceAssignment[], policyId: string, date: string): string | null {

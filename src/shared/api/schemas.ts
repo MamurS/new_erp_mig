@@ -419,7 +419,7 @@ export const dashboard: z.ZodType<D.DashboardSummary> = z.object({
 export const queueItems = z.array(
   z.object({
     id: uuid,
-    type: z.enum(['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change']),
+    type: z.enum(['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change', 'escalation', 'rebill', 'assistance_sla', 'complaint']),
     entityId: uuid,
     who: z.string(),
     details: z.string(),

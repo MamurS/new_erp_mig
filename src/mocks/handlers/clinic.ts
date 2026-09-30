@@ -6,13 +6,12 @@ import { http } from 'msw';
 import Papa from 'papaparse';
 import { z } from 'zod';
 import type { Action } from '@/shared/auth/permissions';
-import type { IntegrationClient, SessionUser, WebhookEndpoint } from '@/shared/types';
+import type { SessionUser } from '@/shared/types';
 import type {
   ClinicDocuments,
   ClinicOverview,
   ClinicUserView,
   ClinicVisitView,
-  IntegrationOverview,
   RegistryImportResult,
 } from '@/shared/types/dto';
 import {
@@ -26,12 +25,9 @@ import {
   declineRequest,
   disputeRequest,
   guaranteeCreateRequest,
-  keyCreateRequest,
   registryLineInput,
   rescheduleRequest,
-  webhookCreateRequest,
 } from '@/shared/integration/schemas';
-import { sha256Hex } from '@/shared/integration/webhook';
 import {
   GUARANTEE_FILE_MAX_BYTES,
   guaranteeNumber,
@@ -39,21 +35,22 @@ import {
   REGISTRY_CSV_MAX_ROWS,
 } from '@/shared/domain/clinics';
 import { detectMime } from '@/shared/lib/image';
-import { db, type ClinicUserRow, type Db, type GuaranteeRow, type IntegrationClientRow, type WebhookEndpointRow } from '../db';
+import { db, type ClinicUserRow, type Db, type GuaranteeRow, type IntegrationClientRow } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, validate } from '../http';
-import { randomId, randomToken } from '../rng';
+import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
 import { DEMO_PASSWORD } from '../credentials';
 import { clinicSlots } from './staff-misc';
+import { partnerIntegrationHandlers } from './partner-integration';
+import { assistanceOn } from '@/shared/domain/assistance';
+import { assistanceName, notifyAssistance } from '../assistance-core';
 import {
   actorOf,
   appointmentOfClinic,
-  attemptDelivery,
   buildLine,
   checkPatient,
   clinicOf,
   coverageFor,
-  emitWebhook,
   isOverdueRequest,
   lineProblems,
   priceListOf,
@@ -79,8 +76,6 @@ function requireClinic(request: Request, action: Action): { user: SessionUser; a
 }
 
 const toUserView = (u: ClinicUserRow): ClinicUserView => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt });
-const toClientView = ({ secretHash: _h, ...k }: IntegrationClientRow): IntegrationClient => k;
-const toWebhookView = ({ signingSecret: _s, ...w }: WebhookEndpointRow): WebhookEndpoint => w;
 
 async function readForm(request: Request): Promise<FormData> {
   try {
@@ -496,143 +491,11 @@ export const clinicHandlers = [
       return toUserView(u);
     }),
   ),
-  // ---- integration (clinic_admin) ----
-  http.get(
-    `${C}/integration/overview`,
-    route(({ request }) => {
-      const { actor, d } = requireClinic(request, 'clinic.integration.manage');
-      const clinic = clinicOf(d, actor.clinicId);
-      const since = Date.now() - DAY;
-      const logs = d.apiLogs.filter((l) => l.clinicId === clinic.id && parseIso(l.at) >= since);
-      const last = d.webhookDeliveries.find((w) => w.clinicId === clinic.id);
-      const activeKeys = d.integrationClients.filter((k) => k.clinicId === clinic.id && !k.revokedAt);
-      const out: IntegrationOverview = {
-        mode: clinic.integrationMode,
-        connected: activeKeys.some((k) => k.lastUsedAt && parseIso(k.lastUsedAt) >= since),
-        activeKeys: activeKeys.length,
-        requests24h: logs.length,
-        errors24h: logs.filter((l) => l.status >= 400).length,
-        lastWebhook: last ? { event: last.event, at: last.lastAttemptAt, status: last.status } : null,
-      };
-      return out;
-    }),
-  ),
-  http.get(
-    `${C}/integration/keys`,
-    route(({ request }) => {
-      const { actor, d } = requireClinic(request, 'clinic.integration.manage');
-      return d.integrationClients.filter((k) => k.clinicId === actor.clinicId).map(toClientView);
-    }),
-  ),
-  http.post(
-    `${C}/integration/keys`,
-    route(async ({ request }) => {
-      const { actor, d } = requireClinic(request, 'clinic.integration.manage');
-      const input = await body(request, keyCreateRequest);
-      const clientId = `mig_${randomToken(12).replace(/[^A-Za-z0-9]/g, '').slice(0, 16).toLowerCase()}`;
-      const clientSecret = randomToken(32);
-      const row: IntegrationClientRow = {
-        id: randomId(),
-        clinicId: actor.clinicId,
-        name: input.name,
-        clientId,
-        secretLast4: clientSecret.slice(-4),
-        secretHash: await sha256Hex(clientSecret),
-        scopes: input.scopes,
-        ipAllowlist: input.ipAllowlist,
-        createdAt: tzIso(Date.now()),
-      };
-      d.integrationClients.push(row);
-      audit(actor, 'integration_key_created', { targetType: 'integration', targetId: row.id, targetLabel: row.name });
-      // The secret is returned exactly once and never stored in clear.
-      return { id: row.id, clientId, clientSecret };
-    }),
-  ),
-  http.post(
-    `${C}/integration/keys/:id/revoke`,
-    route((ctx) => {
-      const { actor, d } = requireClinic(ctx.request, 'clinic.integration.manage');
-      const k = d.integrationClients.find((x) => x.id === param(ctx, 'id') && x.clinicId === actor.clinicId);
-      if (!k) throw notFound();
-      revokeKey(d, k, actor);
-      return toClientView(k);
-    }),
-  ),
-  http.get(
-    `${C}/integration/webhooks`,
-    route(({ request }) => {
-      const { actor, d } = requireClinic(request, 'clinic.integration.manage');
-      return d.webhooks.filter((w) => w.clinicId === actor.clinicId).map(toWebhookView);
-    }),
-  ),
-  http.post(
-    `${C}/integration/webhooks`,
-    route(async ({ request }) => {
-      const { actor, d } = requireClinic(request, 'clinic.integration.manage');
-      const input = await body(request, webhookCreateRequest);
-      const signingSecret = `whsec_${randomToken(24)}`;
-      const row: WebhookEndpointRow = {
-        id: randomId(),
-        clinicId: actor.clinicId,
-        url: input.url,
-        events: input.events,
-        secretLast4: signingSecret.slice(-4),
-        signingSecret,
-        active: true,
-        createdAt: tzIso(Date.now()),
-      };
-      d.webhooks.push(row);
-      audit(actor, 'webhook_created', { targetType: 'integration', targetId: row.id, targetLabel: new URL(row.url).host });
-      return { id: row.id, signingSecret };
-    }),
-  ),
-  http.post(
-    `${C}/integration/webhooks/:id/test`,
-    route(async (ctx) => {
-      const { actor, d } = requireClinic(ctx.request, 'clinic.integration.manage');
-      const w = d.webhooks.find((x) => x.id === param(ctx, 'id') && x.clinicId === actor.clinicId);
-      if (!w) throw notFound();
-      const [delivery] = await emitWebhook(d, actor.clinicId, w.events[0] ?? 'appointment.requested', randomId(), w);
-      const { body: _b, signature: _s, clinicId: _c, ...view } = delivery!;
-      return view;
-    }),
-  ),
-  http.get(
-    `${C}/integration/deliveries`,
-    route(({ request }) => {
-      const { actor, d } = requireClinic(request, 'clinic.integration.manage');
-      return d.webhookDeliveries
-        .filter((w) => w.clinicId === actor.clinicId)
-        .slice(0, 100)
-        .map(({ body: _b, signature: _s, clinicId: _c, ...w }) => w);
-    }),
-  ),
-  http.post(
-    `${C}/integration/deliveries/:id/retry`,
-    route(async (ctx) => {
-      const { actor, d } = requireClinic(ctx.request, 'clinic.integration.manage');
-      const delivery = d.webhookDeliveries.find((x) => x.id === param(ctx, 'id') && x.clinicId === actor.clinicId);
-      if (!delivery) throw notFound();
-      if (delivery.status === 'delivered') throw conflict('Событие уже доставлено');
-      const ep = d.webhooks.find((w) => w.id === delivery.endpointId);
-      if (!ep) throw notFound();
-      if (delivery.status === 'failed') delivery.attempts = Math.min(delivery.attempts, 5); // manual retry gets one more attempt
-      await attemptDelivery(delivery, ep);
-      const { body: _b, signature: _s, clinicId: _c, ...view } = delivery;
-      return view;
-    }),
-  ),
-  http.get(
-    `${C}/integration/logs`,
-    route(({ request }) => {
-      const { actor, d } = requireClinic(request, 'clinic.integration.manage');
-      return d.apiLogs
-        .filter((l) => l.clinicId === actor.clinicId)
-        .sort((a, b) => (a.at < b.at ? 1 : -1))
-        .slice(0, 200)
-        .map(({ clinicId: _c, ...l }) => l);
-    }),
-  ),
+  // ---- integration (clinic_admin): the partner framework shared with assistance companies ----
+  ...partnerIntegrationHandlers(`${C}/integration`, (request) => {
+    const { actor, d } = requireClinic(request, 'clinic.integration.manage');
+    return { actor, partnerId: actor.clinicId, partnerType: 'clinic' as const, mode: clinicOf(d, actor.clinicId).integrationMode, d };
+  }),
 ];
 
 export function createGuarantee(
@@ -645,6 +508,8 @@ export function createGuarantee(
   const svc = priceListOf(d, actor.clinicId).find((p) => p.code === input.serviceCode);
   if (!svc) throw new HttpError(422, 'validation', 'Услуги нет в прайсе договора', { serviceCode: 'Выберите услугу из прайса' });
   const who = d.insured.find((i) => i.id === v.insuredId)!;
+  // The letter goes to the assistance of the insured person on the date of the request (ASSISTANCE_SPEC §5.2).
+  const assistanceId = assistanceOn(d.assignments, who.policyId, isoDay(Date.now()));
   d.guaranteeSeq += 1;
   const g: GuaranteeRow = {
     id: randomId(),
@@ -662,9 +527,13 @@ export function createGuarantee(
     comment: input.comment || undefined,
     attachments: [],
     createdAt: tzIso(Date.now()),
+    policyId: who.policyId,
+    assistanceId,
+    ...(assistanceId ? { assistanceName: assistanceName(d, assistanceId) ?? undefined } : {}),
   };
   d.guarantees.unshift(g);
   audit(actor, 'guarantee_requested', { targetType: 'guarantee', targetId: g.id, targetLabel: g.number });
+  void notifyAssistance(d, assistanceId, 'guarantee.requested', g.id);
   pushEvent(d, actor.clinicId, `Запрошено гарантийное письмо ${g.number} (${byName})`);
   return g;
 }

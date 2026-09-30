@@ -65,14 +65,16 @@ function verify(challengeId: string, code: string): SessionResponse {
         ? 'insured'
         : c.kind === 'clinic'
           ? d.clinicUsers.find((u) => u.id === c.userId)?.role
-          : d.staff.find((s) => s.id === c.userId)?.role;
+          : c.kind === 'assist'
+            ? d.assistUsers.find((u) => u.id === c.userId)?.role
+            : d.staff.find((s) => s.id === c.userId)?.role;
   if (!role) throw invalidCode();
   const user = sessionUserFor(d, c.userId, role);
   if (!user) throw invalidCode();
   const sessionId = randomToken(32);
   const now = Date.now();
   d.sessions.push({ id: sessionId, userId: user.id, role: user.role, createdAt: now, lastActivity: now });
-  const staffRow = d.staff.find((s) => s.id === user.id) ?? d.clinicUsers.find((u) => u.id === user.id);
+  const staffRow = d.staff.find((s) => s.id === user.id) ?? d.clinicUsers.find((u) => u.id === user.id) ?? d.assistUsers.find((u) => u.id === user.id);
   if (staffRow) staffRow.lastLoginAt = tzIso(now);
   audit(user, 'login', { targetType: 'session' });
   return { sessionId, user };
@@ -89,7 +91,8 @@ export const authHandlers = [
       const staff = d.staff.find((s) => s.email === email && s.active);
       const hr = d.hrUsers.find((h) => h.email === email);
       const clinicUser = d.clinicUsers.find((u) => u.email === email && u.active);
-      const account = staff ?? hr ?? clinicUser;
+      const assistUser = d.assistUsers.find((u) => u.email === email && u.active);
+      const account = staff ?? hr ?? clinicUser ?? assistUser;
       if (!account || account.password !== password) {
         recordFailure(key);
         audit({ id: NIL, displayName: 'Неизвестный', role: staff?.role ?? 'operator' }, 'login_failed', {
@@ -97,7 +100,7 @@ export const authHandlers = [
         });
         throw invalidCreds();
       }
-      return newChallenge(account.id, staff ? 'staff' : clinicUser ? 'clinic' : 'hr');
+      return newChallenge(account.id, staff ? 'staff' : clinicUser ? 'clinic' : assistUser ? 'assist' : 'hr');
     }),
   ),
   http.post(

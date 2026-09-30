@@ -28,6 +28,7 @@ const TABS = [
   { key: 'guarantee', label: 'ГП', action: 'guarantees.decide' },
   { key: 'registry', label: 'Реестры', action: 'registries.review' },
   { key: 'policy_change', label: 'Состав', action: 'policy_changes.decide' },
+  { key: 'assistance', label: 'Ассистансы', action: 'rebills.review' },
 ] as const;
 
 const TYPE_CHIP: Record<QueueItem['type'], { kind: string; label: string }> = {
@@ -38,6 +39,10 @@ const TYPE_CHIP: Record<QueueItem['type'], { kind: string; label: string }> = {
   registry: { kind: 'peach', label: 'Реестр' },
   clinic_no_response: { kind: 'danger', label: 'Клиника не ответила' },
   policy_change: { kind: 'accent', label: 'Состав полиса' },
+  escalation: { kind: 'warning', label: 'Эскалация ГП' },
+  rebill: { kind: 'peach', label: 'Счёт ассистанса' },
+  assistance_sla: { kind: 'danger', label: 'SLA ассистанса нарушен' },
+  complaint: { kind: 'danger', label: 'Жалоба' },
 };
 
 function greeting(now = new Date()): string {
@@ -64,7 +69,7 @@ export default function DashboardPage() {
   const rows = useMemo(() => {
     const base = (queue.data ?? []).map((r) => done.get(r.id) ?? r);
     for (const r of done.values()) {
-      if (!base.some((b) => b.id === r.id) && (tab === 'all' || tab === r.type || (tab === 'appointment' && r.type === 'clinic_no_response'))) base.push(r);
+      if (!base.some((b) => b.id === r.id) && (tab === 'all' || tab === r.type || (tab === 'appointment' && r.type === 'clinic_no_response') || (tab === 'guarantee' && r.type === 'escalation'))) base.push(r);
     }
     return base.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
   }, [queue.data, done, tab]);
@@ -88,7 +93,9 @@ export default function DashboardPage() {
   const openRow = (row: QueueItem) => {
     if (row.type === 'claim') navigate(`/staff/claims/${row.entityId}`);
     else if (row.type === 'renewal') navigate(`/staff/clients/${row.entityId}`);
-    else if (row.type === 'guarantee') navigate('/staff/guarantees');
+    else if (row.type === 'guarantee' || row.type === 'escalation') navigate('/staff/guarantees');
+    else if (row.type === 'rebill') navigate(`/staff/rebills/${row.entityId}`);
+    else if (row.type === 'assistance_sla' || row.type === 'complaint') navigate(`/staff/assistance/${row.entityId}`);
     else if (row.type === 'registry') navigate(`/staff/registries/${row.entityId}`);
     else if (row.type === 'policy_change') navigate(`/staff/policy-changes?clientId=${row.entityId}`);
     else navigate(`/staff/appointments?status=${done.has(row.id) ? 'confirmed' : 'requested'}`);

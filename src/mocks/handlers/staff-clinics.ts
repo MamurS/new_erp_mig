@@ -3,7 +3,7 @@
  * guarantee-letter queue for doctor experts, registry review (operator) and payment (accountant).
  */
 import { http } from 'msw';
-import type { Clinic, SessionUser } from '@/shared/types';
+import type { Clinic, Registry, SessionUser } from '@/shared/types';
 import type { ClinicCard, ClinicUserView } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
@@ -16,6 +16,13 @@ import { DAY, isoDay, parseIso, tzIso } from '../time';
 import { DEMO_PASSWORD } from '../credentials';
 import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, refreshGuarantee, toGuaranteeView, toRegistrySummary, toRegistryView } from '../clinic-core';
 import { revokeKey } from './clinic';
+import { linesOf, settleRegistry, subStatus, subTotals } from '../assistance-core';
+
+/** The MIG part of a clinic registry: only lines paid by MIG, with their own status and totals. */
+function migSubRegistry(_d: Db, r: Registry): Registry {
+  const lines = linesOf(r, 'mig');
+  return { ...r, lines, status: subStatus(r, lines), totals: subTotals(lines) };
+}
 
 function requireStaff(request: Request): SessionUser {
   const { user } = requireSession(request);
@@ -141,8 +148,11 @@ export const staffClinicHandlers = [
       const d = db();
       const status = url.searchParams.get('status');
       const clinicId = url.searchParams.get('clinicId');
+      // By default MIG sees what it decides: escalations and clients without an assistance (§7, §9.1).
+      const all = url.searchParams.get('scope') === 'all';
       return d.guarantees
         .map((g) => refreshGuarantee(g))
+        .filter((g) => all || !g.assistanceId || g.escalated)
         .filter((g) => (!status || status.split(',').includes(g.status)) && (!clinicId || g.clinicId === clinicId))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
         .map((g) => toGuaranteeView(d, g));
@@ -167,9 +177,13 @@ export const staffClinicHandlers = [
       const d = db();
       const g = d.guarantees.find((x) => x.id === param(ctx, 'id'));
       if (!g) throw notFound();
+      if (!can(user, 'assist.guarantees.decide', { assistanceId: g.assistanceId ?? null, escalated: g.escalated === true })) {
+        throw new HttpError(403, 'forbidden', `Решение принимает ${g.assistanceName ?? 'ассистанс'}: МИГ решает только эскалации`);
+      }
       if (g.status !== 'requested') throw conflict(g.status === 'info_requested' ? 'Ждём документы от клиники' : 'Решение уже принято');
       const input = await body(ctx.request, guaranteeDecisionSchema);
       const at = tzIso(Date.now());
+      g.decidedBy = 'mig';
       if (input.action === 'approve') {
         const outcome = approvalOutcome(g, input.amount, user.id);
         if (outcome === 'same_doctor') throw new HttpError(409, 'conflict', 'Второе одобрение должен дать другой врач-эксперт (правило четырёх глаз)');
@@ -179,6 +193,7 @@ export const staffClinicHandlers = [
         if (outcome === 'approved') {
           g.status = 'approved';
           g.reason = undefined;
+          g.decidedAt = at;
           await emitWebhook(d, g.clinicId, 'guarantee.decided', g.id);
           pushEvent(d, g.clinicId, `Гарантийное письмо ${g.number} одобрено`);
         }
@@ -186,6 +201,7 @@ export const staffClinicHandlers = [
       } else if (input.action === 'reject') {
         g.status = 'rejected';
         g.reason = input.reason;
+        g.decidedAt = at;
         await emitWebhook(d, g.clinicId, 'guarantee.decided', g.id);
         pushEvent(d, g.clinicId, `Гарантийное письмо ${g.number} отклонено`);
         audit(user, 'guarantee_decided', { targetType: 'guarantee', targetId: g.id, targetLabel: g.number, reason: 'Отклонено' });
@@ -208,8 +224,10 @@ export const staffClinicHandlers = [
       const d = db();
       const status = url.searchParams.get('status');
       const clinicId = url.searchParams.get('clinicId');
+      // MIG works only with its sub-registry: lines of clients without an assistance (§9.2).
       return d.registries
-        .filter((r) => r.status !== 'draft')
+        .filter((r) => r.status !== 'draft' && linesOf(r, 'mig').length > 0)
+        .map((r) => migSubRegistry(d, r))
         .filter((r) => (!status || status.split(',').includes(r.status)) && (!clinicId || r.clinicId === clinicId))
         .sort((a, b) => ((a.submittedAt ?? '') < (b.submittedAt ?? '') ? 1 : -1))
         .map((r) => toRegistrySummary(d, r));
@@ -222,8 +240,8 @@ export const staffClinicHandlers = [
       if (!canReadRegistries(user)) throw forbidden();
       const d = db();
       const r = d.registries.find((x) => x.id === param(ctx, 'id') && x.status !== 'draft');
-      if (!r) throw notFound();
-      return toRegistryView(d, r);
+      if (!r || !linesOf(r, 'mig').length) throw notFound();
+      return toRegistryView(d, migSubRegistry(d, r));
     }),
   ),
   http.post(
@@ -236,7 +254,8 @@ export const staffClinicHandlers = [
       if (!r || r.status === 'draft') throw notFound();
       if (r.status === 'paid') throw conflict('Реестр уже оплачен');
       const line = r.lines.find((l) => l.id === param(ctx, 'lineId'));
-      if (!line) throw notFound();
+      // Lines of an assistance's sub-registry are reviewed by that assistance.
+      if (!line || (line.payer ?? 'mig') !== 'mig') throw notFound();
       if (line.status !== 'pending' && line.status !== 'disputed') throw conflict('По строке уже принято решение');
       const input = await body(ctx.request, registryLineDecisionSchema);
       const wasPending = r.lines.some((l) => l.status === 'pending');
@@ -257,7 +276,7 @@ export const staffClinicHandlers = [
         await emitWebhook(d, r.clinicId, 'registry.reviewed', r.id);
         pushEvent(d, r.clinicId, `Реестр за ${r.period} проверен: ${r.status === 'accepted' ? 'принят' : 'принят частично'}`);
       }
-      return toRegistryView(d, r);
+      return toRegistryView(d, migSubRegistry(d, r));
     }),
   ),
   http.post(
@@ -268,23 +287,29 @@ export const staffClinicHandlers = [
       const d = db();
       const r = d.registries.find((x) => x.id === param(ctx, 'id'));
       if (!r || r.status === 'draft') throw notFound();
-      if (r.status !== 'accepted' && r.status !== 'partially_accepted') throw conflict('Оплатить можно только проверенный реестр');
-      if (r.lines.some((l) => l.status === 'disputed')) throw conflict('Сначала ответьте на оспоренные строки');
-      r.status = 'paid';
-      r.paidAt = tzIso(Date.now());
+      const mine = linesOf(r, 'mig');
+      if (!mine.length) throw notFound();
+      if (mine.some((l) => l.status === 'pending')) throw conflict('Оплатить можно только проверенный реестр');
+      if (mine.some((l) => l.status === 'disputed')) throw conflict('Сначала ответьте на оспоренные строки');
+      const toPay = mine.filter((l) => l.status === 'accepted' && !l.payment);
+      if (!toPay.length) throw conflict('Строки МИГ уже оплачены');
+      const paidAt = tzIso(Date.now());
+      const orderNumber = `ПП-МИГ-${String(Date.now()).slice(-6)}`;
+      for (const l of toPay) l.payment = { paidAt: paidAt.slice(0, 10), amount: l.amount, orderNumber };
+      settleRegistry(r);
       recomputeRegistry(r);
-      const lineIds = new Set(r.lines.filter((l) => l.status === 'accepted').map((l) => l.id));
+      const lineIds = new Set(toPay.map((l) => l.id));
       for (const c of d.claims) {
         if (c.registryLineId && lineIds.has(c.registryLineId)) {
-          c.history.push({ at: r.paidAt, actorName: user.displayName, from: c.status, to: 'paid' });
+          c.history.push({ at: paidAt, actorName: user.displayName, from: c.status, to: 'paid' });
           c.status = 'paid';
-          c.updatedAt = r.paidAt;
+          c.updatedAt = paidAt;
         }
       }
       audit(user, 'registry_paid', { targetType: 'registry', targetId: r.id, targetLabel: `Реестр ${r.period}` });
       await emitWebhook(d, r.clinicId, 'registry.paid', r.id);
-      pushEvent(d, r.clinicId, `Реестр за ${r.period} оплачен`);
-      return toRegistryView(d, r);
+      pushEvent(d, r.clinicId, `МИГ оплатил свои строки реестра за ${r.period}`);
+      return toRegistryView(d, migSubRegistry(d, r));
     }),
   ),
 ];
