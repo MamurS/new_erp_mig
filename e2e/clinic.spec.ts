@@ -136,7 +136,8 @@ test('3. CSV registry: upload, submit, reject, dispute, accept, pay — the clin
   await as(page, 'operator');
   await page.goto(`/staff/registries/${registryId}`);
   await page.getByRole('button', { name: `Принять строку ${simple[0]!.name}` }).click();
-  await expect(page.getByTestId('registry-status')).toContainText('Принят');
+  // Exact text: «Принят частично» must turn into «Принят» before the role switch.
+  await expect(page.getByTestId('registry-status')).toHaveText('Принят');
 
   await as(page, 'accountant');
   await page.goto(`/staff/registries/${registryId}`);

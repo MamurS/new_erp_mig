@@ -8,7 +8,7 @@ import { useLogin } from '@/shared/api/queries/auth';
 import { ApiRequestError, errorMessage } from '@/shared/api/client';
 import { takeLogoutNotice, useSession } from '@/shared/auth/session';
 import { homeFor } from '@/shared/auth/home';
-import { safeNext } from '@/shared/lib/redirect';
+import { targetAfterLogin } from '@/shared/lib/redirect';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { getDemo } from '@/shared/demo';
 import { Button } from '@/shared/ui/button';
@@ -33,7 +33,7 @@ export default function LoginPage() {
     form.setFocus('email');
   }, [form]);
 
-  if (session) return <Navigate to={safeNext(next, homeFor(session.user.role))} replace />;
+  if (session) return <Navigate to={targetAfterLogin(next, homeFor(session.user.role))} replace />;
 
   const onSubmit = form.handleSubmit(async (values) => {
     setServerError(null);
