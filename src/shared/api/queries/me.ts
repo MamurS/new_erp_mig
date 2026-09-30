@@ -85,6 +85,14 @@ export function useCancelMyAppointment() {
   });
 }
 
+export function useAcceptProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => request(`/me/appointments/${id}/accept-proposal`, { method: 'POST', schema: S.appointment }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.meAppointments }),
+  });
+}
+
 export function useSendChat() {
   const qc = useQueryClient();
   return useMutation({

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, MapPin } from 'lucide-react';
 import { useI18n } from '@/i18n';
-import { useCancelMyAppointment, useMyAppointments } from '@/shared/api/queries/me';
+import { useAcceptProposal, useCancelMyAppointment, useMyAppointments } from '@/shared/api/queries/me';
 import { errorMessage } from '@/shared/api/client';
 import type { Appointment, AppointmentStatus } from '@/shared/types';
 import { formatDate, formatTime } from '@/shared/lib/format';
@@ -31,6 +31,7 @@ export default function AppointmentsPage() {
   useDocumentTitle(t('appointments.title'));
   const q = useMyAppointments();
   const cancel = useCancelMyAppointment();
+  const accept = useAcceptProposal();
   const [target, setTarget] = useState<Appointment | null>(null);
   const [now] = useState(() => Date.now());
 
@@ -43,6 +44,15 @@ export default function AppointmentsPage() {
       await cancel.mutateAsync(target.id);
       toast.success(t('appointments.cancelled'));
       setTarget(null);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+
+  const acceptProposal = async (a: Appointment) => {
+    try {
+      await accept.mutateAsync(a.id);
+      toast.success(t('appt.proposalAccepted'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -64,6 +74,20 @@ export default function AppointmentsPage() {
         </div>
         <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold', TONE[a.status])}>{t(`appt.${a.status}`)}</span>
       </div>
+      {a.status === 'confirmed' && a.respondedBy && (
+        <p className="mt-2 text-[13px] font-semibold text-accent-text" data-testid="appt-confirmed-by">
+          {t(a.respondedBy === 'clinic' ? 'appt.byClinic' : 'appt.byOperator')}
+        </p>
+      )}
+      {a.status === 'declined' && a.declineReason && <p className="mt-2 text-[13px] text-muted">{t('appt.declineReason', { reason: a.declineReason })}</p>}
+      {a.status === 'requested' && a.proposedStartsAt && (
+        <div className="mt-3 rounded-btn bg-sun px-3 py-2 text-sun-text" data-testid="appt-proposal">
+          <p className="text-[14px] font-semibold">{t('appt.proposed', { date: formatDate(a.proposedStartsAt), time: formatTime(a.proposedStartsAt) })}</p>
+          <Button onClick={() => void acceptProposal(a)} loading={accept.isPending} className="mt-2 h-11 w-full rounded-btn text-[15px]">
+            {t('appt.acceptProposal')}
+          </Button>
+        </div>
+      )}
       {canCancel && (
         <Button variant="secondary" onClick={() => setTarget(a)} className="mt-3 h-11 w-full rounded-btn text-[15px]">
           {t('appointments.cancel')}

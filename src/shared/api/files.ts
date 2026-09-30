@@ -1,5 +1,6 @@
 /* Authenticated file download → blob: URL (img src cannot carry the bearer token). */
 import { useEffect, useState } from 'react';
+import { downloadText } from '@/shared/lib/csv';
 import { request } from './client';
 
 export function useFileUrl(url: string | null | undefined): { src: string | null; error: boolean } {
@@ -29,4 +30,10 @@ export function useFileUrl(url: string | null | undefined): { src: string | null
     };
   }, [url]);
   return state;
+}
+
+/** Download an authenticated file (PDFs are never rendered inline). */
+export async function downloadFile(id: string, fileName: string): Promise<void> {
+  const blob = (await request(`/files/${id}`, { as: 'blob' })) as Blob;
+  downloadText(blob, fileName, blob.type);
 }

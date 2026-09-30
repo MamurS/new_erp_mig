@@ -31,7 +31,7 @@ test('5. Masking: PINFL absent until reveal, visible 30 s, then masked again; au
   await expect(page.getByRole('cell', { name: /Звонок застрахованного/ }).first()).toBeVisible();
   // The audit trail (admin view) has the entry too — switch role in the same mock via the demo banner.
   await page.getByRole('button', { name: 'Войти как…' }).click();
-  await page.getByRole('menuitem', { name: /Администратор/ }).click();
+  await page.getByRole('menuitem', { name: /^Администратор(?! клиники)/ }).click();
   await expect(page).toHaveURL(/\/staff$/);
   await page.goto('/staff/audit?action=reveal_pii');
   await expect(page.getByRole('cell', { name: /ПИНФЛ: Звонок застрахованного/ }).first()).toBeVisible();

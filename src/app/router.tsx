@@ -44,7 +44,15 @@ const staffRoutes: RouteObject[] = [
     { path: ':claimId', lazy: lazy(() => import('@/features/staff/pages/ClaimCardPage')) },
   ]),
   guarded('appointments', sectionRoles('/staff/appointments'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/AppointmentsPage')) }]),
-  guarded('clinics', sectionRoles('/staff/clinics'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ClinicsPage')) }]),
+  guarded('clinics', sectionRoles('/staff/clinics'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/pages/ClinicsPage')) },
+    { path: ':clinicId', lazy: lazy(() => import('@/features/staff/clinics/ClinicCardPage')) },
+  ]),
+  guarded('guarantees', sectionRoles('/staff/guarantees'), [{ index: true, lazy: lazy(() => import('@/features/staff/clinics/GuaranteesQueuePage')) }]),
+  guarded('registries', sectionRoles('/staff/registries'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/clinics/RegistriesPage')) },
+    { path: ':registryId', lazy: lazy(() => import('@/features/staff/clinics/RegistryReviewPage')) },
+  ]),
   guarded('limit-requests', sectionRoles('/staff/limit-requests'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/LimitRequestsPage')) }]),
   guarded('reports', sectionRoles('/staff/reports'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ReportsPage')) }]),
   guarded('audit', sectionRoles('/staff/audit'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/AuditPage')) }]),
@@ -59,6 +67,30 @@ const hrRoutes: RouteObject[] = [
   { path: 'kp/:kpId', lazy: lazy(() => import('@/features/kp/KpViewPage')) },
   { path: 'stats', lazy: lazy(() => import('@/features/hr/pages/StatsPage')) },
   { path: 'help', lazy: lazy(() => import('@/features/hr/pages/HelpPage')) },
+];
+
+const onlyFor = (action: Parameters<typeof RequirePermission>[0]['action'], children: RouteObject[]): RouteObject => ({
+  element: (
+    <RequirePermission action={action}>
+      <Outlet />
+    </RequirePermission>
+  ),
+  children,
+});
+
+const clinicRoutes: RouteObject[] = [
+  { index: true, lazy: lazy(() => import('@/features/clinic/pages/HomePage')) },
+  { path: 'check', lazy: lazy(() => import('@/features/clinic/pages/CheckPage')) },
+  { path: 'visits/:visitId', lazy: lazy(() => import('@/features/clinic/pages/VisitPage')) },
+  { path: 'appointments', lazy: lazy(() => import('@/features/clinic/pages/AppointmentsPage')) },
+  { path: 'guarantees', lazy: lazy(() => import('@/features/clinic/pages/GuaranteesPage')) },
+  { path: 'documents', lazy: lazy(() => import('@/features/clinic/pages/DocumentsPage')) },
+  onlyFor('registries.submit', [
+    { path: 'registries', lazy: lazy(() => import('@/features/clinic/pages/RegistriesPage')) },
+    { path: 'registries/:registryId', lazy: lazy(() => import('@/features/clinic/pages/RegistryPage')) },
+  ]),
+  onlyFor('clinic.users.manage', [{ path: 'users', lazy: lazy(() => import('@/features/clinic/pages/UsersPage')) }]),
+  onlyFor('clinic.integration.manage', [{ path: 'integration', lazy: lazy(() => import('@/features/clinic/integration/IntegrationPage')) }]),
 ];
 
 const appRoutes: RouteObject[] = [
@@ -124,6 +156,15 @@ export const routes: RouteObject[] = [
           </RequireAuth>
         ),
         children: [{ lazy: lazy(() => import('@/features/hr/HrLayout')), children: hrRoutes }],
+      },
+      {
+        path: '/clinic',
+        element: (
+          <RequireAuth portal="clinic">
+            <Outlet />
+          </RequireAuth>
+        ),
+        children: [{ lazy: lazy(() => import('@/features/clinic/ClinicLayout')), children: clinicRoutes }],
       },
       { path: '/403', element: <ForbiddenPage /> },
       { path: '*', element: <NotFoundPage /> },

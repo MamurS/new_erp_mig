@@ -6,6 +6,7 @@ import { isStaffRole, SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims';
 import { formatMoney } from '@/shared/lib/format';
 import { db, hasLiveKp, type Db } from '../db';
+import { isOverdueRequest } from '../clinic-core';
 import { API, forbidden, requireSession, route } from '../http';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 
@@ -154,17 +155,20 @@ function attentionFor(d: Db, user: SessionUser, now: number): AttentionItem[] {
 
 export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now: number): QueueItem[] {
   const items: QueueItem[] = [];
-  if ((type === 'all' || type === 'appointment') && can(user, 'appointments.read')) {
+  if ((type === 'all' || type === 'appointment' || type === 'clinic_no_response') && can(user, 'appointments.read')) {
     for (const a of d.appointments) {
       if (a.status !== 'requested' || parseIso(a.startsAt) < now - 3600_000) continue;
+      // A clinic that did not answer in time hands the request to the MIG operator (CLINIC_SPEC §4.3).
+      const noResponse = isOverdueRequest(d, a, now);
+      if (type === 'clinic_no_response' && !noResponse) continue;
       items.push({
         id: a.id,
-        type: 'appointment',
+        type: noResponse ? 'clinic_no_response' : 'appointment',
         entityId: a.id,
         who: a.insuredName,
-        details: `${SPECIALTY_LABEL[a.specialty]} · ${a.clinicName}`,
-        status: 'Ожидает подтверждения',
-        statusTone: 'warning',
+        details: `${SPECIALTY_LABEL[a.specialty]} · ${a.clinicName}${a.proposedStartsAt ? ' · клиника предложила другое время' : ''}`,
+        status: noResponse ? 'Клиника не ответила' : a.proposedStartsAt ? 'Ждём ответа пациента' : 'Ожидает подтверждения',
+        statusTone: noResponse ? 'danger' : 'warning',
         dueAt: a.startsAt,
         action: can(user, 'appointments.manage') ? 'confirm' : 'open',
       });
@@ -213,6 +217,46 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all', now:
       });
     }
   }
+  if ((type === 'all' || type === 'guarantee') && can(user, 'guarantees.decide')) {
+    for (const g of d.guarantees) {
+      if (g.status !== 'requested' || g.approvals.some((x) => x.byId === user.id)) continue;
+      const second = g.approvals.length > 0;
+      items.push({
+        id: g.id,
+        type: 'guarantee',
+        entityId: g.id,
+        who: g.insuredName,
+        details: `${g.number} · ${g.serviceName} · ${formatMoney(g.approvedAmount ?? g.estimatedCost)}`,
+        status: second ? 'Нужно второе одобрение' : 'Нужно решение',
+        statusTone: second ? 'warning' : 'info',
+        dueAt: tzIso(parseIso(g.createdAt) + DAY),
+        action: 'open',
+      });
+    }
+  }
+  if (type === 'all' || type === 'registry') {
+    const review = can(user, 'registries.review');
+    const pay = can(user, 'registries.pay');
+    for (const r of d.registries) {
+      const pending = r.lines.filter((l) => l.status === 'pending').length;
+      const disputed = r.lines.filter((l) => l.status === 'disputed').length;
+      const toReview = review && (r.status === 'submitted' || r.status === 'in_review' || disputed > 0);
+      const toPay = pay && (r.status === 'accepted' || r.status === 'partially_accepted') && disputed === 0;
+      if (!toReview && !toPay) continue;
+      const clinic = d.clinics.find((c) => c.id === r.clinicId);
+      items.push({
+        id: r.id,
+        type: 'registry',
+        entityId: r.id,
+        who: clinic?.name ?? 'Клиника',
+        details: `Реестр за ${r.period} · ${formatMoney(toPay ? r.totals.accepted : r.totals.claimed)}`,
+        status: toPay ? 'К оплате' : disputed && !pending ? `Оспорено строк: ${disputed}` : `На проверке: ${pending + disputed}`,
+        statusTone: toPay ? 'success' : 'warning',
+        dueAt: tzIso(parseIso(r.submittedAt ?? tzIso(now)) + 5 * DAY),
+        action: 'open',
+      });
+    }
+  }
   return items.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
 }
 
@@ -239,7 +283,7 @@ export const dashboardHandlers = [
       const { user } = requireSession(request);
       requireStaff(user);
       const t = url.searchParams.get('type');
-      const type = t === 'appointment' || t === 'claim' || t === 'renewal' ? t : 'all';
+      const type = (['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response'] as const).find((x) => x === t) ?? 'all';
       return queueFor(db(), user, type, Date.now()).slice(0, 50);
     }),
   ),

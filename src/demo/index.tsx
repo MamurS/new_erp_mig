@@ -16,11 +16,13 @@ import { ROLE_LABEL } from '@/shared/domain/labels';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/shared/ui/dropdown';
 import { toast } from '@/shared/ui/toast';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
-import { DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from '@/mocks/credentials';
+import { MisSimulator } from './MisSimulator';
+import { DEMO_CLINIC_USERS, DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from '@/mocks/credentials';
 
 const ACCOUNTS: { role: Role; login: string }[] = [
   ...DEMO_STAFF.map((s) => ({ role: s.role as Role, login: s.email })),
   { role: 'hr', login: DEMO_HR.email },
+  ...DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, login: c.email })),
   { role: 'insured', login: '+998 90 000 00 01' },
 ];
 
@@ -155,7 +157,11 @@ function DemoBanner() {
 }
 
 function StaffLoginHints({ onPick }: { onPick: (email: string, password: string) => void }) {
-  const list = [...DEMO_STAFF.map((s) => ({ role: s.role as Role, email: s.email })), { role: 'hr' as Role, email: DEMO_HR.email }];
+  const list = [
+    ...DEMO_STAFF.map((s) => ({ role: s.role as Role, email: s.email })),
+    { role: 'hr' as Role, email: DEMO_HR.email },
+    ...DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, email: c.email })),
+  ];
   return (
     <div className="mt-6 border-t border-border pt-4">
       <p className="mb-2 text-[12px] text-muted">
@@ -197,4 +203,4 @@ function CodeHint() {
   );
 }
 
-export const demoModule: DemoModule = { DemoBanner, StaffLoginHints, PhoneLoginHint, CodeHint };
+export const demoModule: DemoModule = { DemoBanner, StaffLoginHints, PhoneLoginHint, CodeHint, MisSimulator };

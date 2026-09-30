@@ -9,6 +9,8 @@ export interface DemoModule {
   StaffLoginHints: ComponentType<{ onPick: (email: string, password: string) => void }>;
   PhoneLoginHint: ComponentType<{ onPick: (phone: string) => void }>;
   CodeHint: ComponentType;
+  /** Clinic cabinet: buttons that make real integration API calls as a clinic MIS would. */
+  MisSimulator: ComponentType;
 }
 
 let current: DemoModule | null = null;

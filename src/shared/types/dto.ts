@@ -20,6 +20,16 @@ import type {
   ProgramCode,
   SessionUser,
   UUID,
+  Clinic,
+  ClinicRole,
+  GuaranteeLetter,
+  IntegrationClient,
+  IntegrationMode,
+  Registry,
+  RegistryStatus,
+  Visit,
+  WebhookDelivery,
+  WebhookEvent,
 } from './index';
 
 // ---- auth ----
@@ -44,7 +54,7 @@ export interface Kpi {
   tone?: 'default' | 'warning' | 'danger';
   to?: string;
 }
-export type QueueType = 'appointment' | 'claim' | 'renewal';
+export type QueueType = 'appointment' | 'claim' | 'renewal' | 'guarantee' | 'registry' | 'clinic_no_response';
 export interface QueueItem {
   id: UUID;
   type: QueueType;
@@ -239,6 +249,8 @@ export interface MePolicy {
 }
 export interface CardToken {
   token: string;
+  /** The same one-time token as 8 characters for manual entry, e.g. 'K7P4-QX2M'. */
+  shortCode: string;
   expiresAt: ISODateTime;
 }
 export interface RecognizeResult {
@@ -253,3 +265,81 @@ export interface KpDefaults {
 }
 
 export type { LimitUsage };
+
+// ---------- clinics (CLINIC_SPEC) ----------
+export interface ClinicEvent {
+  id: UUID;
+  at: ISODateTime;
+  text: string;
+}
+export interface ClinicOverview {
+  clinicName: string;
+  integrationMode: IntegrationMode;
+  appointmentsToday: number;
+  unanswered: number;
+  unansweredOverdue: number;
+  guaranteesPending: number;
+  currentRegistry: { id: UUID; period: string; status: RegistryStatus; claimed: Money } | null;
+  events: ClinicEvent[];
+}
+export interface ClinicVisitView {
+  id: UUID;
+  insuredName: string;
+  method: Visit['method'];
+  openedAt: ISODateTime;
+  expiresAt: ISODateTime;
+}
+export interface ClinicUserView {
+  id: UUID;
+  email: string;
+  fullName: string;
+  role: ClinicRole;
+  active: boolean;
+  lastLoginAt?: ISODateTime;
+}
+export interface GuaranteeView extends GuaranteeLetter {
+  clinicName: string;
+  /** Approvals still missing before the letter is approved (four-eyes above the threshold). */
+  approvalsNeeded: number;
+  infoComment?: string;
+}
+export interface RegistrySummary extends Omit<Registry, 'lines'> {
+  clinicName: string;
+  lineCount: number;
+  pendingCount: number;
+  disputedCount: number;
+}
+export interface RegistryView extends Registry {
+  clinicName: string;
+  /** Pre-submit problems per line id (drafts). */
+  problems: Record<string, string[]>;
+  /** Lines with a guarantee: claimed amount versus the approved amount of the letter. */
+  guaranteeChecks: Record<string, { approvedAmount: Money | null; ok: boolean }>;
+}
+export interface RegistryImportResult {
+  total: number;
+  valid: number;
+  errors: { row: number; message: string }[];
+  registryId?: UUID;
+}
+export interface ClinicDocuments {
+  contract: { number: string; signedAt: ISODate; validUntil: ISODate };
+  acts: { registryId: UUID; period: string; claimed: Money; accepted: Money; paid: Money; paidAt?: ISODateTime }[];
+}
+export interface IntegrationOverview {
+  mode: IntegrationMode;
+  connected: boolean;
+  activeKeys: number;
+  requests24h: number;
+  errors24h: number;
+  lastWebhook: { event: WebhookEvent; at: ISODateTime; status: WebhookDelivery['status'] } | null;
+}
+export interface ClinicCard {
+  clinic: Clinic;
+  contractNumber: string;
+  metrics: { avgResponseMinutes: number | null; rejectedLineShare: number | null; amountToPay: Money };
+  users: ClinicUserView[];
+  keys: IntegrationClient[];
+  webhooks: { endpoints: number; retrying: number; failed24h: number };
+  apiErrors24h: number;
+}

@@ -13,3 +13,7 @@ export const DEMO_STAFF: { role: StaffRole; email: string; fullName: string }[] 
 ];
 export const DEMO_HR = { email: 'hr@demo-client.uz', fullName: 'Малика Турсунова' };
 export const DEMO_INSURED_PHONE = '+998900000001';
+export const DEMO_CLINIC_USERS: { role: 'clinic_registrar' | 'clinic_admin'; email: string; fullName: string }[] = [
+  { role: 'clinic_registrar', email: 'registrar@demo-clinic.uz', fullName: 'Гульнора Ахмедова' },
+  { role: 'clinic_admin', email: 'admin@demo-clinic.uz', fullName: 'Бахтиёр Каримов' },
+];

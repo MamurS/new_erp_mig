@@ -12,7 +12,13 @@ type NameOnly = 'name_only';
 /** Allowed except on records the user created (four-eyes). */
 type ExceptOwn = 'except_own';
 type Transitions = { transitions: readonly (readonly [ClaimStatus, ClaimStatus])[] };
-export type Rule = boolean | Own | Masked | NameOnly | ExceptOwn | Transitions;
+/** Own clinic, and only for a patient with an open visit of that clinic (checked by the data layer). */
+type ViaVisit = 'via_visit';
+/** Allowed; above the dual-approval threshold a second, different person must approve (four-eyes). */
+type FourEyesAboveThreshold = 'four_eyes_above_threshold';
+/** Allowed only for one narrow sub-action (ctx.sub), e.g. revoking keys during an incident. */
+type Only = { only: string };
+export type Rule = boolean | Own | Masked | NameOnly | ExceptOwn | Transitions | ViaVisit | FourEyesAboveThreshold | Only;
 
 type Row = Record<Role, Rule>;
 
@@ -20,10 +26,10 @@ const no = false;
 const yes = true;
 
 export const PERMISSIONS = {
-  'clients.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: no, insured: no },
-  'clients.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no },
-  'policies.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: 'own' },
-  'policies.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no },
+  'clients.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'clients.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'policies.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: 'own', clinic_registrar: no, clinic_admin: no },
+  'policies.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
   'insured.read': {
     operator: 'masked',
     underwriter: 'masked',
@@ -32,10 +38,12 @@ export const PERMISSIONS = {
     admin: no,
     hr: 'own',
     insured: 'own',
+    clinic_registrar: no,
+    clinic_admin: no,
   },
-  'insured.reveal_pii': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no },
-  'medical.read': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no },
-  'claims.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: yes, admin: no, hr: no, insured: 'own' },
+  'insured.reveal_pii': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'medical.read': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'claims.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: yes, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no },
   'claims.transition': {
     operator: {
       transitions: [
@@ -61,12 +69,14 @@ export const PERMISSIONS = {
     admin: no,
     hr: no,
     insured: no,
+    clinic_registrar: no,
+    clinic_admin: no,
   },
-  'claims.create': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own' },
-  'appointments.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: 'own' },
-  'appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own' },
-  'clinics.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: no, admin: yes, hr: no, insured: yes },
-  'limits.request_change': { operator: yes, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no },
+  'claims.create': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no },
+  'appointments.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no },
+  'appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no },
+  'clinics.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: no, admin: yes, hr: no, insured: yes, clinic_registrar: no, clinic_admin: no },
+  'limits.request_change': { operator: yes, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
   'limits.approve_change': {
     operator: no,
     underwriter: 'except_own',
@@ -75,15 +85,29 @@ export const PERMISSIONS = {
     admin: no,
     hr: no,
     insured: no,
+    clinic_registrar: no,
+    clinic_admin: no,
   },
-  'reports.read': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no },
-  'exports.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no },
-  'audit.read': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no },
-  'users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no },
-  'kp.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no },
-  'kp.send': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no },
-  'kp.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: 'own', insured: no },
-  'hr.employees.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no },
+  'reports.read': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
+  'exports.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
+  'audit.read': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'kp.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'kp.send': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'kp.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
+  'hr.employees.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no },
+  // ---- clinics (CLINIC_SPEC §8) ----
+  'clinic.check_patient': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own' },
+  'clinic.appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own' },
+  'guarantees.request': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'via_visit', clinic_admin: 'via_visit' },
+  'guarantees.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own' },
+  'guarantees.decide': { operator: no, underwriter: no, doctor_expert: 'four_eyes_above_threshold', accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'registries.submit': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own' },
+  'registries.review': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'registries.pay': { operator: no, underwriter: no, doctor_expert: no, accountant: yes, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
+  'clinic.integration.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own' },
+  'clinic.users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'first_admin' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own' },
+  'clinics.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no },
 } as const satisfies Record<string, Row>;
 
 export type Action = keyof typeof PERMISSIONS;
@@ -94,6 +118,10 @@ export interface PermissionContext {
   companyId?: UUID;
   /** Insured person that owns the record (insured scope). */
   insuredId?: UUID;
+  /** Clinic that owns the record (clinic scope). */
+  clinicId?: UUID;
+  /** Narrow sub-action for `{ only }` rules. */
+  sub?: string;
   /** Creator of the record (four-eyes). */
   createdById?: UUID;
   /** Claim transition being attempted. */
@@ -101,7 +129,7 @@ export interface PermissionContext {
   to?: ClaimStatus;
 }
 
-type MinimalUser = Pick<SessionUser, 'id' | 'role' | 'companyId' | 'insuredId'>;
+type MinimalUser = Pick<SessionUser, 'id' | 'role' | 'companyId' | 'insuredId' | 'clinicId'>;
 
 export function ruleFor(role: Role, action: Action): Rule {
   return (PERMISSIONS[action] as Row)[role];
@@ -112,6 +140,10 @@ function ownMatches(user: MinimalUser, ctx: PermissionContext | undefined): bool
   if (user.role === 'hr') {
     if (ctx.companyId === undefined) return ctx.insuredId === undefined;
     return !!user.companyId && ctx.companyId === user.companyId;
+  }
+  if (user.role === 'clinic_registrar' || user.role === 'clinic_admin') {
+    if (ctx.clinicId === undefined) return ctx.insuredId === undefined && ctx.companyId === undefined;
+    return !!user.clinicId && ctx.clinicId === user.clinicId;
   }
   if (user.role === 'insured') {
     if (ctx.insuredId === undefined) return ctx.companyId === undefined;
@@ -125,7 +157,9 @@ export function can(user: MinimalUser | null | undefined, action: Action, ctx?: 
   const rule = ruleFor(user.role, action);
   if (rule === false) return false;
   if (rule === true || rule === 'masked' || rule === 'name_only') return true;
-  if (rule === 'own') return ownMatches(user, ctx);
+  if (rule === 'own' || rule === 'via_visit') return ownMatches(user, ctx);
+  if (rule === 'four_eyes_above_threshold') return true;
+  if (typeof rule === 'object' && 'only' in rule) return ctx?.sub === rule.only;
   if (rule === 'except_own') return !(ctx?.createdById && ctx.createdById === user.id);
   // transitions
   if (ctx?.from === undefined || ctx.to === undefined) return rule.transitions.length > 0;
@@ -143,6 +177,6 @@ export function insuredVisibility(role: Role): 'masked' | 'name_only' | 'none' {
 /** Claim transitions the role may perform from a status (before business rules). */
 export function roleTransitionsFrom(role: Role, from: ClaimStatus): ClaimStatus[] {
   const rule = ruleFor(role, 'claims.transition');
-  if (typeof rule !== 'object') return [];
+  if (typeof rule !== 'object' || !('transitions' in rule)) return [];
   return rule.transitions.filter(([f]) => f === from).map(([, t]) => t);
 }

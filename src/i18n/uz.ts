@@ -234,5 +234,13 @@ export const uz: Dict = {
   'profile.fullName': 'F.I.Sh.',
   'profile.consentMissing': 'berilmagan',
   'card.qrAlt': 'Klinika uchun QR-kod',
+  'card.shortCode': "QR o'qilmasa, kodni ayting",
+  'appt.byClinic': 'Klinika tasdiqladi',
+  'appt.byOperator': 'MIG operatori tasdiqladi',
+  'appt.proposed': 'Klinika boshqa vaqtni taklif qilmoqda: {date}, {time}',
+  'appt.acceptProposal': 'Yangi vaqtni qabul qilish',
+  'appt.proposalAccepted': "Vaqt o'zgartirildi, yozuv tasdiqlandi",
+  'appt.declineReason': 'Sabab: {reason}',
+  'booking.fromClinic': 'Vaqt klinika jadvalidan',
   'offline': "Internet bilan aloqa yo'q",
 };

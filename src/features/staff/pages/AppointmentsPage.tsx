@@ -68,7 +68,14 @@ export default function AppointmentsPage() {
     { key: 'client', header: 'Клиент', cell: (a) => <span className="text-muted">{a.clientName}</span> },
     { key: 'spec', header: 'Врач', sortKey: 'specialty', cell: (a) => SPECIALTY_LABEL[a.specialty] },
     { key: 'clinic', header: 'Клиника', sortKey: 'clinicName', cell: (a) => a.clinicName },
-    { key: 'status', header: 'Статус', sortKey: 'status', cell: (a) => <StatusDot tone={APPT_TONE[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</StatusDot> },
+    { key: 'status', header: 'Статус', sortKey: 'status', cell: (a) => (
+        <span className="flex flex-col">
+          <StatusDot tone={APPT_TONE[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</StatusDot>
+          {a.respondedBy && <span className="text-[11px] text-muted">{a.respondedBy === 'clinic' ? 'ответила клиника' : 'ответил оператор МИГ'}</span>}
+          {a.proposedStartsAt && <span className="text-[11px] text-warning-text">клиника предложила другое время</span>}
+          {a.fromClinicSystem && <span className="text-[11px] text-muted">слот из системы клиники</span>}
+        </span>
+      ) },
     { key: 'actions', header: '', align: 'right', cell: actions },
   ];
 

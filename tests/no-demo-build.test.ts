@@ -30,7 +30,7 @@ describe('build without VITE_DEMO_MODE', () => {
       .map((f) => readFileSync(f, 'utf8'))
       .join('\n');
     expect(text.length).toBeGreaterThan(1000);
-    for (const needle of ['demo.mig.uz', 'Войти как', 'Demo-2026!', 'Демо-версия']) {
+    for (const needle of ['demo.mig.uz', 'demo-clinic.uz', 'Войти как', 'Demo-2026!', 'Демо-версия', 'симулятор МИС', '__demo/mis-card']) {
       expect(text.includes(needle), needle).toBe(false);
     }
     // The demo code '000000' as a standalone token; hex colours such as `#000000ff` in libraries are not codes.
