@@ -119,7 +119,8 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
     } catch {
       /* non-JSON error body */
     }
-    if (res.status === 401 && !AUTH_PATHS.includes(path)) onUnauthorized();
+    // A 401 for a request sent with an older session (e.g. in flight during a role switch) must not end the new one.
+    if (res.status === 401 && !AUTH_PATHS.includes(path) && sid === getSessionId()) onUnauthorized();
     throw new ApiRequestError(res.status, err);
   }
 
