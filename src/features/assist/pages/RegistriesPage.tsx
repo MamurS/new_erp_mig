@@ -9,6 +9,7 @@ import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { PageHeader } from '@/shared/ui/page';
 import { useTopbar } from '@/features/staff/topbar';
+import { SlaBadge } from '../components';
 
 const SOURCE_LABEL = { portal: 'Кабинет', csv: 'CSV', api: 'API' } as const;
 
@@ -27,6 +28,7 @@ export default function RegistriesPage() {
     { key: 'unpaid', header: 'Не оплачено', align: 'right', cell: (r) => <span className={r.unpaidCount ? 'num font-semibold' : 'num text-muted'}>{r.unpaidCount}</span> },
     { key: 'claimed', header: 'Заявлено', align: 'right', cell: (r) => <span className="num whitespace-nowrap">{formatMoney(r.totals.claimed)}</span> },
     { key: 'paid', header: 'Оплачено', align: 'right', cell: (r) => <span className="num whitespace-nowrap">{formatMoney(r.totals.paid)}</span> },
+    { key: 'sla', header: 'Проверить до', cell: (r) => (r.reviewDueAt ? <SlaBadge dueAt={r.reviewDueAt} done={r.pendingCount + r.disputedCount === 0} /> : '—') },
     { key: 'status', header: 'Статус', cell: (r) => <Chip kind={REGISTRY_STATUS_CHIP[r.status]}>{REGISTRY_STATUS_LABEL[r.status]}</Chip> },
   ];
   return (

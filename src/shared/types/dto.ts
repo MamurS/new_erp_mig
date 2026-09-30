@@ -435,6 +435,8 @@ export interface AssistCaseView extends AssistanceCase {
 }
 export interface AssistAppointment extends Appointment {
   overdue: boolean;
+  /** Deadline of the clinic's answer; after it the request is escalated to the assistance. */
+  slaDueAt: ISODateTime;
 }
 export interface AssistChatThread {
   insuredId: UUID;
@@ -463,6 +465,8 @@ export interface SubRegistrySummary {
   disputedCount: number;
   unpaidCount: number;
   totals: Registry['totals'];
+  /** Deadline of the review of the payer's lines (5 days after submission). */
+  reviewDueAt?: ISODateTime;
 }
 export interface SubRegistryView extends SubRegistrySummary {
   lines: RegistryLine[];

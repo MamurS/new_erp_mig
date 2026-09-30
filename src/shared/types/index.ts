@@ -254,7 +254,7 @@ export type AuditAction =
   | 'integration_key_created' | 'integration_key_revoked' | 'webhook_created'
   | 'policy_issued' | 'policy_change_requested' | 'policy_change_decided'
   | 'assistance_assigned' | 'case_created' | 'guarantee_escalated' | 'clinic_payment_recorded'
-  | 'rebill_submitted' | 'rebill_line_decided' | 'rebill_paid' | 'qa_reviewed';
+  | 'rebill_submitted' | 'rebill_line_decided' | 'rebill_paid' | 'qa_reviewed' | 'complaint_resolved';
 
 export interface AuditEntry {
   id: UUID;

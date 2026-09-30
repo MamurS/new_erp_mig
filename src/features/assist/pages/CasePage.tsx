@@ -18,7 +18,7 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { CaseStatus, SlaBadge } from '../components';
-import { BookDialog } from './InsuredCardPage';
+import { BookDialog, RequestGuaranteeDialog } from './InsuredCardPage';
 
 export default function CasePage() {
   const { caseId = '' } = useParams();
@@ -31,6 +31,7 @@ export default function CasePage() {
   const [resolution, setResolution] = useState('');
   const [error, setError] = useState<string>();
   const [booking, setBooking] = useState(false);
+  const [requesting, setRequesting] = useState(false);
 
   return (
     <QueryState query={q}>
@@ -92,6 +93,11 @@ export default function CasePage() {
                       <Button loading={update.isPending} onClick={() => void save()}>
                         Сохранить
                       </Button>
+                      {c.type === 'guarantee' && !c.links.guaranteeId && (
+                        <Button variant="secondary" onClick={() => setRequesting(true)}>
+                          Запросить ГП
+                        </Button>
+                      )}
                       {canBook && c.type === 'appointment' && !c.links.appointmentId && (
                         <Button variant="secondary" onClick={() => setBooking(true)}>
                           Записать к врачу
@@ -118,6 +124,7 @@ export default function CasePage() {
                   <span className="num">{formatDateTime(c.slaDueAt)}</span>
                 </Kv>
                 {c.links.appointmentId && <Kv label="Запись">создана, ждёт клинику</Kv>}
+                {c.links.claimId && <Kv label="Убыток">создан по счёту ассистанса</Kv>}
                 {c.links.guaranteeId && (
                   <Kv label="ГП">
                     <Link className="text-accent-text hover:underline" to={`/assist/guarantees/${c.links.guaranteeId}`}>
@@ -128,6 +135,7 @@ export default function CasePage() {
               </dl>
             </Card>
             {booking && <BookDialog insuredId={c.insuredId} caseId={c.id} onClose={() => setBooking(false)} />}
+            {requesting && <RequestGuaranteeDialog insuredId={c.insuredId} caseId={c.id} onClose={() => setRequesting(false)} />}
           </div>
         );
       }}

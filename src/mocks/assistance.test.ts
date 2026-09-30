@@ -289,3 +289,93 @@ describe('integration API of an assistance (§8)', () => {
     expect(Object.keys(body).sort()).toEqual(['createdAt', 'id', 'objectId', 'type']);
   });
 });
+
+describe('call centre, curator and MIG admin (§2, §5.1–5.2, §5.7, §10)', () => {
+  it('the operator requests a letter on a call: it goes to the assistance doctor, the clinic sees it, the case links it', async () => {
+    const d = db();
+    const me = demoInsured();
+    const op = await login('asst-operator@demo-assist.uz');
+    const c = await call<{ id: string }>('/assist/cases', { method: 'POST', sid: op, json: { insuredId: me.id, type: 'guarantee', description: 'Направление на МРТ, нужно ГП' } });
+    const svc = d.priceLists.find((p) => p.clinicId === demoClinicId())!.items.find((p) => p.requiresGuarantee)!;
+    const noGp = d.priceLists.find((p) => p.clinicId === demoClinicId())!.items.find((p) => !p.requiresGuarantee)!;
+    const bad = await call('/assist/guarantees', { method: 'POST', sid: op, json: { insuredId: me.id, clinicId: demoClinicId(), serviceCode: noGp.code, icd10: 'G43.9', estimatedCost: noGp.price, caseId: c.data.id } });
+    expect(bad.status).toBe(422);
+    const g = await call<{ id: string; number: string; assistanceId: string; status: string }>('/assist/guarantees', {
+      method: 'POST',
+      sid: op,
+      json: { insuredId: me.id, clinicId: demoClinicId(), serviceCode: svc.code, icd10: 'G43.9', estimatedCost: svc.price, caseId: c.data.id },
+    });
+    expect(g.status).toBe(200);
+    expect(g.data).toMatchObject({ assistanceId: A1().id, status: 'requested' });
+    expect(d.cases.find((x) => x.id === c.data.id)!.links.guaranteeId).toBe(g.data.id);
+    const doc = await login('asst-doctor@demo-assist.uz');
+    expect(JSON.stringify((await call('/assist/guarantees?status=requested', { sid: doc })).data)).toContain(g.data.id);
+    const clinic = await login('registrar@demo-clinic.uz');
+    expect(JSON.stringify((await call('/clinic/guarantees', { sid: clinic })).data)).toContain(g.data.number);
+    // Another assistance cannot request letters for this person.
+    const other = await login('asst-operator@demo-assist2.uz');
+    expect((await call('/assist/guarantees', { method: 'POST', sid: other, json: { insuredId: me.id, clinicId: demoClinicId(), serviceCode: svc.code, icd10: 'G43.9', estimatedCost: svc.price } })).status).toBe(404);
+  });
+
+  it('roster `updatedSince` returns people excluded after that moment', async () => {
+    const d = db();
+    const change = d.policyChanges.find((c) => c.status === 'pending' && c.kind === 'exclude' && assistanceOn(d.assignments, c.policyId, today()) === A1().id);
+    if (!change) return;
+    const since = new Date(Date.now() - 1000).toISOString();
+    const uw = await login('underwriter@demo.mig.uz');
+    expect((await call('/policy-changes/decision', { method: 'POST', sid: uw, json: { ids: [change.id], decision: 'approve' } })).status).toBe(200);
+    const admin = await login('asst-admin@demo-assist.uz');
+    const key = await call<{ clientId: string; clientSecret: string }>('/assist/integration/keys', { method: 'POST', sid: admin, json: { name: 'CRM', scopes: ['roster:read'], ipAllowlist: '' } });
+    const t = await call<{ access_token: string }>('/integration/v1/oauth/token', { method: 'POST', json: { grant_type: 'client_credentials', client_id: key.data.clientId, client_secret: key.data.clientSecret } });
+    const res = await fetch(`${BASE}/integration/v1/assistance/roster?updatedSince=${encodeURIComponent(since)}`, { headers: { Authorization: `Bearer ${t.data.access_token}` } });
+    const page = (await res.json()) as { items: { insuredId: string; status: string }[] };
+    expect(page.items).toContainEqual(expect.objectContaining({ insuredId: change.insuredId, status: 'excluded' }));
+  });
+
+  it('the MIG curator reads all cases of an assistance and closes complaints only', async () => {
+    const d = db();
+    const cur = await login('operator@demo.mig.uz');
+    const list = await call<{ id: string; type: string; status: string }[]>(`/assistance/${A1().id}/cases`, { sid: cur });
+    expect(list.status).toBe(200);
+    expect(list.data.length).toBe(d.cases.filter((c) => c.assistanceId === A1().id).length);
+    const complaint = list.data.find((c) => c.type === 'complaint' && c.status !== 'resolved')!;
+    const other = list.data.find((c) => c.type !== 'complaint' && c.status !== 'resolved')!;
+    expect((await call(`/assistance/${A1().id}/cases/${other.id}/complaint`, { method: 'POST', sid: cur, json: { resolution: 'Разобрались с ассистансом' } })).status).toBe(409);
+    const closed = await call<{ status: string; resolution: string }>(`/assistance/${A1().id}/cases/${complaint.id}/complaint`, { method: 'POST', sid: cur, json: { resolution: 'Разобрались с ассистансом' } });
+    expect(closed.data).toMatchObject({ status: 'resolved', resolution: 'Куратор МИГ: Разобрались с ассистансом' });
+    expect(d.audit.some((e) => e.action === 'complaint_resolved' && e.assistanceId === A1().id)).toBe(true);
+    const doctor = await login('doctor@demo.mig.uz');
+    expect((await call(`/assistance/${A1().id}/cases`, { sid: doctor })).status).toBe(403);
+    const asst = await login('asst-operator@demo-assist.uz');
+    expect((await call(`/assistance/${A1().id}/cases`, { sid: asst })).status).toBe(403);
+  });
+
+  it('the MIG admin adds an assistance with its first admin, who can log in; others cannot add', async () => {
+    const admin = await login('admin@demo.mig.uz');
+    const body = {
+      name: 'Самарканд Ассистанс Плюс',
+      phone24x7: '+998 66 200 00 00',
+      integrationMode: 'portal',
+      contractNumber: 'ДА-2026-004',
+      contract: { feeModel: 'per_case', feeValue: 40000, guaranteeAuthorityLimit: 8000000, rebillPaymentDays: 15 },
+      admin: { fullName: 'Дилноза Каримова', email: 'admin@samarkand-assist.uz' },
+    };
+    const uw = await login('underwriter@demo.mig.uz');
+    expect((await call('/assistance', { method: 'POST', sid: uw, json: body })).status).toBe(403);
+    const created = await call<{ id: string; name: string }>('/assistance', { method: 'POST', sid: admin, json: body });
+    expect(created.status).toBe(200);
+    expect((await call('/assistance', { method: 'POST', sid: admin, json: body })).status).toBe(409);
+    const first = await login('admin@samarkand-assist.uz');
+    const ov = await call<{ assistance: { name: string } }>('/assist/overview', { sid: first });
+    expect(ov.data.assistance.name).toBe('Самарканд Ассистанс Плюс');
+  });
+
+  it('appointments and sub-registries carry their SLA deadlines', async () => {
+    const op = await login('asst-operator@demo-assist.uz');
+    const appts = await call<{ slaDueAt: string }[]>('/assist/appointments?view=all', { sid: op });
+    expect(appts.data.every((a) => /^\d{4}-\d{2}-\d{2}T/.test(a.slaDueAt))).toBe(true);
+    const doc = await login('asst-doctor@demo-assist.uz');
+    const regs = await call<{ submittedAt?: string; reviewDueAt?: string }[]>('/assist/registries', { sid: doc });
+    expect(regs.data.filter((r) => r.submittedAt).every((r) => !!r.reviewDueAt)).toBe(true);
+  });
+});

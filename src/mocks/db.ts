@@ -139,6 +139,8 @@ export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMask
   consentGivenAt?: string;
   addedAt: string;
   excludedFrom?: string;
+  /** Last change of the person's status (added, excluded) — `updatedSince` of the assistance roster. */
+  updatedAt?: string;
   userId: UUID;
 }
 /** Change request of the insured list; personal data of a new person stays on the server only. */

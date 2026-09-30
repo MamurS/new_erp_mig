@@ -341,6 +341,9 @@ export function claimsFromRebill(d: Db, b: Rebill, actorName: string): void {
       registryLineId: line.registryLineId,
     };
     d.claims.unshift(claim);
+    // A case that led to the letter of this line now points to the claim as well.
+    const letter = found.l.guaranteeNumber ? d.guarantees.find((g) => g.number === found.l.guaranteeNumber && g.clinicId === found.r.clinicId) : undefined;
+    if (letter) for (const c of d.cases) if (c.links.guaranteeId === letter.id) c.links.claimId = claim.id;
     // The claim enters the client's loss ratio like any other paid-out claim.
     const client = d.clients.find((c) => c.id === who.clientId);
     if (client && client.premium > 0) client.lossRatio = Math.round(((client.lossRatio ?? 0) + line.amount / client.premium) * 1000) / 1000;

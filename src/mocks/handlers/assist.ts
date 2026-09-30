@@ -33,6 +33,7 @@ import { formatMoney } from '@/shared/lib/format';
 import {
   assistAppointmentSchema,
   assistGuaranteeDecisionSchema,
+  assistGuaranteeRequestSchema,
   assistUserInviteSchema,
   assistUserPatchSchema,
   caseCreateSchema,
@@ -71,10 +72,19 @@ import { randomId, randomToken } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
 import { limitsFor } from '../views';
 import { fieldLabel, medicalRecords } from './insured';
+import { createGuarantee } from './clinic';
+import { VISIT_TTL_MS } from '@/shared/domain/clinics';
 import { DEMO_PASSWORD } from '../credentials';
 import { partnerIntegrationHandlers } from './partner-integration';
 
 const A = `${API}/assist`;
+/** Days to review the payer's lines of a clinic registry (the same rule as for MIG). */
+const REGISTRY_REVIEW_DAYS = 5;
+
+function clinicAnswerDue(d: Db, a: Appointment): string {
+  const minutes = d.clinics.find((c) => c.id === a.clinicId)?.responseSlaMinutes ?? 120;
+  return tzIso(parseIso(a.createdAt) + minutes * 60_000);
+}
 const MEDICAL_TTL = 15 * 60_000;
 
 export interface AssistCtx {
@@ -134,6 +144,7 @@ function toSubSummary(d: Db, r: Registry, payer: UUID): SubRegistrySummary {
     disputedCount: lines.filter((l) => l.status === 'disputed').length,
     unpaidCount: lines.filter((l) => l.status === 'accepted' && !l.payment).length,
     totals: subTotals(lines),
+    ...(r.submittedAt ? { reviewDueAt: tzIso(parseIso(r.submittedAt) + REGISTRY_REVIEW_DAYS * DAY) } : {}),
   };
 }
 
@@ -436,7 +447,7 @@ export const assistHandlers = [
       const now = Date.now();
       const list: AssistAppointment[] = appointmentsOf(d, assistanceId)
         .filter((a) => (view === 'requests' ? a.status === 'requested' && parseIso(a.startsAt) > now - 3600_000 : parseIso(a.startsAt) > now - 30 * DAY))
-        .map((a) => ({ ...a, overdue: isOverdueRequest(d, a, now) }))
+        .map((a) => ({ ...a, overdue: isOverdueRequest(d, a, now), slaDueAt: clinicAnswerDue(d, a) }))
         .sort((a, b) => (a.overdue === b.overdue ? (a.startsAt < b.startsAt ? -1 : 1) : a.overdue ? -1 : 1));
       return list;
     }),
@@ -473,7 +484,7 @@ export const assistHandlers = [
         else if (kind === 'reschedule') respondToAppointment(a, 'operator', { kind, startsAt: (await body(ctx.request, z.object({ startsAt: z.string().trim().min(10).max(40) }))).startsAt });
         else respondToAppointment(a, 'operator', { kind, reason: (await body(ctx.request, declineAppointmentSchema)).reason });
         pushEvent(d, a.clinicId, `Ассистанс ответил на заявку вместо клиники`);
-        return { ...a, overdue: false };
+        return { ...a, overdue: false, slaDueAt: clinicAnswerDue(d, a) };
       }),
     ),
   ),
@@ -534,6 +545,33 @@ export const assistHandlers = [
         .filter((g) => !status || status.split(',').includes(g.status))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
         .map((g) => toGuaranteeView(d, g));
+    }),
+  ),
+  // A letter requested on a call: the operator directs the patient to a clinic (§5.2).
+  http.post(
+    `${A}/guarantees`,
+    route(async ({ request }) => {
+      const { user, assistanceId, d } = requireAssist(request, 'assist.cases.manage');
+      const input = await body(request, assistGuaranteeRequestSchema);
+      const { i } = requireInsuredOf(d, assistanceId, input.insuredId);
+      requireAssistanceScope(d, assistanceId, i.policyId, todayIso(), 'write');
+      const clinic = d.clinics.find((c) => c.id === input.clinicId);
+      if (!clinic) throw notFound();
+      const c = input.caseId ? d.cases.find((x) => x.id === input.caseId && x.assistanceId === assistanceId && x.insuredId === i.id) : undefined;
+      if (input.caseId && !c) throw notFound();
+      const svc = priceListOf(d, clinic.id).find((p) => p.code === input.serviceCode);
+      if (!svc?.requiresGuarantee) throw new HttpError(422, 'validation', 'Для этой услуги гарантийное письмо не нужно', { serviceCode: 'Выберите услугу, которой нужно ГП' });
+      // The referral opens a visit in the clinic: the clinic sees the patient and the letter, as after its own check.
+      const now = Date.now();
+      const visit = { id: randomId(), clinicId: clinic.id, insuredId: i.id, openedById: user.id, method: 'policy' as const, openedAt: tzIso(now), expiresAt: tzIso(now + VISIT_TTL_MS) };
+      d.visits.push(visit);
+      const actor = { id: user.id, clinicId: clinic.id, displayName: user.displayName, role: user.role, assistanceId };
+      const g = createGuarantee(d, actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
+      if (c) {
+        c.links.guaranteeId = g.id;
+        if (c.status === 'open') c.status = 'in_progress';
+      }
+      return toGuaranteeView(d, g);
     }),
   ),
   http.get(

@@ -379,3 +379,47 @@ test('8. Simulator of an API assistance: roster sync and a rebill through the AP
   await page.getByRole('tab', { name: 'Счета' }).click();
   await expect(page.getByRole('row', { name: new RegExp(number) })).toBeVisible();
 });
+
+test('9. Operator requests a letter from a guarantee case; the curator closes a complaint; the MIG admin adds an assistance', async ({ page }) => {
+  failOnDialog(page);
+  await loginStaff(page, 'asst_operator');
+  // A guarantee case of the operator: request the letter right from it.
+  const cases = (await api(page, 'GET', '/assist/cases?type=guarantee')).data as { id: string; status: string; access: string; links: { guaranteeId?: string } }[];
+  let caseId = cases.find((c) => c.access === 'full' && c.status !== 'resolved' && !c.links.guaranteeId)?.id;
+  if (!caseId) {
+    const person = ((await api(page, 'GET', '/assist/insured?q=')).data as { id: string }[])[0]!;
+    caseId = ((await api(page, 'POST', '/assist/cases', { insuredId: person.id, type: 'guarantee', description: 'Направление на МРТ' })).data as { id: string }).id;
+  }
+  await page.goto(`/assist/cases/${caseId}`);
+  await page.getByRole('button', { name: 'Запросить ГП' }).click();
+  const dlg = page.getByRole('dialog', { name: 'Запросить гарантийное письмо' });
+  await dlg.getByLabel('Клиника').selectOption({ index: 1 });
+  await dlg.getByLabel('Услуга').selectOption({ index: 1 });
+  await dlg.getByLabel('Код МКБ-10').fill('G43.9');
+  await dlg.getByRole('button', { name: 'Запросить ГП' }).click();
+  await expect(page).toHaveURL(/\/assist\/guarantees\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole('heading', { name: /Гарантийное письмо ГП-\d{4}-\d{6}/ })).toBeVisible();
+
+  await as(page, 'operator');
+  const assistances = (await api(page, 'GET', '/assistance')).data as { id: string; name: string }[];
+  await page.goto(`/staff/assistance/${assistances[0]!.id}?tab=cases`);
+  await page.getByRole('button', { name: /^Закрыть жалобу/ }).first().click();
+  await page.getByRole('dialog', { name: 'Закрыть жалобу' }).getByLabel('Решение МИГ').fill('Связались с ассистансом, ответ получен');
+  await page.getByRole('dialog', { name: 'Закрыть жалобу' }).getByRole('button', { name: 'Закрыть жалобу' }).click();
+  await expect(page.getByText('Жалоба закрыта')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Войти как…' }).click();
+  await page.getByRole('menuitem', { name: /^Администратор(?! клиники| ассистанса)/ }).click();
+  await expect(page.getByText('Вы вошли как «Администратор»').last()).toBeVisible();
+  await page.goto('/staff/assistance');
+  await page.getByRole('button', { name: 'Добавить ассистанс' }).click();
+  const create = page.getByRole('dialog', { name: 'Новый ассистанс' });
+  await create.getByLabel('Название').fill('Самарканд Ассистанс Плюс');
+  await create.getByLabel('Телефон 24/7').fill('+998 66 200 00 00');
+  await create.getByLabel('Номер договора').fill('ДА-2026-004');
+  await create.getByLabel('ФИО администратора').fill('Дилноза Каримова');
+  await create.getByLabel('Email администратора').fill('admin@samarkand-assist.uz');
+  await create.getByRole('button', { name: 'Добавить' }).click();
+  await expect(page).toHaveURL(/\/staff\/assistance\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole('heading', { name: 'Самарканд Ассистанс Плюс' })).toBeVisible();
+});

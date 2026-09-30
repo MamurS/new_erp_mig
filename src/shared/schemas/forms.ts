@@ -331,3 +331,18 @@ export const assistanceCreateSchema = z.object({
   contract: assistanceContractSchema,
   admin: z.object({ email: emailInput, fullName: text(3, 120) }),
 });
+/** A guarantee letter requested by the assistance call centre on a call (ASSISTANCE_SPEC §5.2). */
+export const assistGuaranteeRequestSchema = z.object({
+  insuredId: uuid,
+  clinicId: uuid,
+  serviceCode: text(1, 20, 'Выберите услугу'),
+  icd10: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]\d{2}(\.\d{1,2})?$/, 'Код МКБ-10, например J06.9'),
+  estimatedCost: z.number({ invalid_type_error: 'Укажите сумму' }).int().min(1, 'Сумма должна быть больше нуля').max(10_000_000_000),
+  comment: z.string().trim().max(1000, 'Не больше 1000 символов').optional(),
+  caseId: uuid.optional(),
+});
+export const complaintResolutionSchema = z.object({ resolution: text(5, 1000, 'Опишите решение: минимум 5 символов') });
