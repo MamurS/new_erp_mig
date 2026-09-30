@@ -8,6 +8,7 @@ import { emitWebhook, pushEvent } from '../clinic-core';
 import { db, type ClaimRow, type InsuredRow } from '../db';
 import { API, body, conflict, forbidden, HttpError, notFound, param, requireSession, route, validate } from '../http';
 import { maskCard, maskPhone, maskPinfl } from '../mask';
+import { scheduleSaveDb } from '../persist';
 import { hashString, int, mulberry32, pick, randomId, randomToken } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
 import { limitsFor, toMyClaim } from '../views';
@@ -106,6 +107,8 @@ export const meHandlers = [
       // One-time tokens: the previous ones of this person stop working as soon as a new one is issued.
       d.cardTokens = d.cardTokens.filter((t) => t.expiresAt > now && t.insuredId !== me.id);
       d.cardTokens.push(row);
+      // A GET that writes: persist it like a mutation, or a reload would lose the code on screen.
+      scheduleSaveDb(db);
       const out: CardToken = { token: row.token, shortCode: formatShortCode(row.shortCode), expiresAt: tzIso(row.expiresAt) };
       return out;
     }),

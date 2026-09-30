@@ -37,6 +37,10 @@ test('1. Registrar checks the app code, requests a guarantee letter, the doctor 
   await page.goto('/app/card');
   const code = (await page.getByTestId('card-short-code').innerText()).trim();
   expect(code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+  // The card lives on the patient's phone: leave it before switching roles in this tab, otherwise
+  // the still-mounted card page fetches a fresh code during the switch and the one read above expires.
+  await page.goto('/app');
+  await expect(page).toHaveURL(/\/app$/);
 
   await as(page, 'registrar');
   await page.goto('/clinic/check');
@@ -188,8 +192,8 @@ test('5. Integration: key shown once, sandbox token and patient check, request l
   await page.getByRole('button', { name: 'Получить токен' }).click();
   await expect(page.getByText('Токен получен', { exact: true })).toBeVisible();
   const code = ((await api(page, 'POST', '/__demo/mis-card')).data as { shortCode: string }).shortCode;
-  await page.getByLabel('Тело запроса (JSON)').fill(JSON.stringify({ qrToken: code }));
-  await page.getByRole('button', { name: 'Отправить' }).click();
+  await page.getByLabel(/^qrToken/).fill(code);
+  await page.getByRole('button', { name: 'Выполнить' }).click();
   await expect(page.getByTestId('sandbox-status')).toHaveText('200');
   await expect(page.getByTestId('sandbox-result')).toContainText('visitId');
 
@@ -197,7 +201,7 @@ test('5. Integration: key shown once, sandbox token and patient check, request l
   const keys = (await api(page, 'GET', '/clinic/integration/keys')).data as { id: string; clientId: string }[];
   const key = keys.find((k) => k.clientId === clientId)!;
   expect((await api(page, 'POST', `/clinic/integration/keys/${key.id}/revoke`)).status).toBe(200);
-  await page.getByRole('button', { name: 'Отправить' }).click();
+  await page.getByRole('button', { name: 'Выполнить' }).click();
   await expect(page.getByTestId('sandbox-status')).toHaveText('401');
 
   await page.getByRole('tab', { name: 'Журнал запросов' }).click();
@@ -210,7 +214,7 @@ test('5. Integration: key shown once, sandbox token and patient check, request l
 test('6. MIS simulator sends a registry over the API, MIG operator sees it with source API', async ({ page }) => {
   await loginStaff(page, 'clinic_admin');
   await page.goto('/clinic/integration');
-  await page.getByRole('button', { name: 'Отправить реестр (20 строк)' }).click();
+  await page.getByRole('button', { name: 'Отправить реестр из МИС' }).click();
   await expect(page.getByTestId('mis-log')).toContainText('Реестр отправлен: 20 строк');
 
   await as(page, 'operator');
