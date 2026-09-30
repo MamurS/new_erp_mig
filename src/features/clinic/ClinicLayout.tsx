@@ -66,7 +66,7 @@ export default function ClinicLayout() {
               )}
             </div>
           </div>
-          <nav aria-label="Разделы кабинета клиники" className="order-3 w-full overflow-x-auto md:order-none md:w-auto md:flex-1">
+          <nav aria-label="Разделы кабинета клиники" className="order-3 w-full overflow-x-auto">
             <ul className="flex gap-1.5">
               {NAV.map((n) => (
                 <NavItem key={n.to} item={n} />

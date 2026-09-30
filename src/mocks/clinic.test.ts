@@ -277,3 +277,12 @@ describe('webhooks', () => {
     expectContract(I.webhookPayload, payload);
   });
 });
+
+describe('seed: registries', () => {
+  it('every line of a submitted registry is dated within its period', () => {
+    resetDb();
+    for (const r of db().registries) {
+      for (const l of r.lines) expect(l.serviceDate.startsWith(r.period), `${r.period} ${l.serviceDate}`).toBe(true);
+    }
+  });
+});

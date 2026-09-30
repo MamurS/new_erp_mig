@@ -241,7 +241,8 @@ export function seedClinics(
   const statuses: GuaranteeStatus[] = ['requested', 'requested', 'requested', 'info_requested', 'info_requested', 'approved', 'approved', 'approved', 'rejected', 'rejected', 'used', 'expired'];
   const recentVisits = visits.slice(-6);
   statuses.forEach((status, k) => {
-    const v = k < 6 ? pick(rng, recentVisits) : pick(rng, [...visitsByMonth[1]!, ...visitsByMonth[0]!]);
+    // A «used» letter is billed in last month's registry, so its visit must be in that month.
+    const v = k < 6 ? pick(rng, recentVisits) : pick(rng, status === 'used' ? visitsByMonth[1]! : [...visitsByMonth[1]!, ...visitsByMonth[0]!]);
     const who = base.insured.find((i) => i.id === v.insuredId)!;
     const svc = k === 0 ? item('IP-604') : pick(rng, gpServices);
     const created = parseIso(v.openedAt) + 30 * 60_000;
