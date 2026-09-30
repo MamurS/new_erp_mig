@@ -37,4 +37,28 @@ describe('OpenAPI contract', () => {
       expect(ops).toContain(op);
     }
   });
+
+  it('describes every assistance method of ASSISTANCE_SPEC §8 in its own section', () => {
+    const ops = Object.entries(doc.paths ?? {}).flatMap(([p, m]) => Object.keys(m as object).map((k) => `${k.toUpperCase()} ${p}`));
+    for (const op of [
+      'GET /assistance/roster',
+      'GET /assistance/insured/{id}/limits',
+      'POST /assistance/cases',
+      'PATCH /assistance/cases/{id}',
+      'GET /assistance/appointments',
+      'POST /assistance/appointments/{id}/confirm',
+      'POST /assistance/appointments/{id}/reschedule',
+      'POST /assistance/appointments/{id}/decline',
+      'GET /assistance/guarantees',
+      'POST /assistance/guarantees/{id}/decide',
+      'GET /assistance/registries',
+      'POST /assistance/registries/{id}/lines/{lineId}/decide',
+      'POST /assistance/registries/{id}/payments',
+      'POST /assistance/rebills',
+      'GET /assistance/rebills/{id}',
+      'POST /assistance/rebills/{id}/lines/{lineId}/dispute',
+    ]) {
+      expect(ops).toContain(op);
+    }
+  });
 });

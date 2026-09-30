@@ -9,6 +9,7 @@ import { hrHandlers } from './hr';
 import { kpHandlers } from './kp';
 import { clinicHandlers } from './clinic';
 import { integrationHandlers } from './integration';
+import { integrationAssistanceHandlers } from './integration-assistance';
 import { staffClinicHandlers } from './staff-clinics';
 import { policyHandlers } from './policies';
 import { meHandlers } from './me';
@@ -29,6 +30,7 @@ export const handlers = [
   ...kpHandlers,
   ...clinicHandlers,
   ...integrationHandlers,
+  ...integrationAssistanceHandlers,
   ...staffClinicHandlers,
   ...hrHandlers,
   ...meHandlers,

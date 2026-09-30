@@ -6,7 +6,7 @@
  */
 import { delay, http, HttpResponse, type PathParams } from 'msw';
 import type { ZodTypeAny } from 'zod';
-import type { Appointment, IntegrationScope } from '@/shared/types';
+import type { Appointment, IntegrationScope, PartnerType } from '@/shared/types';
 import {
   appointmentList,
   appointmentQuery,
@@ -52,7 +52,7 @@ import {
 } from '../clinic-core';
 import { attachGuaranteeFiles, createGuarantee } from './clinic';
 
-const BASE = `${API}/integration/v1`;
+export const BASE = `${API}/integration/v1`;
 
 const TITLES: Record<number, string> = {
   400: 'Bad Request',
@@ -67,7 +67,7 @@ const TITLES: Record<number, string> = {
   500: 'Internal Server Error',
 };
 
-class ApiProblem extends Error {
+export class ApiProblem extends Error {
   constructor(
     readonly status: number,
     readonly slug: string,
@@ -96,7 +96,7 @@ function problemResponse(p: ApiProblem, requestId: string): Response {
   return HttpResponse.json(body, { status: p.status, headers: { 'Content-Type': 'application/problem+json', 'X-Request-Id': requestId, ...p.headers } });
 }
 
-interface ApiCtx {
+export interface ApiCtx {
   request: Request;
   params: PathParams;
   url: URL;
@@ -109,13 +109,13 @@ function actorFor(client: IntegrationClientRow): ClinicActor {
   return { id: client.id, clinicId: client.clinicId, displayName: `API: ${client.name}`, role: 'clinic_admin' };
 }
 
-function pathParam(ctx: { params: PathParams }, key: string): string {
+export function pathParam(ctx: { params: PathParams }, key: string): string {
   const v = ctx.params[key];
   if (typeof v !== 'string' || !/^[0-9a-f-]{36}$/i.test(v)) throw new ApiProblem(404, 'not_found', 'Не найдено');
   return v;
 }
 
-async function readJson(request: Request): Promise<unknown> {
+export async function readJson(request: Request): Promise<unknown> {
   const text = await request.text();
   if (text.length > 5_000_000) throw new ApiProblem(413, 'too_large', 'Слишком большой запрос');
   try {
@@ -142,9 +142,9 @@ function ipAllowed(list: string[], ip: string | null): boolean {
 /** Header used only by tests and the sandbox to stand for the caller's IP (CLINIC_SPEC §6.2). */
 export const TEST_IP_HEADER = 'X-Test-Client-IP';
 
-type Handler = (ctx: ApiCtx) => Promise<{ status?: number; body: unknown }> | { status?: number; body: unknown };
+export type Handler = (ctx: ApiCtx) => Promise<{ status?: number; body: unknown }> | { status?: number; body: unknown };
 
-function apiRoute(method: 'GET' | 'POST' | 'PUT', template: string, scope: IntegrationScope, response: ZodTypeAny | null, fn: Handler) {
+export function apiRoute(method: 'GET' | 'POST' | 'PUT' | 'PATCH', template: string, scope: IntegrationScope, response: ZodTypeAny | null, fn: Handler, partner: PartnerType = 'clinic') {
   return async ({ request, params }: { request: Request; params: PathParams }) => {
     const requestId = randomId();
     const started = Date.now();
@@ -163,6 +163,8 @@ function apiRoute(method: 'GET' | 'POST' | 'PUT', template: string, scope: Integ
         client = undefined;
         throw new ApiProblem(401, 'invalid_token', 'Токен недействителен, истёк или ключ отозван', undefined, { 'WWW-Authenticate': 'Bearer error="invalid_token"' });
       }
+      // Keys belong to a partner: clinic methods are closed to assistance keys and vice versa.
+      if ((client.partnerType ?? 'clinic') !== partner) throw new ApiProblem(403, 'wrong_partner', 'Метод недоступен ключу этого типа партнёра');
       if (!token.scopes.includes(scope)) throw new ApiProblem(403, 'insufficient_scope', `Нужна область доступа ${scope}`);
       if (!ipAllowed(client.ipAllowlist, request.headers.get(TEST_IP_HEADER))) throw new ApiProblem(403, 'ip_not_allowed', 'Запрос с адреса, которого нет в списке разрешённых');
       const now = Date.now();
@@ -222,7 +224,7 @@ function apiRoute(method: 'GET' | 'POST' | 'PUT', template: string, scope: Integ
   };
 }
 
-const toIntegrationAppointment = (a: Appointment) =>
+export const toIntegrationAppointment = (a: Appointment) =>
   integrationAppointment.parse({
     id: a.id,
     clinicId: a.clinicId,
@@ -235,7 +237,7 @@ const toIntegrationAppointment = (a: Appointment) =>
     proposedStartsAt: a.proposedStartsAt,
   });
 
-function page<T>(items: T[], cursor: string | undefined, limit: number): { items: T[]; nextCursor: string | null } {
+export function page<T>(items: T[], cursor: string | undefined, limit: number): { items: T[]; nextCursor: string | null } {
   const offset = cursor && /^\d+$/.test(atob(cursor)) ? Number(atob(cursor)) : 0;
   const slice = items.slice(offset, offset + limit);
   return { items: slice, nextCursor: offset + limit < items.length ? btoa(String(offset + limit)) : null };

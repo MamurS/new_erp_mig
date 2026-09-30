@@ -236,6 +236,37 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     d.registries.push({ id: id(), clinicId: demoClinicId, period: periodOf(3), status: 'paid', source: 'portal', lines: olderLines, totals: registryTotals(olderLines, true), submittedAt: tzIso(submitted), paidAt: tzIso(submitted + 20 * DAY) });
   }
 
+  // ---- a registry of another clinic waiting for review: lines of A1 and of MIG (§5.3, e2e 4) ----
+  const clinic2 = d.clinics.find((c) => c.id !== demoClinicId && d.priceLists.some((p) => p.clinicId === c.id))!;
+  const prices2 = d.priceLists.find((p) => p.clinicId === clinic2.id)!.items.filter((p) => !p.requiresGuarantee && !/[<>]/.test(p.name));
+  const migPeople = d.insured.filter((i) => i.status === 'active' && payerOrNull(assignments, i.policyId, today) === null && parseIso(d.policies.find((p) => p.id === i.policyId)!.startDate) < monthStart(1));
+  const pendingLines: RegistryLine[] = [];
+  const pendingOf = (who: (typeof d.insured)[number], k: number): RegistryLine => {
+    const day = monthStart(1) + int(rng, 1, 25) * DAY;
+    const v: Visit = { id: id(), clinicId: clinic2.id, insuredId: who.id, openedById: registrarId, method: 'policy', openedAt: tzIso(day + 9 * 3600_000), expiresAt: tzIso(day + 33 * 3600_000) };
+    d.visits.push(v);
+    const svc = prices2[k % prices2.length]!;
+    return {
+      id: id(),
+      visitId: v.id,
+      insuredName: who.fullName,
+      serviceDate: isoDay(day),
+      serviceCode: svc.code,
+      serviceName: svc.name,
+      icd10: pick(rng, ['J06.9', 'K29.7', 'M54.5']),
+      quantity: 1,
+      price: svc.price,
+      amount: svc.price,
+      status: 'pending',
+      payer: payerOn(assignments, who.policyId, isoDay(day)),
+    };
+  };
+  for (let k = 0; k < 4; k++) pendingLines.push(pendingOf(other(k + 6), k));
+  for (let k = 0; k < 2 && migPeople.length; k++) pendingLines.push(pendingOf(migPeople[k]!, k + 4));
+  if (pendingLines.length) {
+    d.registries.push({ id: id(), clinicId: clinic2.id, period: periodOf(1), status: 'submitted', source: 'portal', lines: pendingLines, totals: registryTotals(pendingLines, false), submittedAt: tzIso(Math.min(now - DAY, monthStart(0) + 2 * DAY)) });
+  }
+
   // ---- payments of A1 lines: two months ago → last month, last month → this month ----
   const regOf = (m: number) => d.registries.find((r) => r.clinicId === demoClinicId && r.period === periodOf(m) && r.status !== 'draft');
   const payLines = (m: number, payMonth: number) => {

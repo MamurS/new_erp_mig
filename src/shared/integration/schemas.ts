@@ -253,6 +253,110 @@ export const disputeRequest = z.object({ comment: text(3, 1000) }).strict();
 export const payment = z.object({ registryId: uuid, period: z.string(), amount: z.number().int(), paidAt: isoDateTime });
 export const paymentList = z.object({ items: z.array(payment), nextCursor: z.string().nullable() });
 
+// ---------- assistance companies (ASSISTANCE_SPEC §8) ----------
+const cursorQuery = { cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(100).default(50) };
+const nextCursor = z.string().nullable();
+export const limitWithRest = z.object({
+  category: limitCategory,
+  limit: z.number().int(),
+  used: z.number().int(),
+  /** Approved guarantee letters not yet used. */
+  reserved: z.number().int(),
+  left: z.number().int(),
+});
+export const rosterItem = z.object({
+  insuredId: uuid,
+  fullName: z.string(),
+  birthDate: isoDate,
+  policyNumber: z.string(),
+  program: z.enum(['basic', 'standard', 'standard_plus', 'premium']),
+  status: z.enum(['active', 'excluded']),
+  insuredFrom: isoDate,
+  excludedFrom: isoDate.optional(),
+  limits: z.array(limitWithRest),
+  updatedAt: isoDateTime,
+});
+export const rosterQuery = z.object({ updatedSince: isoDateTime.optional(), ...cursorQuery });
+export const rosterPage = z.object({ items: z.array(rosterItem), nextCursor });
+export const insuredLimits = z.object({ insuredId: uuid, limits: z.array(limitWithRest) });
+export const caseType = z.enum(['appointment', 'consultation', 'guarantee', 'complaint', 'emergency']);
+export const caseStatus = z.enum(['open', 'in_progress', 'waiting', 'resolved']);
+export const assistanceCase = z.object({
+  id: uuid,
+  number: z.string(),
+  insuredId: uuid,
+  insuredName: z.string(),
+  type: caseType,
+  channel: z.enum(['phone', 'chat', 'app', 'clinic']),
+  status: caseStatus,
+  slaDueAt: isoDateTime,
+  description: z.string(),
+  resolution: z.string().optional(),
+  links: z.object({ appointmentId: uuid.optional(), guaranteeId: uuid.optional(), claimId: uuid.optional() }),
+  createdAt: isoDateTime,
+});
+export const caseCreateRequest = z.object({ insuredId: uuid, type: caseType, description: text(5, 1000) }).strict();
+export const caseUpdateRequest = z
+  .object({ status: caseStatus, resolution: text(3, 1000).optional() })
+  .strict()
+  .refine((v) => v.status !== 'resolved' || !!v.resolution, { message: 'Для решённого обращения нужно описание решения', path: ['resolution'] });
+export const assistAppointmentQuery = z.object({ status: integrationAppointment.shape.status.optional(), ...cursorQuery });
+export const guaranteeQuery = z.object({ status: guaranteeLetter.shape.status.optional(), ...cursorQuery });
+export const guaranteeList = z.object({ items: z.array(guaranteeLetter), nextCursor });
+export const guaranteeDecideRequest = z
+  .object({
+    decision: z.enum(['approve', 'reject', 'escalate']),
+    amount: money.optional(),
+    validUntil: isoDate.optional(),
+    reason: text(3, 1000).optional(),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    if (v.decision === 'approve' && (!v.amount || !v.validUntil)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['amount'], message: 'Для одобрения нужны amount и validUntil' });
+    if (v.decision !== 'approve' && !v.reason) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: 'Укажите причину или заключение' });
+  });
+export const registryQuery = z.object({ status: registry.shape.status.optional(), ...cursorQuery });
+/** A clinic registry as the assistance sees it: only its own lines (sub-registry). */
+export const registryList = z.object({ items: z.array(registry), nextCursor });
+export const lineDecideRequest = z
+  .object({ decision: z.enum(['accept', 'reject']), reason: text(3, 300).optional() })
+  .strict()
+  .refine((v) => v.decision === 'accept' || !!v.reason, { message: 'Укажите причину отклонения', path: ['reason'] });
+export const clinicPaymentRequest = z
+  .object({ lineIds: z.array(uuid).min(1).max(500), paidAt: isoDate, amount: money, paymentOrderNumber: text(1, 40) })
+  .strict();
+export const rebillCheck = z.object({
+  code: z.enum(['not_paid_to_clinic', 'policy_inactive', 'not_assigned', 'over_limit', 'no_guarantee', 'duplicate', 'price_mismatch']),
+  message: z.string(),
+});
+export const rebillLine = z.object({
+  id: uuid,
+  registryLineId: uuid,
+  clinicName: z.string(),
+  insuredName: z.string(),
+  serviceDate: isoDate,
+  serviceName: z.string(),
+  amount: z.number().int(),
+  checks: z.array(rebillCheck),
+  status: z.enum(['pending', 'accepted', 'rejected', 'disputed']),
+  rejectionReason: z.string().optional(),
+  disputeComment: z.string().optional(),
+});
+export const rebill = z.object({
+  id: uuid,
+  number: z.string(),
+  assistanceId: uuid,
+  period: z.string(),
+  lines: z.array(rebillLine),
+  fee: z.object({ model: z.enum(['pepm', 'percent_of_claims', 'per_case']), base: z.number(), value: z.number(), amount: z.number().int(), formula: z.string() }),
+  totals: z.object({ claims: z.number().int(), fee: z.number().int(), total: z.number().int(), accepted: z.number().int(), rejected: z.number().int() }),
+  status: z.enum(['draft', 'submitted', 'in_review', 'partially_accepted', 'accepted', 'paid']),
+  submittedAt: isoDateTime.optional(),
+  paidAt: isoDateTime.optional(),
+});
+/** Without `lineIds` the rebill takes every line of the assistance paid to clinics in the period. */
+export const rebillCreateRequest = z.object({ period, lineIds: z.array(uuid).min(1).max(2000).optional() }).strict();
+
 // ---------- webhooks (MIG → MIS) ----------
 /** Thin event: no personal or medical data, the MIS fetches details through the API. */
 export const webhookPayload = z.object({ id: uuid, type: webhookEvent, createdAt: isoDateTime, objectId: uuid });
