@@ -6,52 +6,50 @@ import { useMemo, useState } from 'react';
 import { z } from 'zod';
 import { integrationCall, type IntegrationCallResult } from '@/shared/api/client';
 import { useIntegrationKeys } from '@/shared/api/queries/clinic';
+import { buildSandboxRequest, SANDBOX_METHODS as METHODS, sandboxDefaults, type SandboxParam } from '@/shared/integration/sandbox';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 import { Panel } from '../components';
 
-interface SandboxMethod {
-  id: string;
-  method: 'GET' | 'POST' | 'PUT';
-  path: string;
-  label: string;
-  params: string[];
-  body?: unknown;
-}
-
-const METHODS: SandboxMethod[] = [
-  { id: 'coverage', method: 'POST', path: '/coverage/check', label: 'Проверить пациента', params: [], body: { qrToken: 'ABCD-EFGH' } },
-  { id: 'visit', method: 'GET', path: '/visits/{visitId}', label: 'Визит', params: ['visitId'] },
-  { id: 'appointments', method: 'GET', path: '/appointments?status=requested&limit=20', label: 'Записи', params: [] },
-  { id: 'confirm', method: 'POST', path: '/appointments/{id}/confirm', label: 'Подтвердить запись', params: ['id'] },
-  { id: 'reschedule', method: 'POST', path: '/appointments/{id}/reschedule', label: 'Предложить другое время', params: ['id'], body: { startsAt: '2026-10-02T10:30:00+05:00' } },
-  { id: 'decline', method: 'POST', path: '/appointments/{id}/decline', label: 'Отклонить запись', params: ['id'], body: { reason: 'Врач в отпуске' } },
-  { id: 'slots', method: 'PUT', path: '/slots', label: 'Заменить слоты', params: [], body: { slots: [{ specialty: 'therapist', startsAt: '2026-10-02T09:00:00+05:00', durationMin: 30, doctorRef: 'dr-17' }] } },
-  { id: 'guarantee-create', method: 'POST', path: '/guarantees', label: 'Запросить ГП', params: [], body: { visitId: '', serviceCode: 'DG-310', icd10: 'G43.9', estimatedCost: 1800000 } },
-  { id: 'guarantee', method: 'GET', path: '/guarantees/{id}', label: 'Гарантийное письмо', params: ['id'] },
-  { id: 'registry-create', method: 'POST', path: '/registries', label: 'Отправить реестр', params: [], body: { period: '2026-09', lines: [{ visitId: '', serviceDate: '2026-09-30', serviceCode: 'TH-101', icd10: 'J06.9', quantity: 1, price: 180000 }] } },
-  { id: 'registry', method: 'GET', path: '/registries/{id}', label: 'Реестр', params: ['id'] },
-  { id: 'payments', method: 'GET', path: '/payments', label: 'Оплаты', params: [] },
-];
-
 const secretSchema = z.object({ clientId: z.string().trim().min(1, 'Выберите ключ').max(80), clientSecret: z.string().trim().min(8, 'Вставьте client_secret').max(200) });
-const paramSchema = z.string().trim().regex(/^[0-9a-f-]{36}$/i, 'Нужен UUID');
-const bodySchema = z
-  .string()
-  .max(50_000, 'Тело запроса слишком большое')
-  .transform((s, ctx) => {
-    try {
-      return s.trim() ? (JSON.parse(s) as unknown) : undefined;
-    } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Тело — не корректный JSON' });
-      return z.NEVER;
-    }
-  });
-
 function statusKind(status: number) {
   return status < 300 ? 'success' : status < 500 ? 'warning' : 'danger';
+}
+
+const WHERE = { path: 'путь', query: 'query', body: 'тело' } as const;
+
+function ParamField({ param: p, value, error, onChange }: { param: SandboxParam; value: string; error?: string; onChange: (v: string) => void }) {
+  const label = `${p.name} · ${WHERE[p.in]}${p.required ? ' · обязательный' : ''}`;
+  return (
+    <Field label={label} error={error} hint={p.hint}>
+      {(a) =>
+        p.kind === 'select' ? (
+          <Select {...a} value={value} onChange={(e) => onChange(e.target.value)}>
+            {(p.options ?? []).map((o) => (
+              <option key={o} value={o}>
+                {o || '—'}
+              </option>
+            ))}
+          </Select>
+        ) : p.kind === 'json' ? (
+          <Textarea {...a} rows={7} className="font-mono text-[12px]" maxLength={50_000} value={value} onChange={(e) => onChange(e.target.value)} />
+        ) : (
+          <Input
+            {...a}
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={p.kind === 'uuid' ? 36 : 1000}
+            inputMode={p.kind === 'number' ? 'numeric' : undefined}
+            placeholder={p.kind === 'uuid' ? 'UUID' : p.kind === 'date' ? 'ГГГГ-ММ-ДД' : undefined}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        )
+      }
+    </Field>
+  );
 }
 
 export function SandboxTab() {
@@ -63,8 +61,8 @@ export function SandboxTab() {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [methodId, setMethodId] = useState(METHODS[0]!.id);
   const method = METHODS.find((m) => m.id === methodId) ?? METHODS[0]!;
-  const [params, setParams] = useState<Record<string, string>>({});
-  const [body, setBody] = useState(JSON.stringify(METHODS[0]!.body, null, 2));
+  const [values, setValues] = useState<Record<string, string>>(() => sandboxDefaults(METHODS[0]!));
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [idemKey, setIdemKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ request: string; response: IntegrationCallResult } | null>(null);
@@ -98,29 +96,20 @@ export function SandboxTab() {
     const m = METHODS.find((x) => x.id === id);
     if (!m) return;
     setMethodId(id);
-    setBody(m.body === undefined ? '' : JSON.stringify(m.body, null, 2));
+    setValues(sandboxDefaults(m));
+    setErrors({});
     setResult(null);
   };
 
   const send = async () => {
-    let path = method.path;
-    for (const p of method.params) {
-      const v = paramSchema.safeParse(params[p] ?? '');
-      if (!v.success) {
-        toast.error(`${p}: ${v.error.issues[0]?.message ?? 'ошибка'}`);
-        return;
-      }
-      path = path.replace(`{${p}}`, v.data);
+    const req = buildSandboxRequest(method, values);
+    if (!req.ok) {
+      setErrors(req.errors);
+      return;
     }
-    let parsedBody: unknown;
-    if (method.method !== 'GET') {
-      const b = bodySchema.safeParse(body);
-      if (!b.success) {
-        toast.error(b.error.issues[0]?.message ?? 'Ошибка в теле запроса');
-        return;
-      }
-      parsedBody = b.data;
-    }
+    setErrors({});
+    const path = req.path;
+    const parsedBody = req.body;
     const headers: Record<string, string> = {};
     const idem = idemKey.trim().slice(0, 128);
     if (idem && method.method === 'POST') headers['Idempotency-Key'] = idem;
@@ -183,21 +172,14 @@ export function SandboxTab() {
               )}
             </Field>
             {method.params.map((p) => (
-              <Field key={`${methodId}-${p}`} label={p}>
-                {(a) => <Input {...a} autoComplete="off" maxLength={36} value={params[p] ?? ''} onChange={(e) => setParams((s) => ({ ...s, [p]: e.target.value }))} placeholder="UUID" />}
-              </Field>
+              <ParamField key={`${methodId}-${p.name}`} param={p} value={values[p.name] ?? ''} error={errors[p.name]} onChange={(v) => setValues((s) => ({ ...s, [p.name]: v }))} />
             ))}
-            {method.method !== 'GET' && (
-              <>
-                <Field label="Тело запроса (JSON)">{(a) => <Textarea {...a} rows={8} className="font-mono text-[12px]" maxLength={50_000} value={body} onChange={(e) => setBody(e.target.value)} />}</Field>
-                {method.method === 'POST' && (
-                  <Field label="Idempotency-Key (необязательно)">{(a) => <Input {...a} autoComplete="off" maxLength={128} value={idemKey} onChange={(e) => setIdemKey(e.target.value)} />}</Field>
-                )}
-              </>
+            {method.method === 'POST' && (
+              <Field label="Idempotency-Key (заголовок, необязательно)">{(a) => <Input {...a} autoComplete="off" maxLength={128} value={idemKey} onChange={(e) => setIdemKey(e.target.value)} />}</Field>
             )}
             <div>
               <Button loading={busy && !!token} disabled={!token} onClick={() => void send()}>
-                Отправить
+                Выполнить
               </Button>
             </div>
           </div>

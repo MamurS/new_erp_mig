@@ -71,7 +71,7 @@ export function MisSimulator() {
   const pushSlots = run('slots', async () => {
     const tomorrow = startOfDay(Date.now()) + DAY;
     const slots = [];
-    for (let day = 0; day < 5; day++) {
+    for (let day = 0; day < 7; day++) {
       for (const [h, m] of [[9, 0], [9, 30], [10, 0], [11, 0], [14, 0], [15, 30]] as const) {
         slots.push({ specialty: day % 2 ? 'cardiologist' : 'therapist', startsAt: tzIso(at(tomorrow + day * DAY, h, m)), durationMin: 30, doctorRef: `mis-dr-${day % 3}` });
       }
@@ -123,16 +123,16 @@ export function MisSimulator() {
       <p className="mb-3 text-[12px] text-muted">Кнопки делают настоящие вызовы API интеграции с собственным ключом — результат виден в журнале запросов и в разделах кабинета.</p>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" loading={busy === 'slots'} disabled={!!busy} onClick={() => void pushSlots()}>
-          Передать расписание
+          Передать расписание из МИС
         </Button>
         <Button size="sm" variant="secondary" loading={busy === 'check'} disabled={!!busy} onClick={() => void checkPatient()}>
-          Проверить пациента
+          Проверить пациента из МИС
         </Button>
         <Button size="sm" variant="secondary" loading={busy === 'registry'} disabled={!!busy} onClick={() => void sendRegistry()}>
-          Отправить реестр (20 строк)
+          Отправить реестр из МИС
         </Button>
         <Button size="sm" variant="secondary" loading={busy === 'confirm'} disabled={!!busy} onClick={() => void confirmAll()}>
-          Подтвердить новые записи
+          Ответить на заявки из МИС
         </Button>
       </div>
       {log.length > 0 && (
