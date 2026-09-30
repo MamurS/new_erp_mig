@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>GOLD — генератор брошюр</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  :root { --ink:#1B1F24; --grey:#3A4248; --orange:#E8720F; --sand:#F3F1EB; --line:#D6D8DB; }
+  aside, aside * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:#E9E9E7; font-family:'Jost','Segoe UI',sans-serif; color:var(--ink); }
+  #app { display:grid; grid-template-columns:340px 1fr; height:100%; }
+  aside { background:#fff; border-right:1px solid var(--line); padding:28px 26px; display:flex; flex-direction:column; gap:22px; overflow:auto; }
+  aside h1 { font-family:'Literata',Georgia,serif; font-size:24px; font-weight:600; margin:0; line-height:1.15; }
+  aside h1 span { display:block; font-family:'Jost'; font-size:13px; font-weight:500; color:#5A626A; margin-top:6px; }
+  fieldset { border:0; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; }
+  legend { font-size:13px; font-weight:600; color:#5A626A; padding:0; margin-bottom:6px; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .seg label { flex:1; text-align:center; padding:9px 6px; font-size:14px; font-weight:500; cursor:pointer; border-right:1px solid var(--line); }
+  .seg label:last-child { border-right:0; }
+  .seg input { display:none; }
+  .seg input:checked + span { background:var(--grey); color:#fff; display:block; margin:-9px -6px; padding:9px 6px; }
+  .seg label span { display:block; }
+  .field { display:flex; flex-direction:column; gap:5px; }
+  .field label { font-size:14px; font-weight:500; }
+  .field input { font:inherit; font-size:16px; padding:9px 12px; border:1px solid var(--line); border-radius:6px; width:100%; }
+  .field input:focus { outline:2px solid var(--orange); outline-offset:1px; border-color:transparent; }
+  .field small { font-size:12px; color:#5A626A; }
+  .btn { font:inherit; font-size:16px; font-weight:600; padding:12px 16px; border:0; border-radius:6px; cursor:pointer; background:var(--orange); color:#fff; }
+  .btn:hover { background:#D3650B; }
+  .hint { font-size:13px; line-height:1.5; color:#5A626A; background:var(--sand); padding:12px 14px; border-radius:6px; }
+  main { overflow:auto; padding:32px; }
+  #pages { display:flex; flex-direction:column; align-items:center; gap:24px; }
+  .page { width:794px; height:1123px; background:#fff; box-shadow:0 2px 14px rgba(0,0,0,.14); overflow:hidden; flex-shrink:0; }
+  .page > div { width:794px !important; height:1123px !important; }
+  /* те же базовые стили, что у страниц на холсте */
+  .page { font-family:'Jost','Segoe UI',sans-serif; color:#1B1F24; line-height:normal; }
+  .page * { box-sizing:content-box; }
+  .page > div { box-sizing:border-box; }
+  .page h1, .page h2, .page h3, .page p { margin:0; }
+  .page img { max-width:none; }
+  @media print {
+    @page { size: 210mm 297mm; margin: 0; }
+    html, body { background:#fff; height:auto; }
+    #app { display:block; }
+    aside { display:none; }
+    main { padding:0; overflow:visible; }
+    #pages { display:block; }
+    .page { width:210mm; height:297mm; box-shadow:none; page-break-after:always; break-after:page; margin:0; overflow:hidden; }
+    .page:last-child { page-break-after:auto; break-after:auto; }
+    * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>Брошюра GOLD<span>Mosaic Insurance Group · генератор PDF</span></h1>
+
+    <fieldset>
+      <legend>Язык</legend>
+      <div class="seg">
+        <label><input type="radio" name="lang" value="ru" checked><span>Русский</span></label>
+        <label><input type="radio" name="lang" value="en"><span>English</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Обложка</legend>
+      <div class="seg">
+        <label><input type="radio" name="variant" value="white"><span>Белая</span></label>
+        <label><input type="radio" name="variant" value="grey" checked><span>Серая</span></label>
+        <label><input type="radio" name="variant" value="black"><span>Чёрная</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Параметры программы</legend>
+      <div class="field">
+        <label for="sum">Страховая сумма на одного застрахованного</label>
+        <input id="sum" type="text" inputmode="numeric" value="200000000">
+        <small>сум, только цифры</small>
+      </div>
+      <div class="field">
+        <label for="premEmp">Премия за сотрудника</label>
+        <input id="premEmp" type="text" inputmode="numeric" value="15000000">
+      </div>
+      <div class="field">
+        <label for="premFam">Премия за каждого члена семьи</label>
+        <input id="premFam" type="text" inputmode="numeric" value="5000000">
+      </div>
+    </fieldset>
+
+    <button class="btn" id="print">Сохранить PDF</button>
+    <div class="hint">В окне печати выберите принтер «Сохранить как PDF», поля — «Нет», масштаб — 100 %, включите «Фоновая графика». Получится 16 страниц A4.</div>
+  </aside>
+  <main><div id="pages"></div></main>
+</div>
+<script src="templates.js"></script>
+<script>
+(function(){
+  const T = window.GOLD_TEMPLATES;
+  const $ = s => document.querySelector(s);
+  const digits = v => (String(v).replace(/\D/g,'') || '0');
+  const fmt = (v, lang) => {
+    const n = digits(v).replace(/^0+(?=\d)/,'');
+    const grouped = n.replace(/\B(?=(\d{3})+(?!\d))/g, lang==='ru' ? '\u00A0' : ',');
+    return lang==='ru' ? grouped + '\u00A0сум' : grouped + ' UZS';
+  };
+  function state(){
+    return {
+      lang: $('input[name=lang]:checked').value,
+      variant: $('input[name=variant]:checked').value,
+      sum: $('#sum').value, premEmp: $('#premEmp').value, premFam: $('#premFam').value
+    };
+  }
+  function render(){
+    const s = state();
+    const pages = T[s.lang + '-' + s.variant];
+    const sum = fmt(s.sum, s.lang), sumN = sum.replace(/\s?(сум|UZS)$/,'');
+    const html = pages.map(p => p
+      .replaceAll('{{SUM}}', sum).replaceAll('{{SUM_N}}', sumN)
+      .replaceAll('{{PREM_EMP}}', fmt(s.premEmp, s.lang))
+      .replaceAll('{{PREM_FAM}}', fmt(s.premFam, s.lang))
+    ).map(p => `<div class="page">${p}</div>`).join('');
+    $('#pages').innerHTML = html;
+    document.title = (s.lang==='ru' ? 'Брошюра GOLD' : 'GOLD brochure') + ' — ' + s.variant;
+    localStorage.setItem('gold-params', JSON.stringify(s));
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem('gold-params') || 'null');
+    if (saved) {
+      $(`input[name=lang][value=${saved.lang}]`).checked = true;
+      $(`input[name=variant][value=${saved.variant}]`).checked = true;
+      $('#sum').value = saved.sum; $('#premEmp').value = saved.premEmp; $('#premFam').value = saved.premFam;
+    }
+  } catch(e) {}
+  document.querySelectorAll('aside input').forEach(el => el.addEventListener('input', render));
+  $('#print').addEventListener('click', () => window.print());
+  render();
+})();
+</script>
+</body>
+</html>
