@@ -141,7 +141,11 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
       g.decidedBy = 'assistance';
       g.approvals = g.status === 'rejected' ? [] : [{ byId: a1doctor.id, byName: a1doctor.fullName, at: g.approvals[0]?.at ?? g.createdAt }];
     }
-    if (g.decidedBy) g.decidedAt = g.approvals[0]?.at ?? tzIso(parseIso(g.createdAt) + int(rng, 2, 30) * 3600_000);
+    if (g.decidedBy) {
+      // Most letters are decided within a day; a few are late (KPI «ГП решены в срок»).
+      g.decidedAt = tzIso(parseIso(g.createdAt) + int(rng, 2, 30) * 3600_000);
+      if (g.approvals[0]) g.approvals[0] = { ...g.approvals[0], at: g.decidedAt };
+    }
   }
   const visitById = new Map(d.visits.map((v) => [v.id, v]));
   for (const r of d.registries) {
@@ -416,7 +420,25 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     createdAt: tzIso(now - 90 * DAY),
     lastUsedAt: tzIso(now - 2 * 3600_000),
   });
-  d.integrationClients.push(key(A1.id, 'CRM «Шифо»'), key(A2.id, 'Система МедЮрт'));
+  const k1 = key(A1.id, 'CRM «Шифо»');
+  const k2 = key(A2.id, 'Система МедЮрт');
+  d.integrationClients.push(k1, k2);
+  const templates = ['/assistance/roster', '/assistance/guarantees', '/assistance/guarantees/{id}/decide', '/assistance/registries', '/assistance/cases'];
+  for (const [k, n] of [[k1, 24], [k2, 30]] as const) {
+    for (let j = 0; j < n; j++) {
+      const path = pick(rng, templates);
+      d.apiLogs.push({
+        id: id(),
+        clinicId: k.clinicId,
+        clientId: k.clientId,
+        at: tzIso(now - j * 53 * 60_000 - int(rng, 0, 600) * 1000),
+        method: path.includes('decide') ? 'POST' : 'GET',
+        pathTemplate: path,
+        status: j % 11 === 5 ? 404 : 200,
+        latencyMs: int(rng, 40, 300),
+      });
+    }
+  }
   const hook: WebhookEndpointRow = {
     id: id(),
     clinicId: A1.id,

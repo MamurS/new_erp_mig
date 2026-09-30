@@ -28,9 +28,10 @@ type LineForm = z.input<typeof registryLineInput>;
 
 function AddLine({ registryId, period }: { registryId: string; period: string }) {
   const visits = useClinicVisits(period);
-  const prices = useClinicPriceList();
   const add = useAddRegistryLine();
   const form = useForm<LineForm>({ resolver: zodResolver(registryLineInput), defaultValues: { visitId: '', serviceDate: '', serviceCode: '', icd10: '', quantity: 1, price: 0 } });
+  // Prices follow the payer of the patient: its assistance or MIG.
+  const prices = useClinicPriceList(form.watch('visitId') || undefined);
   const e = form.formState.errors;
   const submit = form.handleSubmit(async (line) => {
     try {

@@ -19,6 +19,7 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { Stat } from '../components';
 
+const SOURCE_LABEL = { portal: 'кабинет клиники', csv: 'CSV', api: 'API МИС' } as const;
 const LINE_CHIP = { pending: 'sky', accepted: 'success', rejected: 'danger', disputed: 'warning' } as const;
 
 function PaymentDialog({ registryId, lines, onClose }: { registryId: string; lines: RegistryLine[]; onClose: () => void }) {
@@ -200,7 +201,8 @@ export default function RegistryPage() {
                   <span data-testid="registry-status">
                     <Chip kind={REGISTRY_STATUS_CHIP[r.status]}>{REGISTRY_STATUS_LABEL[r.status]}</Chip>
                   </span>
-                  Подреестр вашего ассистанса: {r.lineCount} строк
+                  <span>источник: {SOURCE_LABEL[r.source]}</span>
+                  <span>Подреестр вашего ассистанса: {r.lineCount} строк</span>
                 </p>
               </div>
               {canPay && unpaid.length > 0 && (

@@ -108,6 +108,7 @@ const subSummary = z.object({
   clinicName: z.string(),
   period: z.string(),
   status: I.registry.shape.status,
+  source: I.registry.shape.source,
   submittedAt: isoDateTime.optional(),
   lineCount: z.number(),
   pendingCount: z.number(),

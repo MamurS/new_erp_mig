@@ -127,6 +127,7 @@ function toSubSummary(d: Db, r: Registry, payer: UUID): SubRegistrySummary {
     clinicName: clinicOf(d, r.clinicId).name,
     period: r.period,
     status: subStatus(r, lines),
+    source: r.source,
     submittedAt: r.submittedAt,
     lineCount: lines.length,
     pendingCount: lines.filter((l) => l.status === 'pending').length,
@@ -216,7 +217,7 @@ export const assistHandlers = [
       const now = Date.now();
       const queue: AssistQueueItem[] = [];
       const cases = d.cases.filter((c) => c.assistanceId === assistanceId && c.status !== 'resolved');
-      const appts = appointmentsOf(d, assistanceId).filter((x) => x.status === 'requested' && isOverdueRequest(d, x, now));
+      const appts = appointmentsOf(d, assistanceId).filter((x) => x.status === 'requested' && parseIso(x.startsAt) > now - 3600_000 && isOverdueRequest(d, x, now));
       const gps = d.guarantees.filter((g) => g.assistanceId === assistanceId && g.status === 'requested' && !g.escalated);
       const regs = d.registries.filter((r) => r.status !== 'draft' && linesOf(r, assistanceId).length);
       const pendingLines = regs.reduce((s, r) => s + linesOf(r, assistanceId).filter((l) => l.status === 'pending' || l.status === 'disputed').length, 0);

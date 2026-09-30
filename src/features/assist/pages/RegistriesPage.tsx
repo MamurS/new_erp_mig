@@ -10,6 +10,8 @@ import { DataTable, type Column } from '@/shared/ui/data-table';
 import { PageHeader } from '@/shared/ui/page';
 import { useTopbar } from '@/features/staff/topbar';
 
+const SOURCE_LABEL = { portal: 'Кабинет', csv: 'CSV', api: 'API' } as const;
+
 export default function RegistriesPage() {
   useDocumentTitle('Реестры клиник');
   useTopbar([{ label: 'Реестры клиник' }]);
@@ -18,6 +20,7 @@ export default function RegistriesPage() {
   const columns: Column<SubRegistrySummary>[] = [
     { key: 'clinic', header: 'Клиника', cell: (r) => <span className="font-medium">{r.clinicName}</span> },
     { key: 'period', header: 'Период', cell: (r) => <span className="num">{r.period}</span> },
+    { key: 'source', header: 'Источник', cell: (r) => SOURCE_LABEL[r.source] },
     { key: 'sent', header: 'Получен', cell: (r) => (r.submittedAt ? <span className="num">{formatDate(r.submittedAt)}</span> : '—') },
     { key: 'lines', header: 'Строк', align: 'right', cell: (r) => <span className="num">{r.lineCount}</span> },
     { key: 'todo', header: 'К проверке', align: 'right', cell: (r) => <span className={r.pendingCount + r.disputedCount ? 'num font-semibold text-warning-text' : 'num text-muted'}>{r.pendingCount + r.disputedCount}</span> },

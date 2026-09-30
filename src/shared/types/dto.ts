@@ -456,6 +456,7 @@ export interface SubRegistrySummary {
   clinicName: string;
   period: string;
   status: RegistryStatus;
+  source: Registry['source'];
   submittedAt?: ISODateTime;
   lineCount: number;
   pendingCount: number;

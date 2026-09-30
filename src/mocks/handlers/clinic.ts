@@ -43,7 +43,7 @@ import { DEMO_PASSWORD } from '../credentials';
 import { clinicSlots } from './staff-misc';
 import { partnerIntegrationHandlers } from './partner-integration';
 import { assistanceOn } from '@/shared/domain/assistance';
-import { assistanceName, notifyAssistance } from '../assistance-core';
+import { assistanceName, notifyAssistance, payerOfLine } from '../assistance-core';
 import {
   actorOf,
   appointmentOfClinic,
@@ -63,6 +63,7 @@ import {
   toGuaranteeView,
   toRegistrySummary,
   toRegistryView,
+  visitOfClinic,
   type ClinicActor,
 } from '../clinic-core';
 
@@ -275,9 +276,14 @@ export const clinicHandlers = [
   ),
   http.get(
     `${C}/price-list`,
-    route(({ request }) => {
+    route(({ request, url }) => {
       const { actor, d } = requireClinic(request, 'clinic.check_patient');
-      return priceListOf(d, actor.clinicId);
+      // With a visit: the prices of the patient's payer — the pair «clinic + assistance» or MIG (ASSISTANCE_SPEC §5.3).
+      const visitId = url.searchParams.get('visitId');
+      if (!visitId) return priceListOf(d, actor.clinicId);
+      if (!/^[0-9a-f-]{36}$/i.test(visitId)) throw notFound();
+      const v = visitOfClinic(d, actor.clinicId, visitId);
+      return priceListOf(d, actor.clinicId, payerOfLine(d, { visitId: v.id, serviceDate: isoDay(Date.now()) }));
     }),
   ),
   // ---- registries (clinic_admin) ----

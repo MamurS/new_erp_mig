@@ -64,7 +64,9 @@ export function useRespondAppointment() {
 }
 
 export const useClinicGuarantees = () => useQuery({ queryKey: ck.guarantees, queryFn: () => request('/clinic/guarantees', { schema: C.guaranteeViews }) });
-export const useClinicPriceList = () => useQuery({ queryKey: ck.priceList, queryFn: () => request('/clinic/price-list', { schema: C.priceList }), staleTime: 5 * 60_000 });
+/** Without a visit — the MIG price list; with a visit — the prices of the patient's payer. */
+export const useClinicPriceList = (visitId?: string) =>
+  useQuery({ queryKey: [...ck.priceList, visitId ?? ''], queryFn: () => request('/clinic/price-list', { query: { visitId }, schema: C.priceList }), staleTime: 5 * 60_000 });
 export function useRequestGuarantee() {
   const qc = useQueryClient();
   return useMutation({

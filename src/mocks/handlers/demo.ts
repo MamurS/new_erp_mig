@@ -9,6 +9,7 @@ import { DEMO_INSURED_PHONE } from '../credentials';
 import { forbidden, notFound, requireSession } from '../http';
 import { randomToken } from '../rng';
 import { CARD_TOKEN_TTL_MS, formatShortCode, shortCodeFrom } from '@/shared/domain/clinics';
+import { currentAssistance } from '../assistance-core';
 
 export const demoHandlers = [
   http.post(
@@ -32,11 +33,15 @@ export const demoHandlers = [
   // MIS simulator: a card code of the demo insured person, as if the patient showed the app at the desk.
   http.post(
     `${API}/__demo/mis-card`,
-    route(({ request }) => {
+    route(({ request, url }) => {
       const { user } = requireSession(request);
       if (user.role !== 'clinic_admin') throw forbidden();
       const d = db();
-      const me = d.insured.find((i) => i.phone === DEMO_INSURED_PHONE);
+      // `?who=mig`: a patient of a client without an assistance, to show sub-registries of two payers.
+      const me =
+        url.searchParams.get('who') === 'mig'
+          ? d.insured.find((i) => i.status === 'active' && !currentAssistance(d, i.policyId) && d.policies.some((p) => p.id === i.policyId && p.status === 'active'))
+          : d.insured.find((i) => i.phone === DEMO_INSURED_PHONE);
       if (!me) throw notFound();
       const bytes = new Uint8Array(8);
       crypto.getRandomValues(bytes);

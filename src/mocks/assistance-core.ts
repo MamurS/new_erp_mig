@@ -359,9 +359,12 @@ export function kpiOf(d: Db, a: AssistanceCompany, now = Date.now()): Assistance
   const reviewed = d.qaSamples.filter((s) => s.assistanceId === a.id && s.verdict);
   const agreed = reviewed.filter((s) => s.verdict === 'agree').length;
   const complaints = d.cases.filter((c) => c.assistanceId === a.id && c.type === 'complaint' && parseIso(c.createdAt) >= now - 30 * DAY).length;
-  const premium = d.policies.filter((p) => p.assistanceId === a.id).reduce((s, p) => s + p.premium, 0);
-  const paid = d.claims.filter((c) => c.source === 'assistance' && people.has(c.insuredId)).reduce((s, c) => s + (c.amountApproved ?? c.amountClaimed), 0);
-  const inLines = d.registries.flatMap((r) => r.lines).filter((l) => l.payer === a.id && l.status === 'accepted' && !d.claims.some((c) => c.registryLineId === l.id));
+  // Loss ratio of the portfolio: every paid-out claim of its people plus lines accepted but not rebilled yet.
+  const policyIds = new Set(roster.map((i) => i.policyId));
+  const premium = d.policies.filter((p) => policyIds.has(p.id)).reduce((s, p) => s + p.premium, 0);
+  const paid = d.claims.filter((c) => people.has(c.insuredId) && PAID_LIKE_REBILL.has(c.status)).reduce((s, c) => s + (c.amountApproved ?? c.amountClaimed), 0);
+  const claimedLines = new Set(d.claims.map((c) => c.registryLineId).filter(Boolean));
+  const inLines = d.registries.flatMap((r) => r.lines).filter((l) => l.payer === a.id && l.status === 'accepted' && !claimedLines.has(l.id));
   const losses = paid + inLines.reduce((s, l) => s + l.amount, 0);
   return {
     appointmentResponseMinutesAvg: avg,
