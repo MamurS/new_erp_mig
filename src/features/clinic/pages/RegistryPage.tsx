@@ -28,9 +28,10 @@ type LineForm = z.input<typeof registryLineInput>;
 
 function AddLine({ registryId, period }: { registryId: string; period: string }) {
   const visits = useClinicVisits(period);
-  const prices = useClinicPriceList();
   const add = useAddRegistryLine();
   const form = useForm<LineForm>({ resolver: zodResolver(registryLineInput), defaultValues: { visitId: '', serviceDate: '', serviceCode: '', icd10: '', quantity: 1, price: 0 } });
+  // Prices follow the payer of the patient: its assistance or MIG.
+  const prices = useClinicPriceList(form.watch('visitId') || undefined);
   const e = form.formState.errors;
   const submit = form.handleSubmit(async (line) => {
     try {
@@ -183,6 +184,7 @@ export default function RegistryPage() {
     { key: 'qty', header: 'Кол-во', align: 'right', cell: (l) => <span className="num">{l.quantity}</span> },
     { key: 'amount', header: 'Сумма', align: 'right', cell: (l) => <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span> },
     { key: 'gp', header: 'ГП', cell: (l) => <span className="num text-muted">{l.guaranteeNumber ?? '—'}</span> },
+    { key: 'payer', header: 'Плательщик', cell: (l) => <span data-testid="line-payer">{r.payerNames?.[l.payer ?? 'mig'] ?? 'МИГ'}</span> },
     {
       key: 'status',
       header: 'Статус',
@@ -201,6 +203,11 @@ export default function RegistryPage() {
           )}
           {l.rejectionReason && <span className="text-[12px] text-muted">{l.rejectionReason}</span>}
           {l.disputeComment && <span className="text-[12px] text-muted">Оспорено: {l.disputeComment}</span>}
+          {l.payment && (
+            <span className="text-[12px] text-success-text" data-testid="line-payment">
+              Оплачено {l.payer && l.payer !== 'mig' ? `ассистансом ${r.payerNames?.[l.payer] ?? ''}` : 'МИГ'} {formatDate(l.payment.paidAt)}
+            </span>
+          )}
         </span>
       ),
     },

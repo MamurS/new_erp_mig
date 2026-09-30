@@ -20,18 +20,20 @@ export interface RevealFieldProps {
   canReveal: boolean;
   /** e.g. an open claim number for the quick reason «Обработка убытка №…». */
   claimNumber?: string;
+  /** API prefix of the insured resource: MIG staff or the assistance portal. */
+  apiBase?: string;
 }
 
 /**
  * Masked PII value with «Показать». The full value comes only from the reveal mutation (never the query
  * cache), lives in component state for 30 seconds, then is dropped.
  */
-export function RevealField({ insuredId, field, masked, canReveal, claimNumber }: RevealFieldProps) {
+export function RevealField({ insuredId, field, masked, canReveal, claimNumber, apiBase }: RevealFieldProps) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<string | null>(null);
   const [until, setUntil] = useState<number | null>(null);
   const left = useCountdown(until);
-  const copied = useRevealCopied();
+  const copied = useRevealCopied(apiBase);
 
   useEffect(() => {
     if (until === null) return;
@@ -91,6 +93,7 @@ export function RevealField({ insuredId, field, masked, canReveal, claimNumber }
         insuredId={insuredId}
         field={field}
         claimNumber={claimNumber}
+        apiBase={apiBase}
         onRevealed={(v, sec) => {
           setValue(v);
           setUntil(Date.now() + sec * 1000);
@@ -107,6 +110,7 @@ export function RevealModal({
   field,
   claimNumber,
   onRevealed,
+  apiBase,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -114,10 +118,11 @@ export function RevealModal({
   field: PiiField;
   claimNumber?: string;
   onRevealed: (value: string, seconds: number) => void;
+  apiBase?: string;
 }) {
   const [reason, setReason] = useState('');
   const [touched, setTouched] = useState(false);
-  const reveal = useReveal();
+  const reveal = useReveal(apiBase);
   const trimmed = reason.trim();
   const error = trimmed.length < 10 ? 'Опишите причину: минимум 10 символов' : undefined;
   const quick = [claimNumber ? `Обработка убытка №${claimNumber}` : 'Обработка убытка №', 'Звонок застрахованного', 'Запрос клиники'];

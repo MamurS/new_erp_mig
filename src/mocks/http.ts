@@ -96,6 +96,12 @@ export function sessionUserFor(d: Db, userId: string, role: Role): SessionUser |
     // Role and clinic always come from the server-side record.
     return { id: u.id, role: u.role, displayName: u.fullName, clinicId: u.clinicId };
   }
+  if (role === 'asst_operator' || role === 'asst_doctor' || role === 'asst_billing' || role === 'asst_admin') {
+    const u = d.assistUsers.find((x) => x.id === userId);
+    if (!u || !u.active) return null;
+    // Role and assistance company always come from the server-side record.
+    return { id: u.id, role: u.role, displayName: u.fullName, assistanceId: u.assistanceId };
+  }
   if (role === 'insured') {
     const i = d.insured.find((x) => x.userId === userId);
     if (!i || i.status !== 'active') return null;
@@ -171,10 +177,12 @@ export async function body<S extends ZodTypeAny>(request: Request, schema: S): P
 
 // ---------- audit ----------
 export function audit(
-  actor: Pick<SessionUser, 'id' | 'displayName' | 'role'>,
+  actor: Pick<SessionUser, 'id' | 'displayName' | 'role'> & { assistanceId?: string },
   action: AuditAction,
-  target: Pick<AuditEntry, 'targetType'> & Partial<Pick<AuditEntry, 'targetId' | 'targetLabel' | 'reason'>>,
+  target: Pick<AuditEntry, 'targetType'> & Partial<Pick<AuditEntry, 'targetId' | 'targetLabel' | 'reason' | 'assistanceId'>>,
 ): void {
+  // Actions of assistance users are tagged with their company (ASSISTANCE_SPEC §3).
+  const assistanceId = actor.assistanceId ?? target.assistanceId;
   db().audit.unshift({
     id: randomId(),
     at: tzIso(Date.now()),
@@ -183,6 +191,7 @@ export function audit(
     actorRole: actor.role,
     action,
     ...target,
+    ...(assistanceId ? { assistanceId } : {}),
   });
 }
 

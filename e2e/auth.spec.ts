@@ -14,7 +14,7 @@ test.describe('1. Login with every role, MFA, logout', () => {
         await page.evaluate(() => document.fonts.ready.then(() => undefined));
         await page.getByRole('button', { name: 'Выйти', exact: true }).click();
         await expect(page).toHaveURL(/\/app\/login/);
-      } else if (role === 'hr' || role === 'clinic_registrar' || role === 'clinic_admin') {
+      } else if (role === 'hr' || role === 'clinic_registrar' || role === 'clinic_admin' || role.startsWith('asst_')) {
         await page.getByRole('button', { name: 'Меню пользователя' }).click();
         await page.getByRole('menuitem', { name: 'Выйти' }).click();
         await expect(page).toHaveURL(/\/login/);

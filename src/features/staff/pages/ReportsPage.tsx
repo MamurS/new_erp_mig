@@ -17,6 +17,7 @@ import { CLAIM_CATEGORY_LABEL } from '@/shared/domain/claims';
 import { addDaysISO, formatMoney, formatMoneyShort, formatNumber, formatPercent, todayISO } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Input } from '@/shared/ui/input';
+import { useAssistanceReport } from '@/shared/api/queries/assist';
 import { Card } from '@/shared/ui/page';
 import { EmptyState, QueryState, Skeleton } from '@/shared/ui/states';
 import { ExportButton } from '../components/ExportButton';
@@ -29,6 +30,7 @@ const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'и�
 const money = (v: number) => formatMoneyShort(v).replace(' UZS', '');
 
 export default function ReportsPage() {
+  const byAssistance = useAssistanceReport();
   useDocumentTitle('Отчёты');
   useTopbar([{ label: 'Отчёты' }]);
   const [from, setFrom] = useState(() => addDaysISO(todayISO(), -365));
@@ -122,6 +124,39 @@ export default function ReportsPage() {
           </QueryState>
         </Card>
       </div>
+      <Card title="Ассистансы: убыточность, выплаты и стоимость обслуживания" bodyClassName="p-0">
+        <QueryState query={byAssistance}>
+          {(rows) => (
+            <table className="w-full text-left" data-testid="report-by-assistance">
+              <caption className="sr-only">Отчёт по ассистансам</caption>
+              <thead className="text-[12px] text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Ассистанс</th>
+                  <th className="px-4 py-2 text-right font-medium">Застрахованных</th>
+                  <th className="px-4 py-2 text-right font-medium">Премия</th>
+                  <th className="px-4 py-2 text-right font-medium">Выплаты</th>
+                  <th className="px-4 py-2 text-right font-medium">Убыточность</th>
+                  <th className="px-4 py-2 text-right font-medium">Вознаграждение</th>
+                  <th className="px-4 py-2 text-right font-medium">На застрахованного</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.assistanceId ?? 'mig'} className="border-t border-border-soft">
+                    <td className="px-4 py-1.5 font-medium">{r.name}</td>
+                    <td className="num px-4 py-1.5 text-right">{formatNumber(r.insuredCount)}</td>
+                    <td className="num px-4 py-1.5 text-right">{formatMoney(r.premium)}</td>
+                    <td className="num px-4 py-1.5 text-right">{formatMoney(r.paid)}</td>
+                    <td className={`num px-4 py-1.5 text-right ${(r.lossRatio ?? 0) >= 0.8 ? 'text-warning-text' : ''}`}>{r.lossRatio === null ? '—' : formatPercent(r.lossRatio)}</td>
+                    <td className="num px-4 py-1.5 text-right">{r.assistanceId ? formatMoney(r.fee) : '—'}</td>
+                    <td className="num px-4 py-1.5 text-right">{r.feePerInsured === null ? '—' : formatMoney(r.feePerInsured)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </QueryState>
+      </Card>
       <p className="text-[12px] text-muted">Проценты убыточности: {formatPercent(0.8)} и выше отмечены оранжевым.</p>
     </div>
   );

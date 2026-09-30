@@ -27,7 +27,7 @@ import { SlaCell } from '../components/cells';
 import { CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
 
-const SOURCE_LABEL = { app: 'Приложение', clinic_invoice: 'Счёт клиники', operator: 'Оператор' } as const;
+const SOURCE_LABEL = { app: 'Приложение', clinic_invoice: 'Счёт клиники', operator: 'Куратор МИГ', assistance: 'Счёт ассистанса' } as const;
 
 export default function ClaimCardPage() {
   const { claimId = '' } = useParams();

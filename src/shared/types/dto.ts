@@ -30,6 +30,16 @@ import type {
   Visit,
   WebhookDelivery,
   WebhookEvent,
+  AssistanceAssignment,
+  AssistanceCase,
+  AssistanceCompany,
+  AssistanceKpi,
+  AssistanceRole,
+  Appointment,
+  PriceListItem,
+  QaSample,
+  Rebill,
+  RegistryLine,
 } from './index';
 
 // ---- auth ----
@@ -54,7 +64,18 @@ export interface Kpi {
   tone?: 'default' | 'warning' | 'danger';
   to?: string;
 }
-export type QueueType = 'appointment' | 'claim' | 'renewal' | 'guarantee' | 'registry' | 'clinic_no_response' | 'policy_change';
+export type QueueType =
+  | 'appointment'
+  | 'claim'
+  | 'renewal'
+  | 'guarantee'
+  | 'registry'
+  | 'clinic_no_response'
+  | 'policy_change'
+  | 'escalation'
+  | 'rebill'
+  | 'assistance_sla'
+  | 'complaint';
 export interface QueueItem {
   id: UUID;
   type: QueueType;
@@ -320,6 +341,8 @@ export interface RegistryView extends Registry {
   problems: Record<string, string[]>;
   /** Lines with a guarantee: claimed amount versus the approved amount of the letter. */
   guaranteeChecks: Record<string, { approvedAmount: Money | null; ok: boolean }>;
+  /** Names of the payers of the lines: 'mig' or an assistance id → name (ASSISTANCE_SPEC §5.3). */
+  payerNames?: Record<string, string>;
 }
 export interface RegistryImportResult {
   total: number;
@@ -361,4 +384,153 @@ export interface PolicyChangeDecisionResult {
   approved: number;
   rejected: number;
   endorsements: number;
+}
+
+// ---- assistance companies (ASSISTANCE_SPEC) ----
+/** Short info about the assistance company, visible to its users and to the insured person. */
+export interface AssistanceBrief {
+  id: UUID;
+  name: string;
+  phone24x7: string;
+  integrationMode: AssistanceCompany['integrationMode'];
+}
+export interface AssistQueueItem {
+  id: UUID;
+  kind: 'appointment' | 'case' | 'guarantee' | 'registry' | 'escalation' | 'rebill';
+  title: string;
+  subtitle: string;
+  dueAt?: ISODateTime;
+  to: string;
+}
+export interface AssistOverview {
+  assistance: AssistanceBrief;
+  authorityLimit: Money;
+  queue: AssistQueueItem[];
+  counters: { openCases: number; slaBreaches: number; guaranteesPending: number; linesPending: number; rebillsInReview: number };
+  kpi: AssistanceKpi;
+}
+export interface AssistInsuredItem {
+  id: UUID;
+  fullName: string;
+  clientName: string;
+  policyNumber: string;
+  programName: string;
+  status: Insured['status'];
+  phoneMasked: string;
+  pinflMasked: string;
+  birthDateMasked: string;
+  access: 'full' | 'read';
+}
+export interface AssistInsuredDetail extends AssistInsuredItem {
+  policyId: UUID;
+  policyStart: ISODate;
+  policyEnd: ISODate;
+  limits: LimitUsage[];
+  cases: AssistanceCase[];
+  appointments: Appointment[];
+  guarantees: GuaranteeView[];
+}
+export interface AssistCaseView extends AssistanceCase {
+  access: 'full' | 'read';
+}
+export interface AssistAppointment extends Appointment {
+  overdue: boolean;
+}
+export interface AssistChatThread {
+  insuredId: UUID;
+  insuredName: string;
+  lastText: string;
+  lastAt: ISODateTime;
+  unanswered: boolean;
+}
+export interface AssistChatMessage {
+  id: UUID;
+  from: 'insured' | 'operator';
+  text: string;
+  at: ISODateTime;
+}
+/** One payer's part of a clinic registry. */
+export interface SubRegistrySummary {
+  id: UUID;
+  clinicId: UUID;
+  clinicName: string;
+  period: string;
+  status: RegistryStatus;
+  source: Registry['source'];
+  submittedAt?: ISODateTime;
+  lineCount: number;
+  pendingCount: number;
+  disputedCount: number;
+  unpaidCount: number;
+  totals: Registry['totals'];
+}
+export interface SubRegistryView extends SubRegistrySummary {
+  lines: RegistryLine[];
+  guaranteeChecks: Record<string, { approvedAmount: Money | null; ok: boolean }>;
+}
+export interface RebillView extends Rebill {
+  assistanceName: string;
+  /** Deadline of the MIG review: 10 working days after submission. */
+  reviewDueAt?: ISODate;
+  acceptedByName?: string;
+  paidByName?: string;
+}
+export type RebillSummary = Omit<RebillView, 'lines'> & { lineCount: number; flaggedCount: number };
+export interface AssistClinic {
+  clinicId: UUID;
+  clinicName: string;
+  city: string;
+  specialties: Clinic['specialties'];
+  ownPrices: boolean;
+  priceList: PriceListItem[];
+}
+export interface AssistUserView {
+  id: UUID;
+  email: string;
+  fullName: string;
+  role: AssistanceRole;
+  active: boolean;
+  lastLoginAt?: ISODateTime;
+}
+export interface AssistanceListItem extends AssistanceBrief {
+  contractNumber: string;
+  insuredCount: number;
+  clientsCount: number;
+  kpi: AssistanceKpi;
+  rebillsToReview: number;
+  slaBreaches: number;
+}
+export interface AssistanceCardView {
+  assistance: AssistanceCompany;
+  kpi: AssistanceKpi;
+  insuredCount: number;
+  clients: { id: UUID; name: string; insuredCount: number; policyNumber: string; from: ISODate }[];
+  users: AssistUserView[];
+  keys: IntegrationClient[];
+  webhooks: { endpoints: number; retrying: number; failed24h: number };
+  apiErrors24h: number;
+  rebills: RebillSummary[];
+  qa: QaSampleView[];
+  audit: AuditEntry[];
+  feePerInsured: Money | null;
+  /** Complaints and cases with a breached SLA: visible to the MIG curator (§5.1). */
+  attention: AssistanceCase[];
+}
+export interface QaSampleView extends QaSample {
+  assistanceName: string;
+  reviewedByName?: string;
+}
+export interface AssignmentView extends AssistanceAssignment {
+  assistanceName: string | null;
+  setByName: string;
+}
+export interface AssistanceReportRow {
+  assistanceId: UUID | null;
+  name: string;
+  insuredCount: number;
+  premium: Money;
+  paid: Money;
+  lossRatio: number | null;
+  fee: Money;
+  feePerInsured: Money | null;
 }

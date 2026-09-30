@@ -1,5 +1,6 @@
 import type { AuditAction, AuditEntry } from '@/shared/types';
 import { useAdminUsers, useAudit } from '@/shared/api/queries/staff';
+import { useAssistances } from '@/shared/api/queries/assist';
 import { AUDIT_ACTION_LABEL, ROLE_LABEL } from '@/shared/domain/labels';
 import { formatDateTime } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
@@ -16,10 +17,11 @@ const SENSITIVE: AuditAction[] = ['reveal_pii', 'open_medical', 'export', 'role_
 export default function AuditPage() {
   useDocumentTitle('Журнал аудита');
   useTopbar([{ label: 'Журнал аудита' }]);
-  const [f, setF] = useUrlFilters(['action', 'actorId', 'from', 'to', 'page'] as const);
+  const [f, setF] = useUrlFilters(['action', 'actorId', 'assistanceId', 'from', 'to', 'page'] as const);
   const page = Number(f.page) || 1;
-  const list = useAudit({ action: f.action, actorId: f.actorId, from: f.from, to: f.to, page, pageSize: 25 });
+  const list = useAudit({ action: f.action, actorId: f.actorId, assistanceId: f.assistanceId, from: f.from, to: f.to, page, pageSize: 25 });
   const users = useAdminUsers();
+  const assistances = useAssistances();
   const cols: Column<AuditEntry>[] = [
     { key: 'at', header: 'Время', cell: (e) => <span className="whitespace-nowrap">{formatDateTime(e.at)}</span> },
     { key: 'actor', header: 'Сотрудник', cell: (e) => e.actorName },
@@ -28,7 +30,7 @@ export default function AuditPage() {
     { key: 'target', header: 'Объект', cell: (e) => <span className="num text-[12px]">{e.targetLabel ?? '—'}</span> },
     { key: 'reason', header: 'Причина', cell: (e) => <span className="text-muted">{e.reason ?? ''}</span> },
   ];
-  const hasFilters = f.action || f.actorId || f.from || f.to;
+  const hasFilters = f.action || f.actorId || f.assistanceId || f.from || f.to;
   return (
     <div>
       <div className="mb-3">
@@ -50,6 +52,14 @@ export default function AuditPage() {
             </option>
           ))}
         </Select>
+        <Select aria-label="Ассистанс" className="h-7 w-56" value={f.assistanceId} onChange={(e) => setF({ assistanceId: e.target.value })}>
+          <option value="">Все, включая МИГ</option>
+          {(assistances.data ?? []).map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </Select>
         <label className="flex items-center gap-1 text-[12px] text-muted">
           с <Input type="date" className="h-7 w-auto" value={f.from} max={f.to || undefined} onChange={(e) => setF({ from: e.target.value })} aria-label="С даты" />
         </label>
@@ -57,7 +67,7 @@ export default function AuditPage() {
           по <Input type="date" className="h-7 w-auto" value={f.to} min={f.from || undefined} onChange={(e) => setF({ to: e.target.value })} aria-label="По дату" />
         </label>
         {hasFilters && (
-          <Button size="sm" variant="ghost" onClick={() => setF({ action: '', actorId: '', from: '', to: '' })}>
+          <Button size="sm" variant="ghost" onClick={() => setF({ action: '', actorId: '', assistanceId: '', from: '', to: '' })}>
             Сбросить
           </Button>
         )}

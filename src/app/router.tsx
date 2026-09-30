@@ -2,6 +2,7 @@ import { createBrowserRouter, Outlet, type RouteObject } from 'react-router-dom'
 import type { ComponentType } from 'react';
 import { RequireAuth, RequirePermission, RequireRole, RootRedirect } from '@/shared/auth/guards';
 import { INSURED_CARD_ROLES, sectionRoles } from '@/features/staff/nav';
+import { assistRoles } from '@/features/assist/nav';
 import { RootLayout } from './RootLayout';
 import { ForbiddenPage, NotFoundPage, RouteErrorPage } from './pages';
 
@@ -62,6 +63,15 @@ const staffRoutes: RouteObject[] = [
     { index: true, lazy: lazy(() => import('@/features/staff/clinics/RegistriesPage')) },
     { path: ':registryId', lazy: lazy(() => import('@/features/staff/clinics/RegistryReviewPage')) },
   ]),
+  guarded('assistance', sectionRoles('/staff/assistance'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/assistance/AssistancesPage')) },
+    { path: ':assistanceId', lazy: lazy(() => import('@/features/staff/assistance/AssistanceCardPage')) },
+  ]),
+  guarded('rebills', sectionRoles('/staff/rebills'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/assistance/RebillsPage')) },
+    { path: ':rebillId', lazy: lazy(() => import('@/features/staff/assistance/RebillReviewPage')) },
+  ]),
+  guarded('qa', sectionRoles('/staff/qa'), [{ index: true, lazy: lazy(() => import('@/features/staff/assistance/QaPage')) }]),
   guarded('policy-changes', sectionRoles('/staff/policy-changes'), [{ index: true, lazy: lazy(() => import('@/features/staff/policies/PolicyChangesPage')) }]),
   guarded('limit-requests', sectionRoles('/staff/limit-requests'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/LimitRequestsPage')) }]),
   guarded('reports', sectionRoles('/staff/reports'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ReportsPage')) }]),
@@ -101,6 +111,35 @@ const clinicRoutes: RouteObject[] = [
   ]),
   onlyFor('clinic.users.manage', [{ path: 'users', lazy: lazy(() => import('@/features/clinic/pages/UsersPage')) }]),
   onlyFor('clinic.integration.manage', [{ path: 'integration', lazy: lazy(() => import('@/features/clinic/integration/IntegrationPage')) }]),
+];
+
+const assistRoutes: RouteObject[] = [
+  { index: true, lazy: lazy(() => import('@/features/assist/pages/DashboardPage')) },
+  guarded('insured', assistRoles('/assist/insured'), [
+    { index: true, lazy: lazy(() => import('@/features/assist/pages/InsuredSearchPage')) },
+    { path: ':insuredId', lazy: lazy(() => import('@/features/assist/pages/InsuredCardPage')) },
+  ]),
+  guarded('cases', assistRoles('/assist/cases'), [
+    { index: true, lazy: lazy(() => import('@/features/assist/pages/CasesPage')) },
+    { path: ':caseId', lazy: lazy(() => import('@/features/assist/pages/CasePage')) },
+  ]),
+  guarded('appointments', assistRoles('/assist/appointments'), [{ index: true, lazy: lazy(() => import('@/features/assist/pages/AppointmentsPage')) }]),
+  guarded('chat', assistRoles('/assist/chat'), [{ index: true, lazy: lazy(() => import('@/features/assist/pages/ChatPage')) }]),
+  guarded('guarantees', assistRoles('/assist/guarantees'), [
+    { index: true, lazy: lazy(() => import('@/features/assist/pages/GuaranteesPage')) },
+    { path: ':guaranteeId', lazy: lazy(() => import('@/features/assist/pages/GuaranteePage')) },
+  ]),
+  guarded('registries', assistRoles('/assist/registries'), [
+    { index: true, lazy: lazy(() => import('@/features/assist/pages/RegistriesPage')) },
+    { path: ':registryId', lazy: lazy(() => import('@/features/assist/pages/RegistryPage')) },
+  ]),
+  guarded('rebills', assistRoles('/assist/rebills'), [
+    { index: true, lazy: lazy(() => import('@/features/assist/pages/RebillsPage')) },
+    { path: ':rebillId', lazy: lazy(() => import('@/features/assist/pages/RebillPage')) },
+  ]),
+  { path: 'clinics', lazy: lazy(() => import('@/features/assist/pages/ClinicsPage')) },
+  guarded('users', assistRoles('/assist/users'), [{ index: true, lazy: lazy(() => import('@/features/assist/pages/UsersPage')) }]),
+  guarded('integration', assistRoles('/assist/integration'), [{ index: true, lazy: lazy(() => import('@/features/assist/pages/IntegrationPage')) }]),
 ];
 
 const appRoutes: RouteObject[] = [
@@ -175,6 +214,15 @@ export const routes: RouteObject[] = [
           </RequireAuth>
         ),
         children: [{ lazy: lazy(() => import('@/features/clinic/ClinicLayout')), children: clinicRoutes }],
+      },
+      {
+        path: '/assist',
+        element: (
+          <RequireAuth portal="assist">
+            <Outlet />
+          </RequireAuth>
+        ),
+        children: [{ lazy: lazy(() => import('@/features/assist/AssistLayout')), children: assistRoutes }],
       },
       { path: '/403', element: <ForbiddenPage /> },
       { path: '*', element: <NotFoundPage /> },

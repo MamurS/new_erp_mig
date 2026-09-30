@@ -8,12 +8,14 @@ import type {
   ClaimCategory,
   CoverageCheckResult,
   GuaranteeLetter,
+  Payer,
   PriceListItem,
   Registry,
   RegistryLine,
   Role,
   ServiceCategory,
   SessionUser,
+  Specialty,
   UUID,
   Visit,
   WebhookEvent,
@@ -34,12 +36,14 @@ import {
   WEBHOOK_RETRY_MINUTES,
 } from '@/shared/domain/clinics';
 import { signWebhook } from '@/shared/integration/webhook';
-import { db, type ClaimRow, type Db, type GuaranteeRow, type WebhookDeliveryRow, type WebhookEndpointRow } from './db';
+import { db, type ClaimRow, type Db, type InsuredRow, type GuaranteeRow, type WebhookDeliveryRow, type WebhookEndpointRow } from './db';
 import { audit, conflict, HttpError, insuredLabel, notFound } from './http';
 import { PROGRAMS } from './programs';
 import { randomId } from './rng';
 import { DAY, isoDay, parseIso, tzIso } from './time';
 import { limitsFor } from './views';
+import { payerName, payerOfLine } from './assistance-core';
+import { assistanceOn } from '@/shared/domain/assistance';
 
 /** Who performs a clinic action: a cabinet user or an API key of the clinic. */
 export interface ClinicActor {
@@ -65,7 +69,12 @@ export function pushEvent(d: Db, clinicId: UUID, text: string): void {
   d.clinicEvents = d.clinicEvents.slice(0, 500);
 }
 
-export function priceListOf(d: Db, clinicId: UUID): PriceListItem[] {
+/** Price list of the pair «clinic + payer» (ASSISTANCE_SPEC §5.3). Without a separate contract the MIG list applies. */
+export function priceListOf(d: Db, clinicId: UUID, payer: Payer = 'mig'): PriceListItem[] {
+  if (payer !== 'mig') {
+    const contract = d.clinicContracts.find((c) => c.clinicId === clinicId && c.payer === payer);
+    if (contract) return contract.priceList;
+  }
   return d.priceLists.find((p) => p.clinicId === clinicId)?.items ?? [];
 }
 
@@ -205,6 +214,37 @@ export function respondToAppointment(
   return a;
 }
 
+/** A request to a clinic (from the app or the assistance call centre). The clinic answers; the assistance is notified. */
+export async function createAppointment(d: Db, who: InsuredRow, input: { clinicId: UUID; specialty: Specialty; startsAt: string }): Promise<Appointment> {
+  const clinic = d.clinics.find((c) => c.id === input.clinicId);
+  if (!clinic || !clinic.specialties.includes(input.specialty)) throw notFound();
+  const starts = parseIso(input.startsAt);
+  if (Number.isNaN(starts) || starts < Date.now()) throw conflict('Это время уже прошло. Выберите другое');
+  const iso = tzIso(starts);
+  if (d.appointments.some((a) => a.clinicId === clinic.id && a.startsAt === iso && a.status !== 'cancelled' && a.status !== 'declined')) {
+    throw conflict('Это время уже заняли. Выберите другое');
+  }
+  const a: Appointment = {
+    id: randomId(),
+    insuredId: who.id,
+    insuredName: who.fullName,
+    clientName: who.clientName,
+    clinicId: clinic.id,
+    clinicName: clinic.name,
+    specialty: input.specialty,
+    startsAt: iso,
+    status: 'requested',
+    createdAt: tzIso(Date.now()),
+    ...(clinic.integrationMode === 'api' ? { fromClinicSystem: true } : {}),
+  };
+  d.appointments.push(a);
+  await emitWebhook(d, clinic.id, 'appointment.requested', a.id);
+  const assistanceId = assistanceOn(d.assignments, who.policyId, isoDay(Date.now()));
+  if (assistanceId) await emitWebhook(d, assistanceId, 'appointment.requested', a.id);
+  pushEvent(d, clinic.id, 'Новая заявка на запись');
+  return a;
+}
+
 /** Requests without an answer longer than the clinic's response time (they go to the MIG operator). */
 export function isOverdueRequest(d: Db, a: Appointment, now = Date.now()): boolean {
   if (a.status !== 'requested' || a.proposedStartsAt) return false;
@@ -259,7 +299,8 @@ export interface LineInput {
 export function buildLine(d: Db, clinicId: UUID, input: LineInput): RegistryLine {
   const v = visitOfClinic(d, clinicId, input.visitId);
   const who = d.insured.find((i) => i.id === v.insuredId)!;
-  const svc = priceListOf(d, clinicId).find((p) => p.code === input.serviceCode);
+  const payer = payerOfLine(d, { visitId: v.id, serviceDate: input.serviceDate });
+  const svc = priceListOf(d, clinicId, payer).find((p) => p.code === input.serviceCode);
   const price = input.price ?? svc?.price ?? 0;
   return {
     id: randomId(),
@@ -274,6 +315,7 @@ export function buildLine(d: Db, clinicId: UUID, input: LineInput): RegistryLine
     amount: price * input.quantity,
     guaranteeNumber: input.guaranteeNumber || undefined,
     status: 'pending',
+    payer,
   };
 }
 
@@ -283,7 +325,7 @@ export function lineProblems(d: Db, clinicId: UUID, line: RegistryLine): string[
   const policy = who && d.policies.find((p) => p.id === who.policyId);
   const g = line.guaranteeNumber ? d.guarantees.find((x) => x.number === line.guaranteeNumber && x.clinicId === clinicId) : undefined;
   const problems = registryLineProblems(line, {
-    priceItem: priceListOf(d, clinicId).find((p) => p.code === line.serviceCode),
+    priceItem: priceListOf(d, clinicId, line.payer ?? payerOfLine(d, line)).find((p) => p.code === line.serviceCode),
     guarantee: g ? refreshGuarantee(g) : null,
     policyFrom: policy?.startDate,
     policyTo: policy?.endDate,
@@ -312,7 +354,9 @@ export function toRegistryView(d: Db, r: Registry): RegistryView {
     const approved = g?.approvedAmount ?? null;
     guaranteeChecks[l.id] = { approvedAmount: approved, ok: approved !== null && l.amount <= approved };
   }
-  return { ...r, clinicName: clinicOf(d, r.clinicId).name, problems: registryProblems(d, r), guaranteeChecks };
+  const payerNames: Record<string, string> = {};
+  for (const l of r.lines) payerNames[l.payer ?? 'mig'] = payerName(d, l.payer);
+  return { ...r, clinicName: clinicOf(d, r.clinicId).name, problems: registryProblems(d, r), guaranteeChecks, payerNames };
 }
 
 export function toRegistrySummary(d: Db, r: Registry): RegistrySummary {
@@ -328,6 +372,8 @@ export function toRegistrySummary(d: Db, r: Registry): RegistrySummary {
 
 export function recomputeRegistry(r: Registry): void {
   r.totals = registryTotals(r.lines, r.status === 'paid');
+  // Sub-registries are paid separately by their payers (ASSISTANCE_SPEC §5.4).
+  if (r.status !== 'paid') r.totals.paid = r.lines.filter((l) => l.status === 'accepted' && l.payment).reduce((s, l) => s + l.amount, 0);
 }
 
 export function submitRegistry(d: Db, r: Registry, actor: { id: UUID; displayName: string; role: Role }): void {
@@ -340,14 +386,19 @@ export function submitRegistry(d: Db, r: Registry, actor: { id: UUID; displayNam
     for (const id of bad) fields[`lines.${r.lines.findIndex((l) => l.id === id)}`] = problems[id]!.join('; ');
     throw new HttpError(422, 'validation', `Исправьте строки реестра: ${bad.length}`, fields);
   }
+  // One registry a month; the system splits it into sub-registries of payers (ASSISTANCE_SPEC §5.3).
+  for (const l of r.lines) l.payer = payerOfLine(d, l);
   r.status = 'submitted';
   r.submittedAt = tzIso(Date.now());
   recomputeRegistry(r);
   audit(actor, 'registry_submitted', { targetType: 'registry', targetId: r.id, targetLabel: `Реестр ${r.period}` });
   pushEvent(d, r.clinicId, `Реестр за ${r.period} отправлен на проверку`);
+  for (const payer of new Set(r.lines.map((l) => l.payer ?? 'mig'))) {
+    if (payer !== 'mig') void emitWebhook(d, payer, 'registry.received', r.id);
+  }
 }
 
-const CATEGORY_TO_CLAIM: Record<ServiceCategory, ClaimCategory> = {
+export const CATEGORY_TO_CLAIM_OF_SERVICE: Record<ServiceCategory, ClaimCategory> = {
   outpatient: 'doctor_visit',
   diagnostics_advanced: 'diagnostics',
   dental: 'dental',
@@ -355,7 +406,7 @@ const CATEGORY_TO_CLAIM: Record<ServiceCategory, ClaimCategory> = {
   inpatient: 'inpatient',
 };
 
-function nextClaimNumber(d: Db): string {
+export function nextClaimNumber(d: Db): string {
   const year = new Date().getFullYear();
   const max = d.claims.reduce((m, c) => Math.max(m, Number(/-(\d+)$/.exec(c.number)?.[1] ?? 0)), 0);
   return `У-${year}-${String(max + 1).padStart(6, '0')}`;
@@ -376,7 +427,7 @@ export function claimFromLine(d: Db, r: Registry, line: RegistryLine, actorName:
     insuredName: who.fullName,
     clientId: who.clientId,
     clientName: who.clientName,
-    category: CATEGORY_TO_CLAIM[svc?.category ?? 'outpatient'],
+    category: CATEGORY_TO_CLAIM_OF_SERVICE[svc?.category ?? 'outpatient'],
     source: 'clinic_invoice',
     amountClaimed: line.amount,
     amountApproved: line.amount,

@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import type { WebhookDelivery } from '@/shared/types';
-import { WEBHOOK_EVENTS, webhookCreateRequest } from '@/shared/integration/schemas';
+import { webhookCreateRequest } from '@/shared/integration/schemas';
+import type { WebhookEvent } from '@/shared/types';
+import { usePartner } from './partner';
 import { useCreateWebhook, useDeliveries, useRetryDelivery, useTestWebhook, useWebhooks } from '@/shared/api/queries/clinic';
 import { errorMessage } from '@/shared/api/client';
 import { WEBHOOK_EVENT_LABEL } from '@/shared/domain/clinics';
@@ -22,8 +24,9 @@ type HookForm = z.input<typeof webhookCreateRequest>;
 const STATUS = { delivered: ['success', 'Доставлен'], retrying: ['warning', 'Повтор'], failed: ['danger', 'Не доставлен'] } as const;
 
 function CreateWebhookDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (secret: string) => void }) {
-  const create = useCreateWebhook();
-  const form = useForm<HookForm>({ resolver: zodResolver(webhookCreateRequest), defaultValues: { url: 'https://', events: [...WEBHOOK_EVENTS] }, mode: 'onTouched' });
+  const partner = usePartner();
+  const create = useCreateWebhook(partner.base);
+  const form = useForm<HookForm>({ resolver: zodResolver(webhookCreateRequest), defaultValues: { url: 'https://', events: [...(partner.events as WebhookEvent[])] }, mode: 'onTouched' });
   const e = form.formState.errors;
   const submit = form.handleSubmit(async (v) => {
     try {
@@ -57,7 +60,7 @@ function CreateWebhookDialog({ onClose, onCreated }: { onClose: () => void; onCr
         <fieldset>
           <legend className="mb-1 text-[12px] font-medium text-muted">События</legend>
           <div className="grid gap-1.5 sm:grid-cols-2">
-            {WEBHOOK_EVENTS.map((ev) => (
+            {(partner.events as WebhookEvent[]).map((ev) => (
               <label key={ev} className="flex items-center gap-2">
                 <input type="checkbox" value={ev} {...form.register('events')} />
                 <span>
@@ -78,10 +81,11 @@ function CreateWebhookDialog({ onClose, onCreated }: { onClose: () => void; onCr
 }
 
 export function WebhooksTab() {
-  const hooks = useWebhooks();
-  const deliveries = useDeliveries();
-  const test = useTestWebhook();
-  const retry = useRetryDelivery();
+  const partner = usePartner();
+  const hooks = useWebhooks(partner.base);
+  const deliveries = useDeliveries(partner.base);
+  const test = useTestWebhook(partner.base);
+  const retry = useRetryDelivery(partner.base);
   const [creating, setCreating] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
 

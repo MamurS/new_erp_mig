@@ -15,6 +15,13 @@ import type {
   IntegrationClient,
   PolicyChange,
   PriceListItem,
+  AssistanceAssignment,
+  AssistanceCase,
+  AssistanceCompany,
+  AssistanceRole,
+  ClinicContract,
+  QaSample,
+  Rebill,
   Registry,
   Specialty,
   Visit,
@@ -62,7 +69,11 @@ export interface CardTokenRow {
 }
 export interface GuaranteeRow extends GuaranteeLetter {
   insuredId: UUID;
+  /** Policy of the patient: the payer is resolved on the date of the request (ASSISTANCE_SPEC §5.2). */
+  policyId?: UUID;
   infoComment?: string; // clinic's answer to «нужны документы»
+  /** Time of the final decision (KPI «ГП решены в срок»). */
+  decidedAt?: string;
 }
 export interface IntegrationClientRow extends IntegrationClient {
   secretHash: string; // SHA-256 hex; the secret itself is never stored
@@ -92,6 +103,22 @@ export interface IdempotencyRow {
 }
 export interface ApiCallLogRow extends ApiCallLog {
   clinicId: UUID;
+}
+export interface AssistUserRow {
+  id: UUID;
+  email: string;
+  password: string;
+  fullName: string;
+  assistanceId: UUID;
+  role: AssistanceRole;
+  active: boolean;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+export interface AssistanceCaseRow extends AssistanceCase {
+  policyId: UUID;
+  createdById?: UUID;
+  resolvedAt?: string;
 }
 export interface ClinicEventRow {
   id: UUID;
@@ -152,7 +179,7 @@ export interface SessionRow {
 export interface ChallengeRow {
   id: string;
   userId: UUID;
-  kind: 'staff' | 'hr' | 'insured' | 'clinic';
+  kind: 'staff' | 'hr' | 'insured' | 'clinic' | 'assist';
   expiresAt: number;
   attempts: number;
 }
@@ -212,6 +239,15 @@ export interface Db {
   misSlots: { clinicId: UUID; specialty: Specialty; startsAt: string; durationMin: number; doctorRef?: string }[];
   integrationsSeed: number;
   policyChanges: PolicyChangeRow[];
+  // ---- assistance companies (ASSISTANCE_SPEC) ----
+  assistances: AssistanceCompany[];
+  assignments: AssistanceAssignment[];
+  assistUsers: AssistUserRow[];
+  cases: AssistanceCaseRow[];
+  caseSeq: number;
+  clinicContracts: ClinicContract[];
+  rebills: Rebill[];
+  qaSamples: QaSample[];
 }
 
 let current: Db | null = null;

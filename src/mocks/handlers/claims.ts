@@ -4,10 +4,12 @@ import { declineAppointmentSchema, myClaimSchema, transitionSchema } from '@/sha
 import { claimTransitions } from '@/shared/domain/claims';
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
-import type { Appointment } from '@/shared/types';
+import type { Appointment, SessionUser } from '@/shared/types';
+import { currentAssistance } from '../assistance-core';
 import { db, type ClaimRow } from '../db';
 import {
   API,
+  HttpError,
   audit,
   body,
   conflict,
@@ -230,6 +232,7 @@ export const claimHandlers = [
       if (!isStaffRole(user.role)) throw notFound();
       const a = db().appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a) throw notFound();
+      requireMigAppointment(user, a.insuredId);
       if (a.status !== 'requested') throw conflict('Запись уже обработана');
       // The operator answers as a fallback when the clinic does not (CLINIC_SPEC §4.3).
       a.status = 'confirmed';
@@ -247,6 +250,7 @@ export const claimHandlers = [
       if (!isStaffRole(user.role)) throw notFound();
       const a = db().appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a) throw notFound();
+      requireMigAppointment(user, a.insuredId);
       const { reason } = await body(ctx.request, declineAppointmentSchema);
       if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('Запись уже обработана');
       a.status = 'declined';
@@ -294,3 +298,12 @@ export const claimHandlers = [
     }),
   ),
 ];
+
+/** The MIG curator answers only for clients without an assistance (ASSISTANCE_SPEC §9.3). */
+function requireMigAppointment(user: SessionUser, insuredId: string): void {
+  const i = db().insured.find((x) => x.id === insuredId);
+  const assistanceId = i ? currentAssistance(db(), i.policyId) : null;
+  if (!can(user, 'assist.appointments.manage', { assistanceId })) {
+    throw new HttpError(403, 'forbidden', 'Запись ведёт ассистанс застрахованного');
+  }
+}

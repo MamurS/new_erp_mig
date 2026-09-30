@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CalendarPlus, ChevronRight, MapPin, MessageCircle, QrCode, Receipt, type LucideIcon } from 'lucide-react';
+import { Bell, CalendarPlus, ChevronRight, Headphones, MapPin, MessageCircle, Phone, QrCode, Receipt, type LucideIcon } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import { useMe, useMeLimits, useMePolicy, useMyClaims } from '@/shared/api/queries/me';
+import { useMyAssistance } from '@/shared/api/queries/assist';
+import { safeUrl } from '@/shared/lib/safeUrl';
 import type { LimitCategory } from '@/shared/types';
 import { formatDate, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
@@ -21,6 +23,34 @@ const TILES: { to: string; label: I18nKey; icon: LucideIcon; tone: string }[] = 
 ];
 
 const CATEGORIES: LimitCategory[] = ['outpatient', 'dental', 'medicines', 'inpatient'];
+
+/** «Ваш ассистанс 24/7» (ASSISTANCE_SPEC §5.1): shown when the policy is served by an assistance company. */
+function AssistanceCard() {
+  const { t } = useI18n();
+  const q = useMyAssistance();
+  const a = q.data?.assistance;
+  if (!a) return null;
+  return (
+    <section className="mt-4 flex items-center gap-3 rounded-card border border-border bg-surface p-4" aria-label={t('home.assistance')} data-testid="assistance-card">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-text">
+        <Headphones className="h-5 w-5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] text-muted">{t('home.assistance')}</p>
+        <p className="truncate font-bold" data-testid="assistance-name">
+          {a.name}
+        </p>
+        <p className="text-[12px] text-muted">{t('home.assistanceHint')}</p>
+      </div>
+      <Button asChild className="h-11 shrink-0 rounded-btn px-4 font-semibold">
+        <a href={safeUrl(`tel:${a.phone24x7.replace(/[^\d+]/g, '')}`)}>
+          <Phone className="h-4 w-4" aria-hidden />
+          {t('home.call')}
+        </a>
+      </Button>
+    </section>
+  );
+}
 
 export default function HomePage() {
   const { t } = useI18n();
@@ -87,6 +117,8 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      <AssistanceCard />
 
       {/* Tiles */}
       <nav className="mt-4 grid grid-cols-2 gap-3">

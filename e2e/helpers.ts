@@ -12,6 +12,10 @@ export const EMAIL: Record<Exclude<Role, 'insured'>, string> = {
   hr: 'hr@demo-client.uz',
   clinic_registrar: 'registrar@demo-clinic.uz',
   clinic_admin: 'admin@demo-clinic.uz',
+  asst_operator: 'asst-operator@demo-assist.uz',
+  asst_doctor: 'asst-doctor@demo-assist.uz',
+  asst_billing: 'asst-billing@demo-assist.uz',
+  asst_admin: 'asst-admin@demo-assist.uz',
 };
 export const HOME: Record<Role, string> = {
   operator: '/staff',
@@ -22,9 +26,13 @@ export const HOME: Record<Role, string> = {
   hr: '/hr',
   clinic_registrar: '/clinic',
   clinic_admin: '/clinic',
+  asst_operator: '/assist',
+  asst_doctor: '/assist',
+  asst_billing: '/assist',
+  asst_admin: '/assist',
   insured: '/app',
 };
-export const ROLES: Role[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'clinic_registrar', 'clinic_admin', 'insured'];
+export const ROLES: Role[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'clinic_registrar', 'clinic_admin', 'asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin', 'insured'];
 
 /** Fails the test if any JS dialog (alert/confirm) opens — XSS canary. */
 export function failOnDialog(page: Page): void {

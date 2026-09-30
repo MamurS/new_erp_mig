@@ -65,6 +65,7 @@ export const registryView: z.ZodType<D.RegistryView> = I.registry.extend({
   clinicName: z.string(),
   problems: z.record(z.array(z.string())),
   guaranteeChecks: z.record(z.object({ approvedAmount: z.number().nullable(), ok: z.boolean() })),
+  payerNames: z.record(z.string()).optional(),
 });
 export const registryImport: z.ZodType<D.RegistryImportResult> = z.object({
   total: z.number(),
@@ -91,10 +92,11 @@ export const clinicUsers = z.array(clinicUser);
 export const integrationClient: z.ZodType<T.IntegrationClient> = z.object({
   id: uuid,
   clinicId: uuid,
+  partnerType: z.enum(['clinic', 'assistance']).optional(),
   name: z.string(),
   clientId: z.string(),
   secretLast4: z.string(),
-  scopes: z.array(I.integrationScope),
+  scopes: z.array(I.anyScope),
   ipAllowlist: z.array(z.string()),
   createdAt: isoDateTime,
   lastUsedAt: isoDateTime.optional(),
@@ -102,7 +104,7 @@ export const integrationClient: z.ZodType<T.IntegrationClient> = z.object({
 });
 export const integrationClients = z.array(integrationClient);
 export const webhookEndpoints: z.ZodType<T.WebhookEndpoint[]> = z.array(
-  z.object({ id: uuid, clinicId: uuid, url: z.string(), events: z.array(I.webhookEvent), secretLast4: z.string(), active: z.boolean(), createdAt: isoDateTime }),
+  z.object({ id: uuid, clinicId: uuid, partnerType: z.enum(['clinic', 'assistance']).optional(), url: z.string(), events: z.array(I.webhookEvent), secretLast4: z.string(), active: z.boolean(), createdAt: isoDateTime }),
 );
 export const webhookDelivery: z.ZodType<T.WebhookDelivery> = z.object({
   id: uuid,

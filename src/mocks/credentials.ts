@@ -17,3 +17,12 @@ export const DEMO_CLINIC_USERS: { role: 'clinic_registrar' | 'clinic_admin'; ema
   { role: 'clinic_registrar', email: 'registrar@demo-clinic.uz', fullName: 'Гульнора Ахмедова' },
   { role: 'clinic_admin', email: 'admin@demo-clinic.uz', fullName: 'Бахтиёр Каримов' },
 ];
+/** Users of the first assistance company (ASSISTANCE_SPEC §12). */
+export const DEMO_ASSIST_USERS: { role: 'asst_operator' | 'asst_doctor' | 'asst_billing' | 'asst_admin'; email: string; fullName: string }[] = [
+  { role: 'asst_operator', email: 'asst-operator@demo-assist.uz', fullName: 'Севара Исмоилова' },
+  { role: 'asst_doctor', email: 'asst-doctor@demo-assist.uz', fullName: 'Жасур Мирзаев' },
+  { role: 'asst_billing', email: 'asst-billing@demo-assist.uz', fullName: 'Ольга Ким' },
+  { role: 'asst_admin', email: 'asst-admin@demo-assist.uz', fullName: 'Рустам Назаров' },
+];
+/** Operator of the second assistance company: isolation checks (ASSISTANCE_SPEC §14, e2e 6). */
+export const DEMO_ASSIST2_OPERATOR = { role: 'asst_operator' as const, email: 'asst-operator@demo-assist2.uz', fullName: 'Азиза Хамидова' };

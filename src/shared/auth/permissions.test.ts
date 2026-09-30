@@ -39,6 +39,25 @@ const POLICY_TABLE = `
 | \`policy_changes.decide\` | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 `;
 
+/** ASSISTANCE_SPEC §10, verbatim. Columns: asst_operator, asst_doctor, asst_billing, asst_admin, operator, doctor_expert, accountant, underwriter, admin. */
+const ASSIST_TABLE = `
+| \`assist.insured.search\` | свои | свои | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ |
+| \`assist.insured.reveal_pii\` | свои, причина | свои, причина | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ |
+| \`assist.medical.read\` | ✗ | свои, причина | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ |
+| \`assist.cases.manage\` | свои | свои | ✗ | ✗ | чтение и жалобы | ✗ | ✗ | ✗ | ✗ |
+| \`assist.appointments.manage\` | свои | ✗ | ✗ | ✗ | без ассистанса | ✗ | ✗ | ✗ | ✗ |
+| \`assist.guarantees.decide\` | ✗ | свои, до лимита | ✗ | ✗ | ✗ | эскалации и без ассистанса | ✗ | ✗ | ✗ |
+| \`assist.registries.review\` | ✗ | свои | свои | ✗ | без ассистанса | ✗ | ✗ | ✗ | ✗ |
+| \`assist.clinic_payments.record\` | ✗ | ✗ | свои | ✗ | ✗ | ✗ | без ассистанса | ✗ | ✗ |
+| \`assist.rebills.submit\` | ✗ | ✗ | свои | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`rebills.review\` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| \`rebills.pay\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓, не тот, кто принял | ✗ | ✗ |
+| \`qa.review\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ |
+| \`assistance.assign\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
+| \`assistance.manage\` (компании, договоры) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| \`assist.users.manage\`, \`assist.integration.manage\` | ✗ | ✗ | ✗ | свои | ✗ | ✗ | ✗ | ✗ | отзыв ключей |
+`;
+
 const ROLES: Role[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured', 'clinic_registrar', 'clinic_admin'];
 const STATUSES: ClaimStatus[] = ['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid'];
 
@@ -69,12 +88,13 @@ const CLINIC_NO_ACCESS: Role[] = ['underwriter', 'hr', 'insured'];
 
 function userFor(role: Role): SessionUser {
   return {
-    id: `00000000-0000-4000-8000-00000000000${ROLES.indexOf(role)}`,
+    id: `00000000-0000-4000-8000-0000000000${String([...ROLES, ...ASSIST_ROLES].indexOf(role)).padStart(2, '0')}`,
     role,
     displayName: role,
     companyId: role === 'hr' ? COMPANY : undefined,
     insuredId: role === 'insured' ? INSURED : undefined,
     clinicId: role === 'clinic_registrar' || role === 'clinic_admin' ? CLINIC : undefined,
+    assistanceId: ASSIST_ROLES.includes(role) ? ASSIST : undefined,
   };
 }
 
@@ -99,10 +119,18 @@ const parse = (table: string) =>
 const rows = parse(TABLE);
 const clinicRows = parse(CLINIC_TABLE);
 const policyRows = parse(POLICY_TABLE);
+/** A row may name several actions (`a`, `b`): one entry per action. */
+const assistRows = ASSIST_TABLE.trim()
+  .split('\n')
+  .map((line) => line.split('|').slice(1, -1).map((c) => c.trim()))
+  .flatMap(([action, ...cells]) => [...action!.matchAll(/`([^`]+)`/g)].map((m) => ({ action: m[1] as Action, cells })));
+const ASSIST = '77777777-7777-4777-8777-777777777777';
+const OTHER_ASSIST = '88888888-8888-4888-8888-888888888888';
+const ASSIST_ROLES: Role[] = ['asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin'];
 
 describe('permissions matrix (SPEC §4)', () => {
   it('covers every action exactly', () => {
-    expect([...rows, ...clinicRows, ...policyRows].map((r) => r.action).sort()).toEqual([...ACTIONS].sort());
+    expect([...rows, ...clinicRows, ...policyRows, ...assistRows].map((r) => r.action).sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -219,4 +247,77 @@ describe('policy permissions matrix (POLICY_SPEC §2)', () => {
       }
     });
   }
+});
+
+describe('assistance permissions matrix (ASSISTANCE_SPEC §10)', () => {
+  const columns: Role[] = ['asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin', 'operator', 'doctor_expert', 'accountant', 'underwriter', 'admin'];
+  const others: Role[] = ['hr', 'insured', 'clinic_registrar', 'clinic_admin'];
+  for (const { action, cells } of assistRows) {
+    columns.forEach((role, i) => {
+      const cell = cells[i]!;
+      it(`${action} × ${role} = ${cell}`, () => {
+        const user = userFor(role);
+        if (cell === '✗') {
+          expect(can(user, action)).toBe(false);
+          expect(can(user, action, { assistanceId: ASSIST })).toBe(false);
+          expect(can(user, action, { assistanceId: null })).toBe(false);
+          return;
+        }
+        if (cell === '✓') {
+          expect(can(user, action)).toBe(true);
+          return;
+        }
+        if (cell.startsWith('свои')) {
+          // «свои», «свои, причина», «свои, до лимита»: only the user's assistance on the event date; the reason and the limit are checked by the data layer
+          expect(can(user, action)).toBe(true);
+          expect(can(user, action, { assistanceId: ASSIST })).toBe(true);
+          expect(can(user, action, { assistanceId: OTHER_ASSIST })).toBe(false);
+          expect(can(user, action, { assistanceId: null })).toBe(false);
+          return;
+        }
+        if (cell === 'без ассистанса') {
+          expect(can(user, action, { assistanceId: null })).toBe(true);
+          expect(can(user, action, { assistanceId: ASSIST })).toBe(false);
+          return;
+        }
+        if (cell === 'эскалации и без ассистанса') {
+          expect(can(user, action, { assistanceId: null })).toBe(true);
+          expect(can(user, action, { assistanceId: ASSIST, escalated: true })).toBe(true);
+          expect(can(user, action, { assistanceId: ASSIST })).toBe(false);
+          return;
+        }
+        if (cell === 'чтение и жалобы') {
+          expect(can(user, action, { sub: 'read' })).toBe(true);
+          expect(can(user, action, { sub: 'complaint' })).toBe(true);
+          expect(can(user, action, { sub: 'create' })).toBe(false);
+          expect(can(user, action)).toBe(false);
+          return;
+        }
+        if (cell === '✓, не тот, кто принял') {
+          expect(can(user, action, { createdById: '99999999-9999-4999-8999-999999999999' })).toBe(true);
+          expect(can(user, action, { createdById: user.id })).toBe(false);
+          return;
+        }
+        expect(cell).toBe('отзыв ключей');
+        expect(can(user, action)).toBe(false);
+        expect(can(user, action, { sub: 'revoke_keys' })).toBe(true);
+        expect(can(user, action, { sub: 'anything_else' })).toBe(false);
+      });
+    });
+    for (const role of others) {
+      it(`${action} × ${role} = ✗`, () => {
+        expect(can(userFor(role), action)).toBe(false);
+        expect(can(userFor(role), action, { assistanceId: null })).toBe(false);
+      });
+    }
+  }
+
+  it('assistance roles have none of the rights of the earlier tables', () => {
+    const own = new Set(assistRows.map((r) => r.action));
+    for (const role of ASSIST_ROLES)
+      for (const action of ACTIONS.filter((a) => !own.has(a))) {
+        expect(can(userFor(role), action), `${role} ${action}`).toBe(false);
+        expect(can(userFor(role), action, { companyId: COMPANY, insuredId: INSURED, clinicId: CLINIC })).toBe(false);
+      }
+  });
 });

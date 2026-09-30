@@ -25,6 +25,7 @@ import { INSURED_CARD_ROLES } from '../nav';
 import { useTopbar } from '../topbar';
 import { ClientDocumentsTable } from '../components/ClientDocumentsTable';
 import { HrLetterDialog } from '../components/HrLetterDialog';
+import { AssistanceBlock } from '../assistance/AssistanceBlock';
 
 const TAB_KEYS = ['tab', 'highlight'] as const;
 const TABS = ['overview', 'insured', 'policies', 'claims', 'documents', 'history'];
@@ -96,6 +97,11 @@ export default function ClientCardPage() {
               </div>
             </div>
           </div>
+          {c.activePolicyId && (
+            <div className="mt-4">
+              <AssistanceBlock policyId={c.activePolicyId} />
+            </div>
+          )}
           <Card title="Убытки по месяцам" className="mt-4">
             <div className="h-64" role="img" aria-label="График суммы убытков по месяцам за последние 12 месяцев">
               <ResponsiveContainer width="100%" height="100%">

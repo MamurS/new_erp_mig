@@ -17,7 +17,7 @@ export function buildOpenApi(): ReturnType<OpenApiGeneratorV31['generateDocument
   const r = new OpenAPIRegistry();
   const bearer = r.registerComponent('securitySchemes', 'oauth2', {
     type: 'oauth2',
-    flows: { clientCredentials: { tokenUrl: `${S.INTEGRATION_BASE}/oauth/token`, scopes: Object.fromEntries(S.INTEGRATION_SCOPES.map((s) => [s, s])) } },
+    flows: { clientCredentials: { tokenUrl: `${S.INTEGRATION_BASE}/oauth/token`, scopes: Object.fromEntries(S.ALL_SCOPES.map((s) => [s, s])) } },
   });
 
   const Problem = r.register('Problem', S.problem);
@@ -173,17 +173,179 @@ export function buildOpenApi(): ReturnType<OpenApiGeneratorV31['generateDocument
     responses: { 200: { description: 'Оплаты', ...json(PaymentList) }, 401: errors[401] },
   });
 
+  // ---------------- assistance companies (ASSISTANCE_SPEC §8), a separate section ----------------
+  const RosterPage = r.register('AssistanceRosterPage', S.rosterPage);
+  const InsuredLimits = r.register('AssistanceInsuredLimits', S.insuredLimits);
+  const Case = r.register('AssistanceCase', S.assistanceCase);
+  const GuaranteeList = r.register('GuaranteeList', S.guaranteeList);
+  const RegistryList = r.register('AssistanceRegistryList', S.registryList);
+  const Rebill = r.register('Rebill', S.rebill);
+  const A = '/assistance';
+  const tagA = (t: string) => [`Ассистанс: ${t}`];
+  const conflict = { description: 'Действие невозможно в текущем состоянии', content: { 'application/problem+json': { schema: Problem } } };
+  r.registerPath({
+    method: 'get',
+    path: `${A}/roster`,
+    summary: 'Застрахованные ассистанса с лимитами и остатками',
+    description: 'Только люди, чей полис закреплён за ассистансом сегодня. `updatedSince` — изменения после момента времени; постранично по курсору.',
+    tags: tagA('застрахованные'),
+    security: secured('roster:read'),
+    request: { query: S.rosterQuery },
+    responses: { 200: { description: 'Страница списка', ...json(RosterPage) }, 401: errors[401], 403: errors[403], 422: errors[422] },
+  });
+  r.registerPath({
+    method: 'get',
+    path: `${A}/insured/{id}/limits`,
+    summary: 'Лимиты застрахованного с учётом резервов ГП',
+    tags: tagA('застрахованные'),
+    security: secured('roster:read'),
+    request: { params: z.object({ id: z.string().uuid() }) },
+    responses: { 200: { description: 'Лимиты', ...json(InsuredLimits) }, 401: errors[401], 404: errors[404] },
+  });
+  r.registerPath({
+    method: 'post',
+    path: `${A}/cases`,
+    summary: 'Создать обращение колл-центра',
+    tags: tagA('обращения'),
+    security: secured('cases:write'),
+    request: { headers: idem, body: json(S.caseCreateRequest, { insuredId: EXAMPLES.id, type: 'appointment', description: 'Просит записать к терапевту' }) },
+    responses: { 201: { description: 'Обращение', ...json(Case) }, ...errors },
+  });
+  r.registerPath({
+    method: 'patch',
+    path: `${A}/cases/{id}`,
+    summary: 'Изменить статус обращения',
+    tags: tagA('обращения'),
+    security: secured('cases:write'),
+    request: { params: z.object({ id: z.string().uuid() }), body: json(S.caseUpdateRequest, { status: 'resolved', resolution: 'Записан на 02.10, 10:30' }) },
+    responses: { 200: { description: 'Обращение', ...json(Case) }, 401: errors[401], 403: errors[403], 404: errors[404], 422: errors[422] },
+  });
+  r.registerPath({
+    method: 'get',
+    path: `${A}/appointments`,
+    summary: 'Записи своих застрахованных',
+    tags: tagA('записи'),
+    security: secured('appointments:write'),
+    request: { query: S.assistAppointmentQuery },
+    responses: { 200: { description: 'Страница записей', ...json(AppointmentList) }, 401: errors[401], 403: errors[403] },
+  });
+  for (const [action, summary, body] of [
+    ['confirm', 'Подтвердить запись вместо клиники (после её срока ответа)', null],
+    ['reschedule', 'Предложить другое время', S.rescheduleRequest],
+    ['decline', 'Отклонить запись', S.declineRequest],
+  ] as const) {
+    r.registerPath({
+      method: 'post',
+      path: `${A}/appointments/{id}/${action}`,
+      summary,
+      tags: tagA('записи'),
+      security: secured('appointments:write'),
+      request: { headers: idem, params: z.object({ id: z.string().uuid() }), ...(body ? { body: { content: { 'application/json': { schema: body } } } } : {}) },
+      responses: { 200: { description: 'Запись', ...json(Appointment) }, 401: errors[401], 404: errors[404], 409: conflict },
+    });
+  }
+  r.registerPath({
+    method: 'get',
+    path: `${A}/guarantees`,
+    summary: 'Гарантийные письма своих застрахованных',
+    tags: tagA('гарантийные письма'),
+    security: secured('guarantees:decide'),
+    request: { query: S.guaranteeQuery },
+    responses: { 200: { description: 'Страница писем', ...json(GuaranteeList) }, 401: errors[401], 403: errors[403] },
+  });
+  r.registerPath({
+    method: 'post',
+    path: `${A}/guarantees/{id}/decide`,
+    summary: 'Решение по ГП: одобрить в пределах полномочий, отклонить или эскалировать в МИГ',
+    description: 'Сумма одобрения не больше полномочий по договору; выше — `escalate` с заключением врача, решает МИГ. Одобренная сумма резервирует лимит.',
+    tags: tagA('гарантийные письма'),
+    security: secured('guarantees:decide'),
+    request: { headers: idem, params: z.object({ id: z.string().uuid() }), body: json(S.guaranteeDecideRequest, { decision: 'approve', amount: 1_700_000, validUntil: '2026-10-30' }) },
+    responses: { 200: { description: 'Письмо', ...json(GuaranteeLetter) }, ...errors, 409: conflict },
+  });
+  r.registerPath({
+    method: 'get',
+    path: `${A}/registries`,
+    summary: 'Подреестры клиник: только строки этого ассистанса',
+    tags: tagA('реестры'),
+    security: secured('registries:review'),
+    request: { query: S.registryQuery },
+    responses: { 200: { description: 'Страница подреестров', ...json(RegistryList) }, 401: errors[401], 403: errors[403] },
+  });
+  r.registerPath({
+    method: 'post',
+    path: `${A}/registries/{id}/lines/{lineId}/decide`,
+    summary: 'Принять или отклонить строку реестра',
+    description: 'Принятая строка списывает лимит, резерв её ГП снимается.',
+    tags: tagA('реестры'),
+    security: secured('registries:review'),
+    request: { headers: idem, params: z.object({ id: z.string().uuid(), lineId: z.string().uuid() }), body: json(S.lineDecideRequest, { decision: 'accept' }) },
+    responses: { 200: { description: 'Подреестр', ...json(Registry) }, 401: errors[401], 404: errors[404], 409: conflict, 422: errors[422] },
+  });
+  r.registerPath({
+    method: 'post',
+    path: `${A}/registries/{id}/payments`,
+    summary: 'Отметить оплату клинике',
+    tags: tagA('реестры'),
+    security: secured('payments:write'),
+    request: { headers: idem, params: z.object({ id: z.string().uuid() }), body: json(S.clinicPaymentRequest, { lineIds: [EXAMPLES.id], paidAt: '2026-09-25', amount: 171_000, paymentOrderNumber: 'ПП-10452' }) },
+    responses: { 200: { description: 'Подреестр', ...json(Registry) }, 401: errors[401], 404: errors[404], 409: conflict, 422: errors[422] },
+  });
+  r.registerPath({
+    method: 'post',
+    path: `${A}/rebills`,
+    summary: 'Выставить МИГ счёт на возмещение за месяц',
+    description: 'Строки, оплаченные клиникам в периоде (или переданные `lineIds`), плюс вознаграждение по договору. Счёт сразу отправляется в МИГ; автоматические проверки видны в `lines[].checks`.',
+    tags: tagA('счета МИГ'),
+    security: secured('rebills:write'),
+    request: { headers: idem, body: json(S.rebillCreateRequest, { period: '2026-09' }) },
+    responses: { 201: { description: 'Счёт', ...json(Rebill) }, ...errors, 409: conflict },
+  });
+  r.registerPath({
+    method: 'get',
+    path: `${A}/rebills/{id}`,
+    summary: 'Счёт со статусами строк',
+    tags: tagA('счета МИГ'),
+    security: secured('rebills:write'),
+    request: { params: z.object({ id: z.string().uuid() }) },
+    responses: { 200: { description: 'Счёт', ...json(Rebill) }, 401: errors[401], 404: errors[404] },
+  });
+  r.registerPath({
+    method: 'post',
+    path: `${A}/rebills/{id}/lines/{lineId}/dispute`,
+    summary: 'Оспорить отклонённую строку счёта',
+    tags: tagA('счета МИГ'),
+    security: secured('rebills:write'),
+    request: { headers: idem, params: z.object({ id: z.string().uuid(), lineId: z.string().uuid() }), body: json(S.disputeRequest, { comment: 'Лимит пересчитан, прикладываем расчёт' }) },
+    responses: { 200: { description: 'Счёт', ...json(Rebill) }, 401: errors[401], 404: errors[404], 409: conflict },
+  });
+
   return new OpenApiGeneratorV31(r.definitions).generateDocument({
     openapi: '3.1.0',
     info: {
-      title: 'MIG ДМС — API интеграции клиник',
+      title: 'MIG ДМС — API интеграции клиник и ассистансов',
       version: '1.0.0',
       description:
         'API для медицинских информационных систем клиник. JSON по HTTPS, ошибки в формате application/problem+json (RFC 9457), ' +
         'каждый ответ содержит X-Request-Id, POST принимает Idempotency-Key, лимит 60 запросов в минуту на ключ. ' +
-        'Данные пациента доступны только через визит клиники. Сущности соответствуют ресурсам HL7 FHIR: Patient, Coverage, Appointment, Claim.',
+        'Данные пациента доступны клинике только через визит, ассистансу — только по своим застрахованным на дату события. ' +
+        'Ключи принадлежат партнёру (клиника или ассистанс): методы раздела «Ассистанс» закрыты для ключей клиник и наоборот. ' +
+        'Сущности соответствуют ресурсам HL7 FHIR: Patient, Coverage, Appointment, Claim.',
     },
     servers: [{ url: S.INTEGRATION_BASE }],
-    tags: ['Авторизация', 'Пациенты', 'Записи', 'Гарантийные письма', 'Реестры', 'Оплаты'].map((name) => ({ name })),
+    tags: [
+      'Авторизация',
+      'Пациенты',
+      'Записи',
+      'Гарантийные письма',
+      'Реестры',
+      'Оплаты',
+      'Ассистанс: застрахованные',
+      'Ассистанс: обращения',
+      'Ассистанс: записи',
+      'Ассистанс: гарантийные письма',
+      'Ассистанс: реестры',
+      'Ассистанс: счета МИГ',
+    ].map((name) => ({ name })),
   } as Parameters<OpenApiGeneratorV31['generateDocument']>[0]);
 }

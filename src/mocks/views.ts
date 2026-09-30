@@ -6,6 +6,7 @@ import { CLAIM_TO_LIMIT, claimTransitions, requiresMedicalReview, toMyClaimStatu
 import type { ClaimRow, ClientRow, Db, InsuredRow } from './db';
 import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from './mask';
 import { PROGRAMS } from './programs';
+import { limitExtras } from './assistance-core';
 import { DAY, isoDay, parseIso } from './time';
 
 export function insuredCountFor(d: Db, clientId: string): number {
@@ -99,10 +100,13 @@ export function limitsFor(d: Db, i: InsuredRow): LimitUsage[] {
     if (parseIso(c.serviceDate) < from - 7 * DAY) continue;
     used[CLAIM_TO_LIMIT[c.category]] += c.amountApproved ?? c.amountClaimed;
   }
+  // Lines accepted by an assistance count as used; approved guarantee letters reserve the limit.
+  const extra = limitExtras(d, i, from);
   return (['outpatient', 'dental', 'medicines', 'inpatient'] as const).map((category) => ({
     category,
     limit: program.limits[category],
-    used: used[category],
+    used: used[category] + extra.used[category],
+    reserved: extra.reserved[category],
   }));
 }
 

@@ -11,6 +11,8 @@ export interface DemoModule {
   CodeHint: ComponentType;
   /** Clinic cabinet: buttons that make real integration API calls as a clinic MIS would. */
   MisSimulator: ComponentType;
+  /** Assistance portal: buttons that make real integration API calls as the assistance's system would. */
+  AssistSimulator: ComponentType;
 }
 
 let current: DemoModule | null = null;

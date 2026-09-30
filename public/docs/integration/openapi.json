@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "MIG ДМС — API интеграции клиник",
+    "title": "MIG ДМС — API интеграции клиник и ассистансов",
     "version": "1.0.0",
-    "description": "API для медицинских информационных систем клиник. JSON по HTTPS, ошибки в формате application/problem+json (RFC 9457), каждый ответ содержит X-Request-Id, POST принимает Idempotency-Key, лимит 60 запросов в минуту на ключ. Данные пациента доступны только через визит клиники. Сущности соответствуют ресурсам HL7 FHIR: Patient, Coverage, Appointment, Claim."
+    "description": "API для медицинских информационных систем клиник. JSON по HTTPS, ошибки в формате application/problem+json (RFC 9457), каждый ответ содержит X-Request-Id, POST принимает Idempotency-Key, лимит 60 запросов в минуту на ключ. Данные пациента доступны клинике только через визит, ассистансу — только по своим застрахованным на дату события. Ключи принадлежат партнёру (клиника или ассистанс): методы раздела «Ассистанс» закрыты для ключей клиник и наоборот. Сущности соответствуют ресурсам HL7 FHIR: Patient, Coverage, Appointment, Claim."
   },
   "servers": [
     {
@@ -28,6 +28,24 @@
     },
     {
       "name": "Оплаты"
+    },
+    {
+      "name": "Ассистанс: застрахованные"
+    },
+    {
+      "name": "Ассистанс: обращения"
+    },
+    {
+      "name": "Ассистанс: записи"
+    },
+    {
+      "name": "Ассистанс: гарантийные письма"
+    },
+    {
+      "name": "Ассистанс: реестры"
+    },
+    {
+      "name": "Ассистанс: счета МИГ"
     }
   ],
   "components": {
@@ -46,7 +64,13 @@
               "guarantees:write": "guarantees:write",
               "registries:read": "registries:read",
               "registries:write": "registries:write",
-              "payments:read": "payments:read"
+              "payments:read": "payments:read",
+              "roster:read": "roster:read",
+              "cases:write": "cases:write",
+              "guarantees:decide": "guarantees:decide",
+              "registries:review": "registries:review",
+              "payments:write": "payments:write",
+              "rebills:write": "rebills:write"
             }
           }
         }
@@ -512,6 +536,29 @@
           "createdAt": {
             "type": "string",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+          },
+          "assistanceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "assistanceName": {
+            "type": "string"
+          },
+          "escalated": {
+            "type": "boolean"
+          },
+          "assistanceOpinion": {
+            "type": "string"
+          },
+          "decidedBy": {
+            "type": "string",
+            "enum": [
+              "assistance",
+              "mig"
+            ]
           }
         },
         "required": [
@@ -618,6 +665,40 @@
                 },
                 "disputeComment": {
                   "type": "string"
+                },
+                "payer": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "mig"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  ]
+                },
+                "payment": {
+                  "type": "object",
+                  "properties": {
+                    "paidAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "orderNumber": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "paidAt",
+                    "amount",
+                    "orderNumber"
+                  ]
                 }
               },
               "required": [
@@ -734,7 +815,16 @@
               "guarantee.decided",
               "guarantee.documents_requested",
               "registry.reviewed",
-              "registry.paid"
+              "registry.paid",
+              "insured.added",
+              "insured.excluded",
+              "policy.assigned",
+              "policy.unassigned",
+              "guarantee.requested",
+              "registry.received",
+              "rebill.reviewed",
+              "rebill.paid",
+              "qa.disagreement"
             ]
           },
           "createdAt": {
@@ -751,6 +841,838 @@
           "type",
           "createdAt",
           "objectId"
+        ]
+      },
+      "AssistanceRosterPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "insuredId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "fullName": {
+                  "type": "string"
+                },
+                "birthDate": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "policyNumber": {
+                  "type": "string"
+                },
+                "program": {
+                  "type": "string",
+                  "enum": [
+                    "basic",
+                    "standard",
+                    "standard_plus",
+                    "premium"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "excluded"
+                  ]
+                },
+                "insuredFrom": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "excludedFrom": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "limits": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "category": {
+                        "type": "string",
+                        "enum": [
+                          "outpatient",
+                          "dental",
+                          "medicines",
+                          "inpatient"
+                        ]
+                      },
+                      "limit": {
+                        "type": "integer"
+                      },
+                      "used": {
+                        "type": "integer"
+                      },
+                      "reserved": {
+                        "type": "integer"
+                      },
+                      "left": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "category",
+                      "limit",
+                      "used",
+                      "reserved",
+                      "left"
+                    ]
+                  }
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+                }
+              },
+              "required": [
+                "insuredId",
+                "fullName",
+                "birthDate",
+                "policyNumber",
+                "program",
+                "status",
+                "insuredFrom",
+                "limits",
+                "updatedAt"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "AssistanceInsuredLimits": {
+        "type": "object",
+        "properties": {
+          "insuredId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "limits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "outpatient",
+                    "dental",
+                    "medicines",
+                    "inpatient"
+                  ]
+                },
+                "limit": {
+                  "type": "integer"
+                },
+                "used": {
+                  "type": "integer"
+                },
+                "reserved": {
+                  "type": "integer"
+                },
+                "left": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "category",
+                "limit",
+                "used",
+                "reserved",
+                "left"
+              ]
+            }
+          }
+        },
+        "required": [
+          "insuredId",
+          "limits"
+        ]
+      },
+      "AssistanceCase": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "string"
+          },
+          "insuredId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "insuredName": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "appointment",
+              "consultation",
+              "guarantee",
+              "complaint",
+              "emergency"
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "chat",
+              "app",
+              "clinic"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in_progress",
+              "waiting",
+              "resolved"
+            ]
+          },
+          "slaDueAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "string"
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "appointmentId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "guaranteeId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "claimId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "insuredId",
+          "insuredName",
+          "type",
+          "channel",
+          "status",
+          "slaDueAt",
+          "description",
+          "links",
+          "createdAt"
+        ]
+      },
+      "GuaranteeList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "number": {
+                  "type": "string"
+                },
+                "clinicId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "visitId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "insuredName": {
+                  "type": "string"
+                },
+                "serviceCode": {
+                  "type": "string"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "icd10": {
+                  "type": "string"
+                },
+                "estimatedCost": {
+                  "type": "integer"
+                },
+                "approvedAmount": {
+                  "type": "integer"
+                },
+                "validUntil": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "requested",
+                    "info_requested",
+                    "approved",
+                    "rejected",
+                    "used",
+                    "expired"
+                  ]
+                },
+                "approvals": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "byId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "byName": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+                      }
+                    },
+                    "required": [
+                      "byId",
+                      "byName",
+                      "at"
+                    ]
+                  }
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "comment": {
+                  "type": "string"
+                },
+                "attachments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "receipt",
+                          "invoice",
+                          "referral",
+                          "other"
+                        ]
+                      },
+                      "fileName": {
+                        "type": "string"
+                      },
+                      "mime": {
+                        "type": "string",
+                        "enum": [
+                          "image/jpeg",
+                          "image/png",
+                          "image/webp",
+                          "application/pdf"
+                        ]
+                      },
+                      "sizeBytes": {
+                        "type": "integer"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kind",
+                      "fileName",
+                      "mime",
+                      "sizeBytes",
+                      "url"
+                    ]
+                  }
+                },
+                "createdAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+                },
+                "assistanceId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "assistanceName": {
+                  "type": "string"
+                },
+                "escalated": {
+                  "type": "boolean"
+                },
+                "assistanceOpinion": {
+                  "type": "string"
+                },
+                "decidedBy": {
+                  "type": "string",
+                  "enum": [
+                    "assistance",
+                    "mig"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "number",
+                "clinicId",
+                "visitId",
+                "insuredName",
+                "serviceCode",
+                "serviceName",
+                "icd10",
+                "estimatedCost",
+                "status",
+                "approvals",
+                "attachments",
+                "createdAt"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "AssistanceRegistryList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "clinicId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "period": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "draft",
+                    "submitted",
+                    "in_review",
+                    "partially_accepted",
+                    "accepted",
+                    "paid"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "portal",
+                    "csv",
+                    "api"
+                  ]
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "visitId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "insuredName": {
+                        "type": "string"
+                      },
+                      "serviceDate": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      "serviceCode": {
+                        "type": "string"
+                      },
+                      "serviceName": {
+                        "type": "string"
+                      },
+                      "icd10": {
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "type": "integer"
+                      },
+                      "price": {
+                        "type": "integer"
+                      },
+                      "amount": {
+                        "type": "integer"
+                      },
+                      "guaranteeNumber": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "accepted",
+                          "rejected",
+                          "disputed"
+                        ]
+                      },
+                      "rejectionReason": {
+                        "type": "string"
+                      },
+                      "disputeComment": {
+                        "type": "string"
+                      },
+                      "payer": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "mig"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        ]
+                      },
+                      "payment": {
+                        "type": "object",
+                        "properties": {
+                          "paidAt": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "amount": {
+                            "type": "integer"
+                          },
+                          "orderNumber": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "paidAt",
+                          "amount",
+                          "orderNumber"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "insuredName",
+                      "serviceDate",
+                      "serviceCode",
+                      "serviceName",
+                      "icd10",
+                      "quantity",
+                      "price",
+                      "amount",
+                      "status"
+                    ]
+                  }
+                },
+                "totals": {
+                  "type": "object",
+                  "properties": {
+                    "claimed": {
+                      "type": "integer"
+                    },
+                    "accepted": {
+                      "type": "integer"
+                    },
+                    "rejected": {
+                      "type": "integer"
+                    },
+                    "paid": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "claimed",
+                    "accepted",
+                    "rejected",
+                    "paid"
+                  ]
+                },
+                "submittedAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+                },
+                "paidAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+                }
+              },
+              "required": [
+                "id",
+                "clinicId",
+                "period",
+                "status",
+                "source",
+                "lines",
+                "totals"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "Rebill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "string"
+          },
+          "assistanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "period": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "registryLineId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "clinicName": {
+                  "type": "string"
+                },
+                "insuredName": {
+                  "type": "string"
+                },
+                "serviceDate": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "serviceName": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "integer"
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "not_paid_to_clinic",
+                          "policy_inactive",
+                          "not_assigned",
+                          "over_limit",
+                          "no_guarantee",
+                          "duplicate",
+                          "price_mismatch"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "accepted",
+                    "rejected",
+                    "disputed"
+                  ]
+                },
+                "rejectionReason": {
+                  "type": "string"
+                },
+                "disputeComment": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "registryLineId",
+                "clinicName",
+                "insuredName",
+                "serviceDate",
+                "serviceName",
+                "amount",
+                "checks",
+                "status"
+              ]
+            }
+          },
+          "fee": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string",
+                "enum": [
+                  "pepm",
+                  "percent_of_claims",
+                  "per_case"
+                ]
+              },
+              "base": {
+                "type": "number"
+              },
+              "value": {
+                "type": "number"
+              },
+              "amount": {
+                "type": "integer"
+              },
+              "formula": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "model",
+              "base",
+              "value",
+              "amount",
+              "formula"
+            ]
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "claims": {
+                "type": "integer"
+              },
+              "fee": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "accepted": {
+                "type": "integer"
+              },
+              "rejected": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "claims",
+              "fee",
+              "total",
+              "accepted",
+              "rejected"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "submitted",
+              "in_review",
+              "partially_accepted",
+              "accepted",
+              "paid"
+            ]
+          },
+          "submittedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+          },
+          "paidAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "assistanceId",
+          "period",
+          "lines",
+          "fee",
+          "totals",
+          "status"
         ]
       }
     },
@@ -2335,6 +3257,1666 @@
           },
           "401": {
             "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/roster": {
+      "get": {
+        "summary": "Застрахованные ассистанса с лимитами и остатками",
+        "description": "Только люди, чей полис закреплён за ассистансом сегодня. `updatedSince` — изменения после момента времени; постранично по курсору.",
+        "tags": [
+          "Ассистанс: застрахованные"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "roster:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+            },
+            "required": false,
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Страница списка",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistanceRosterPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка проверки данных",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/insured/{id}/limits": {
+      "get": {
+        "summary": "Лимиты застрахованного с учётом резервов ГП",
+        "tags": [
+          "Ассистанс: застрахованные"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "roster:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Лимиты",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistanceInsuredLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/cases": {
+      "post": {
+        "summary": "Создать обращение колл-центра",
+        "tags": [
+          "Ассистанс: обращения"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "cases:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "insuredId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "appointment",
+                      "consultation",
+                      "guarantee",
+                      "complaint",
+                      "emergency"
+                    ]
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "insuredId",
+                  "type",
+                  "description"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "insuredId": "0c6e2f91-3b7d-4a55-8e2c-7f14d9a6b302",
+                  "type": "appointment",
+                  "description": "Просит записать к терапевту"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Обращение",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistanceCase"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректный запрос",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка проверки данных",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит 60 запросов в минуту (заголовок Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/cases/{id}": {
+      "patch": {
+        "summary": "Изменить статус обращения",
+        "tags": [
+          "Ассистанс: обращения"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "cases:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "in_progress",
+                      "waiting",
+                      "resolved"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "status": "resolved",
+                  "resolution": "Записан на 02.10, 10:30"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Обращение",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistanceCase"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка проверки данных",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/appointments": {
+      "get": {
+        "summary": "Записи своих застрахованных",
+        "tags": [
+          "Ассистанс: записи"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "appointments:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "requested",
+                "confirmed",
+                "declined",
+                "completed",
+                "cancelled"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Страница записей",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppointmentList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/appointments/{id}/confirm": {
+      "post": {
+        "summary": "Подтвердить запись вместо клиники (после её срока ответа)",
+        "tags": [
+          "Ассистанс: записи"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "appointments:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Запись",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Appointment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/appointments/{id}/reschedule": {
+      "post": {
+        "summary": "Предложить другое время",
+        "tags": [
+          "Ассистанс: записи"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "appointments:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "startsAt": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$"
+                  }
+                },
+                "required": [
+                  "startsAt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Запись",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Appointment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/appointments/{id}/decline": {
+      "post": {
+        "summary": "Отклонить запись",
+        "tags": [
+          "Ассистанс: записи"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "appointments:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Запись",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Appointment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/guarantees": {
+      "get": {
+        "summary": "Гарантийные письма своих застрахованных",
+        "tags": [
+          "Ассистанс: гарантийные письма"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "guarantees:decide"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "requested",
+                "info_requested",
+                "approved",
+                "rejected",
+                "used",
+                "expired"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Страница писем",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuaranteeList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/guarantees/{id}/decide": {
+      "post": {
+        "summary": "Решение по ГП: одобрить в пределах полномочий, отклонить или эскалировать в МИГ",
+        "description": "Сумма одобрения не больше полномочий по договору; выше — `escalate` с заключением врача, решает МИГ. Одобренная сумма резервирует лимит.",
+        "tags": [
+          "Ассистанс: гарантийные письма"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "guarantees:decide"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "reject",
+                      "escalate"
+                    ]
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000000000
+                  },
+                  "validUntil": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "decision"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "decision": "approve",
+                  "amount": 1700000,
+                  "validUntil": "2026-10-30"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Письмо",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuaranteeLetter"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректный запрос",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка проверки данных",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит 60 запросов в минуту (заголовок Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/registries": {
+      "get": {
+        "summary": "Подреестры клиник: только строки этого ассистанса",
+        "tags": [
+          "Ассистанс: реестры"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "registries:review"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "submitted",
+                "in_review",
+                "partially_accepted",
+                "accepted",
+                "paid"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Страница подреестров",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistanceRegistryList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/registries/{id}/lines/{lineId}/decide": {
+      "post": {
+        "summary": "Принять или отклонить строку реестра",
+        "description": "Принятая строка списывает лимит, резерв её ГП снимается.",
+        "tags": [
+          "Ассистанс: реестры"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "registries:review"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "lineId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "accept",
+                      "reject"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "decision"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "decision": "accept"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Подреестр",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Registry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка проверки данных",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/registries/{id}/payments": {
+      "post": {
+        "summary": "Отметить оплату клинике",
+        "tags": [
+          "Ассистанс: реестры"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "payments:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lineIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 500
+                  },
+                  "paidAt": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000000000
+                  },
+                  "paymentOrderNumber": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  }
+                },
+                "required": [
+                  "lineIds",
+                  "paidAt",
+                  "amount",
+                  "paymentOrderNumber"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "lineIds": [
+                    "0c6e2f91-3b7d-4a55-8e2c-7f14d9a6b302"
+                  ],
+                  "paidAt": "2026-09-25",
+                  "amount": 171000,
+                  "paymentOrderNumber": "ПП-10452"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Подреестр",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Registry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка проверки данных",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/rebills": {
+      "post": {
+        "summary": "Выставить МИГ счёт на возмещение за месяц",
+        "description": "Строки, оплаченные клиникам в периоде (или переданные `lineIds`), плюс вознаграждение по договору. Счёт сразу отправляется в МИГ; автоматические проверки видны в `lines[].checks`.",
+        "tags": [
+          "Ассистанс: счета МИГ"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "rebills:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "period": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+                  },
+                  "lineIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 2000
+                  }
+                },
+                "required": [
+                  "period"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "period": "2026-09"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Счёт",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rebill"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректный запрос",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет области доступа или IP не в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка проверки данных",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит 60 запросов в минуту (заголовок Retry-After)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/rebills/{id}": {
+      "get": {
+        "summary": "Счёт со статусами строк",
+        "tags": [
+          "Ассистанс: счета МИГ"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "rebills:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Счёт",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rebill"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistance/rebills/{id}/lines/{lineId}/dispute": {
+      "post": {
+        "summary": "Оспорить отклонённую строку счёта",
+        "tags": [
+          "Ассистанс: счета МИГ"
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "rebills:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "lineId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Повтор с тем же ключом в течение 24 часов вернёт первый ответ"
+            },
+            "required": false,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "comment": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "comment"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "comment": "Лимит пересчитан, прикладываем расчёт"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Счёт",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rebill"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет токена, токен истёк или ключ отозван",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено (в том числе объект другой клиники или визит без действия)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Действие невозможно в текущем состоянии",
             "content": {
               "application/problem+json": {
                 "schema": {

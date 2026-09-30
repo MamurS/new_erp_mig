@@ -161,7 +161,7 @@ type GpForm = z.input<typeof guaranteeCreateRequest>;
 
 /** A new guarantee letter can only be requested from an open visit (CLINIC_SPEC §4.4). */
 export function GuaranteeRequestDialog({ visitId, open, onOpenChange, onDone }: { visitId: string; open: boolean; onOpenChange: (o: boolean) => void; onDone?: () => void }) {
-  const prices = useClinicPriceList();
+  const prices = useClinicPriceList(visitId);
   const requestGp = useRequestGuarantee();
   const [files, setFiles] = useState<File[]>([]);
   const form = useForm<GpForm>({
@@ -195,7 +195,7 @@ export function GuaranteeRequestDialog({ visitId, open, onOpenChange, onDone }: 
       onOpenChange={onOpenChange}
       wide
       title="Запросить гарантийное письмо"
-      description="Запрос уйдёт врачу-эксперту МИГ. Ответ появится в разделе «Гарантийные письма»."
+      description="Запрос уйдёт врачу ассистанса пациента или врачу-эксперту МИГ. Ответ появится в разделе «Гарантийные письма»."
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>

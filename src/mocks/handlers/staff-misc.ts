@@ -301,6 +301,9 @@ export const staffMiscHandlers = [
       if (action) list = list.filter((e) => action.split(',').includes(e.action));
       const actorId = url.searchParams.get('actorId');
       if (actorId) list = list.filter((e) => e.actorId === actorId);
+      // Actions of assistance users, by company (ASSISTANCE_SPEC §3).
+      const assistanceId = url.searchParams.get('assistanceId');
+      if (assistanceId) list = list.filter((e) => e.assistanceId === assistanceId);
       const from = url.searchParams.get('from');
       if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) list = list.filter((e) => parseIso(e.at) >= parseIso(from));
       const to = url.searchParams.get('to');

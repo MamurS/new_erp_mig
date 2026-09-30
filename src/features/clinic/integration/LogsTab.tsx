@@ -5,10 +5,11 @@ import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { EmptyState } from '@/shared/ui/states';
 import { Panel } from '../components';
+import { usePartner } from './partner';
 
 /** Path templates only: no parameters, bodies or personal data (CLINIC_SPEC §9.8). */
 export function LogsTab() {
-  const q = useApiLogs();
+  const q = useApiLogs(usePartner().base);
   const columns: Column<ApiCallLog>[] = [
     { key: 'at', header: 'Время', cell: (l) => <span className="num whitespace-nowrap text-muted">{formatDateTime(l.at)}</span> },
     { key: 'key', header: 'Ключ', cell: (l) => <code className="text-[12px]">{l.clientId}</code> },

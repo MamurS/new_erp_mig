@@ -12,6 +12,7 @@ import { Button } from '@/shared/ui/button';
 import { toast } from '@/shared/ui/toast';
 import { CardSkeletons, Empty, LoadError, ScreenHeader } from '../components';
 import { CHAT_MAX, linkify } from '../lib';
+import { useMyAssistance } from '@/shared/api/queries/assist';
 
 /** Message text as plain React text; only safe http(s) URLs become links. */
 export function MessageText({ text }: { text: string }) {
@@ -55,6 +56,7 @@ export default function ChatPage() {
   useDocumentTitle(t('chat.title'));
   const q = useChat();
   const send = useSendChat();
+  const assistance = useMyAssistance();
   const [text, setText] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
   const count = q.data?.length ?? 0;
@@ -77,6 +79,11 @@ export default function ChatPage() {
   return (
     <div className="flex min-h-[calc(100vh-var(--banner-h,0px)-140px)] flex-col">
       <ScreenHeader title={t('chat.title')} back="/app" />
+      {assistance.data?.assistance && (
+        <p className="-mt-2 mb-3 text-[13px] text-muted" data-testid="chat-assistance">
+          {t('chat.assistance', { name: assistance.data.assistance.name })}
+        </p>
+      )}
       <div className="flex-1">
         {q.isLoading ? (
           <CardSkeletons count={2} />

@@ -94,7 +94,8 @@ export function MisSimulator() {
     if (check.status !== 200) return problemText(check);
     const cov = check.body as { visitId: string; categories: { category: string; status: string }[] };
     const covered = new Set(cov.categories.filter((c) => c.status === 'covered').map((c) => c.category));
-    const prices = await request('/clinic/price-list', { schema: C.priceList });
+    // Prices of the patient's payer (its assistance or MIG).
+    const prices = await request('/clinic/price-list', { query: { visitId: cov.visitId }, schema: C.priceList });
     const services = prices.filter((p) => !p.requiresGuarantee && covered.has(p.category) && !/[<>]/.test(p.name));
     if (services.length === 0) return 'Нет услуг, покрытых программой пациента';
     const today = isoDay(Date.now());

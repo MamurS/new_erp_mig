@@ -121,6 +121,7 @@ export const makeKpParamsSchema = (today: () => string = () => todayISO()) =>
       coverageEnd: isoDateInput,
       validUntil: isoDateInput,
       paymentTerms: z.enum(['single', 'quarterly', 'monthly']),
+      assistanceId: z.preprocess((v) => (v === '' ? null : v), uuid.nullable()).optional(),
     })
     .superRefine((v, ctx) => {
       if (v.coverageEnd <= v.coverageStart) {
@@ -267,3 +268,66 @@ export const policyChangeDecisionSchema = z
   .superRefine((v, ctx) => {
     if (v.decision === 'reject' && (v.reason ?? '').length < 5) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: 'Укажите причину: минимум 5 символов' });
   });
+
+// ---- assistance companies (ASSISTANCE_SPEC) ----
+const periodInput = z.string().trim().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Период ГГГГ-ММ');
+const assistRole = z.enum(['asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin'], { errorMap: () => ({ message: 'Выберите роль' }) });
+export const caseTypeInput = z.enum(['appointment', 'consultation', 'guarantee', 'complaint', 'emergency'], { errorMap: () => ({ message: 'Выберите тип обращения' }) });
+export const caseCreateSchema = z.object({
+  insuredId: uuid,
+  type: caseTypeInput,
+  channel: z.enum(['phone', 'chat', 'app', 'clinic']).default('phone'),
+  description: text(5, 1000, 'Опишите обращение: минимум 5 символов'),
+});
+export const caseUpdateSchema = z
+  .object({
+    status: z.enum(['open', 'in_progress', 'waiting', 'resolved']),
+    resolution: z.string().trim().max(1000, 'Не больше 1000 символов').optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.status === 'resolved' && (v.resolution ?? '').length < 3) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['resolution'], message: 'Опишите решение' });
+  });
+export const assistAppointmentSchema = myAppointmentSchema.extend({ insuredId: uuid, caseId: uuid.optional() });
+export const assistGuaranteeDecisionSchema = z.discriminatedUnion('action', [
+  ...guaranteeDecisionSchema.options,
+  z.object({ action: z.literal('escalate'), reason: text(10, 1000, 'Заключение врача: минимум 10 символов') }),
+]);
+export const clinicPaymentSchema = z.object({
+  lineIds: z.array(uuid).min(1, 'Выберите строки').max(500, 'Не больше 500 строк'),
+  paidAt: isoDateInput,
+  amount: z.number().int().min(1).max(100_000_000_000).optional(),
+  orderNumber: text(1, 40, 'Укажите номер платёжного поручения'),
+});
+export const rebillCreateSchema = z.object({ period: periodInput, lineIds: z.array(uuid).max(2000).optional() });
+export const rebillDisputeSchema = z.object({ comment: text(5, 1000, 'Опишите возражение: минимум 5 символов') });
+export const rebillLineDecisionSchema = registryLineDecisionSchema;
+export const qaReviewSchema = z
+  .object({ verdict: z.enum(['agree', 'disagree'], { errorMap: () => ({ message: 'Выберите оценку' }) }), comment: z.string().trim().max(1000, 'Не больше 1000 символов').optional() })
+  .superRefine((v, ctx) => {
+    if (v.verdict === 'disagree' && (v.comment ?? '').length < 5) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['comment'], message: 'Объясните несогласие: минимум 5 символов' });
+  });
+export const assignmentSchema = z.object({ assistanceId: uuid.nullable(), from: isoDateInput });
+export const assistUserInviteSchema = z.object({ email: emailInput, fullName: text(3, 120), role: assistRole });
+export const assistUserPatchSchema = z
+  .object({ role: assistRole.optional(), active: z.boolean().optional() })
+  .refine((v) => v.role !== undefined || v.active !== undefined, 'Нечего менять');
+const feeModelInput = z.enum(['pepm', 'percent_of_claims', 'per_case'], { errorMap: () => ({ message: 'Выберите модель' }) });
+export const assistanceContractSchema = z
+  .object({
+    feeModel: feeModelInput,
+    feeValue: z.number({ invalid_type_error: 'Укажите размер' }).min(0).max(100_000_000),
+    guaranteeAuthorityLimit: z.number({ invalid_type_error: 'Укажите сумму' }).int().min(0).max(10_000_000_000),
+    rebillPaymentDays: z.number({ invalid_type_error: 'Укажите срок' }).int().min(1, 'Не меньше 1 дня').max(90, 'Не больше 90 дней'),
+  })
+  .superRefine((v, ctx) => {
+    if (v.feeModel === 'percent_of_claims' && (v.feeValue <= 0 || v.feeValue >= 1)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['feeValue'], message: 'Доля от 0 до 1, например 0,07' });
+    if (v.feeModel !== 'percent_of_claims' && (v.feeValue < 1 || !Number.isInteger(v.feeValue))) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['feeValue'], message: 'Целая сумма в UZS' });
+  });
+export const assistanceCreateSchema = z.object({
+  name: text(3, 120),
+  phone24x7: text(5, 30),
+  integrationMode: z.enum(['portal', 'api', 'hybrid']),
+  contractNumber: text(3, 40),
+  contract: assistanceContractSchema,
+  admin: z.object({ email: emailInput, fullName: text(3, 120) }),
+});

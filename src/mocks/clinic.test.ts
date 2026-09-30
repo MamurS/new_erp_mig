@@ -213,7 +213,7 @@ describe('integration API', () => {
     expect(Number(last!.headers.get('Retry-After'))).toBeGreaterThan(0);
   });
 
-  it('registry from the MIS: checks lines, creates an `api` registry visible to the operator', async () => {
+  it('registry from the MIS: checks lines, creates an `api` registry routed to the payer of its lines', async () => {
     const admin = await login('admin@demo-clinic.uz');
     const key = await newKey(admin);
     const t = (await token(key.clientId, key.clientSecret)).data.access_token;
@@ -237,18 +237,26 @@ describe('integration API', () => {
     expect(ok.status).toBe(201);
     expectContract(I.registry, ok.data);
     expect(ok.data).toMatchObject({ source: 'api', status: 'submitted' });
+    // The demo patient is served by an assistance: its sub-registry goes there, not to MIG (ASSISTANCE_SPEC §9.2).
     const op = await login('operator@demo.mig.uz');
     const list = await call<{ id: string }[]>('/registries', { sid: op });
-    expect(list.data.map((r) => r.id)).toContain(ok.data.id);
+    expect(list.data.map((r) => r.id)).not.toContain(ok.data.id);
+    const asst = await login('asst-doctor@demo-assist.uz');
+    const own = await call<{ id: string }[]>('/assist/registries', { sid: asst });
+    expect(own.data.map((r) => r.id)).toContain(ok.data.id);
   });
 });
 
 describe('guarantees: four-eyes above the threshold', () => {
   it('one doctor cannot approve a letter above 20 000 000 alone', async () => {
     const d = db();
-    const g = d.guarantees.find((x) => x.status === 'requested' && x.approvals.length === 0)!;
+    const g = d.guarantees.find((x) => x.status === 'requested' && x.approvals.length === 0 && x.assistanceId && !x.escalated)!;
     g.estimatedCost = 30_000_000;
     const doc = await login('doctor@demo.mig.uz');
+    // A letter of an assistance's client is decided by the assistance until it escalates (ASSISTANCE_SPEC §9.1).
+    const early = await call(`/guarantees/${g.id}/decision`, { method: 'POST', sid: doc, json: { action: 'approve', amount: 30_000_000, validUntil: '2030-01-01' } });
+    expect(early.status).toBe(403);
+    g.escalated = true;
     const first = await call<{ status: string; approvalsNeeded: number }>(`/guarantees/${g.id}/decision`, { method: 'POST', sid: doc, json: { action: 'approve', amount: 30_000_000, validUntil: '2030-01-01' } });
     expect(first.status).toBe(200);
     expect(first.data).toMatchObject({ status: 'requested', approvalsNeeded: 1 });

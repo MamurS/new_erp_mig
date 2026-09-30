@@ -11,7 +11,11 @@ const FORBIDDEN_ROUTES: Record<Role, string[]> = {
   hr: ['/staff', '/staff/clients', '/app', '/clinic'],
   clinic_registrar: ['/staff', '/staff/clinics', '/hr', '/app', '/clinic/integration', '/clinic/registries', '/clinic/users'],
   clinic_admin: ['/staff', '/staff/registries', '/hr', '/app'],
-  insured: ['/staff', '/hr', '/staff/claims', '/clinic'],
+  insured: ['/staff', '/hr', '/staff/claims', '/clinic', '/assist'],
+  asst_operator: ['/staff', '/hr', '/clinic', '/app', '/assist/rebills', '/assist/users', '/assist/integration'],
+  asst_doctor: ['/staff', '/staff/guarantees', '/assist/rebills', '/assist/users', '/assist/chat'],
+  asst_billing: ['/staff', '/assist/insured', '/assist/cases', '/assist/users'],
+  asst_admin: ['/staff', '/assist/insured', '/assist/rebills', '/hr'],
 };
 
 test.describe('2. Route matrix: forbidden routes lead to /403', () => {
@@ -36,6 +40,10 @@ const FORBIDDEN_API: Record<Role, [string, string, unknown?][]> = {
   hr: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/audit'], ['GET', '/me/claims'], ['POST', '/exports', { type: 'clients' }], ['GET', '/clinic/overview']],
   insured: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/hr/employees'], ['GET', '/audit'], ['GET', '/dashboard'], ['GET', '/clinic/overview']],
   clinic_registrar: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/guarantees'], ['GET', '/registries'], ['GET', '/clinic/integration/keys'], ['GET', '/clinic/registries'], ['GET', '/clinic/users'], ['GET', '/me/policy'], ['GET', '/dashboard']],
+  asst_operator: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/audit'], ['GET', '/rebills'], ['GET', '/assist/rebills'], ['GET', '/assist/users'], ['GET', '/clinic/overview'], ['GET', '/policy-changes']],
+  asst_doctor: [['GET', '/clients'], ['GET', '/policies'], ['GET', '/guarantees'], ['GET', '/assist/rebills'], ['GET', '/assist/users'], ['GET', '/qa']],
+  asst_billing: [['GET', '/clients'], ['GET', '/assist/insured?q=а'], ['GET', '/assist/cases'], ['GET', '/rebills'], ['GET', '/assist/integration/keys']],
+  asst_admin: [['GET', '/clients'], ['GET', '/assist/insured?q=а'], ['GET', '/assist/rebills'], ['GET', '/assistance']],
   clinic_admin: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/audit'], ['GET', '/guarantees'], ['GET', '/registries'], ['GET', '/hr/employees'], ['POST', '/clinics', {}]],
 };
 

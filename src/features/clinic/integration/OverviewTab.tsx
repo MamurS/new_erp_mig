@@ -5,12 +5,15 @@ import { formatDateTime } from '@/shared/lib/format';
 import { Chip } from '@/shared/ui/chips';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
 import { Panel } from '../components';
+import { usePartner } from './partner';
 
 const DELIVERY_LABEL = { delivered: 'Доставлен', retrying: 'Повтор', failed: 'Не доставлен' } as const;
 
 export function OverviewTab() {
-  const q = useIntegrationOverview();
-  const Simulator = getDemo()?.MisSimulator;
+  const partner = usePartner();
+  const q = useIntegrationOverview(partner.base);
+  // The assistance simulator is for companies connected by API (api or hybrid mode).
+  const Simulator = partner.type === 'assistance' ? (q.data && q.data.mode !== 'portal' ? getDemo()?.AssistSimulator : undefined) : getDemo()?.MisSimulator;
   return (
     <div className="flex flex-col gap-4">
       <QueryState query={q} skeleton={<SkeletonRows rows={3} />}>

@@ -6,7 +6,8 @@ import { useMemo, useState } from 'react';
 import { z } from 'zod';
 import { integrationCall, type IntegrationCallResult } from '@/shared/api/client';
 import { useIntegrationKeys } from '@/shared/api/queries/clinic';
-import { buildSandboxRequest, SANDBOX_METHODS as METHODS, sandboxDefaults, type SandboxParam } from '@/shared/integration/sandbox';
+import { buildSandboxRequest, sandboxDefaults, type SandboxParam } from '@/shared/integration/sandbox';
+import { usePartner } from './partner';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
@@ -53,7 +54,9 @@ function ParamField({ param: p, value, error, onChange }: { param: SandboxParam;
 }
 
 export function SandboxTab() {
-  const keys = useIntegrationKeys();
+  const partner = usePartner();
+  const METHODS = partner.sandbox;
+  const keys = useIntegrationKeys(partner.base);
   const active = useMemo(() => (keys.data ?? []).filter((k) => !k.revokedAt), [keys.data]);
   const [clientId, setClientId] = useState('');
   const [secret, setSecret] = useState('');

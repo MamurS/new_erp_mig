@@ -8,6 +8,7 @@ import { db, type HrUserRow } from '../db';
 import { API, audit, body, conflict, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
 import { DEMO_PASSWORD } from '../credentials';
 import { activePolicyOf, createInsured, endorsementDoc, nextPolicyNumber, parsePolicyList, refreshPolicyTotals, toPolicyChange } from '../policy-core';
+import { currentAssistance, notifyAssistance } from '../assistance-core';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
 
@@ -134,6 +135,8 @@ export const policyHandlers = [
               person.status = 'excluded';
               person.excludedFrom = r!.effectiveDate;
             }
+            // The assistance of the policy sees the change at once (ASSISTANCE_SPEC §5.7).
+            await notifyAssistance(d, currentAssistance(d, policy.id), r!.kind === 'add' ? 'insured.added' : 'insured.excluded', r!.insuredId!);
             delta += r!.premiumDelta;
             Object.assign(r!, { status: 'approved', decidedAt: at, decidedByName: user.displayName });
           }

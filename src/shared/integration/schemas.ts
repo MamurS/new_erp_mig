@@ -25,7 +25,11 @@ export const INTEGRATION_SCOPES = [
   'registries:write',
   'payments:read',
 ] as const;
+/** Scopes of assistance keys (ASSISTANCE_SPEC §8). `appointments:write` is shared with clinics. */
+export const ASSIST_SCOPES = ['roster:read', 'cases:write', 'appointments:write', 'guarantees:decide', 'registries:review', 'payments:write', 'rebills:write'] as const;
+export const ALL_SCOPES = [...new Set([...INTEGRATION_SCOPES, ...ASSIST_SCOPES])] as [string, ...string[]];
 export const integrationScope = z.enum(INTEGRATION_SCOPES);
+export const anyScope = z.enum(ALL_SCOPES as unknown as readonly [(typeof INTEGRATION_SCOPES)[number] | (typeof ASSIST_SCOPES)[number], ...((typeof INTEGRATION_SCOPES)[number] | (typeof ASSIST_SCOPES)[number])[]]);
 
 export const WEBHOOK_EVENTS = [
   'appointment.requested',
@@ -35,7 +39,21 @@ export const WEBHOOK_EVENTS = [
   'registry.reviewed',
   'registry.paid',
 ] as const;
-export const webhookEvent = z.enum(WEBHOOK_EVENTS);
+/** Thin events for assistance companies (ASSISTANCE_SPEC §8). */
+export const ASSIST_WEBHOOK_EVENTS = [
+  'insured.added',
+  'insured.excluded',
+  'policy.assigned',
+  'policy.unassigned',
+  'appointment.requested',
+  'guarantee.requested',
+  'registry.received',
+  'rebill.reviewed',
+  'rebill.paid',
+  'qa.disagreement',
+] as const;
+const ALL_EVENTS = [...new Set([...WEBHOOK_EVENTS, ...ASSIST_WEBHOOK_EVENTS])] as [(typeof WEBHOOK_EVENTS)[number] | (typeof ASSIST_WEBHOOK_EVENTS)[number], ...((typeof WEBHOOK_EVENTS)[number] | (typeof ASSIST_WEBHOOK_EVENTS)[number])[]];
+export const webhookEvent = z.enum(ALL_EVENTS);
 
 export const icd10 = z
   .string()
@@ -177,6 +195,11 @@ export const guaranteeLetter = z.object({
   comment: z.string().optional(),
   attachments: z.array(attachment),
   createdAt: isoDateTime,
+  assistanceId: uuid.nullable().optional(),
+  assistanceName: z.string().optional(),
+  escalated: z.boolean().optional(),
+  assistanceOpinion: z.string().optional(),
+  decidedBy: z.enum(['assistance', 'mig']).optional(),
 });
 
 // ---------- registries & payments ----------
@@ -211,6 +234,9 @@ export const registryLine = z.object({
   status: z.enum(['pending', 'accepted', 'rejected', 'disputed']),
   rejectionReason: z.string().optional(),
   disputeComment: z.string().optional(),
+  /** 'mig' or the id of the assistance company that checks and pays the line. */
+  payer: z.union([z.literal('mig'), uuid]).optional(),
+  payment: z.object({ paidAt: isoDate, amount: z.number().int(), orderNumber: z.string() }).optional(),
 });
 export const registry = z.object({
   id: uuid,
@@ -226,6 +252,110 @@ export const registry = z.object({
 export const disputeRequest = z.object({ comment: text(3, 1000) }).strict();
 export const payment = z.object({ registryId: uuid, period: z.string(), amount: z.number().int(), paidAt: isoDateTime });
 export const paymentList = z.object({ items: z.array(payment), nextCursor: z.string().nullable() });
+
+// ---------- assistance companies (ASSISTANCE_SPEC §8) ----------
+const cursorQuery = { cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(100).default(50) };
+const nextCursor = z.string().nullable();
+export const limitWithRest = z.object({
+  category: limitCategory,
+  limit: z.number().int(),
+  used: z.number().int(),
+  /** Approved guarantee letters not yet used. */
+  reserved: z.number().int(),
+  left: z.number().int(),
+});
+export const rosterItem = z.object({
+  insuredId: uuid,
+  fullName: z.string(),
+  birthDate: isoDate,
+  policyNumber: z.string(),
+  program: z.enum(['basic', 'standard', 'standard_plus', 'premium']),
+  status: z.enum(['active', 'excluded']),
+  insuredFrom: isoDate,
+  excludedFrom: isoDate.optional(),
+  limits: z.array(limitWithRest),
+  updatedAt: isoDateTime,
+});
+export const rosterQuery = z.object({ updatedSince: isoDateTime.optional(), ...cursorQuery });
+export const rosterPage = z.object({ items: z.array(rosterItem), nextCursor });
+export const insuredLimits = z.object({ insuredId: uuid, limits: z.array(limitWithRest) });
+export const caseType = z.enum(['appointment', 'consultation', 'guarantee', 'complaint', 'emergency']);
+export const caseStatus = z.enum(['open', 'in_progress', 'waiting', 'resolved']);
+export const assistanceCase = z.object({
+  id: uuid,
+  number: z.string(),
+  insuredId: uuid,
+  insuredName: z.string(),
+  type: caseType,
+  channel: z.enum(['phone', 'chat', 'app', 'clinic']),
+  status: caseStatus,
+  slaDueAt: isoDateTime,
+  description: z.string(),
+  resolution: z.string().optional(),
+  links: z.object({ appointmentId: uuid.optional(), guaranteeId: uuid.optional(), claimId: uuid.optional() }),
+  createdAt: isoDateTime,
+});
+export const caseCreateRequest = z.object({ insuredId: uuid, type: caseType, description: text(5, 1000) }).strict();
+export const caseUpdateRequest = z
+  .object({ status: caseStatus, resolution: text(3, 1000).optional() })
+  .strict()
+  .refine((v) => v.status !== 'resolved' || !!v.resolution, { message: 'Для решённого обращения нужно описание решения', path: ['resolution'] });
+export const assistAppointmentQuery = z.object({ status: integrationAppointment.shape.status.optional(), ...cursorQuery });
+export const guaranteeQuery = z.object({ status: guaranteeLetter.shape.status.optional(), ...cursorQuery });
+export const guaranteeList = z.object({ items: z.array(guaranteeLetter), nextCursor });
+export const guaranteeDecideRequest = z
+  .object({
+    decision: z.enum(['approve', 'reject', 'escalate']),
+    amount: money.optional(),
+    validUntil: isoDate.optional(),
+    reason: text(3, 1000).optional(),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    if (v.decision === 'approve' && (!v.amount || !v.validUntil)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['amount'], message: 'Для одобрения нужны amount и validUntil' });
+    if (v.decision !== 'approve' && !v.reason) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: 'Укажите причину или заключение' });
+  });
+export const registryQuery = z.object({ status: registry.shape.status.optional(), ...cursorQuery });
+/** A clinic registry as the assistance sees it: only its own lines (sub-registry). */
+export const registryList = z.object({ items: z.array(registry), nextCursor });
+export const lineDecideRequest = z
+  .object({ decision: z.enum(['accept', 'reject']), reason: text(3, 300).optional() })
+  .strict()
+  .refine((v) => v.decision === 'accept' || !!v.reason, { message: 'Укажите причину отклонения', path: ['reason'] });
+export const clinicPaymentRequest = z
+  .object({ lineIds: z.array(uuid).min(1).max(500), paidAt: isoDate, amount: money, paymentOrderNumber: text(1, 40) })
+  .strict();
+export const rebillCheck = z.object({
+  code: z.enum(['not_paid_to_clinic', 'policy_inactive', 'not_assigned', 'over_limit', 'no_guarantee', 'duplicate', 'price_mismatch']),
+  message: z.string(),
+});
+export const rebillLine = z.object({
+  id: uuid,
+  registryLineId: uuid,
+  clinicName: z.string(),
+  insuredName: z.string(),
+  serviceDate: isoDate,
+  serviceName: z.string(),
+  amount: z.number().int(),
+  checks: z.array(rebillCheck),
+  status: z.enum(['pending', 'accepted', 'rejected', 'disputed']),
+  rejectionReason: z.string().optional(),
+  disputeComment: z.string().optional(),
+});
+export const rebill = z.object({
+  id: uuid,
+  number: z.string(),
+  assistanceId: uuid,
+  period: z.string(),
+  lines: z.array(rebillLine),
+  fee: z.object({ model: z.enum(['pepm', 'percent_of_claims', 'per_case']), base: z.number(), value: z.number(), amount: z.number().int(), formula: z.string() }),
+  totals: z.object({ claims: z.number().int(), fee: z.number().int(), total: z.number().int(), accepted: z.number().int(), rejected: z.number().int() }),
+  status: z.enum(['draft', 'submitted', 'in_review', 'partially_accepted', 'accepted', 'paid']),
+  submittedAt: isoDateTime.optional(),
+  paidAt: isoDateTime.optional(),
+});
+/** Without `lineIds` the rebill takes every line of the assistance paid to clinics in the period. */
+export const rebillCreateRequest = z.object({ period, lineIds: z.array(uuid).min(1).max(2000).optional() }).strict();
 
 // ---------- webhooks (MIG → MIS) ----------
 /** Thin event: no personal or medical data, the MIS fetches details through the API. */
@@ -313,7 +443,7 @@ export const webhookUrl = z
 const ipEntry = z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^[0-9a-fA-F:]+(\/\d{1,3})?$/, 'IP-адрес или подсеть');
 export const keyCreateRequest = z.object({
   name: text(2, 60),
-  scopes: z.array(integrationScope).min(1, 'Выберите хотя бы одну область доступа'),
+  scopes: z.array(anyScope).min(1, 'Выберите хотя бы одну область доступа'),
   ipAllowlist: z
     .string()
     .max(1000)

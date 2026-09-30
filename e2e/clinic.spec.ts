@@ -6,14 +6,18 @@ import { acceptConsent, api, failOnDialog, loginInsured, loginStaff } from './he
 async function switchTo(page: Page, role: RegExp, home: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'Войти как…' }).click();
   await page.getByRole('menuitem', { name: role }).click();
+  // Roles of one portal share the home page: wait for the new session, not only for the URL.
+  await expect(page.getByText(`Вы вошли как «${role.source.replace(/^\^/, '')}`).last()).toBeVisible();
   await expect(page).toHaveURL(home);
 }
 const AS = {
   registrar: [/^Регистратор клиники/, /\/clinic$/],
   clinicAdmin: [/^Администратор клиники/, /\/clinic$/],
   doctor: [/^Врач-эксперт/, /\/staff$/],
-  operator: [/^Оператор ДМС/, /\/staff$/],
+  operator: [/^Куратор ДМС/, /\/staff$/],
   accountant: [/^Бухгалтер/, /\/staff$/],
+  asstDoctor: [/^Врач ассистанса/, /\/assist$/],
+  asstBilling: [/^Финансист ассистанса/, /\/assist$/],
 } as const satisfies Record<string, readonly [RegExp, RegExp]>;
 const as = (page: Page, who: keyof typeof AS) => switchTo(page, AS[who][0], AS[who][1]);
 
@@ -31,7 +35,7 @@ function dateTime(iso: string): string {
   return `${day}.${m}.${y}, ${t.slice(0, 5)}`;
 }
 
-test('1. Registrar checks the app code, requests a guarantee letter, the doctor approves it', async ({ page }) => {
+test('1. Registrar checks the app code, requests a guarantee letter, the doctor of the patient\'s assistance approves it', async ({ page }) => {
   failOnDialog(page);
   await loginInsured(page);
   await page.goto('/app/card');
@@ -64,16 +68,18 @@ test('1. Registrar checks the app code, requests a guarantee letter, the doctor 
   const number = /ГП-\d{4}-\d{6}/.exec(await toast.innerText())![0];
   await expect(page).toHaveURL(/\/clinic\/guarantees$/);
 
-  await as(page, 'doctor');
-  await page.goto('/staff/guarantees');
+  // The demo patient is served by an assistance: its doctor decides within the authority (ASSISTANCE_SPEC §9.1).
+  await as(page, 'asstDoctor');
+  await page.goto('/assist/guarantees');
   await page.getByRole('row').filter({ hasText: number }).click();
-  const decision = page.getByRole('dialog', { name: `Гарантийное письмо ${number}` });
-  await decision.getByRole('button', { name: 'Одобрить' }).click();
-  await expect(page.getByText('Письмо одобрено')).toBeVisible();
+  await page.getByRole('button', { name: 'Одобрить' }).click();
+  await expect(page.getByText('Письмо одобрено, лимит зарезервирован')).toBeVisible();
 
   await as(page, 'registrar');
   await page.goto('/clinic/guarantees');
-  await expect(page.getByRole('row').filter({ hasText: number })).toContainText('Одобрено');
+  const row = page.getByRole('row').filter({ hasText: number });
+  await expect(row).toContainText('Одобрено');
+  await expect(row).toContainText('Шифо Ассистанс Групп');
 });
 
 test('2. Insured books in the demo clinic, registrar confirms, the app shows «Подтвердила клиника»', async ({ page }) => {
@@ -102,10 +108,11 @@ test('2. Insured books in the demo clinic, registrar confirms, the app shows «�
   await expect(page.getByTestId('appt-confirmed-by').filter({ hasText: 'Подтвердила клиника' }).first()).toBeVisible();
 });
 
-test('3. CSV registry: upload, submit, reject, dispute, accept, pay — the clinic sees «Оплачен»', async ({ page }) => {
+test('3. CSV registry: upload, submit; the payer\'s assistance rejects, the clinic disputes, it accepts and pays — the clinic sees «Оплачен»', async ({ page }) => {
   await loginStaff(page, 'clinic_admin');
   const visitId = await openVisit(page);
-  const prices = (await api(page, 'GET', '/clinic/price-list')).data as { code: string; price: number; requiresGuarantee: boolean; name: string }[];
+  // Prices of the patient's payer (the demo patient is served by an assistance with its own price list).
+  const prices = (await api(page, 'GET', `/clinic/price-list?visitId=${visitId}`)).data as { code: string; price: number; requiresGuarantee: boolean; name: string }[];
   const simple = prices.filter((p) => !p.requiresGuarantee && !/[<>"]/.test(p.name)).slice(0, 2);
   const today = new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
   const csv = ['visit_id,service_date,service_code,icd10,quantity,price,guarantee_number', ...simple.map((p) => `${visitId},${today},${p.code},J06.9,1,${p.price},`)].join('\n');
@@ -120,8 +127,9 @@ test('3. CSV registry: upload, submit, reject, dispute, accept, pay — the clin
   await page.getByRole('button', { name: 'Отправить в МИГ' }).click();
   await expect(page.getByTestId('registry-status')).toContainText('Отправлен');
 
-  await as(page, 'operator');
-  await page.goto(`/staff/registries/${registryId}`);
+  // The lines of the demo patient belong to the sub-registry of its assistance (ASSISTANCE_SPEC §9.2).
+  await as(page, 'asstDoctor');
+  await page.goto(`/assist/registries/${registryId}`);
   await page.getByRole('button', { name: `Отклонить строку ${simple[0]!.name}` }).click();
   const reject = page.getByRole('dialog', { name: 'Отклонить строку' });
   await reject.getByLabel('Причина').fill('Нет записи в медкарте');
@@ -137,21 +145,24 @@ test('3. CSV registry: upload, submit, reject, dispute, accept, pay — the clin
   await dispute.getByRole('button', { name: 'Оспорить' }).click();
   await expect(page.getByText('Строка оспорена')).toBeVisible();
 
-  await as(page, 'operator');
-  await page.goto(`/staff/registries/${registryId}`);
+  await as(page, 'asstDoctor');
+  await page.goto(`/assist/registries/${registryId}`);
   await page.getByRole('button', { name: `Принять строку ${simple[0]!.name}` }).click();
   // Exact text: «Принят частично» must turn into «Принят» before the role switch.
   await expect(page.getByTestId('registry-status')).toHaveText('Принят');
 
-  await as(page, 'accountant');
-  await page.goto(`/staff/registries/${registryId}`);
-  await page.getByRole('button', { name: /^Оплатить/ }).click();
-  await page.getByRole('dialog', { name: 'Оплатить реестр?' }).getByRole('button', { name: 'Оплатить' }).click();
+  await as(page, 'asstBilling');
+  await page.goto(`/assist/registries/${registryId}`);
+  await page.getByRole('button', { name: /^Оплатить все принятые/ }).click();
+  const pay = page.getByRole('dialog', { name: 'Отметить оплату клинике' });
+  await pay.getByLabel('Номер платёжного поручения').fill('ПП-10452');
+  await pay.getByRole('button', { name: 'Отметить оплату' }).click();
   await expect(page.getByTestId('registry-status')).toContainText('Оплачен');
 
   await as(page, 'clinicAdmin');
   await page.goto(`/clinic/registries/${registryId}`);
   await expect(page.getByTestId('registry-status')).toContainText('Оплачен');
+  await expect(page.getByTestId('line-payment').first()).toContainText('Оплачено ассистансом Шифо Ассистанс Групп');
 });
 
 test('4. Isolation: no visit → 404, foreign letter → 404, registrar has no integration or staff pages', async ({ page }) => {
@@ -211,14 +222,14 @@ test('5. Integration: key shown once, sandbox token and patient check, request l
   expect(await page.content()).not.toContain(code);
 });
 
-test('6. MIS simulator sends a registry over the API, MIG operator sees it with source API', async ({ page }) => {
+test('6. MIS simulator sends a registry over the API, the payer (the patient\'s assistance) sees it with source API', async ({ page }) => {
   await loginStaff(page, 'clinic_admin');
   await page.goto('/clinic/integration');
   await page.getByRole('button', { name: 'Отправить реестр из МИС' }).click();
   await expect(page.getByTestId('mis-log')).toContainText('Реестр отправлен: 20 строк');
 
-  await as(page, 'operator');
-  await page.goto('/staff/registries');
+  await as(page, 'asstDoctor');
+  await page.goto('/assist/registries');
   const row = page.getByRole('row').filter({ hasText: 'API' });
   await expect(row.first()).toBeVisible();
   await row.first().click();
@@ -282,6 +293,10 @@ test('10. Four-eyes: a letter above the threshold is not approved by one doctor'
   const created = await api(page, 'POST', '/clinic/guarantees', { visitId, serviceCode: 'IP-604', icd10: 'K80.2', estimatedCost: 26_000_000, comment: 'Плановая операция' });
   expect([200, 201]).toContain(created.status);
   const number = (created.data as { number: string }).number;
+  // Above the authority of the patient's assistance: its doctor escalates to MIG first (ASSISTANCE_SPEC §5.2).
+  await as(page, 'asstDoctor');
+  const escalated = await api(page, 'POST', `/assist/guarantees/${(created.data as { id: string }).id}/decision`, { action: 'escalate', reason: 'Показана плановая операция, сумма выше полномочий' });
+  expect(escalated.status).toBe(200);
 
   await as(page, 'doctor');
   await page.goto('/staff/guarantees');
