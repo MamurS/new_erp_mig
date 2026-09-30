@@ -1,7 +1,7 @@
 /* Queries of the assistance portal (/api/assist/...) and of the MIG assistance screens (ASSISTANCE_SPEC §6–7). */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { z } from 'zod';
-import type { assistGuaranteeDecisionSchema, caseCreateSchema } from '@/shared/schemas/forms';
+import { z } from 'zod';
+import type { assistanceCreateSchema, assistGuaranteeDecisionSchema, assistGuaranteeRequestSchema, caseCreateSchema } from '@/shared/schemas/forms';
 import type { MedicalRecordEntry } from '@/shared/types';
 import { request } from '../client';
 import * as S from '../schemas';
@@ -73,6 +73,8 @@ export const useAssistSend = () => useAssistMutation((v: { id: string; text: str
 
 export const useAssistGuarantees = (status = '') => useQuery({ queryKey: ak.guarantees(status), queryFn: () => request('/assist/guarantees', { query: { status }, schema: C.guaranteeViews }) });
 export const useAssistGuarantee = (id: string) => useQuery({ queryKey: ak.guarantee(id), queryFn: () => request(`/assist/guarantees/${id}`, { schema: C.guaranteeView }), retry: false });
+export const useAssistRequestGuarantee = () =>
+  useAssistMutation((body: z.input<typeof assistGuaranteeRequestSchema>) => request('/assist/guarantees', { method: 'POST', body, schema: C.guaranteeView }));
 export const useAssistDecideGuarantee = () =>
   useAssistMutation((v: { id: string; body: z.input<typeof assistGuaranteeDecisionSchema> }) => request(`/assist/guarantees/${v.id}/decision`, { method: 'POST', body: v.body, schema: C.guaranteeView }));
 
@@ -128,6 +130,14 @@ function useStaffAssistMutation<V, R>(fn: (v: V) => Promise<R>) {
 }
 export const useAssistances = () => useQuery({ queryKey: sk.list, queryFn: () => request('/assistance', { schema: A.assistanceList }), staleTime: 60_000 });
 export const useAssistanceCard = (id: string) => useQuery({ queryKey: sk.card(id), queryFn: () => request(`/assistance/${id}/card`, { schema: A.assistanceCard }) });
+export const useAssistanceCases = (id: string, enabled: boolean) =>
+  useQuery({ queryKey: ['staff-assistance', 'cases', id], queryFn: () => request(`/assistance/${id}/cases`, { schema: z.array(A.assistanceCase) }), enabled });
+export const useResolveComplaint = () =>
+  useStaffAssistMutation((v: { assistanceId: string; caseId: string; resolution: string }) =>
+    request(`/assistance/${v.assistanceId}/cases/${v.caseId}/complaint`, { method: 'POST', body: { resolution: v.resolution }, schema: A.assistanceCase }),
+  );
+export const useCreateAssistance = () =>
+  useStaffAssistMutation((body: z.input<typeof assistanceCreateSchema>) => request('/assistance', { method: 'POST', body, schema: A.assistanceListItem }));
 export const useUpdateContract = () =>
   useStaffAssistMutation((v: { id: string; body: { feeModel: string; feeValue: number; guaranteeAuthorityLimit: number; rebillPaymentDays: number } }) =>
     request(`/assistance/${v.id}/contract`, { method: 'PATCH', body: v.body, schema: A.assistanceCompany }),

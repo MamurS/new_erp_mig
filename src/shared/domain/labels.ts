@@ -114,6 +114,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   rebill_line_decided: 'Решение по строке счёта ассистанса',
   rebill_paid: 'Счёт ассистанса оплачен',
   qa_reviewed: 'Контроль качества',
+  complaint_resolved: 'Жалоба закрыта МИГ',
 };
 
 export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin'] as const;

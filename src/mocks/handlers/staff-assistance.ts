@@ -9,7 +9,7 @@ import type { AssignmentView, AssistanceCardView, AssistanceListItem, Assistance
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
 import { assistanceOn } from '@/shared/domain/assistance';
-import { assignmentSchema, assistanceContractSchema, assistanceCreateSchema, qaReviewSchema, rebillLineDecisionSchema } from '@/shared/schemas/forms';
+import { assignmentSchema, assistanceContractSchema, assistanceCreateSchema, complaintResolutionSchema, qaReviewSchema, rebillLineDecisionSchema } from '@/shared/schemas/forms';
 import { db, type Db } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
 import {
@@ -171,6 +171,43 @@ export const staffAssistanceHandlers = [
           .filter((c) => c.assistanceId === a.id && c.status !== 'resolved' && (c.type === 'complaint' || parseIso(c.slaDueAt) < now))
           .map(({ policyId: _p, createdById: _c, resolvedAt: _r, ...c }) => c),
       };
+      return out;
+    }),
+  ),
+  // ---- cases of the assistance: the curator reads them and handles complaints (§5.1, §10) ----
+  http.get(
+    `${API}/assistance/:id/cases`,
+    route((ctx) => {
+      const user = requireStaff(ctx.request);
+      requirePermission(user, 'assist.cases.manage', { sub: 'read' });
+      const d = db();
+      const a = assistanceOf(d, param(ctx, 'id'));
+      const status = ctx.url.searchParams.get('status');
+      const type = ctx.url.searchParams.get('type');
+      return d.cases
+        .filter((c) => c.assistanceId === a.id && (!status || status.split(',').includes(c.status)) && (!type || c.type === type))
+        .sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1))
+        .slice(0, 200)
+        .map(({ policyId: _p, createdById: _c, resolvedAt: _r, ...c }) => c);
+    }),
+  ),
+  http.post(
+    `${API}/assistance/:id/cases/:caseId/complaint`,
+    route(async (ctx) => {
+      const user = requireStaff(ctx.request);
+      requirePermission(user, 'assist.cases.manage', { sub: 'complaint' });
+      const d = db();
+      const a = assistanceOf(d, param(ctx, 'id'));
+      const c = d.cases.find((x) => x.id === param(ctx, 'caseId') && x.assistanceId === a.id);
+      if (!c) throw notFound();
+      if (c.type !== 'complaint') throw conflict('МИГ закрывает только жалобы; остальные обращения ведёт ассистанс');
+      if (c.status === 'resolved') throw conflict('Жалоба уже закрыта');
+      const { resolution } = await body(ctx.request, complaintResolutionSchema);
+      c.status = 'resolved';
+      c.resolution = `Куратор МИГ: ${resolution}`;
+      c.resolvedAt = tzIso(Date.now());
+      audit(user, 'complaint_resolved', { targetType: 'case', targetId: c.id, targetLabel: c.number, reason: resolution, assistanceId: a.id });
+      const { policyId: _p, createdById: _c, resolvedAt: _r, ...out } = c;
       return out;
     }),
   ),

@@ -15,6 +15,7 @@ import { PageHeader } from '@/shared/ui/page';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
+import { SlaBadge } from '../components';
 
 const STATUS = { requested: 'Ждёт клинику', confirmed: 'Подтверждена', declined: 'Отклонена', completed: 'Состоялась', cancelled: 'Отменена' } as const;
 
@@ -46,6 +47,7 @@ export default function AppointmentsPage() {
       header: 'Статус',
       cell: (a) => (a.overdue ? <Chip kind="danger">Клиника не ответила в срок</Chip> : <Chip kind={a.status === 'confirmed' ? 'success' : a.status === 'requested' ? 'sky' : 'neutral'}>{STATUS[a.status]}</Chip>),
     },
+    { key: 'sla', header: 'Ответ клиники', cell: (a) => <SlaBadge dueAt={a.slaDueAt} done={a.status !== 'requested' || !!a.proposedStartsAt} /> },
     {
       key: 'actions',
       header: '',

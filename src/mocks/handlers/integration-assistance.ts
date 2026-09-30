@@ -93,7 +93,8 @@ export const integrationAssistanceHandlers = [
       const q = validate(rosterQuery, Object.fromEntries(ctx.url.searchParams));
       const since = q.updatedSince ? parseIso(q.updatedSince) : 0;
       const items = rosterOf(ctx.d, assistanceId)
-        .map((i) => ({ i, updatedAt: i.addedAt }))
+        // Exclusions change a person after they were added: the latest change counts.
+        .map((i) => ({ i, updatedAt: i.updatedAt ?? i.addedAt }))
         .filter((x) => parseIso(x.updatedAt) >= since)
         .sort((a, b) => (a.i.fullName < b.i.fullName ? -1 : 1))
         .map(({ i, updatedAt }) => {

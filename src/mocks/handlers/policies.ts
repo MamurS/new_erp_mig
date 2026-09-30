@@ -134,6 +134,7 @@ export const policyHandlers = [
               const person = d.insured.find((i) => i.id === r!.insuredId)!;
               person.status = 'excluded';
               person.excludedFrom = r!.effectiveDate;
+              person.updatedAt = at;
             }
             // The assistance of the policy sees the change at once (ASSISTANCE_SPEC §5.7).
             await notifyAssistance(d, currentAssistance(d, policy.id), r!.kind === 'add' ? 'insured.added' : 'insured.excluded', r!.insuredId!);

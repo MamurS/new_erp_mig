@@ -337,6 +337,7 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'rebill_line_decided',
     'rebill_paid',
     'qa_reviewed',
+    'complaint_resolved',
   ]),
   targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill']),
   targetId: uuid.optional(),

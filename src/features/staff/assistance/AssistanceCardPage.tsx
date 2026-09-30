@@ -2,21 +2,22 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { AssistanceCardView } from '@/shared/types/dto';
-import type { FeeModel } from '@/shared/types';
-import { useAssistanceCard, useRevokeAssistKey, useUpdateContract } from '@/shared/api/queries/assist';
+import type { AssistanceCase, FeeModel } from '@/shared/types';
+import { useAssistanceCard, useAssistanceCases, useResolveComplaint, useRevokeAssistKey, useUpdateContract } from '@/shared/api/queries/assist';
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { CASE_TYPE_LABEL, FEE_MODEL_LABEL } from '@/shared/domain/assistance';
 import { AUDIT_ACTION_LABEL, ROLE_LABEL } from '@/shared/domain/labels';
 import { INTEGRATION_MODE_LABEL, SCOPE_LABEL } from '@/shared/domain/clinics';
-import { assistanceContractSchema } from '@/shared/schemas/forms';
+import { assistanceContractSchema, complaintResolutionSchema } from '@/shared/schemas/forms';
 import { formatDate, formatDateTime, formatMoney, formatNumber } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
 import { DataTable } from '@/shared/ui/data-table';
-import { Field, Input, Select } from '@/shared/ui/input';
+import { Field, Input, Select, Textarea } from '@/shared/ui/input';
+import { Modal } from '@/shared/ui/dialog';
 import { Card, Kv } from '@/shared/ui/page';
 import { EmptyState, QueryState } from '@/shared/ui/states';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
@@ -29,6 +30,7 @@ const TABS = [
   ['overview', 'Обзор и KPI'],
   ['contract', 'Договор'],
   ['clients', 'Клиенты'],
+  ['cases', 'Обращения'],
   ['users', 'Пользователи'],
   ['integration', 'Интеграция'],
   ['rebills', 'Счета'],
@@ -180,6 +182,91 @@ function IntegrationTab({ c }: { c: AssistanceCardView }) {
   );
 }
 
+function CasesTab({ assistanceId }: { assistanceId: string }) {
+  const canRead = useCan('assist.cases.manage', { sub: 'read' });
+  const canComplaint = useCan('assist.cases.manage', { sub: 'complaint' });
+  const q = useAssistanceCases(assistanceId, canRead);
+  const resolve = useResolveComplaint();
+  const [closing, setClosing] = useState<AssistanceCase | null>(null);
+  const [resolution, setResolution] = useState('');
+  const [error, setError] = useState<string>();
+  if (!canRead) return <EmptyState title="Обращения ассистанса видит куратор ДМС" />;
+  return (
+    <>
+      <div className="rounded-card border border-border bg-surface">
+        <DataTable
+          caption="Обращения ассистанса"
+          columns={[
+            { key: 'num', header: 'Номер', cell: (x) => <span className="num font-medium">{x.number}</span> },
+            { key: 'type', header: 'Тип', cell: (x) => (x.type === 'complaint' ? <Chip kind="danger">{CASE_TYPE_LABEL[x.type]}</Chip> : CASE_TYPE_LABEL[x.type]) },
+            { key: 'who', header: 'Застрахованный', cell: (x) => x.insuredName },
+            { key: 'text', header: 'Суть', cell: (x) => <span className="line-clamp-1 text-muted">{x.resolution ?? x.description}</span> },
+            { key: 'status', header: 'Статус', cell: (x) => <CaseStatus status={x.status} /> },
+            { key: 'sla', header: 'SLA', cell: (x) => <SlaBadge dueAt={x.slaDueAt} done={x.status === 'resolved'} /> },
+            {
+              key: 'actions',
+              header: '',
+              align: 'right',
+              cell: (x) =>
+                canComplaint && x.type === 'complaint' && x.status !== 'resolved' ? (
+                  <Button size="sm" variant="secondary" onClick={() => setClosing(x)} aria-label={`Закрыть жалобу ${x.number}`}>
+                    Закрыть жалобу
+                  </Button>
+                ) : null,
+            },
+          ]}
+          rows={q.data}
+          loading={q.isLoading}
+          error={q.error}
+          onRetry={() => void q.refetch()}
+          rowKey={(x) => x.id}
+          empty="Обращений нет"
+        />
+      </div>
+      {closing && (
+        <Modal
+          open
+          onOpenChange={(o) => !o && setClosing(null)}
+          title="Закрыть жалобу"
+          description={`${closing.number} · ${closing.insuredName}`}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setClosing(null)}>
+                Отмена
+              </Button>
+              <Button
+                loading={resolve.isPending}
+                onClick={async () => {
+                  const parsed = complaintResolutionSchema.safeParse({ resolution });
+                  if (!parsed.success) {
+                    setError(parsed.error.issues[0]?.message);
+                    return;
+                  }
+                  try {
+                    await resolve.mutateAsync({ assistanceId, caseId: closing.id, resolution: parsed.data.resolution });
+                    toast.success('Жалоба закрыта');
+                    setClosing(null);
+                    setResolution('');
+                  } catch (e) {
+                    toast.error(errorMessage(e));
+                  }
+                }}
+              >
+                Закрыть жалобу
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-3 rounded-btn bg-rail px-3 py-2 text-[13px]">{closing.description}</p>
+          <Field label="Решение МИГ" error={error}>
+            {(a) => <Textarea {...a} rows={3} maxLength={1000} value={resolution} onChange={(e) => setResolution(e.target.value)} />}
+          </Field>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 export default function AssistanceCardPage() {
   const { assistanceId = '' } = useParams();
   const q = useAssistanceCard(assistanceId);
@@ -250,6 +337,9 @@ export default function AssistanceCardPage() {
                   onRowClick={(x) => navigate(`/staff/clients/${x.id}`)}
                 />
               </div>
+            </TabsContent>
+            <TabsContent value="cases">
+              <CasesTab assistanceId={c.assistance.id} />
             </TabsContent>
             <TabsContent value="users">
               <div className="rounded-card border border-border bg-surface">

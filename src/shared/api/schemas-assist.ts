@@ -97,7 +97,7 @@ export const insuredDetail: z.ZodType<D.AssistInsuredDetail> = insuredItem.exten
   guarantees: C.guaranteeViews,
 });
 
-export const assistAppointments: z.ZodType<D.AssistAppointment[]> = z.array(S.appointment.and(z.object({ overdue: z.boolean() })));
+export const assistAppointments: z.ZodType<D.AssistAppointment[]> = z.array(S.appointment.and(z.object({ overdue: z.boolean(), slaDueAt: isoDateTime })));
 export const chatThreads: z.ZodType<D.AssistChatThread[]> = z.array(z.object({ insuredId: uuid, insuredName: z.string(), lastText: z.string(), lastAt: isoDateTime, unanswered: z.boolean() }));
 export const chatMessage: z.ZodType<D.AssistChatMessage> = z.object({ id: uuid, from: z.enum(['insured', 'operator']), text: z.string(), at: isoDateTime });
 export const chatMessages = z.array(chatMessage);
@@ -115,6 +115,7 @@ const subSummary = z.object({
   disputedCount: z.number(),
   unpaidCount: z.number(),
   totals: I.registry.shape.totals,
+  reviewDueAt: isoDateTime.optional(),
 });
 export const subRegistries: z.ZodType<D.SubRegistrySummary[]> = z.array(subSummary);
 export const subRegistry: z.ZodType<D.SubRegistryView> = subSummary.extend({
@@ -152,9 +153,9 @@ const qaBase = z.object({
 export const qaSample: z.ZodType<D.QaSampleView> = qaBase;
 export const qaSamples = z.array(qaBase);
 
-export const assistanceList: z.ZodType<D.AssistanceListItem[]> = z.array(
-  brief.extend({ contractNumber: z.string(), insuredCount: z.number(), clientsCount: z.number(), kpi, rebillsToReview: z.number(), slaBreaches: z.number() }),
-);
+const listItem = brief.extend({ contractNumber: z.string(), insuredCount: z.number(), clientsCount: z.number(), kpi, rebillsToReview: z.number(), slaBreaches: z.number() });
+export const assistanceListItem: z.ZodType<D.AssistanceListItem> = listItem;
+export const assistanceList: z.ZodType<D.AssistanceListItem[]> = z.array(listItem);
 export const assistanceCard: z.ZodType<D.AssistanceCardView> = z.object({
   assistance: assistanceCompany,
   kpi,

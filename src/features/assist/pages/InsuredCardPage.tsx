@@ -7,13 +7,13 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 import type { AssistanceCase, Specialty } from '@/shared/types';
-import { useAssistBook, useAssistClinics, useAssistPerson, useCreateCase } from '@/shared/api/queries/assist';
+import { useAssistBook, useAssistClinics, useAssistPerson, useAssistRequestGuarantee, useCreateCase } from '@/shared/api/queries/assist';
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { CASE_TYPE_LABEL } from '@/shared/domain/assistance';
 import { GUARANTEE_STATUS_LABEL } from '@/shared/domain/clinics';
 import { SPECIALTY_LABEL } from '@/shared/domain/labels';
-import { assistAppointmentSchema, caseCreateSchema } from '@/shared/schemas/forms';
+import { assistAppointmentSchema, assistGuaranteeRequestSchema, caseCreateSchema } from '@/shared/schemas/forms';
 import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -169,6 +169,107 @@ export function BookDialog({ insuredId, caseId, onClose }: { insuredId: string; 
   );
 }
 
+export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insuredId: string; caseId?: string; onClose: () => void }) {
+  const clinics = useAssistClinics();
+  const requestGp = useAssistRequestGuarantee();
+  const navigate = useNavigate();
+  const [clinicId, setClinicId] = useState('');
+  const [serviceCode, setServiceCode] = useState('');
+  const [icd10, setIcd10] = useState('');
+  const [cost, setCost] = useState('');
+  const [comment, setComment] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const clinic = clinics.data?.find((c) => c.clinicId === clinicId);
+  const services = (clinic?.priceList ?? []).filter((p) => p.requiresGuarantee);
+  const submit = async () => {
+    const parsed = assistGuaranteeRequestSchema.safeParse({ insuredId, clinicId, serviceCode, icd10, estimatedCost: Number(cost.replace(/\s/g, '')), comment: comment || undefined, caseId });
+    if (!parsed.success) {
+      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])));
+      return;
+    }
+    setErrors({});
+    try {
+      const g = await requestGp.mutateAsync(parsed.data);
+      toast.success(`Гарантийное письмо ${g.number} запрошено`);
+      onClose();
+      navigate(`/assist/guarantees/${g.id}`);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+  return (
+    <Modal
+      open
+      wide
+      onOpenChange={(o) => !o && onClose()}
+      title="Запросить гарантийное письмо"
+      description="Направление в клинику по звонку: клиника увидит пациента и письмо, решение принимает врач ассистанса"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button loading={requestGp.isPending} onClick={() => void submit()}>
+            Запросить ГП
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Клиника" error={errors.clinicId}>
+          {(a) => (
+            <Select
+              {...a}
+              value={clinicId}
+              onChange={(e) => {
+                setClinicId(e.target.value);
+                setServiceCode('');
+              }}
+            >
+              <option value="">Выберите клинику</option>
+              {(clinics.data ?? []).map((c) => (
+                <option key={c.clinicId} value={c.clinicId}>
+                  {c.clinicName} · {c.city}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Услуга" error={errors.serviceCode}>
+          {(a) => (
+            <Select
+              {...a}
+              value={serviceCode}
+              disabled={!clinic}
+              onChange={(e) => {
+                setServiceCode(e.target.value);
+                const p = services.find((x) => x.code === e.target.value);
+                if (p) setCost(String(p.price));
+              }}
+            >
+              <option value="">Выберите услугу</option>
+              {services.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.code} · {p.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Код МКБ-10" error={errors.icd10}>
+          {(a) => <Input {...a} maxLength={8} value={icd10} onChange={(e) => setIcd10(e.target.value)} placeholder="G43.9" />}
+        </Field>
+        <Field label="Оценка стоимости, UZS" error={errors.estimatedCost}>
+          {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={cost} onChange={(e) => setCost(e.target.value)} />}
+        </Field>
+        <Field label="Комментарий" error={errors.comment} className="sm:col-span-2">
+          {(a) => <Textarea {...a} rows={2} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />}
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
 export default function InsuredCardPage() {
   const { insuredId = '' } = useParams();
   const q = useAssistPerson(insuredId);
@@ -178,7 +279,7 @@ export default function InsuredCardPage() {
   const canCases = useCan('assist.cases.manage');
   const canBook = useCan('assist.appointments.manage');
   const isDoctor = useCan('assist.medical.read');
-  const [dialog, setDialog] = useState<'case' | 'book' | null>(null);
+  const [dialog, setDialog] = useState<'case' | 'book' | 'gp' | null>(null);
 
   return (
     <QueryState query={q}>
@@ -198,6 +299,11 @@ export default function InsuredCardPage() {
                   {canCases && (
                     <Button variant="secondary" onClick={() => setDialog('case')}>
                       Новое обращение
+                    </Button>
+                  )}
+                  {canCases && (
+                    <Button variant="secondary" onClick={() => setDialog('gp')}>
+                      Запросить ГП
                     </Button>
                   )}
                   {canBook && <Button onClick={() => setDialog('book')}>Записать к врачу</Button>}
@@ -284,6 +390,7 @@ export default function InsuredCardPage() {
             {isDoctor && full && <MedicalCard insuredId={p.id} apiBase="/assist/insured" action="assist.medical.read" />}
             {dialog === 'case' && <NewCaseDialog insuredId={p.id} name={p.fullName} onClose={() => setDialog(null)} />}
             {dialog === 'book' && <BookDialog insuredId={p.id} onClose={() => setDialog(null)} />}
+            {dialog === 'gp' && <RequestGuaranteeDialog insuredId={p.id} onClose={() => setDialog(null)} />}
           </div>
         );
       }}

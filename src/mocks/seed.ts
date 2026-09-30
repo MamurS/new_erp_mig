@@ -393,7 +393,10 @@ export function createSeed(opts: SeedOptions = {}): Db {
         addedAt: tzIso(Math.min(fromMs, today) - DAY),
         consentGivenAt: appStatus === 'active' ? tzIso(fromMs + int(rng, 1, 30) * DAY) : undefined,
       };
-      if (row.status === 'excluded') row.excludedFrom = isoDay(today - int(rng, 5, 60) * DAY);
+      if (row.status === 'excluded') {
+        row.excludedFrom = isoDay(today - int(rng, 5, 60) * DAY);
+        row.updatedAt = tzIso(parseIso(row.excludedFrom));
+      }
       if (isDemo && k === 0) {
         row.fullName = 'Каримов Азиз Бахромович';
         row.position = 'Руководитель отдела логистики';
