@@ -14,6 +14,7 @@ import { Field, Input } from '@/shared/ui/input';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
 import { CoverageCard, GuaranteeRequestDialog, PageTitle, Panel, useTimeLeft } from '../components';
 import { QrScanner } from '../QrScanner';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 const METHOD_LABEL = { qr: 'QR / код', policy: 'Полис и ПИНФЛ', api: 'МИС (API)' } as const;
 
@@ -36,6 +37,9 @@ function VisitRow({ v }: { v: { id: string; insuredName: string; method: 'qr' | 
 
 export default function CheckPage() {
   useDocumentTitle('Проверка пациента');
+  const checksPerHour = useDmsParam('pinflChecksPerHour');
+  const failsBeforeLock = useDmsParam('pinflFailsBeforeLock');
+  const lockMinutes = useDmsParam('pinflLockMinutes');
   const navigate = useNavigate();
   const check = useCheckPatient();
   const visits = useClinicVisits('today');
@@ -110,7 +114,7 @@ export default function CheckPage() {
             <Field label="ПИНФЛ">
               {(a) => <Input {...a} autoComplete="off" inputMode="numeric" maxLength={14} value={pinfl} onChange={(e) => setPinfl(digitsOnly(e.target.value))} />}
             </Field>
-            <p className="text-[12px] text-muted sm:col-span-2">Оба поля обязательны. Не больше 30 проверок в час; после 10 ошибок подряд проверки блокируются на 15 минут.</p>
+            <p className="text-[12px] text-muted sm:col-span-2">Оба поля обязательны. Не больше {checksPerHour} проверок в час; после {failsBeforeLock} ошибок подряд проверки блокируются на {lockMinutes} мин.</p>
             <Button type="submit" className="w-fit" disabled={!policy.trim() || pinfl.length !== 14} loading={check.isPending && !scan}>
               Проверить полис
             </Button>

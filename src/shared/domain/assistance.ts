@@ -18,9 +18,7 @@ import type {
   UUID,
 } from '@/shared/types';
 
-// ---- tunables (demo values, MIG replaces them with contract values) ----
-export const QA_SAMPLE_SHARE = 0.05;
-export const REBILL_REVIEW_WORKDAYS = 10;
+// ---- tunables (demo values; QA share, review terms and the authority limit are DMS parameters) ----
 /** The former assistance keeps read-only access to its cases for this long after a change. */
 export const FORMER_ACCESS_MONTHS = 12;
 /** Case SLA by type, minutes. */
@@ -196,11 +194,12 @@ function hash(s: string): number {
 }
 
 /** Deterministic monthly sample: the same decision is in or out of the sample for a given month. */
-export function inQaSample(decisionId: UUID, month: string, share = QA_SAMPLE_SHARE): boolean {
+/** `share`: DMS parameter `qaSampleShare`. */
+export function inQaSample(decisionId: UUID, month: string, share: number): boolean {
   return hash(`${month}:${decisionId}`) % 10_000 < Math.round(share * 10_000);
 }
 
-export function qaSample<T extends { id: UUID }>(decisions: readonly T[], month: string, share = QA_SAMPLE_SHARE): T[] {
+export function qaSample<T extends { id: UUID }>(decisions: readonly T[], month: string, share: number): T[] {
   return decisions.filter((d) => inQaSample(d.id, month, share));
 }
 

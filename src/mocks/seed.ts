@@ -30,7 +30,6 @@ import { PROGRAMS, perPersonPremium } from './programs';
 import { seedClinics } from './seed-clinics';
 import { seedPolicyChanges } from './seed-policies';
 import { seedAssistance } from './seed-assistance';
-import { CLINIC_RESPONSE_SLA_MINUTES } from '@/shared/domain/clinics';
 
 // ---------- dictionaries ----------
 const UZ_MALE = ['Азиз', 'Бахтиёр', 'Жасур', 'Отабек', 'Шерзод', 'Фаррух', 'Улугбек', 'Санжар', 'Дилшод', 'Рустам', 'Тимур', 'Мансур', 'Бобур', 'Анвар'];
@@ -239,7 +238,6 @@ export function createSeed(opts: SeedOptions = {}): Db {
       apiStatus: pick(rng, ['online', 'online', 'online', 'offline', 'manual'] as const),
       contractUntil: isoDay(today + int(rng, 60, 700) * DAY),
       integrationMode: 'portal',
-      responseSlaMinutes: CLINIC_RESPONSE_SLA_MINUTES,
     });
   }
 
@@ -596,7 +594,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
   claims.push(makeClaim(demo, 'paid', now - 75 * DAY, 'diagnostics', 640_000, false, 'app'));
   const demoApproved = claims[claims.length - 4]!;
   demoApproved.amountApproved = 245_000;
-  // Dental limit must be > 80 % used: the paid dental claim is approved in full.
+  // Dental limit must be running low (demo value of `limitLowShare`): the paid dental claim is approved in full.
   for (const c of claims.slice(-2)) {
     c.amountApproved = c.amountClaimed;
     for (const h of c.history) if (h.to === 'approved') delete h.comment;
@@ -811,6 +809,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     clinicContracts: [],
     rebills: [],
     qaSamples: [],
+    dmsParams: { values: {}, changes: [] },
   };
   seedAssistance(out, { now });
   return out;

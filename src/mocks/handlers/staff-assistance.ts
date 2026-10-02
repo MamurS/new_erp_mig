@@ -219,7 +219,9 @@ export const staffAssistanceHandlers = [
       const d = db();
       const a = assistanceOf(d, param(ctx, 'id'));
       const input = await body(ctx.request, assistanceContractSchema);
-      a.contract = { ...a.contract, ...input };
+      // The form sends the whole contract: an omitted authority removes the individual value (the DMS parameter applies).
+      const { guaranteeAuthorityLimit: _old, ...keep } = a.contract;
+      a.contract = { ...keep, ...input };
       audit(user, 'role_change', { targetType: 'assistance', targetId: a.id, targetLabel: `${a.name}: договор`, assistanceId: a.id });
       return a;
     }),

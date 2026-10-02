@@ -22,6 +22,7 @@ import { Card } from '@/shared/ui/page';
 import { EmptyState, QueryState, Skeleton } from '@/shared/ui/states';
 import { ExportButton } from '../components/ExportButton';
 import { useTopbar } from '../topbar';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 const ACCENT = '#4f46e5';
 const WARN = '#d97706';
@@ -30,6 +31,7 @@ const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'и�
 const money = (v: number) => formatMoneyShort(v).replace(' UZS', '');
 
 export default function ReportsPage() {
+  const lossWarn = useDmsParam('lossRatioWarn');
   const byAssistance = useAssistanceReport();
   useDocumentTitle('Отчёты');
   useTopbar([{ label: 'Отчёты' }]);
@@ -49,7 +51,7 @@ export default function ReportsPage() {
             rows.length === 0 ? (
               <EmptyState title="Нет данных" />
             ) : (
-              <div style={{ height: Math.max(280, rows.length * 22) }} role="img" aria-label={`Убыточность по клиентам. Выше 80%: ${rows.filter((r) => r.lossRatio >= 0.8).length} клиентов`}>
+              <div style={{ height: Math.max(280, rows.length * 22) }} role="img" aria-label={`Убыточность по клиентам. От ${formatPercent(lossWarn)}: ${rows.filter((r) => r.lossRatio >= lossWarn).length} клиентов`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={rows.map((r) => ({ ...r, pct: Math.round(r.lossRatio * 100) }))} layout="vertical" margin={{ left: 8, right: 24 }}>
                     <CartesianGrid horizontal={false} stroke={GRID} />
@@ -59,7 +61,7 @@ export default function ReportsPage() {
                     <ReferenceLine x={80} stroke={WARN} strokeDasharray="4 3" label={{ value: 'Порог 80%', position: 'top', fill: WARN, fontSize: 12 }} />
                     <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={12}>
                       {rows.map((r) => (
-                        <Cell key={r.clientId} fill={r.lossRatio >= 0.8 ? WARN : ACCENT} />
+                        <Cell key={r.clientId} fill={r.lossRatio >= lossWarn ? WARN : ACCENT} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -147,7 +149,7 @@ export default function ReportsPage() {
                     <td className="num px-4 py-1.5 text-right">{formatNumber(r.insuredCount)}</td>
                     <td className="num px-4 py-1.5 text-right">{formatMoney(r.premium)}</td>
                     <td className="num px-4 py-1.5 text-right">{formatMoney(r.paid)}</td>
-                    <td className={`num px-4 py-1.5 text-right ${(r.lossRatio ?? 0) >= 0.8 ? 'text-warning-text' : ''}`}>{r.lossRatio === null ? '—' : formatPercent(r.lossRatio)}</td>
+                    <td className={`num px-4 py-1.5 text-right ${(r.lossRatio ?? 0) >= lossWarn ? 'text-warning-text' : ''}`}>{r.lossRatio === null ? '—' : formatPercent(r.lossRatio)}</td>
                     <td className="num px-4 py-1.5 text-right">{r.assistanceId ? formatMoney(r.fee) : '—'}</td>
                     <td className="num px-4 py-1.5 text-right">{r.feePerInsured === null ? '—' : formatMoney(r.feePerInsured)}</td>
                   </tr>
@@ -157,7 +159,7 @@ export default function ReportsPage() {
           )}
         </QueryState>
       </Card>
-      <p className="text-[12px] text-muted">Проценты убыточности: {formatPercent(0.8)} и выше отмечены оранжевым.</p>
+      <p className="text-[12px] text-muted">Проценты убыточности: {formatPercent(lossWarn)} и выше отмечены оранжевым.</p>
     </div>
   );
 }

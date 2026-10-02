@@ -32,7 +32,7 @@ export const assistanceCompany: z.ZodType<T.AssistanceCompany> = brief.extend({
     validTo: isoDate,
     feeModel,
     feeValue: z.number(),
-    guaranteeAuthorityLimit: money,
+    guaranteeAuthorityLimit: money.optional(),
     rebillPaymentDays: z.number(),
   }),
   kpi: kpi.optional(),

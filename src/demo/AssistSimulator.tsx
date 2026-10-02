@@ -11,6 +11,7 @@ import * as A from '@/shared/api/schemas-assist';
 import { ASSIST_SCOPES } from '@/shared/integration/schemas';
 import { addDaysISO, todayISO } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/button';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 interface Creds {
   clientId: string;
@@ -33,6 +34,7 @@ function problemText(r: IntegrationCallResult): string {
 export function AssistSimulator() {
   const qc = useQueryClient();
   const creds = useRef<Creds | null>(null);
+  const validityDays = useDmsParam('guaranteeValidityDays');
   const [busy, setBusy] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const say = (s: string) => setLog((l) => [s, ...l].slice(0, 8));
@@ -101,7 +103,7 @@ export function AssistSimulator() {
       const res = await call(
         'POST',
         `/assistance/guarantees/${g.id}/decide`,
-        within ? { decision: 'approve', amount: g.estimatedCost, validUntil: addDaysISO(todayISO(), 30) } : { decision: 'escalate', reason: 'Показания подтверждены, сумма выше полномочий ассистанса' },
+        within ? { decision: 'approve', amount: g.estimatedCost, validUntil: addDaysISO(todayISO(), validityDays) } : { decision: 'escalate', reason: 'Показания подтверждены, сумма выше полномочий ассистанса' },
       );
       if (res.status === 200) {
         if (within) approved++;

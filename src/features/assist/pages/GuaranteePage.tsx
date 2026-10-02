@@ -18,6 +18,7 @@ import { Card, Kv } from '@/shared/ui/page';
 import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 type Mode = 'approve' | 'reject' | 'request_info' | 'escalate';
 
@@ -29,12 +30,15 @@ export default function GuaranteePage() {
   useTopbar([{ label: 'Гарантийные письма', to: '/assist/guarantees' }, { label: q.data?.number ?? 'Письмо' }]);
   const canDecide = useCan('assist.guarantees.decide');
   const decide = useAssistDecideGuarantee();
-  const limit = overview.data?.authorityLimit ?? 10_000_000;
+  const validityDays = useDmsParam('guaranteeValidityDays');
   const [mode, setMode] = useState<Mode | null>(null);
   const [amount, setAmount] = useState('');
-  const [validUntil, setValidUntil] = useState(addDaysISO(todayISO(), 30));
+  const [validUntil, setValidUntil] = useState(() => addDaysISO(todayISO(), validityDays));
   const [reason, setReason] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The authority limit comes from the server: the contract value or the DMS parameter.
+  const limit = overview.data?.authorityLimit;
+  if (limit === undefined) return <QueryState query={overview}>{() => null}</QueryState>;
 
   return (
     <QueryState query={q}>

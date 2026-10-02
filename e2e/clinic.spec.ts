@@ -261,7 +261,7 @@ test('8. The 11th failed policy + PINFL check is blocked', async ({ page }) => {
   await page.getByLabel('Номер полиса').fill('ДМС-2026-999999');
   await page.getByLabel('ПИНФЛ').fill('31234567890123');
   await page.getByRole('button', { name: 'Проверить полис' }).click();
-  await expect(page.getByTestId('check-error')).toContainText('заблокированы на 15 минут');
+  await expect(page.getByTestId('check-error')).toContainText('заблокированы на 15 мин');
 });
 
 test('9. A webhook to a failing address goes to retrying; «Повторить» works', async ({ page }) => {

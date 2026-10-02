@@ -1,4 +1,4 @@
-import { BadgeCheck, BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FileText, Handshake, Hospital, LayoutDashboard, Receipt, ReceiptText, ScrollText, SlidersHorizontal, type LucideIcon, UserPlus, Users } from 'lucide-react';
+import { BadgeCheck, BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FileText, Handshake, Hospital, LayoutDashboard, Receipt, ReceiptText, ScrollText, Settings2, SlidersHorizontal, type LucideIcon, UserPlus, Users } from 'lucide-react';
 import type { StaffRole } from '@/shared/types';
 
 export interface StaffSection {
@@ -30,6 +30,7 @@ export const STAFF_SECTIONS: StaffSection[] = [
   { path: '/staff/reports', label: 'Отчёты', icon: BarChart3, roles: ['underwriter', 'accountant'], inNav: true },
   { path: '/staff/audit', label: 'Журнал аудита', icon: ScrollText, roles: ['admin'], inNav: true },
   { path: '/staff/admin/users', label: 'Пользователи и роли', icon: Users, roles: ['admin'], inNav: true },
+  { path: '/staff/admin/parameters', label: 'Параметры ДМС', icon: Settings2, roles: ALL, inNav: true },
 ];
 
 export const INSURED_CARD_ROLES: StaffRole[] = ['operator', 'underwriter', 'doctor_expert'];

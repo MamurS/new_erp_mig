@@ -2,6 +2,7 @@
  * Seed of assistance companies (ASSISTANCE_SPEC §12). Runs after the rest of the seed on its own
  * RNG stream, so the earlier data does not shift.
  */
+import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 import type {
   AssistanceAssignment,
   AssistanceCaseStatus,
@@ -67,7 +68,8 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
       validTo: `${year + 1}-12-31`,
       feeModel: fees[k]![0],
       feeValue: fees[k]![1],
-      guaranteeAuthorityLimit: 10_000_000,
+      // The second company has an individual authority in its contract; the others use the DMS parameter.
+      ...(k === 1 ? { guaranteeAuthorityLimit: 12_000_000 } : {}),
       rebillPaymentDays: 10,
     },
   }));
@@ -132,7 +134,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
       if (g.approvals.length) g.decidedBy = 'mig';
       continue;
     }
-    const over = g.estimatedCost > A1.contract.guaranteeAuthorityLimit;
+    const over = g.estimatedCost > (assistances.find((x) => x.id === a)?.contract.guaranteeAuthorityLimit ?? DMS_DEFAULTS.assistanceGuaranteeAuthority);
     if (over) {
       g.escalated = true;
       g.assistanceOpinion = 'Показания подтверждены, сумма выше полномочий ассистанса';
@@ -195,19 +197,19 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     return g;
   };
   const other = (k: number) => a1People.filter((p) => p.id !== demoInsured.id)[k % Math.max(1, a1People.length - 1)] ?? demoInsured;
-  const cheap = migPrices.filter((p) => p.requiresGuarantee && p.price <= 10_000_000);
-  const costly = migPrices.filter((p) => p.requiresGuarantee && p.price > 10_000_000);
+  const cheap = migPrices.filter((p) => p.requiresGuarantee && p.price <= DMS_DEFAULTS.assistanceGuaranteeAuthority);
+  const costly = migPrices.filter((p) => p.requiresGuarantee && p.price > DMS_DEFAULTS.assistanceGuaranteeAuthority);
   addLetter(other(0), cheap[0]!.code, 'requested', {}, 3);
-  addLetter(other(1), cheap[1 % cheap.length]!.code, 'approved', { decidedBy: 'assistance', decidedAt: tzIso(now - 20 * 3600_000), approvedAmount: priceOf(A1.id, cheap[1 % cheap.length]!.code)!.price, validUntil: isoDay(now + 30 * DAY), approvals: [{ byId: a1doctor.id, byName: a1doctor.fullName, at: tzIso(now - 20 * 3600_000) }] }, 26);
+  addLetter(other(1), cheap[1 % cheap.length]!.code, 'approved', { decidedBy: 'assistance', decidedAt: tzIso(now - 20 * 3600_000), approvedAmount: priceOf(A1.id, cheap[1 % cheap.length]!.code)!.price, validUntil: isoDay(now + DMS_DEFAULTS.guaranteeValidityDays * DAY), approvals: [{ byId: a1doctor.id, byName: a1doctor.fullName, at: tzIso(now - 20 * 3600_000) }] }, 26);
   addLetter(other(2), cheap[2 % cheap.length]!.code, 'rejected', { decidedBy: 'assistance', decidedAt: tzIso(now - 30 * 3600_000), reason: 'Нет показаний: сначала амбулаторное лечение' }, 50);
   if (costly.length) {
     addLetter(other(3), costly[0]!.code, 'requested', { escalated: true, assistanceOpinion: 'Показана плановая операция; сумма выше полномочий ассистанса' }, 6);
     const done = addLetter(other(4), costly[costly.length - 1]!.code, 'approved', { escalated: true, decidedBy: 'mig', assistanceOpinion: 'Операция показана, прошу одобрить' }, 70);
     done.approvedAmount = done.estimatedCost;
     done.decidedAt = tzIso(now - 58 * 3600_000);
-    done.validUntil = isoDay(now + 30 * DAY);
+    done.validUntil = isoDay(now + DMS_DEFAULTS.guaranteeValidityDays * DAY);
     const doctors = d.staff.filter((s) => s.role === 'doctor_expert');
-    done.approvals = doctors.slice(0, done.estimatedCost > 20_000_000 ? 2 : 1).map((s, k) => ({ byId: s.id, byName: s.fullName, at: tzIso(now - (60 - k) * 3600_000) }));
+    done.approvals = doctors.slice(0, done.estimatedCost > DMS_DEFAULTS.guaranteeDualApprovalThreshold ? 2 : 1).map((s, k) => ({ byId: s.id, byName: s.fullName, at: tzIso(now - (60 - k) * 3600_000) }));
   }
 
   // ---- an older A1-only registry (paid two months ago) for the paid rebill ----

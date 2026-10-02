@@ -11,7 +11,7 @@ export function canDecideLimitRequest(
   return req.status === 'pending' && can(user, 'limits.approve_change', { createdById: req.requestedById });
 }
 
-export const LIMIT_WARN_RATIO = 0.8;
-export function isNearLimit(used: number, limit: number): boolean {
-  return limit > 0 && used / limit >= LIMIT_WARN_RATIO;
+/** Running low: no more than `lowShare` (DMS parameter `limitLowShare`) of the limit is left. */
+export function isNearLimit(used: number, limit: number, lowShare: number): boolean {
+  return limit > 0 && (limit - used) / limit <= lowShare;
 }

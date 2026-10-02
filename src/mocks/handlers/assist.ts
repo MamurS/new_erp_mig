@@ -26,7 +26,8 @@ import type {
   SubRegistryView,
 } from '@/shared/types/dto';
 import { isAssistRole } from '@/shared/domain/labels';
-import { assistanceScope, CASE_SLA_MINUTES, CASE_TYPE_LABEL, REBILL_REVIEW_WORKDAYS } from '@/shared/domain/assistance';
+import { assistanceScope, CASE_SLA_MINUTES, CASE_TYPE_LABEL } from '@/shared/domain/assistance';
+import { dmsParam } from '../params';
 import { registryStatusAfterReview } from '@/shared/domain/clinics';
 import { SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { formatMoney } from '@/shared/lib/format';
@@ -52,6 +53,7 @@ import { db, type AssistUserRow, type AssistanceCaseRow, type Db, type Guarantee
 import { API, audit, body, conflict, forbidden, HttpError, insuredLabel, notFound, param, q, requirePermission, requireSession, route } from '../http';
 import {
   assistanceOf,
+  authorityLimitOf,
   kpiOf,
   linesOf,
   recomputeRebill,
@@ -65,7 +67,7 @@ import {
   todayIso,
   upsertDraftRebill,
 } from '../assistance-core';
-import { clinicOf, createAppointment, emitWebhook, isOverdueRequest, priceListOf, pushEvent, recomputeRegistry, refreshGuarantee, respondToAppointment, toGuaranteeView } from '../clinic-core';
+import { clinicOf, clinicResponseMinutes, createAppointment, emitWebhook, isOverdueRequest, priceListOf, pushEvent, recomputeRegistry, refreshGuarantee, respondToAppointment, toGuaranteeView } from '../clinic-core';
 import { maskBirthDate, maskPhone, maskPinfl, formatPhoneFull } from '../mask';
 import { PROGRAMS } from '../programs';
 import { randomId, randomToken } from '../rng';
@@ -78,12 +80,8 @@ import { DEMO_PASSWORD } from '../credentials';
 import { partnerIntegrationHandlers } from './partner-integration';
 
 const A = `${API}/assist`;
-/** Days to review the payer's lines of a clinic registry (the same rule as for MIG). */
-const REGISTRY_REVIEW_DAYS = 5;
-
 function clinicAnswerDue(d: Db, a: Appointment): string {
-  const minutes = d.clinics.find((c) => c.id === a.clinicId)?.responseSlaMinutes ?? 120;
-  return tzIso(parseIso(a.createdAt) + minutes * 60_000);
+  return tzIso(parseIso(a.createdAt) + clinicResponseMinutes(d, a.clinicId) * 60_000);
 }
 const MEDICAL_TTL = 15 * 60_000;
 
@@ -144,7 +142,7 @@ function toSubSummary(d: Db, r: Registry, payer: UUID): SubRegistrySummary {
     disputedCount: lines.filter((l) => l.status === 'disputed').length,
     unpaidCount: lines.filter((l) => l.status === 'accepted' && !l.payment).length,
     totals: subTotals(lines),
-    ...(r.submittedAt ? { reviewDueAt: tzIso(parseIso(r.submittedAt) + REGISTRY_REVIEW_DAYS * DAY) } : {}),
+    ...(r.submittedAt ? { reviewDueAt: tzIso(parseIso(r.submittedAt) + dmsParam('subRegistryReviewDays') * DAY) } : {}),
   };
 }
 
@@ -177,7 +175,7 @@ export function toRebillView(d: Db, b: RebillView | Parameters<typeof recomputeR
   return {
     ...b,
     assistanceName: assistanceOf(d, b.assistanceId).name,
-    ...(b.submittedAt ? { reviewDueAt: addWorkdays(b.submittedAt, REBILL_REVIEW_WORKDAYS) } : {}),
+    ...(b.submittedAt ? { reviewDueAt: addWorkdays(b.submittedAt, dmsParam('rebillReviewWorkdays')) } : {}),
     ...(b.acceptedById ? { acceptedByName: name(b.acceptedById) } : {}),
     ...(b.paidById ? { paidByName: name(b.paidById) } : {}),
   };
@@ -264,7 +262,7 @@ export const assistHandlers = [
       }
       const out: AssistOverview = {
         assistance: { id: a.id, name: a.name, phone24x7: a.phone24x7, integrationMode: a.integrationMode },
-        authorityLimit: a.contract.guaranteeAuthorityLimit,
+        authorityLimit: authorityLimitOf(a),
         queue: queue.sort((x, y) => ((x.dueAt ?? '9') < (y.dueAt ?? '9') ? -1 : 1)),
         counters: {
           openCases: cases.length,
@@ -591,7 +589,7 @@ export const assistHandlers = [
       if (g.escalated) throw conflict('Письмо передано в МИГ: решение принимает врач-эксперт МИГ');
       if (g.status !== 'requested') throw conflict(g.status === 'info_requested' ? 'Ждём документы от клиники' : 'Решение уже принято');
       const input = await body(ctx.request, assistGuaranteeDecisionSchema);
-      const limit = assistanceOf(d, assistanceId).contract.guaranteeAuthorityLimit;
+      const limit = authorityLimitOf(assistanceOf(d, assistanceId));
       const at = tzIso(Date.now());
       await decideAsAssistance(d, g, user, input, limit, at);
       return toGuaranteeView(d, g);

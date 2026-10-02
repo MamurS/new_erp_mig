@@ -19,14 +19,10 @@ import type {
 } from '@/shared/types';
 
 // ---- tunables (demo values) ----
-/** Guarantee letters above this amount need a second doctor_expert (four-eyes). */
-export const GUARANTEE_DUAL_APPROVAL_THRESHOLD: Money = 20_000_000;
-export const CLINIC_RESPONSE_SLA_MINUTES = 120;
+// Business thresholds (dual approval, response SLA, check limits) are DMS parameters:
+// src/shared/config/dmsParameters.ts. The values here are technical.
 export const VISIT_TTL_MS = 24 * 3600_000;
 export const CARD_TOKEN_TTL_MS = 60_000;
-export const CHECKS_PER_HOUR = 30;
-export const CHECK_FAILS_BEFORE_LOCK = 10;
-export const CHECK_LOCK_MS = 15 * 60_000;
 export const API_RATE_PER_MINUTE = 60;
 export const ACCESS_TOKEN_TTL_SEC = 15 * 60;
 export const IDEMPOTENCY_TTL_MS = 24 * 3600_000;
@@ -135,10 +131,10 @@ export function coverageStatus(program: ProgramCode, category: ServiceCategory):
   return 'covered';
 }
 
-/** `low` when less than 20% of the limit is left. Amounts themselves are never shown to the clinic. */
-export function limitState(limit: Money, used: Money): LimitState {
+/** `low` when no more than `lowShare` of the limit is left (DMS parameter `limitLowShare`). Amounts themselves are never shown to the clinic. */
+export function limitState(limit: Money, used: Money, lowShare: number): LimitState {
   if (limit <= 0 || used >= limit) return 'exhausted';
-  return (limit - used) / limit < 0.2 ? 'low' : 'available';
+  return (limit - used) / limit <= lowShare ? 'low' : 'available';
 }
 
 // ---- one-time card code ----
@@ -166,17 +162,18 @@ export function shortCodeFrom(randomBytes: Uint8Array): string {
 }
 
 // ---- guarantees ----
-export function needsSecondApproval(amount: Money): boolean {
-  return amount > GUARANTEE_DUAL_APPROVAL_THRESHOLD;
+/** Letters above `threshold` (DMS parameter `guaranteeDualApprovalThreshold`) need a second doctor_expert (four-eyes). */
+export function needsSecondApproval(amount: Money, threshold: Money): boolean {
+  return amount > threshold;
 }
 
 /**
  * What an approval by `doctorId` does to a letter: completes it, records the first of two approvals,
  * or is refused because the same doctor already approved (four-eyes).
  */
-export function approvalOutcome(g: Pick<GuaranteeLetter, 'approvals'>, amount: Money, doctorId: UUID): 'approved' | 'first_of_two' | 'same_doctor' {
+export function approvalOutcome(g: Pick<GuaranteeLetter, 'approvals'>, amount: Money, doctorId: UUID, threshold: Money): 'approved' | 'first_of_two' | 'same_doctor' {
   if (g.approvals.some((a) => a.byId === doctorId)) return 'same_doctor';
-  if (!needsSecondApproval(amount)) return 'approved';
+  if (!needsSecondApproval(amount, threshold)) return 'approved';
   return g.approvals.length >= 1 ? 'approved' : 'first_of_two';
 }
 

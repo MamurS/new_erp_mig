@@ -2,8 +2,9 @@
  * Seed of the clinic cabinet and integration (CLINIC_SPEC §10). Runs after the main seed with its
  * own RNG stream, so the rest of the demo data stays exactly as before.
  */
+import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 import type { Appointment, Clinic, GuaranteeStatus, PriceListItem, Registry, RegistryLine, ServiceCategory, Visit } from '@/shared/types';
-import { GUARANTEE_DUAL_APPROVAL_THRESHOLD, guaranteeNumber, registryTotals, VISIT_TTL_MS } from '@/shared/domain/clinics';
+import { guaranteeNumber, registryTotals, VISIT_TTL_MS } from '@/shared/domain/clinics';
 import type {
   ApiCallLogRow,
   ClinicEventRow,
@@ -260,11 +261,11 @@ export function seedClinics(
       icd10: pick(rng, ICD),
       estimatedCost: svc.price,
       approvedAmount: decided ? svc.price : undefined,
-      validUntil: decided ? isoDay(status === 'expired' ? now - 3 * DAY : created + 30 * DAY) : undefined,
+      validUntil: decided ? isoDay(status === 'expired' ? now - 3 * DAY : created + DMS_DEFAULTS.guaranteeValidityDays * DAY) : undefined,
       status,
       approvals:
         decided || bigFirst
-          ? [{ byId: doctors[0]!.id, byName: doctors[0]!.fullName, at: tzIso(created + 3600_000) }, ...(decided && svc.price > GUARANTEE_DUAL_APPROVAL_THRESHOLD && doctors[1] ? [{ byId: doctors[1].id, byName: doctors[1].fullName, at: tzIso(created + 2 * 3600_000) }] : [])]
+          ? [{ byId: doctors[0]!.id, byName: doctors[0]!.fullName, at: tzIso(created + 3600_000) }, ...(decided && svc.price > DMS_DEFAULTS.guaranteeDualApprovalThreshold && doctors[1] ? [{ byId: doctors[1].id, byName: doctors[1].fullName, at: tzIso(created + 2 * 3600_000) }] : [])]
           : [],
       reason:
         status === 'rejected'

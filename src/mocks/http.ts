@@ -45,16 +45,19 @@ function isMutation(method: string): boolean {
   return method !== 'GET' && method !== 'HEAD';
 }
 
-/** Wraps a handler with latency, failure injection, error mapping and persistence. */
+/**
+ * Wraps a handler with latency, failure injection, error mapping and persistence.
+ * `noFailures`: the simulated 500s never hit this route (the demo controls themselves).
+ */
 export function route(
   fn: (ctx: Ctx) => Promise<unknown> | unknown,
+  opts: { noFailures?: boolean } = {},
 ): HttpResponseResolver<PathParams, DefaultBodyType, DefaultBodyType> {
   return async ({ request, params }) => {
     const [lo, hi] = mockConfig.latency;
     if (hi > 0) await delay(lo + Math.floor(Math.random() * (hi - lo)));
     const url = new URL(request.url);
-    const isDemoEndpoint = url.pathname.startsWith('/api/__demo');
-    if (mockConfig.failures && !isDemoEndpoint && Math.random() < 0.1) {
+    if (mockConfig.failures && !opts.noFailures && Math.random() < 0.1) {
       return HttpResponse.json(
         { code: 'server', message: 'Сервис временно недоступен. Повторите попытку' } satisfies ApiError,
         { status: 500 },

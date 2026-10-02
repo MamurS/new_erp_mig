@@ -2,6 +2,8 @@
  * In-memory "server" database. Rows hold full (unmasked) values; handlers mask on output.
  */
 import type {
+  DmsParamChange,
+  DmsParamKey,
   Appointment,
   AuditEntry,
   ChatMessage,
@@ -250,6 +252,11 @@ export interface Db {
   clinicContracts: ClinicContract[];
   rebills: Rebill[];
   qaSamples: QaSample[];
+  // ---- DMS business parameters: only values changed from the demo defaults are stored ----
+  dmsParams: {
+    values: Partial<Record<DmsParamKey, { value: number; changedAt: string; changedByName: string }>>;
+    changes: DmsParamChange[];
+  };
 }
 
 let current: Db | null = null;

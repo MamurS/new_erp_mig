@@ -145,6 +145,10 @@ export const PERMISSIONS = {
   'assistance.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
   'assist.users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: 'own' },
   'assist.integration.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: 'own' },
+  // ---- DMS business parameters (/staff/admin/parameters): an admin proposes, a second admin or underwriter confirms ----
+  'dms_params.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: yes, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'dms_params.propose': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'dms_params.approve': { operator: no, underwriter: 'except_own', doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
 } as const satisfies Record<string, Row>;
 
 export type Action = keyof typeof PERMISSIONS;

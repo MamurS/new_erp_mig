@@ -1,10 +1,12 @@
 import type { Claim, ClaimStatus } from '@/shared/types';
 import { cn } from '@/shared/lib/cn';
 import { daysUntil, formatDateTime, formatPercent, formatRelativeDays } from '@/shared/lib/format';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 export function LossBar({ ratio }: { ratio: number | null }) {
+  const warnFrom = useDmsParam('lossRatioWarn');
   if (ratio === null) return <span className="text-muted">—</span>;
-  const warn = ratio >= 0.8;
+  const warn = ratio >= warnFrom;
   return (
     <span className="inline-flex items-center gap-2">
       <span className="h-1.5 w-14 overflow-hidden rounded-full bg-rail" aria-hidden>

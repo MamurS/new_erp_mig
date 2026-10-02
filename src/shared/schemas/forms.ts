@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { claimCategory, claimStatus, limitCategory, specialty, staffRole } from '@/shared/api/schemas';
 import { todayISO } from '@/shared/lib/format';
 import { digitsOnly, parseRuDate } from '@/shared/lib/masks';
+import { dmsParamError, isDmsParamKey } from '@/shared/config/dmsParameters';
 
 const text = (min: number, max: number, msg?: string) =>
   z
@@ -316,7 +317,8 @@ export const assistanceContractSchema = z
   .object({
     feeModel: feeModelInput,
     feeValue: z.number({ invalid_type_error: 'Укажите размер' }).min(0).max(100_000_000),
-    guaranteeAuthorityLimit: z.number({ invalid_type_error: 'Укажите сумму' }).int().min(0).max(10_000_000_000),
+    /** Individual authority; omitted — the DMS parameter `assistanceGuaranteeAuthority` applies. */
+    guaranteeAuthorityLimit: z.number({ invalid_type_error: 'Укажите сумму' }).int().min(0).max(10_000_000_000).optional(),
     rebillPaymentDays: z.number({ invalid_type_error: 'Укажите срок' }).int().min(1, 'Не меньше 1 дня').max(90, 'Не больше 90 дней'),
   })
   .superRefine((v, ctx) => {
@@ -346,3 +348,16 @@ export const assistGuaranteeRequestSchema = z.object({
   caseId: uuid.optional(),
 });
 export const complaintResolutionSchema = z.object({ resolution: text(5, 1000, 'Опишите решение: минимум 5 символов') });
+/** An admin proposes a new value of a DMS parameter; it applies after a second person confirms. */
+export const dmsParamChangeSchema = z
+  .object({
+    key: z.string().trim().max(60).refine(isDmsParamKey, 'Неизвестный параметр'),
+    value: z.number({ invalid_type_error: 'Введите число' }),
+    reason: text(5, 500, 'Опишите основание: минимум 5 символов'),
+  })
+  .superRefine((v, ctx) => {
+    if (!isDmsParamKey(v.key)) return;
+    const error = dmsParamError(v.key, v.value);
+    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: error });
+  });
+export const dmsParamRejectSchema = z.object({ reason: text(5, 500, 'Укажите причину: минимум 5 символов') });

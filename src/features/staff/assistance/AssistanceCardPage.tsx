@@ -25,6 +25,7 @@ import { toast } from '@/shared/ui/toast';
 import { CaseStatus, KpiGrid, RebillStatus, SlaBadge, Stat } from '@/features/assist/components';
 import { QaVerdict } from './QaPage';
 import { useTopbar } from '../topbar';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 const TABS = [
   ['overview', 'Обзор и KPI'],
@@ -49,14 +50,16 @@ function ContractTab({ c }: { c: AssistanceCardView }) {
   const update = useUpdateContract();
   const [feeModel, setFeeModel] = useState<FeeModel>(a.contract.feeModel);
   const [feeValue, setFeeValue] = useState(String(a.contract.feeValue).replace('.', ','));
-  const [limit, setLimit] = useState(String(a.contract.guaranteeAuthorityLimit));
+  const defaultLimit = useDmsParam('assistanceGuaranteeAuthority');
+  const [limit, setLimit] = useState(a.contract.guaranteeAuthorityLimit === undefined ? '' : String(a.contract.guaranteeAuthorityLimit));
   const [days, setDays] = useState(String(a.contract.rebillPaymentDays));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const save = async () => {
     const parsed = assistanceContractSchema.safeParse({
       feeModel,
       feeValue: Number(feeValue.replace(/\s/g, '').replace(',', '.')),
-      guaranteeAuthorityLimit: Number(limit.replace(/\s/g, '')),
+      // Empty: no individual value, the DMS parameter applies.
+      guaranteeAuthorityLimit: limit.trim() ? Number(limit.replace(/\s/g, '')) : undefined,
       rebillPaymentDays: Number(days),
     });
     if (!parsed.success) {
@@ -83,7 +86,13 @@ function ContractTab({ c }: { c: AssistanceCardView }) {
           <Kv label="Вознаграждение">
             <span data-testid="contract-fee">{feeText(a.contract.feeModel, a.contract.feeValue)}</span>
           </Kv>
-          <Kv label="Полномочия по ГП">до {formatMoney(a.contract.guaranteeAuthorityLimit)}</Kv>
+          <Kv label="Полномочия по ГП">
+            {a.contract.guaranteeAuthorityLimit === undefined ? (
+              <span data-testid="contract-authority">до {formatMoney(defaultLimit)} · по параметру ДМС</span>
+            ) : (
+              <span data-testid="contract-authority">до {formatMoney(a.contract.guaranteeAuthorityLimit)} · по договору</span>
+            )}
+          </Kv>
           <Kv label="Срок оплаты счёта МИГ">{a.contract.rebillPaymentDays} дней</Kv>
           <Kv label="Стоимость обслуживания">{c.feePerInsured === null ? '—' : `${formatMoney(c.feePerInsured)} на застрахованного в месяц`}</Kv>
           <Kv label="Линия 24/7">
@@ -108,7 +117,7 @@ function ContractTab({ c }: { c: AssistanceCardView }) {
             <Field label={feeModel === 'percent_of_claims' ? 'Доля (0,07 = 7%)' : 'Сумма, UZS'} error={errors.feeValue}>
               {(p) => <Input {...p} inputMode="decimal" maxLength={14} value={feeValue} onChange={(e) => setFeeValue(e.target.value)} />}
             </Field>
-            <Field label="Полномочия по ГП, UZS" error={errors.guaranteeAuthorityLimit}>
+            <Field label="Полномочия по ГП, UZS" error={errors.guaranteeAuthorityLimit} hint={`Пусто — по параметру ДМС (${formatMoney(defaultLimit)})`}>
               {(p) => <Input {...p} inputMode="numeric" maxLength={14} value={limit} onChange={(e) => setLimit(e.target.value)} />}
             </Field>
             <Field label="Срок оплаты счёта, дней" error={errors.rebillPaymentDays}>

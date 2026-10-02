@@ -8,6 +8,7 @@ import { formatDate, formatDateTime, formatMoney, formatPercent } from '@/shared
 import { cn } from '@/shared/lib/cn';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
+import { useDmsParam } from '@/shared/api/queries/params';
 
 /** Re-renders every 30 seconds so SLA countdowns stay fresh. */
 function useNow(): number {
@@ -53,12 +54,14 @@ export function CaseStatus({ status }: { status: keyof typeof CASE_CHIP }) {
 }
 
 export function KpiGrid({ kpi, className }: { kpi: AssistanceKpi; className?: string }) {
+  const responseNorm = useDmsParam('clinicResponseMinutes');
+  const lossWarn = useDmsParam('lossRatioWarn');
   const items: [string, string, boolean][] = [
-    ['Ответ по записи, в среднем', `${kpi.appointmentResponseMinutesAvg} мин`, kpi.appointmentResponseMinutesAvg > 120],
+    ['Ответ по записи, в среднем', `${kpi.appointmentResponseMinutesAvg} мин`, kpi.appointmentResponseMinutesAvg > responseNorm],
     ['ГП решены в срок', formatPercent(kpi.guaranteesOnTimeShare), kpi.guaranteesOnTimeShare < 0.9],
     ['Согласие контроля качества', formatPercent(kpi.qaAgreementShare), kpi.qaAgreementShare < 0.9],
     ['Жалоб на 1000 застрахованных', String(kpi.complaintsPer1000).replace('.', ','), kpi.complaintsPer1000 > 5],
-    ['Убыточность портфеля', kpi.lossRatio === null ? '—' : formatPercent(kpi.lossRatio), (kpi.lossRatio ?? 0) > 0.8],
+    ['Убыточность портфеля', kpi.lossRatio === null ? '—' : formatPercent(kpi.lossRatio), (kpi.lossRatio ?? 0) >= lossWarn],
   ];
   return (
     <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-5', className)} data-testid="kpi">

@@ -285,7 +285,7 @@ export const clinic: z.ZodType<T.Clinic> = z.object({
   contractUntil: isoDate,
   distanceKm: z.number().optional(),
   integrationMode: z.enum(['portal', 'api', 'hybrid']),
-  responseSlaMinutes: z.number(),
+  responseSlaMinutes: z.number().optional(),
 });
 export const clinics = z.array(clinic);
 export const slots = z.array(z.object({ clinicId: uuid, startsAt: isoDateTime, fromClinicSystem: z.boolean().optional() }) satisfies z.ZodType<T.Slot>);
@@ -338,8 +338,11 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'rebill_paid',
     'qa_reviewed',
     'complaint_resolved',
+    'dms_param_proposed',
+    'dms_param_changed',
+    'dms_param_rejected',
   ]),
-  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill']),
+  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill', 'parameter']),
   targetId: uuid.optional(),
   targetLabel: z.string().optional(),
   reason: z.string().optional(),
@@ -601,3 +604,44 @@ export const policyChange: z.ZodType<T.PolicyChange> = z.object({
 });
 export const policyChanges = z.array(policyChange);
 export const policyChangeDecisionResult: z.ZodType<D.PolicyChangeDecisionResult> = z.object({ approved: z.number(), rejected: z.number(), endorsements: z.number() });
+
+// ---- DMS business parameters ----
+const dmsParamKey = z.enum([
+  'assistanceGuaranteeAuthority',
+  'guaranteeDualApprovalThreshold',
+  'guaranteeValidityDays',
+  'qaSampleShare',
+  'rebillReviewWorkdays',
+  'subRegistryReviewDays',
+  'clinicResponseMinutes',
+  'limitLowShare',
+  'lossRatioWarn',
+  'kpValidityDays',
+  'loginMaxAttempts',
+  'loginWindowMinutes',
+  'loginLockMinutes',
+  'pinflChecksPerHour',
+  'pinflFailsBeforeLock',
+  'pinflLockMinutes',
+]);
+/** Portals other than the MIG one receive only part of the values. */
+export const dmsParamValues: z.ZodType<Partial<T.DmsParamValues>> = z.record(dmsParamKey, z.number());
+export const dmsParamChange: z.ZodType<T.DmsParamChange> = z.object({
+  id: uuid,
+  key: dmsParamKey,
+  from: z.number(),
+  to: z.number(),
+  reason: z.string(),
+  status: z.enum(['pending', 'applied', 'rejected']),
+  proposedById: uuid,
+  proposedByName: z.string(),
+  proposedAt: isoDateTime,
+  decidedById: uuid.optional(),
+  decidedByName: z.string().optional(),
+  decidedAt: isoDateTime.optional(),
+  rejectReason: z.string().optional(),
+});
+export const dmsParamsView: z.ZodType<D.DmsParamsView> = z.object({
+  parameters: z.array(z.object({ key: dmsParamKey, value: z.number(), isDemo: z.boolean(), changedAt: isoDateTime.optional(), changedByName: z.string().optional() })),
+  changes: z.array(dmsParamChange),
+});
