@@ -80,7 +80,7 @@ function DemoBanner() {
               Войти как… <ChevronDown className="h-3 w-3" aria-hidden />
             </button>
           </MenuTrigger>
-          <MenuContent>
+          <MenuContent className="max-h-[calc(100vh-56px)] overflow-y-auto">
             {ACCOUNTS.map((a) => (
               <MenuItem
                 key={a.login}

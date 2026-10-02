@@ -2,6 +2,9 @@
  * In-memory "server" database. Rows hold full (unmasked) values; handlers mask on output.
  */
 import type {
+  AiCallLog,
+  AiSettings,
+  AiSettingsChange,
   AuthorityChange,
   Census,
   ChangeRequest,
@@ -308,6 +311,9 @@ export interface Db {
     values: Partial<Record<DmsParamKey, { value: number; changedAt: string; changedByName: string }>>;
     changes: DmsParamChange[];
   };
+  // ---- AI coverage check (AI_COVERAGE_SPEC): settings with four-eyes changes, the call log ----
+  /** `rebillFlags`: registry line id → reason of the AI precheck flag `ai_disagrees`. */
+  ai: { settings: AiSettings; changes: AiSettingsChange[]; logs: AiCallLog[]; rebillFlags: Record<UUID, string> };
 }
 
 let current: Db | null = null;

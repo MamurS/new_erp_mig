@@ -1,5 +1,12 @@
 /* Screen-level DTOs. Part of the API contract, alongside ./index.ts. */
 import type {
+  AiProviderId,
+  AiScenario,
+  AiSettings,
+  AiSettingsChange,
+  CoverageVerdict,
+  CoverageVerdictDecision,
+  LimitState,
   Census,
   ChangeRequest,
   ClaimDecisionKind,
@@ -728,4 +735,63 @@ export interface ClaimLetter {
   insuredName: string;
   amountClaimed: Money;
   decision: { kind: ClaimDecisionKind; amount: Money; clauseRef?: string; reason: string; at: ISODateTime };
+}
+
+// ---------------- AI coverage check (AI_COVERAGE_SPEC) ----------------
+export interface AiCheckItem {
+  logId: UUID;
+  /** What was checked, as the user typed it (never sent to a provider unredacted). */
+  input: string;
+  amount?: Money;
+  /** Registry line or receipt position the item belongs to. */
+  subjectId?: string;
+  matches: { code: string; name: string; confidence: number }[];
+  confidence: number;
+  needsSpecialist: boolean;
+  verdict: CoverageVerdict;
+  /** Clinics see only «доступен / на исходе / исчерпан», never the sums. */
+  limitStatus?: LimitState | null;
+  clauses: { ref: string; label: string }[];
+  explanation: string;
+  /** Receipt positions in the app: «вернём», «не вернём», «уточним». */
+  receiptLabel?: 'refund' | 'no_refund' | 'check';
+  suspicious: boolean;
+}
+
+export interface AiCheckResult {
+  available: boolean;
+  items: AiCheckItem[];
+  suspicious: boolean;
+  /** Receipts: what is expected to be reimbursed (covered positions within the limit). */
+  expectedReimbursement?: Money;
+}
+
+export interface AiStatus {
+  killSwitch: boolean;
+  scenarios: Record<AiScenario, boolean>;
+}
+
+export interface AiMetricsRow {
+  scenario: AiScenario;
+  calls: number;
+  rated: number;
+  agreeShare: number | null;
+  specialistShare: number | null;
+  avgLatencyMs: number | null;
+}
+
+export interface AiAdminView {
+  settings: AiSettings;
+  changes: AiSettingsChange[];
+  metrics: AiMetricsRow[];
+  disagreements: { id: UUID; at: ISODateTime; scenario: AiScenario; input: string; decision: CoverageVerdictDecision; comment: string; byName: string }[];
+  promptVersion: string;
+  providersAvailable: AiProviderId[];
+}
+
+export interface AiGoldenResult {
+  total: number;
+  correct: number;
+  accuracy: number;
+  errors: { text: string; expectedCodes: string[]; gotCodes: string[]; expectedDecision: CoverageVerdictDecision; gotDecision: CoverageVerdictDecision }[];
 }

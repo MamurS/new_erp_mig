@@ -1,0 +1,714 @@
+{
+ "program": "standard",
+ "cases": [
+  {
+   "text": "мрт колена",
+   "expectedCodes": [
+    "DG-314"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "МРТ колен. суст. с контрастом",
+   "expectedCodes": [
+    "DG-314"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "tizza MRT",
+   "expectedCodes": [
+    "DG-314"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "мрт головного мозга",
+   "expectedCodes": [
+    "DG-310"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "МРТ поясничного отдела позвоночника",
+   "expectedCodes": [
+    "DG-311"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "кт легких",
+   "expectedCodes": [
+    "DG-312"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "компьютерная томография головы",
+   "expectedCodes": [
+    "DG-316"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "мрт плечевого сустава",
+   "expectedCodes": [
+    "DG-315"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "прием терапевта",
+   "expectedCodes": [
+    "TH-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "консультация кардиолога",
+   "expectedCodes": [
+    "CR-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "к лор врачу",
+   "expectedCodes": [
+    "EN-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "pediatr qabuli",
+   "expectedCodes": [
+    "PD-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "приём невролога повторно",
+   "expectedCodes": [
+    "NE-101",
+    "TH-102"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "окулист",
+   "expectedCodes": [
+    "OP-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "гинеколог осмотр",
+   "expectedCodes": [
+    "GY-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "дерматолог",
+   "expectedCodes": [
+    "CN-102"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "вызов врача на дом",
+   "expectedCodes": [
+    "CN-108"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "онлайн консультация врача",
+   "expectedCodes": [
+    "CN-109"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "общий анализ крови",
+   "expectedCodes": [
+    "LB-201"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "ОАК",
+   "expectedCodes": [
+    "LB-201"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "umumiy qon tahlili",
+   "expectedCodes": [
+    "LB-201"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "биохимия крови",
+   "expectedCodes": [
+    "LB-202"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "анализ мочи общий",
+   "expectedCodes": [
+    "LB-203"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "ТТГ",
+   "expectedCodes": [
+    "LB-204"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "сахар крови",
+   "expectedCodes": [
+    "LB-206"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "пцр тест",
+   "expectedCodes": [
+    "LB-209"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "холестерин",
+   "expectedCodes": [
+    "LB-210"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "экг",
+   "expectedCodes": [
+    "CR-110"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "узи сердца",
+   "expectedCodes": [
+    "CR-120"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "узи брюшной полости",
+   "expectedCodes": [
+    "DG-301"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "УЗИ щитовидки",
+   "expectedCodes": [
+    "DG-302"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "рентген легких",
+   "expectedCodes": [
+    "DG-303"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "флюорография",
+   "expectedCodes": [
+    "DG-304"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "рентген колена",
+   "expectedCodes": [
+    "DG-305"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "фгдс",
+   "expectedCodes": [
+    "DG-308"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "холтер",
+   "expectedCodes": [
+    "DG-307"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "укол внутримышечно",
+   "expectedCodes": [
+    "MD-501"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "капельница",
+   "expectedCodes": [
+    "MD-502"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "перевязка раны",
+   "expectedCodes": [
+    "PR-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "ингаляция небулайзером",
+   "expectedCodes": [
+    "PR-104"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "массаж спины",
+   "expectedCodes": [
+    "PH-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "электрофорез",
+   "expectedCodes": [
+    "PH-102"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "прививка от гриппа",
+   "expectedCodes": [
+    "MD-503"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "вакцина от гепатита",
+   "expectedCodes": [
+    "VC-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "чек-ап полное обследование",
+   "expectedCodes": [
+    "CH-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "справка в бассейн",
+   "expectedCodes": [
+    "CH-103"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "скорая помощь",
+   "expectedCodes": [
+    "AM-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "лечение кариеса",
+   "expectedCodes": [
+    "DT-402"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "поставить пломбу",
+   "expectedCodes": [
+    "DT-402"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "удаление зуба мудрости",
+   "expectedCodes": [
+    "DT-404"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "tish davolash",
+   "expectedCodes": [
+    "DT-402"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "пульпит лечение каналов",
+   "expectedCodes": [
+    "DT-406"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "снятие зубного камня",
+   "expectedCodes": [
+    "DT-403"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "профчистка зубов",
+   "expectedCodes": [
+    "DT-403"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "имплант зуба",
+   "expectedCodes": [
+    "DP-102"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "коронка металлокерамика",
+   "expectedCodes": [
+    "DP-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "брекеты",
+   "expectedCodes": [
+    "DP-106"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "отбеливание зубов",
+   "expectedCodes": [
+    "DP-105"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "Амоксиклав 875",
+   "expectedCodes": [
+    "RX-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "сумамед",
+   "expectedCodes": [
+    "RX-102"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "цефтриаксон 1 г",
+   "expectedCodes": [
+    "RX-103"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "метформин 500",
+   "expectedCodes": [
+    "RX-104"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "эналаприл",
+   "expectedCodes": [
+    "RX-105"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "омез капсулы",
+   "expectedCodes": [
+    "RX-108"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "эутирокс 50",
+   "expectedCodes": [
+    "RX-109"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "инсулин лантус",
+   "expectedCodes": [
+    "RX-114"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "Нурофен 200 мг",
+   "expectedCodes": [
+    "OT-102"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "парацетамол таблетки",
+   "expectedCodes": [
+    "OT-101"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "ношпа",
+   "expectedCodes": [
+    "OT-104"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "смекта",
+   "expectedCodes": [
+    "OT-105"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "називин капли",
+   "expectedCodes": [
+    "OT-109"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "сироп от кашля амброксол",
+   "expectedCodes": [
+    "OT-110"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "мезим форте",
+   "expectedCodes": [
+    "OT-111"
+   ],
+   "expectedDecision": "covered"
+  },
+  {
+   "text": "Аквадетрим 10 мл",
+   "expectedCodes": [
+    "VT-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "витамин С шип.",
+   "expectedCodes": [
+    "VT-102"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "компливит",
+   "expectedCodes": [
+    "VT-103"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "магне б6",
+   "expectedCodes": [
+    "VT-104"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "омега 3 капсулы",
+   "expectedCodes": [
+    "VT-105"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "vitamin d",
+   "expectedCodes": [
+    "VT-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "линекс",
+   "expectedCodes": [
+    "BD-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "коллаген порошок",
+   "expectedCodes": [
+    "BD-102"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "протеиновый батончик",
+   "expectedCodes": [
+    "BD-103"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "БАД эвалар",
+   "expectedCodes": [
+    "BD-104"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "крем для лица увлажняющий",
+   "expectedCodes": [
+    "CS-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "солнцезащитный крем spf 50",
+   "expectedCodes": [
+    "CS-102"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "шампунь",
+   "expectedCodes": [
+    "CS-103"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "зубная паста",
+   "expectedCodes": [
+    "CS-107"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "ботокс",
+   "expectedCodes": [
+    "CL-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "чистка лица",
+   "expectedCodes": [
+    "CL-102"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "лазерная эпиляция",
+   "expectedCodes": [
+    "CL-103"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "очки для зрения",
+   "expectedCodes": [
+    "OPT-101"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "контактные линзы",
+   "expectedCodes": [
+    "OPT-102"
+   ],
+   "expectedDecision": "excluded"
+  },
+  {
+   "text": "госпитализация в стационар",
+   "expectedCodes": [
+    "IP-601"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "аппендицит операция",
+   "expectedCodes": [
+    "IP-602"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "удаление желчного пузыря",
+   "expectedCodes": [
+    "IP-603"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "артроскопия колена",
+   "expectedCodes": [
+    "IP-604"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "роды",
+   "expectedCodes": [
+    "IP-606"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "ведение беременности",
+   "expectedCodes": [
+    "MT-101"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "tug'ruq",
+   "expectedCodes": [
+    "IP-606"
+   ],
+   "expectedDecision": "needs_guarantee"
+  },
+  {
+   "text": "фывапролд",
+   "expectedCodes": [],
+   "expectedDecision": "unknown"
+  },
+  {
+   "text": "ааааа",
+   "expectedCodes": [],
+   "expectedDecision": "unknown"
+  },
+  {
+   "text": "непонятная услуга xyz",
+   "expectedCodes": [],
+   "expectedDecision": "unknown"
+  }
+ ]
+}

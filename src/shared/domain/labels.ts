@@ -162,6 +162,11 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   claim_flag_dismissed: 'Снят флаг мошенничества',
   claim_appealed: 'Апелляция по убытку',
   claim_appeal_resolved: 'Апелляция рассмотрена',
+  ai_settings_proposed: 'Предложено изменение настроек ИИ',
+  ai_settings_changed: 'Настройки ИИ изменены',
+  ai_settings_rejected: 'Изменение настроек ИИ отклонено',
+  ai_kill_switch: 'ИИ отключён везде',
+  ai_feedback: 'Оценка подсказки ИИ',
 };
 
 export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer'] as const;

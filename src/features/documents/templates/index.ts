@@ -6,6 +6,7 @@ import { CONTRACT_TEMPLATE } from './contract';
 import { ENDORSEMENT_TEMPLATE } from './endorsement';
 import { CERTIFICATE_TEMPLATE } from './certificate';
 import { CLAIM_DECISION_LETTER_TEMPLATE } from './claimDecisionLetter';
+import { PROGRAM_TEMPLATE } from './program';
 import type { DocTemplate, DocTemplateId, StubClause } from './types';
 
 export type { DocTemplate, DocTemplateId, StubClause, StubSection, FieldDef, TableDef } from './types';
@@ -16,6 +17,7 @@ export const DOC_TEMPLATES: Record<DocTemplateId, DocTemplate> = {
   endorsement: ENDORSEMENT_TEMPLATE,
   certificate: CERTIFICATE_TEMPLATE,
   claimDecisionLetter: CLAIM_DECISION_LETTER_TEMPLATE,
+  program: PROGRAM_TEMPLATE,
 };
 
 export interface CatalogClause extends StubClause {
@@ -34,14 +36,14 @@ export function clauseByRef(ref: string): CatalogClause | undefined {
   return CLAUSE_CATALOG.find((c) => c.ref === ref);
 }
 
-/** Clauses a claim decision may refer to (refusal or partial approval): the contract's coverage and settlement sections. */
-export const DECISION_CLAUSES: CatalogClause[] = CLAUSE_CATALOG.filter((c) => c.templateId === 'contract' && /^(4|8)\./.test(c.id));
+/** Clauses a claim decision may refer to (refusal or partial approval): the contract's coverage and settlement sections and the program. */
+export const DECISION_CLAUSES: CatalogClause[] = CLAUSE_CATALOG.filter((c) => (c.templateId === 'contract' && /^(4|8)\./.test(c.id)) || c.templateId === 'program');
 
 /** «п. 4.3 договора «Исключения из страхового покрытия»». Plain text. */
 export function clauseLabel(ref: string): string {
   const c = clauseByRef(ref);
   if (!c) return ref;
-  const where = c.templateId === 'contract' ? 'договора' : `«${c.templateName}»`;
+  const where = c.templateId === 'contract' ? 'договора' : c.templateId === 'program' ? 'программы' : `«${c.templateName}»`;
   return `п. ${c.id} ${where} «${c.title}»`;
 }
 

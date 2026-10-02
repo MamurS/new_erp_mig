@@ -4,7 +4,7 @@
  * change ids, fields or tables: contracts, decisions and the coverage table refer to clause ids.
  */
 
-export type DocTemplateId = 'contract' | 'endorsement' | 'certificate' | 'claimDecisionLetter';
+export type DocTemplateId = 'contract' | 'endorsement' | 'certificate' | 'claimDecisionLetter' | 'program';
 
 export interface StubClause {
   /** «4.3»; unique inside the template. Global reference: `${templateId}:${id}`. */

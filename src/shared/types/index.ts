@@ -385,7 +385,12 @@ export type AuditAction =
   | 'claim_reserve_changed'
   | 'claim_flag_dismissed'
   | 'claim_appealed'
-  | 'claim_appeal_resolved';
+  | 'claim_appeal_resolved'
+  | 'ai_settings_proposed'
+  | 'ai_settings_changed'
+  | 'ai_settings_rejected'
+  | 'ai_kill_switch'
+  | 'ai_feedback';
 
 export interface AuditEntry {
   id: UUID;
@@ -394,7 +399,7 @@ export interface AuditEntry {
   actorName: string;
   actorRole: Role;
   action: AuditAction;
-  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill' | 'parameter' | 'deal' | 'quote' | 'contract' | 'endorsement' | 'invoice';
+  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill' | 'parameter' | 'deal' | 'quote' | 'contract' | 'endorsement' | 'invoice' | 'ai';
   targetId?: UUID;
   targetLabel?: string;                    // без ПДн: номер полиса или убытка, либо «Застрахованный #a1b2»
   reason?: string;
@@ -737,7 +742,7 @@ export interface ClinicContract {
 }
 
 export type RebillStatus = 'draft' | 'submitted' | 'in_review' | 'partially_accepted' | 'accepted' | 'paid';
-export type RebillCheckCode = 'not_paid_to_clinic' | 'policy_inactive' | 'not_assigned' | 'over_limit' | 'no_guarantee' | 'duplicate' | 'price_mismatch';
+export type RebillCheckCode = 'not_paid_to_clinic' | 'policy_inactive' | 'not_assigned' | 'over_limit' | 'no_guarantee' | 'duplicate' | 'price_mismatch' | 'ai_disagrees';
 
 export interface RebillLine {
   id: UUID;
@@ -1060,4 +1065,87 @@ export interface Endorsement {
   invoiceId?: UUID;
   refundDocument?: string;                 // номер документа на возврат
   amountsApprovedByName?: string;
+}
+
+// ---------- AI coverage check (AI_COVERAGE_SPEC) ----------
+/** Group of a catalog service: coverage rules refer to it. */
+export type ServiceGroup =
+  | 'consultation' | 'lab' | 'diagnostics' | 'hightech' | 'procedure' | 'physio' | 'vaccination' | 'checkup' | 'ambulance'
+  | 'dental_treatment' | 'dental_hygiene' | 'dental_prosthetics'
+  | 'rx_drug' | 'otc_drug' | 'vitamins' | 'supplements' | 'cosmetics' | 'cosmetology' | 'optics'
+  | 'inpatient' | 'surgery' | 'maternity';
+
+export interface ServiceCatalogItem {
+  code: string;                            // 'DG-314'; коды прайсов клиник совпадают
+  name: string;
+  synonyms: string[];                      // разговорные формулировки и сокращения ru/uz
+  category: ServiceGroup;
+  limitCategory: LimitCategory;
+  requiresGuarantee: boolean;
+}
+
+export type CoverageDecision = 'covered' | 'needs_guarantee' | 'excluded';
+
+export interface CoverageRule {
+  program: ProgramCode;
+  serviceCode?: string;                    // правило на услугу важнее правила на группу
+  category?: ServiceGroup;
+  decision: CoverageDecision;
+  subLimit?: Money;
+  waitingDays?: number;                    // от даты начала покрытия застрахованного
+  clauseIds: string[];                     // 'program:6.2', 'contract:4.3'
+}
+
+export type CoverageVerdictDecision = CoverageDecision | 'limit_exhausted' | 'policy_inactive' | 'unknown';
+
+export interface CoverageVerdict {
+  decision: CoverageVerdictDecision;
+  clauseIds: string[];
+  limit: { category: LimitCategory; remaining: Money; afterThis?: Money } | null;
+  notes: string[];
+}
+
+export type AiScenario = 'insured' | 'clinic' | 'decision' | 'rebill';
+export type AiProviderId = 'mock' | 'local' | 'external';
+
+export interface AiSettings {
+  scenarios: Record<AiScenario, { enabled: boolean; provider: AiProviderId }>;
+  confidenceThreshold: number;             // доля 0..1: ниже — «Нужна проверка специалиста»
+  killSwitch: boolean;                     // «Отключить ИИ везде»
+}
+
+export interface AiSettingsChange {
+  id: UUID;
+  /** What changes: a full new settings object (the editor sends the whole form). */
+  to: AiSettings;
+  from: AiSettings;
+  reason: string;
+  status: 'pending' | 'applied' | 'rejected';
+  proposedById: UUID;
+  proposedByName: string;
+  proposedAt: ISODateTime;
+  decidedByName?: string;
+  decidedAt?: ISODateTime;
+  rejectReason?: string;
+}
+
+/** One AI answer: no personal data, the input is stored as a hash. */
+export interface AiCallLog {
+  id: UUID;
+  at: ISODateTime;
+  scenario: AiScenario;
+  promptVersion: string;
+  provider: AiProviderId;
+  model: string;
+  inputHash: string;
+  /** Redacted input (labels instead of names and numbers) — for the review of disagreements. */
+  inputRedacted: string;
+  output: { codes: string[]; decision: CoverageVerdictDecision; needsSpecialist: boolean };
+  confidence: number;
+  latencyMs: number;
+  userId: UUID;
+  userRole: Role;
+  subject?: { type: 'claim' | 'guarantee' | 'registry_line' | 'rebill_line' | 'query' | 'receipt_item'; id?: UUID };
+  suspicious: boolean;
+  feedback?: { agree: boolean; comment?: string; byName: string; at: ISODateTime };
 }

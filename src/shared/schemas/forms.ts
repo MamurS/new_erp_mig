@@ -489,3 +489,27 @@ export const flagDismissSchema = z.object({ comment: text(5, 500, 'Коммен�
 export const appealSchema = z.object({ text: text(10, 1000, 'Опишите, с чем вы не согласны: минимум 10 символов') });
 export const appealResolveSchema = z.object({ resolution: text(5, 1000, 'Решение по апелляции: минимум 5 символов') });
 export const contractCreateSchema = z.object({ dealId: uuid });
+
+// ---------------- AI coverage check (AI_COVERAGE_SPEC) ----------------
+const aiScenario = z.enum(['insured', 'clinic', 'decision', 'rebill']);
+export const aiCheckRequestSchema = z.object({
+  scenario: aiScenario,
+  query: z.string().trim().min(2, 'Напишите услугу или лекарство').max(300, 'Не больше 300 символов').optional(),
+  items: z.array(z.object({ text: z.string().trim().min(1).max(200), amount: z.number().int().min(0).max(100_000_000_000).optional() })).max(30).optional(),
+  subject: z.object({ type: z.enum(['visit', 'claim', 'guarantee', 'registry', 'registry_line']), id: uuid }).optional(),
+  serviceCode: z.string().trim().max(20).optional(),
+  icd10: z.string().trim().max(10).optional(),
+  amount: z.number().int().min(0).max(100_000_000_000).optional(),
+  lang: z.enum(['ru', 'uz']).optional(),
+});
+export const aiFeedbackSchema = z
+  .object({ logId: uuid, agree: z.boolean(), comment: z.string().trim().max(500, 'Не больше 500 символов').optional() })
+  .refine((v) => v.agree || (v.comment ?? '').length >= 5, { message: 'Опишите, с чем вы не согласны: минимум 5 символов', path: ['comment'] });
+const aiScenarioSettings = z.object({ enabled: z.boolean(), provider: z.enum(['mock', 'local', 'external']) });
+export const aiSettingsSchema = z.object({
+  scenarios: z.object({ insured: aiScenarioSettings, clinic: aiScenarioSettings, decision: aiScenarioSettings, rebill: aiScenarioSettings }),
+  confidenceThreshold: z.number({ invalid_type_error: 'Введите число' }).min(0.3, 'От 30 до 95%').max(0.95, 'От 30 до 95%'),
+  killSwitch: z.boolean(),
+});
+export const aiSettingsChangeSchema = z.object({ to: aiSettingsSchema, reason: text(5, 500, 'Опишите основание: минимум 5 символов') });
+export const aiRejectSchema = z.object({ reason: text(5, 500, 'Укажите причину: минимум 5 символов') });

@@ -1,3 +1,4 @@
+import { aiHandlers } from './ai';
 import { http } from 'msw';
 import { authHandlers } from './auth';
 import { dashboardHandlers } from './dashboard';
@@ -46,6 +47,7 @@ export const handlers = [
   ...lifecycleHandlers,
   ...contractHandlers,
   ...settlementHandlers,
+  ...aiHandlers,
   // Unknown API routes behave like a real server: 404.
   http.all(
     `${API}/*`,

@@ -154,6 +154,16 @@ const multi = (table: string) =>
     .split('\n')
     .map((line) => line.split('|').slice(1, -1).map((c) => c.trim()))
     .flatMap(([action, ...cells]) => [...action!.matchAll(/`([^`]+)`/g)].map((m) => ({ action: m[1] as Action, cells })));
+/** AI_COVERAGE_SPEC §5, verbatim: action → who. */
+const AI_TABLE: Record<string, string> = {
+  'ai.coverage.self': '`insured`: только свой полис',
+  'ai.coverage.clinic': '`clinic_*`: только через визит',
+  'ai.coverage.assist': '`asst_doctor`, `asst_operator`: свои застрахованные',
+  'ai.coverage.mig': '`claims_officer`, `doctor_expert`, `operator`',
+  'ai.feedback': 'все, кто видит подсказку в рабочих экранах',
+  'ai.admin': '`admin` (с подтверждением второго)',
+};
+const AI_ACTIONS = Object.keys(AI_TABLE) as Action[];
 const lifecycleRows = [...multi(LIFECYCLE_TABLE), ...multi(LIFECYCLE_READ_TABLE)];
 const rows = parse(TABLE);
 const paramRows = parse(PARAMS_TABLE);
@@ -173,7 +183,7 @@ describe('permissions matrix (SPEC §4)', () => {
     const earlier = [...rows, ...clinicRows, ...policyRows, ...assistRows, ...paramRows].map((r) => r.action);
     // LIFECYCLE §14 also restates `kp.send` and `rebills.review` of the earlier tables.
     const added = lifecycleRows.map((r) => r.action).filter((a) => !earlier.includes(a));
-    expect([...earlier, ...added].sort()).toEqual([...ACTIONS].sort());
+    expect([...earlier, ...added, ...AI_ACTIONS].sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -356,7 +366,8 @@ describe('assistance permissions matrix (ASSISTANCE_SPEC §10)', () => {
   }
 
   it('assistance roles have none of the rights of the earlier tables', () => {
-    const own = new Set(assistRows.map((r) => r.action));
+    // The AI actions of assistances (AI_COVERAGE_SPEC §5) are tested in their own block.
+    const own = new Set([...assistRows.map((r) => r.action), 'ai.coverage.assist', 'ai.feedback']);
     for (const role of ASSIST_ROLES)
       for (const action of ACTIONS.filter((a) => !own.has(a))) {
         expect(can(userFor(role), action), `${role} ${action}`).toBe(false);
@@ -438,5 +449,28 @@ describe('lifecycle permissions matrix (LIFECYCLE_SPEC §14)', () => {
     expect(can(admin, 'staff.authority.manage')).toBe(true);
     expect(can(admin, 'staff.authority.manage', { sub: 'approve', createdById: '99999999-9999-4999-8999-999999999999' })).toBe(true);
     expect(can(admin, 'staff.authority.manage', { sub: 'approve', createdById: admin.id })).toBe(false);
+  });
+});
+
+describe('AI permissions (AI_COVERAGE_SPEC §5)', () => {
+  const ALL: Role[] = [...ROLES, ...ASSIST_ROLES, 'sales_manager', 'legal', 'claims_officer'];
+  const allowed = (action: Action) => ALL.filter((r) => can({ ...userFor(r), canSign: true }, action, { insuredId: INSURED, companyId: COMPANY, clinicId: CLINIC, assistanceId: ASSIST, createdById: '99999999-9999-4999-8999-999999999999' }));
+  it('only the roles of the table', () => {
+    expect(allowed('ai.coverage.self')).toEqual(['insured']);
+    expect(allowed('ai.coverage.clinic')).toEqual(['clinic_registrar', 'clinic_admin']);
+    expect(allowed('ai.coverage.assist')).toEqual(['asst_operator', 'asst_doctor']);
+    expect(allowed('ai.coverage.mig').sort()).toEqual(['claims_officer', 'doctor_expert', 'operator']);
+    // «все, кто видит подсказку в рабочих экранах»: the hint is shown to MIG and assistance decision makers
+    expect(allowed('ai.feedback').sort()).toEqual(['asst_doctor', 'asst_operator', 'claims_officer', 'doctor_expert', 'operator']);
+    expect(allowed('ai.admin')).toEqual(['admin']);
+    expect(Object.keys(AI_TABLE)).toHaveLength(6);
+  });
+  it('scopes: own policy, own clinic, own assistance; the admin never confirms own change; HR has nothing', () => {
+    expect(can(userFor('insured'), 'ai.coverage.self', { insuredId: OTHER_INSURED })).toBe(false);
+    expect(can(userFor('clinic_registrar'), 'ai.coverage.clinic', { clinicId: OTHER_CLINIC })).toBe(false);
+    expect(can(userFor('asst_doctor'), 'ai.coverage.assist', { assistanceId: OTHER_ASSIST })).toBe(false);
+    const admin = userFor('admin');
+    expect(can(admin, 'ai.admin', { createdById: admin.id })).toBe(false);
+    for (const a of AI_ACTIONS) expect(can(userFor('hr'), a, { companyId: COMPANY })).toBe(false);
   });
 });

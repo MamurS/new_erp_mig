@@ -326,7 +326,7 @@ export const clinicPaymentRequest = z
   .object({ lineIds: z.array(uuid).min(1).max(500), paidAt: isoDate, amount: money, paymentOrderNumber: text(1, 40) })
   .strict();
 export const rebillCheck = z.object({
-  code: z.enum(['not_paid_to_clinic', 'policy_inactive', 'not_assigned', 'over_limit', 'no_guarantee', 'duplicate', 'price_mismatch']),
+  code: z.enum(['not_paid_to_clinic', 'policy_inactive', 'not_assigned', 'over_limit', 'no_guarantee', 'duplicate', 'price_mismatch', 'ai_disagrees']),
   message: z.string(),
 });
 export const rebillLine = z.object({

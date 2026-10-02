@@ -31,6 +31,7 @@ import { seedClinics } from './seed-clinics';
 import { seedPolicyChanges } from './seed-policies';
 import { seedAssistance } from './seed-assistance';
 import { seedLifecycle } from './seed-lifecycle';
+import { defaultAiSettings } from '@/features/ai/settings';
 
 // ---------- dictionaries ----------
 const UZ_MALE = ['Азиз', 'Бахтиёр', 'Жасур', 'Отабек', 'Шерзод', 'Фаррух', 'Улугбек', 'Санжар', 'Дилшод', 'Рустам', 'Тимур', 'Мансур', 'Бобур', 'Анвар'];
@@ -814,6 +815,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     rebills: [],
     qaSamples: [],
     dmsParams: { values: {}, changes: [] },
+    ai: { settings: defaultAiSettings(), changes: [], logs: [], rebillFlags: {} },
     authorityChanges: [],
     deals: [],
     dealEvents: [],

@@ -1119,6 +1119,7 @@ components:
                         - no_guarantee
                         - duplicate
                         - price_mismatch
+                        - ai_disagrees
                     message:
                       type: string
                   required:

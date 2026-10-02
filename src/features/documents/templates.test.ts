@@ -36,12 +36,13 @@ describe('template hashes', () => {
     expect(Object.keys(PINNED).every((id) => all.some((t) => t.id === id && t.approved))).toBe(true);
   });
 
-  it('the four stubs are not approved', () => {
+  it('the stubs are not approved', () => {
     expect(Object.values(DOC_TEMPLATES).map((t) => [t.id, t.approved])).toEqual([
       ['contract', false],
       ['endorsement', false],
       ['certificate', false],
       ['claimDecisionLetter', false],
+      ['program', false],
     ]);
   });
 });
@@ -64,7 +65,8 @@ describe('stub templates', () => {
   it('the clause catalog has global refs and decision clauses', () => {
     expect(clauseByRef('contract:4.3')?.title).toBe('Исключения из страхового покрытия');
     expect(clauseLabel('contract:8.4')).toBe('п. 8.4 договора «Основания для отказа в выплате»');
-    expect(DECISION_CLAUSES.every((c) => c.templateId === 'contract')).toBe(true);
+    expect(DECISION_CLAUSES.every((c) => c.templateId === 'contract' || c.templateId === 'program')).toBe(true);
+    expect(clauseLabel('program:6.2')).toBe('п. 6.2 программы «БАДы и витамины без назначения врача»');
     expect(DECISION_CLAUSES.length).toBeGreaterThanOrEqual(10);
     expect(new Set(CLAUSE_CATALOG.map((c) => c.ref)).size).toBe(CLAUSE_CATALOG.length);
   });

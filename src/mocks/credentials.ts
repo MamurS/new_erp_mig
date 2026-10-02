@@ -21,7 +21,7 @@ export const DEMO_STAFF: DemoStaff[] = [
   { role: 'accountant', email: 'accountant@demo.mig.uz', fullName: 'Елена Морозова' },
   { role: 'admin', email: 'admin@demo.mig.uz', fullName: 'Тимур Алиев' },
   // The second person of four-eyes on staff authority (LIFECYCLE_SPEC §14: «только admin + второй»).
-  { role: 'admin', email: 'admin2@demo.mig.uz', fullName: 'Сардор Назаров', label: 'Администратор (второй)' },
+  { role: 'admin', email: 'admin2@demo.mig.uz', fullName: 'Сардор Назаров', label: 'Второй администратор' },
   // LIFECYCLE_SPEC §2
   { role: 'sales_manager', email: 'sales@demo.mig.uz', fullName: 'Азиз Каримов' },
   { role: 'legal', email: 'legal@demo.mig.uz', fullName: 'Наталья Ким' },

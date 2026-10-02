@@ -59,6 +59,7 @@ export const REBILL_CHECK_LABEL: Record<RebillCheckCode, string> = {
   no_guarantee: 'Нет одобренного ГП',
   duplicate: 'Дубль',
   price_mismatch: 'Цена не по прайсу',
+  ai_disagrees: 'ИИ: спорный вердикт',
 };
 
 // ---- assignment on the date of the event (§3) ----
