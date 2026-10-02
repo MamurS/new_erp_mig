@@ -9,7 +9,7 @@ import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
 import { calculateQuote, canApproveQuote, quoteAuthorityProblem } from '@/shared/domain/tariff';
 import { CENSUS_MAX_BYTES, parseCensusCsv } from '@/shared/domain/census';
-import { dealNumber, originalReminderDue } from '@/shared/domain/contracts';
+import { dealNumber, defaultStartDate, originalReminderDue } from '@/shared/domain/contracts';
 import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
 import { defaultEndDate } from '@/shared/domain/policies';
 import {
@@ -519,7 +519,7 @@ export const lifecycleHandlers = [
       const q = latestQuote(d, deal.id);
       if (!q || q.status !== 'approved') throw conflict('КП можно отправить только по утверждённой котировке');
       const client = clientRow(d, deal.clientId);
-      const start = deal.expectedStart && deal.expectedStart >= todayIso() ? deal.expectedStart : isoDay(Date.now() + 30 * DAY);
+      const start = deal.expectedStart && deal.expectedStart >= todayIso() ? deal.expectedStart : defaultStartDate(todayIso());
       const c = census(d, deal.id);
       const employees = c?.rows.filter((r) => r.relation === 'employee').length ?? 0;
       const counts = { employees, family: (c?.rows.length ?? 0) - employees };

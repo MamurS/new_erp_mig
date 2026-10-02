@@ -21,7 +21,6 @@ import { Card } from '@/shared/ui/page';
 import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
-import { AuthorityChangesCard } from '../admin/Authority';
 
 const STATUS_CHIP: Record<DmsParamChange['status'], [string, string]> = {
   pending: ['warning', 'Ждёт подтверждения'],
@@ -218,7 +217,6 @@ export default function ParametersPage() {
           (администратор или андеррайтер).
         </p>
       </div>
-      {!canPropose && <AuthorityChangesCard />}
       <QueryState query={q}>
         {({ parameters, changes }) => {
           const pending = changes.filter((c) => c.status === 'pending');

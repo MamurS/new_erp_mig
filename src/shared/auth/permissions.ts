@@ -202,7 +202,7 @@ export const PERMISSIONS = {
   'claims.decide': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: 'within_authority' },
   'claims.medical_opinion': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
   'claims.reserves': { operator: no, underwriter: { only: 'read' }, doctor_expert: no, accountant: { only: 'read' }, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
-  'staff.authority.manage': { operator: no, underwriter: { only: 'approve' }, doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'staff.authority.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
 } as const satisfies Record<string, Row>;
 
 export type Action = keyof typeof PERMISSIONS;

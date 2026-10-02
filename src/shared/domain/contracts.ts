@@ -193,3 +193,8 @@ export function signingSummary(s: Signing): { side: Side; state: 'signed' | 'sca
 
 export const INVOICE_STATUS_LABEL: Record<Invoice['status'], string> = { unpaid: 'Ожидает оплаты', paid: 'Оплачен', overdue: 'Просрочен' };
 export const INVOICE_STATUS_CHIP: Record<Invoice['status'], string> = { unpaid: 'warning', paid: 'success', overdue: 'danger' };
+
+/** Default start of coverage for a new deal: the first day of the month after next (time for the paperwork). */
+export function defaultStartDate(today: ISODate): ISODate {
+  return addMonths(`${today.slice(0, 7)}-01`, 2);
+}

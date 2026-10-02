@@ -378,7 +378,9 @@ describe('rights on the server (§14, e2e 8)', () => {
     expect((await call(`/admin/authority-changes/${prop.data.id}/approve`, { method: 'POST', sid: admin })).status).toBe(403);
     expect((await call(`/admin/authority-changes/${prop.data.id}/approve`, { method: 'POST', sid: sales })).status).toBe(403);
     const uw = await login('underwriter@demo.mig.uz');
-    expect((await call(`/admin/authority-changes/${prop.data.id}/approve`, { method: 'POST', sid: uw })).status).toBe(200);
+    expect((await call(`/admin/authority-changes/${prop.data.id}/approve`, { method: 'POST', sid: uw })).status).toBe(403);
+    const admin2 = await login('admin2@demo.mig.uz');
+    expect((await call(`/admin/authority-changes/${prop.data.id}/approve`, { method: 'POST', sid: admin2 })).status).toBe(200);
     expect(target.signatory?.basis).toBe('Доверенность № 77 от 01.10.2026');
     expect(db().audit.some((e) => e.action === 'authority_changed' && e.targetLabel?.includes('подписант'))).toBe(true);
     // The new right works at the next request.

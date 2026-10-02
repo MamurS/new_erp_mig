@@ -7,7 +7,7 @@ import type { ChangeRequest, Census, Client, Contract, Deal, Endorsement, KpDocu
 import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 import { calculateQuote, type CensusRow } from '@/shared/domain/tariff';
 import { addLine, excludeLine, REFUND_RULES } from '@/shared/domain/endorsements';
-import { buildPaymentSchedule, certificateNumber, contractNumber, dealNumber, endorsementNumber } from '@/shared/domain/contracts';
+import { buildPaymentSchedule, certificateNumber, contractNumber, dealNumber, defaultStartDate, endorsementNumber } from '@/shared/domain/contracts';
 import { defaultEndDate, tariffOf } from '@/shared/domain/policies';
 import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
 import { detectFlags } from '@/shared/domain/settlement';
@@ -83,7 +83,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       stage,
       ownerId: sales.id,
       underwriterId: underwriter.id,
-      expectedStart: isoDay(now + 30 * DAY),
+      expectedStart: defaultStartDate(isoDay(now)),
       createdAt: at(daysAgo),
       updatedAt: at(Math.max(0, daysAgo - 3)),
     };
@@ -227,7 +227,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const client = newClient(PROSPECTS[2]!, 'negotiation', 80, 40);
     const deal = newDeal(client, 'contract_review', 40);
     const c = withCensus(deal, 76, 36);
-    const q = withQuote(deal, c, 'standard', [{ label: 'Надбавка за отрасль', pct: 0.05, comment: 'Тяжёлые условия труда на складах' }], 'approved', 30);
+    const q = withQuote(deal, c, 'standard', [{ label: 'Надбавка за отрасль', pct: 0.06, comment: 'Тяжёлые условия труда на складах' }], 'approved', 30);
     const kp = withKp(deal, client, q, c, 'accepted', 25);
     const contract = newContract(deal, client, kp, q, 15);
     contract.clauseOverrides = [
