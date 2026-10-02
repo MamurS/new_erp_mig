@@ -524,7 +524,8 @@ export const contractHandlers = [
           total,
           paymentFrequency: 'single',
           paymentSchedule: buildPaymentSchedule(total, kp.params.coverageStart, 'single'),
-          activationRule: 'on_start_date',
+          // By default the contract comes into force not earlier than the first installment is paid.
+          activationRule: 'after_first_payment',
           migSignatoryId: signatory.id,
           clientSignatory: { name: client.requisites?.director ?? client.hrContact.name, position: 'Директор', basis: client.requisites?.directorBasis ?? 'Устав' },
           assistanceId: kp.params.assistanceId ?? null,

@@ -30,6 +30,7 @@ import { randomId } from '../rng';
 import { DAY, isoDay, tzIso } from '../time';
 import { toClient } from '../views';
 import { PROGRAMS } from '../programs';
+import { DEMO_PASSWORD } from '../credentials';
 import { dmsParam, paramValues } from '../params';
 import { clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView, todayIso } from '../lifecycle-core';
 
@@ -562,6 +563,11 @@ export const lifecycleHandlers = [
       };
       d.kp.unshift(kp);
       if (client.status === 'lead') client.status = 'negotiation';
+      // The client's contact gets the HR cabinet to answer the offer and sign the contract (demo password).
+      if (!d.hrUsers.some((h) => h.companyId === client.id)) {
+        d.hrUsers.push({ id: randomId(), email: client.hrContact.email, password: DEMO_PASSWORD, fullName: client.hrContact.name, companyId: client.id });
+        dealEvent(d, deal.id, user.displayName, `Контакту клиента открыт кабинет HR (${client.hrContact.email})`);
+      }
       moveDeal(d, deal.id, 'kp_sent', user.displayName, `КП ${kp.number} отправлено клиенту`);
       audit(user, 'kp_sent', { targetType: 'kp', targetId: kp.id, targetLabel: kp.number });
       return HttpResponse.json(kp, { status: 201 });
