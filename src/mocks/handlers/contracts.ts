@@ -161,6 +161,13 @@ function endorsementView(d: Db, e: Endorsement): EndorsementView {
   };
 }
 
+/** The client's HR sees the document and its signing, not MIG's internal kitchen. */
+function forViewer<T extends ContractView | EndorsementView>(user: SessionUser, v: T): T {
+  if (user.role !== 'hr') return v;
+  if ('signatories' in v) return { ...v, signatories: [], quote: null, versions: [], legalComment: undefined, financeDiffers: undefined, financeApprovedByName: undefined, legalApprovedByName: undefined, payments: [] };
+  return { ...v, needsAmountApproval: false, amountsApprovedByName: undefined };
+}
+
 function viewOf(d: Db, ref: DocRef): ContractView | EndorsementView {
   return ref.kind === 'contract' ? contractView(d, ref.contract) : endorsementView(d, d.endorsements.find((x) => x.id === ref.id)!);
 }
@@ -234,7 +241,7 @@ function signingRoutes(kind: Kind) {
             : { method: 'paper' as const, signedAt: at, signerName: user.displayName };
         ref.setSigning({ ...addSignature(ref.signing, input.side, sig), ...(input.method === 'paper' ? { printedAt: at } : {}) });
         await done(d, ref, user, input.side, input.method === 'eimzo' ? 'ЭЦП' : 'бумага');
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     http.post(
@@ -251,7 +258,7 @@ function signingRoutes(kind: Kind) {
         ref.setSigning({ ...s, edoPending: { provider, sentAt: at } });
         if (ref.status === 'approved') ref.setStatus('sent');
         await done(d, ref, user, 'mig', `ЭДО ${provider}`);
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     http.post(
@@ -271,7 +278,7 @@ function signingRoutes(kind: Kind) {
         audit(user, 'contract_scan_uploaded', { targetType: kind === 'contract' ? 'contract' : 'endorsement', targetId: ref.id, targetLabel: `${ref.number}: скан ${side === 'mig' ? 'МИГ' : 'клиента'}` });
         if (ref.dealId && kind === 'contract') dealEvent(d, ref.dealId, user.displayName, `${ref.number}: загружен скан подписи ${side === 'mig' ? 'МИГ' : 'клиента'}, ждёт проверки`);
         if (kind === 'contract') moveDeal(d, ref.dealId, 'signing', user.displayName);
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     http.post(
@@ -285,7 +292,7 @@ function signingRoutes(kind: Kind) {
         ref.setSigning(verifyScan(ref.signing, side, { id: user.id, name: user.displayName }, tzIso(Date.now()), signer));
         audit(user, 'contract_scan_verified', { targetType: kind === 'contract' ? 'contract' : 'endorsement', targetId: ref.id, targetLabel: `${ref.number}: скан ${side === 'mig' ? 'МИГ' : 'клиента'}` });
         await done(d, ref, user, side, 'скан проверен');
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     http.post(
@@ -317,7 +324,7 @@ function signingRoutes(kind: Kind) {
           targetLabel: `${ref.number}: ${input.clientOriginalReceivedAt ? 'оригинал клиента получен' : 'экземпляр МИГ отправлен клиенту'}`,
         });
         if (input.clientOriginalReceivedAt && !s.client) await done(d, ref, user, 'client', 'бумага');
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     // ---- legal approval: needed only when a clause was changed ----
@@ -339,7 +346,7 @@ function signingRoutes(kind: Kind) {
           moveDeal(d, ref.dealId, 'contract_review', user.displayName, changed ? `Договор ${ref.number} у юриста: изменено пунктов ${ref.clauseOverrides.length}` : `Договор ${ref.number} без изменённых пунктов — согласование юриста не требуется`);
           ref.contract.versions.push({ version: ref.contract.version, at: tzIso(Date.now()), byName: user.displayName, changes: changed ? 'Отправлен юристу' : 'Согласован без юриста (пункты не менялись)' });
         }
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     http.post(
@@ -357,7 +364,7 @@ function signingRoutes(kind: Kind) {
           if (ref.dealId) dealEvent(d, ref.dealId, user.displayName, `Юрист согласовал договор ${ref.number}`);
         }
         audit(user, 'contract_legal_approved', { targetType: kind === 'contract' ? 'contract' : 'endorsement', targetId: ref.id, targetLabel: ref.number, reason: comment });
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     http.post(
@@ -374,7 +381,7 @@ function signingRoutes(kind: Kind) {
           if (ref.dealId) dealEvent(d, ref.dealId, user.displayName, `Юрист вернул договор ${ref.number}: ${comment}`);
         }
         audit(user, 'contract_legal_returned', { targetType: kind === 'contract' ? 'contract' : 'endorsement', targetId: ref.id, targetLabel: ref.number, reason: comment });
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
     http.post(
@@ -389,7 +396,7 @@ function signingRoutes(kind: Kind) {
           moveDeal(d, ref.dealId, 'contract_sent', user.displayName, `Договор ${ref.number} отправлен клиенту`);
           ref.contract.versions.push({ version: ref.contract.version, at: tzIso(Date.now()), byName: user.displayName, changes: 'Отправлен клиенту' });
         }
-        return viewOf(d, refOf(d, kind, ref.id));
+        return forViewer(user, viewOf(d, refOf(d, kind, ref.id)));
       }),
     ),
   ];
@@ -471,7 +478,7 @@ export const contractHandlers = [
       if (status) list = list.filter((c) => status.split(',').includes(c.status));
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((c) => c.clientId === clientId);
-      return list.map((c) => contractView(d, c));
+      return list.map((c) => forViewer(user, contractView(d, c)));
     }),
   ),
   http.get(
@@ -482,7 +489,7 @@ export const contractHandlers = [
       const ref = refOf(d, 'contract', param(ctx, 'id'));
       readable(user, ref);
       await refreshContract(d, ref.contract);
-      return contractView(d, ref.contract);
+      return forViewer(user, contractView(d, ref.contract));
     }),
   ),
   http.post(
@@ -636,7 +643,7 @@ export const contractHandlers = [
       c.insuredListId = c.id;
       c.insuredCount = rows.length;
       c.versions.push({ version: c.version, at: tzIso(Date.now()), byName: user.displayName, changes: `Загружено приложение 2: ${rows.length} застрахованных` });
-      return contractView(d, c);
+      return forViewer(user, contractView(d, c));
     }),
   ),
   http.post(
@@ -815,7 +822,7 @@ export const contractHandlers = [
       } else if (!isStaffRole(user.role) || !can(user, 'contracts.read')) throw forbidden();
       const contractId = url.searchParams.get('contractId');
       if (contractId) list = list.filter((e) => e.contractId === contractId);
-      return list.map((e) => endorsementView(d, e));
+      return list.map((e) => forViewer(user, endorsementView(d, e)));
     }),
   ),
   http.get(
@@ -826,7 +833,7 @@ export const contractHandlers = [
       const ref = refOf(d, 'endorsement', param(ctx, 'id'));
       readable(user, ref);
       await refreshContract(d, ref.contract);
-      return endorsementView(d, d.endorsements.find((e) => e.id === ref.id)!);
+      return forViewer(user, endorsementView(d, d.endorsements.find((e) => e.id === ref.id)!));
     }),
   ),
   http.post(

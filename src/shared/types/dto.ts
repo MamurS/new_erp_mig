@@ -302,6 +302,8 @@ export interface MePolicy {
   startDate: ISODate;
   endDate: ISODate;
   limits: Record<LimitCategory, Money>;
+  /** Number of the insured person's certificate (LIFECYCLE_SPEC §10); shown on the card for the clinic. */
+  certificateNumber?: string;
 }
 export interface CardToken {
   token: string;

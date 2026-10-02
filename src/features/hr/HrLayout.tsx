@@ -12,6 +12,7 @@ import { cn } from '@/shared/lib/cn';
 const NAV = [
   { to: '/hr', label: 'Сотрудники', end: true },
   { to: '/hr/documents', label: 'Счета и документы', end: false },
+  { to: '/hr/contracts', label: 'Договор и изменения', end: false },
   { to: '/hr/stats', label: 'Статистика', end: false },
   { to: '/hr/help', label: 'Помощь', end: false },
 ] as const;

@@ -1,5 +1,13 @@
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Banknote, CheckCircle2, CircleX, Inbox, MessageCircle, SearchCheck, type LucideIcon } from 'lucide-react';
+import { Banknote, CheckCircle2, CircleX, FileText, Inbox, MessageCircle, Scale, SearchCheck, type LucideIcon } from 'lucide-react';
+import { useAppeal, useMyClaimLetter } from '@/shared/api/queries/lifecycle';
+import { appealSchema } from '@/shared/schemas/forms';
+import { letterDocument } from '@/features/documents/builders';
+import { DocPreview, DocPrintButton, useStubDocument } from '@/features/documents/DocPreview';
+import { Modal } from '@/shared/ui/dialog';
+import { Field, Textarea } from '@/shared/ui/input';
+import { toast } from '@/shared/ui/toast';
 import { useI18n } from '@/i18n';
 import { useMeLimits, useMyClaim } from '@/shared/api/queries/me';
 import { ApiRequestError } from '@/shared/api/client';
@@ -21,6 +29,88 @@ const HERO: Record<MyClaim['status'], { icon: LucideIcon; tone: string }> = {
   rejected: { icon: CircleX, tone: 'bg-danger-soft text-danger-text' },
   paid: { icon: Banknote, tone: 'bg-accent-soft text-accent-text' },
 };
+
+function AppealBlock({ claim }: { claim: MyClaim }) {
+  const { t } = useI18n();
+  const appeal = useAppeal();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string>();
+  if (claim.appealStatus)
+    return (
+      <p className="mt-4 rounded-btn bg-surface/70 px-3 py-2 text-[14px] font-semibold text-text" role="status" data-testid="appeal-status">
+        {t(claim.appealStatus === 'open' ? 'status.appealOpen' : 'status.appealResolved')}
+      </p>
+    );
+  if (!claim.canAppeal) return null;
+  const send = async () => {
+    const parsed = appealSchema.safeParse({ text });
+    if (!parsed.success) return setError(t('status.appealError'));
+    setError(undefined);
+    try {
+      await appeal.mutateAsync({ claimId: claim.id, text: parsed.data.text });
+      toast.success(t('status.appealSent'));
+      setOpen(false);
+    } catch {
+      toast.error(t('common.loadError'));
+    }
+  };
+  return (
+    <>
+      <Button variant="secondary" className="mt-3 h-12 w-full rounded-btn text-[15px] font-semibold" onClick={() => setOpen(true)}>
+        <Scale className="h-5 w-5" aria-hidden />
+        {t('status.appeal')}
+      </Button>
+      <Modal
+        open={open}
+        onOpenChange={setOpen}
+        title={t('status.appeal')}
+        description={t('status.appealHint')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button loading={appeal.isPending} onClick={() => void send()}>
+              {t('status.appealSend')}
+            </Button>
+          </>
+        }
+      >
+        <Field label={t('status.appealField')} error={error}>
+          {(a) => <Textarea {...a} rows={4} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} />}
+        </Field>
+      </Modal>
+    </>
+  );
+}
+
+function LetterBlock({ claim }: { claim: MyClaim }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const q = useMyClaimLetter(claim.id, open);
+  const input = useMemo(() => (q.data ? letterDocument(q.data) : null), [q.data]);
+  const doc = useStubDocument(input);
+  if (!claim.letterAvailable) return null;
+  return (
+    <>
+      <Button variant="ghost" className="mt-2 h-11 w-full rounded-btn text-[15px] font-semibold" onClick={() => setOpen(true)}>
+        <FileText className="h-5 w-5" aria-hidden />
+        {t('status.letter')}
+      </Button>
+      <Modal open={open} onOpenChange={setOpen} title={t('status.letter')} wide>
+        {doc && input ? (
+          <>
+            <DocPreview doc={doc} label={t('status.letter')} height="h-[55vh]" />
+            <DocPrintButton input={() => input} className="mt-3" />
+          </>
+        ) : (
+          <p className="text-muted">{t('common.loading')}</p>
+        )}
+      </Modal>
+    </>
+  );
+}
 
 function NotFound() {
   const { t } = useI18n();
@@ -70,6 +160,12 @@ export default function ClaimStatusPage() {
           <p className="mt-1 text-[15px] font-semibold">
             {c.status === 'rejected' ? (c.rejectionReason ?? '') : t(`status.sub.${c.status}`)}
           </p>
+          {c.status !== 'rejected' && c.rejectionReason && <p className="mt-1 text-[14px]">{c.rejectionReason}</p>}
+          {c.clauseRef && (
+            <p className="mt-1 text-[14px]" data-testid="claim-clause">
+              {t('status.clause', { clause: c.clauseRef })}
+            </p>
+          )}
           <p className="mt-3 font-heading text-[28px] font-semibold text-text">{formatMoney(c.amountClaimed)}</p>
           {c.amountApproved !== undefined && c.status !== 'rejected' && (
             <p className="text-[14px] font-semibold">{t('status.approvedAmount', { amount: formatMoney(c.amountApproved) })}</p>
@@ -86,6 +182,8 @@ export default function ClaimStatusPage() {
               </Link>
             </Button>
           )}
+          <AppealBlock claim={c} />
+          <LetterBlock claim={c} />
         </section>
 
         <Section title={t('status.steps')}>

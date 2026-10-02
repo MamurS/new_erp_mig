@@ -79,14 +79,21 @@ export function DocPreview({
   );
 }
 
-/** «Скачать PDF»: renders the document into a hidden frame and opens the print dialog. */
-export function DocPrintButton({ input, label = 'Скачать PDF', onPrinted, ...props }: { input: () => StubRenderInput | null; label?: string; onPrinted?: () => void } & Omit<ButtonProps, 'onClick'>) {
+/** «Скачать PDF»: renders the document (or several, one after another) into a hidden frame and opens the print dialog. */
+export function DocPrintButton({
+  input,
+  label = 'Скачать PDF',
+  title,
+  onPrinted,
+  ...props
+}: { input: () => StubRenderInput | StubRenderInput[] | null; label?: string; title?: string; onPrinted?: () => void } & Omit<ButtonProps, 'onClick' | 'title'>) {
   const [doc, setDoc] = useState<{ html: string; title: string; pages: number } | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const start = () => {
     const i = input();
-    if (!i) return;
-    const r = renderStubDocument(i);
+    if (!i || (Array.isArray(i) && !i.length)) return;
+    const parts = (Array.isArray(i) ? i : [i]).map(renderStubDocument);
+    const r = { title: title ?? parts[0]!.title, pagesHtml: parts.flatMap((p) => p.pagesHtml) };
     setDoc({ html: docSrcdoc(r), title: r.title, pages: r.pagesHtml.length });
   };
   const onLoad = async () => {

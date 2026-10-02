@@ -628,6 +628,7 @@ export const mePolicy: z.ZodType<D.MePolicy> = z.object({
   startDate: isoDate,
   endDate: isoDate,
   limits: limitsRecord,
+  certificateNumber: z.string().optional(),
 });
 export const cardToken: z.ZodType<D.CardToken> = z.object({ token: z.string(), shortCode: z.string(), expiresAt: isoDateTime });
 export const recognizeResult: z.ZodType<D.RecognizeResult> = z.object({

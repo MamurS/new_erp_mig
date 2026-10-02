@@ -89,6 +89,7 @@ export const meHandlers = [
         startDate: p.startDate,
         endDate: p.endDate,
         limits: PROGRAMS[p.program].limits,
+        ...(me.certificateNumber ? { certificateNumber: me.certificateNumber } : {}),
       };
       return out;
     }),

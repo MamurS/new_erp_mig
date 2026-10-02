@@ -102,6 +102,9 @@ const hrRoutes: RouteObject[] = [
   { path: 'import', lazy: lazy(() => import('@/features/hr/pages/ImportPage')) },
   { path: 'documents', lazy: lazy(() => import('@/features/hr/pages/DocumentsPage')) },
   { path: 'kp/:kpId', lazy: lazy(() => import('@/features/kp/KpViewPage')) },
+  { path: 'contracts', lazy: lazy(() => import('@/features/hr/pages/ContractsPage')) },
+  { path: 'contracts/:contractId', lazy: lazy(() => import('@/features/hr/pages/HrDocumentPage')) },
+  { path: 'endorsements/:endorsementId', lazy: async () => ({ Component: (await import('@/features/hr/pages/HrDocumentPage')).HrEndorsementPage }) },
   { path: 'stats', lazy: lazy(() => import('@/features/hr/pages/StatsPage')) },
   { path: 'help', lazy: lazy(() => import('@/features/hr/pages/HelpPage')) },
 ];
@@ -170,6 +173,7 @@ const appRoutes: RouteObject[] = [
   { path: 'clinics', lazy: lazy(() => import('@/features/insured/pages/ClinicsPage')) },
   { path: 'chat', lazy: lazy(() => import('@/features/insured/pages/ChatPage')) },
   { path: 'profile', lazy: lazy(() => import('@/features/insured/pages/ProfilePage')) },
+  { path: 'certificate', lazy: lazy(() => import('@/features/insured/pages/CertificatePage')) },
 ];
 
 export const routes: RouteObject[] = [
