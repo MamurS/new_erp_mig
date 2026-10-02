@@ -23,7 +23,7 @@ import { at, DAY, isoDay, parseIso, tzIso } from './time';
 
 type Catalogue = [code: string, name: string, category: ServiceCategory, price: number, gp?: true][];
 
-/** 40 services; the 10 marked `true` need a guarantee letter. */
+/** 42 services; the 10 marked `true` need a guarantee letter. The last two are excluded by the coverage rules (AI_COVERAGE_SPEC). */
 const CATALOGUE: Catalogue = [
   ['TH-101', 'Приём терапевта', 'outpatient', 180_000],
   ['TH-102', 'Повторный приём терапевта', 'outpatient', 120_000],
@@ -65,7 +65,11 @@ const CATALOGUE: Catalogue = [
   ['IP-604', 'Операция на коленном суставе', 'inpatient', 26_000_000, true],
   ['IP-605', 'Реанимация, сутки', 'inpatient', 4_500_000, true],
   ['IP-606', 'Родоразрешение', 'inpatient', 12_000_000, true],
+  ['CL-102', 'Чистка лица', 'outpatient', 300_000],
+  ['DP-101', 'Коронка металлокерамическая', 'dental', 2_500_000],
 ];
+/** Services the seeded registries never use (they are excluded by the program). */
+const NOT_IN_SEED = new Set(['CL-102', 'DP-101']);
 
 const ICD = ['J06.9', 'J20.9', 'I10', 'K29.7', 'M54.5', 'E11.9', 'N39.0', 'H10.9', 'K80.2', 'S83.2', 'G43.9', 'K35.8', 'O80', 'K02.1', 'R51'];
 
@@ -299,7 +303,7 @@ export function seedClinics(
       status: 'pending',
     };
   };
-  const simpleCodes = CATALOGUE.filter((c) => !c[4]).map((c) => c[0]);
+  const simpleCodes = CATALOGUE.filter((c) => !c[4] && !NOT_IN_SEED.has(c[0])).map((c) => c[0]);
   const periodOf = (m: number) => isoDay(monthStart(m)).slice(0, 7);
   const registries: Registry[] = [];
   const usedGuarantee = guarantees.find((g) => g.status === 'used')!;

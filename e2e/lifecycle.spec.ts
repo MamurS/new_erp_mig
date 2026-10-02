@@ -5,7 +5,8 @@ import { acceptConsent, api, CODE, loginStaff, PASSWORD } from './helpers';
 /** Switches the role in the same tab (the same in-page mock DB) through the demo banner. */
 async function switchTo(page: Page, label: string, home: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'Войти как…' }).click();
-  await page.getByRole('menuitem', { name: new RegExp(`^${label}`) }).click();
+  // The label followed by the login: «Администратор» must not match «Администратор клиники».
+  await page.getByRole('menuitem', { name: new RegExp(`^${label}\\s*[a-z0-9.+-]+@`) }).click();
   await expect(page.getByText(`Вы вошли как «${label}»`).last()).toBeVisible();
   await expect(page).toHaveURL(home);
 }
@@ -324,11 +325,12 @@ test('4. HR adds and excludes employees → monthly endorsement with the formula
   await expect(page.getByText('Отправлено клиенту').first()).toBeVisible();
 
   // Scans of both sides, verified by the manager
-  for (const side of ['МИГ', 'клиента'] as const) {
+  for (const [side, id] of [['МИГ', 'sign-mig'], ['клиента', 'sign-client']] as const) {
     await page.getByLabel('Чей скан').selectOption({ label: side });
     await page.getByLabel('Файл скана подписанного документа').setInputFiles({ name: 'scan.jpg', mimeType: 'image/jpeg', buffer: await receiptJpeg(page, `SCAN ${side}`) });
+    await expect(page.getByTestId(id)).toContainText('Скан на проверке');
     await page.getByRole('button', { name: 'Скан проверен' }).click();
-    await expect(page.getByText('Скан проверен, подпись засчитана').last()).toBeVisible();
+    await expect(page.getByTestId(id)).toContainText('Подписано');
   }
   await expect(page.getByTestId('endorsement-result')).toBeVisible();
   const invoices = (await api(page, 'GET', `/invoices?contractId=${e.contractId}`)).data as { endorsementId?: string; amount: number }[];
@@ -345,7 +347,7 @@ test('5. Above authority goes to the head; refusal needs a clause; the insured s
   test.setTimeout(180_000);
   // (a) approval above claims@'s authority waits for claims-head@
   await loginStaff(page, 'claims_officer');
-  const big = ((await api(page, 'GET', '/claims?tab=review&pageSize=100')).data as { items: { id: string; amountClaimed: number }[] }).items.find((c) => c.amountClaimed > 5_000_000)!;
+  const big = ((await api(page, 'GET', '/claims?tab=review&pageSize=100')).data as { items: { id: string; number: string; amountClaimed: number }[] }).items.find((c) => c.amountClaimed > 5_000_000)!;
   expect(big).toBeTruthy();
   await page.goto(`/staff/claims/${big.id}`);
   const form = page.getByTestId('decision-form');
@@ -356,8 +358,7 @@ test('5. Above authority goes to the head; refusal needs a clause; the insured s
 
   await as.claimsHead(page);
   await page.goto('/staff/claims?tab=above');
-  const bigNumber = ((await api(page, 'GET', `/claims/${big.id}`)).data as { number: string }).number;
-  await page.getByRole('row').filter({ hasText: bigNumber }).click();
+  await page.getByRole('row').filter({ hasText: big.number }).click();
   await expect(page).toHaveURL(new RegExp(`/staff/claims/${big.id}$`));
   await page.getByTestId('pending-decision').getByRole('button', { name: 'Согласовать' }).click();
   await expect(page.getByTestId('claim-decision')).toContainText('Одобрено полностью');
@@ -389,10 +390,12 @@ test('5. Above authority goes to the head; refusal needs a clause; the insured s
   await expect(page.getByTestId('appeal-status')).toContainText('Апелляция на рассмотрении');
 
   await as.claims(page);
-  await page.goto('/staff/claims?tab=appeals');
-  const appeals = (await api(page, 'GET', '/claims?tab=appeals&pageSize=100')).data as { items: { id: string; number: string }[] };
+  const res = await api(page, 'GET', '/claims?tab=appeals&pageSize=100');
+  expect(res.status, JSON.stringify(res.data).slice(0, 300)).toBe(200);
+  const appeals = res.data as { items: { id: string; number: string }[] };
   const mine = appeals.items.find((c) => c.id === claimId)!;
   expect(mine).toBeTruthy();
+  await page.goto('/staff/claims?tab=appeals');
   await expect(page.getByRole('row').filter({ hasText: mine.number })).toBeVisible();
 });
 
@@ -420,14 +423,21 @@ test('6. Duplicate receipt: the second identical receipt is flagged; the flag is
 
 test('7. The reserves report on a date equals the sum of open reserves', async ({ page }) => {
   await loginStaff(page, 'claims_officer');
-  const list = (await api(page, 'GET', '/claims?pageSize=1000')).data as { items: { reserve?: number }[]; total: number };
-  expect(list.items).toHaveLength(list.total);
-  const sum = list.items.reduce((s, c) => s + (c.reserve ?? 0), 0);
+  let sum = 0;
+  let seen = 0;
+  for (let p = 1; ; p++) {
+    const list = (await api(page, 'GET', `/claims?pageSize=100&page=${p}`)).data as { items: { reserve?: number }[]; total: number };
+    sum += list.items.reduce((s, c) => s + (c.reserve ?? 0), 0);
+    seen += list.items.length;
+    if (!list.items.length || seen >= list.total) break;
+  }
   expect(sum).toBeGreaterThan(0);
-  await page.goto('/staff/reports/reserves');
-  const report = (await api(page, 'GET', `/reports/reserves?date=${today()}`)).data as { total: number; byClient: { reserve: number }[] };
+  const res = await api(page, 'GET', `/reports/reserves?date=${today()}`);
+  expect(res.status, JSON.stringify(res.data)).toBe(200);
+  const report = res.data as { total: number; byClient: { reserve: number }[] };
   expect(report.total).toBe(sum);
   expect(report.byClient.reduce((s, r) => s + r.reserve, 0)).toBe(sum);
+  await page.goto('/staff/reports/reserves');
   await expect(page.getByTestId('reserve-total')).toHaveText(new RegExp(String(sum).replace(/\B(?=(\d{3})+(?!\d))/g, '\\s')));
 });
 

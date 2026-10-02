@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, CreditCard, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import { useMe, useRecognize, useSubmitClaim } from '@/shared/api/queries/me';
-import { useAiCheck, useAiStatus } from '@/shared/api/queries/ai';
+import { useAiCheck } from '@/shared/api/queries/ai';
 import type { AiCheckResult } from '@/shared/types/dto';
 import { errorMessage } from '@/shared/api/client';
 import type { ClaimCategory } from '@/shared/types';
@@ -67,7 +67,6 @@ export default function NewClaimPage() {
   const [photoError, setPhotoError] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Receipt positions labelled by the coverage check (AI_COVERAGE_SPEC §4.1).
-  const aiStatus = useAiStatus();
   const aiCheck = useAiCheck();
   const [labelled, setLabelled] = useState<AiCheckResult | null>(null);
 
@@ -83,7 +82,8 @@ export default function NewClaimPage() {
       setAmount((v) => v || maskMoney(String(r.amount)));
       setServiceDate((v) => v || formatDate(r.serviceDate));
       setRecognized('ok');
-      if (r.items?.length && aiStatus.data?.scenarios.insured) {
+      // The server answers `available: false` when the scenario is off or the kill switch is on.
+      if (r.items?.length) {
         try {
           const res = await aiCheck.mutateAsync({ scenario: 'insured', items: r.items.map((x) => ({ text: x.name, amount: x.amount })), lang });
           setLabelled(res.available ? res : null);

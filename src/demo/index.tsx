@@ -3,6 +3,7 @@
  * «Войти как…» performs a real login through the mock API, it never changes the role client-side.
  */
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, FlaskConical, RotateCcw } from 'lucide-react';
@@ -36,12 +37,13 @@ async function loginAs(acc: (typeof ACCOUNTS)[number]): Promise<Role> {
   if (acc.role === 'insured') {
     challengeId = (await request('/auth/phone', { method: 'POST', body: { phone: DEMO_INSURED_PHONE }, schema: S.challenge })).challengeId;
     const res = await request('/auth/phone/verify', { method: 'POST', body: { challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
-    setSession(res);
+    // Commit the new session (and any guard redirect it causes) before the caller navigates home.
+    flushSync(() => setSession(res));
     return res.user.role;
   }
   challengeId = (await request('/auth/login', { method: 'POST', body: { email: acc.login, password: DEMO_PASSWORD }, schema: S.challenge })).challengeId;
   const res = await request('/auth/otp', { method: 'POST', body: { challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
-  setSession(res);
+  flushSync(() => setSession(res));
   return res.user.role;
 }
 
