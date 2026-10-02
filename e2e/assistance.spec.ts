@@ -21,6 +21,8 @@ const AS = {
   operator: [/^Куратор ДМС/, /\/staff$/],
   accountant: [/^Бухгалтер/, /\/staff$/],
   underwriter: [/^Андеррайтер/, /\/staff$/],
+  // Rebills are reviewed by the claims officer since LIFECYCLE_SPEC §14.
+  claims: [/^Специалист по убыткам/, /\/staff$/],
 } as const satisfies Record<string, readonly [RegExp, RegExp]>;
 const as = (page: Page, who: keyof typeof AS) => switchTo(page, AS[who][0], AS[who][1]);
 
@@ -225,7 +227,7 @@ test('4. One registry of two payers is split: the assistance sees its lines, MIG
   expect(mig.lines.every((l) => l.payer === 'mig')).toBe(true);
 });
 
-test('5. Rebill: the assistance pays the clinic, bills MIG; the curator rejects, the assistance disputes, the curator accepts, the accountant pays', async ({ page }) => {
+test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer rejects, the assistance disputes, the claims officer accepts, the accountant pays', async ({ page }) => {
   failOnDialog(page);
   await loginStaff(page, 'asst_doctor');
   // A registry of another clinic waits for review: the doctor accepts the lines of the assistance.
@@ -252,7 +254,7 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the curator rejects,
   await expect(page.getByTestId('rebill-status')).toContainText('Отправлен');
   const rebillId = rebillUrl.split('/').pop()!;
 
-  await as(page, 'operator');
+  await as(page, 'claims');
   await page.goto(`/staff/rebills/${rebillId}`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText(number);
   await page.getByRole('button', { name: /^Отклонить строку/ }).first().click();
@@ -267,7 +269,7 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the curator rejects,
     await expect(accept).toHaveCount(n - k - 1);
   }
   await expect(page.getByTestId('rebill-status')).toContainText('Принят частично');
-  // The curator cannot pay.
+  // The claims officer cannot pay.
   await expect(page.getByRole('button', { name: /^Оплатить/ })).toHaveCount(0);
   expect((await api(page, 'POST', `/rebills/${rebillId}/pay`)).status).toBe(403);
 
@@ -278,7 +280,7 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the curator rejects,
   await page.getByRole('dialog').getByRole('button', { name: 'Оспорить' }).click();
   await expect(page.getByTestId('rebill-status')).toContainText('На проверке');
 
-  await as(page, 'operator');
+  await as(page, 'claims');
   await page.goto(`/staff/rebills/${rebillId}`);
   await expect(page.getByText('Ассистанс: Платёжное поручение ПП-20931 приложено')).toBeVisible();
   await page.getByRole('button', { name: /^Принять строку/ }).click();
@@ -371,7 +373,7 @@ test('8. Simulator of an API assistance: roster sync and a rebill through the AP
   await page.getByRole('tab', { name: 'Журнал запросов' }).click();
   await expect(page.getByText('/assistance/rebills').first()).toBeVisible();
 
-  await as(page, 'operator');
+  await as(page, 'claims');
   await page.goto('/staff/rebills');
   await expect(page.getByRole('row', { name: new RegExp(number) })).toBeVisible();
   await page.goto('/staff/assistance');
