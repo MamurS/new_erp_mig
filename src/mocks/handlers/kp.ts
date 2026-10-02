@@ -15,6 +15,7 @@ import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
 import { dmsParam } from '../params';
+import { ensureRenewalDeal } from './lifecycle';
 
 const DEFAULT_SUM = 200_000_000;
 const DEFAULT_PREMIUM = 5_000_000;
@@ -30,7 +31,7 @@ function readableKp(user: SessionUser, ctx: Ctx): KpDocument {
   if (!can(user, 'kp.read')) throw forbidden();
   const kp = db().kp.find((k) => k.id === param(ctx, 'id'));
   if (!kp) throw notFound();
-  if (user.role === 'hr' && (kp.status !== 'sent' || !can(user, 'kp.read', { companyId: kp.clientId }))) throw notFound();
+  if (user.role === 'hr' && (!['sent', 'accepted', 'declined'].includes(kp.status) || !can(user, 'kp.read', { companyId: kp.clientId }))) throw notFound();
   return kp;
 }
 
@@ -174,8 +175,15 @@ export const kpHandlers = [
       const kp = writableKp(user, ctx, 'kp.send');
       if (kp.status !== 'draft') throw conflict('Отправить можно только черновик');
       if (kp.params.validUntil < isoDay(startOfDay(Date.now()))) throw conflict('Срок действия КП истёк. Создайте новую версию');
+      // An offer of a deal goes out only on an approved quote (LIFECYCLE_SPEC §5).
+      if (kp.dealId) {
+        const q = db().quotes.filter((x) => x.dealId === kp.dealId).at(-1);
+        if (!q || q.status !== 'approved') throw conflict('КП можно отправить только по утверждённой котировке');
+      }
       kp.status = 'sent';
       kp.sentAt = tzIso(Date.now());
+      // A renewal offer opens (or moves) a renewal deal (LIFECYCLE_SPEC §3).
+      ensureRenewalDeal(db(), kp, user);
       audit(user, 'kp_sent', { targetType: 'kp', targetId: kp.id, targetLabel: kp.number });
       return kp;
     }),

@@ -187,7 +187,8 @@ describe('seed', () => {
     const d = db();
     expect(d.clients).toHaveLength(40);
     expect(d.clinics).toHaveLength(30);
-    expect(d.staff).toHaveLength(12);
+    // 12 staff of SPEC §2 plus 5 demo accounts of LIFECYCLE_SPEC §2.
+    expect(d.staff).toHaveLength(17);
     expect(d.claims.length).toBeGreaterThanOrEqual(600);
     expect(d.audit).toHaveLength(500);
     expect(d.limitRequests).toHaveLength(8);

@@ -261,7 +261,7 @@ export const hrHandlers = [
       const d = db();
       // Offers are shown to HR only once sent; drafts and revoked offers stay internal.
       const offers: ClientDocument[] = d.kp
-        .filter((k) => k.clientId === user.companyId && k.status === 'sent')
+        .filter((k) => k.clientId === user.companyId && (k.status === 'sent' || k.status === 'accepted' || k.status === 'declined'))
         .map((k) => ({ id: k.id, clientId: k.clientId, title: `Коммерческое предложение ${k.number}`, kind: 'kp', kpId: k.id, createdAt: (k.sentAt ?? k.createdAt).slice(0, 10) }));
       const docs = d.documents.filter((x) => x.clientId === user.companyId && x.kind !== 'kp');
       return [...offers, ...docs];

@@ -345,7 +345,47 @@ export type AuditAction =
   | 'policy_issued' | 'policy_change_requested' | 'policy_change_decided'
   | 'assistance_assigned' | 'case_created' | 'guarantee_escalated' | 'clinic_payment_recorded'
   | 'rebill_submitted' | 'rebill_line_decided' | 'rebill_paid' | 'qa_reviewed' | 'complaint_resolved'
-  | 'dms_param_proposed' | 'dms_param_changed' | 'dms_param_rejected';
+  | 'dms_param_proposed' | 'dms_param_changed' | 'dms_param_rejected'
+  | 'authority_proposed'
+  | 'authority_changed'
+  | 'authority_rejected'
+  | 'lead_created'
+  | 'deal_stage_changed'
+  | 'deal_lost'
+  | 'census_uploaded'
+  | 'quote_saved'
+  | 'quote_submitted'
+  | 'quote_approved'
+  | 'quote_rejected'
+  | 'kp_accepted'
+  | 'kp_declined'
+  | 'contract_created'
+  | 'contract_updated'
+  | 'contract_legal_submitted'
+  | 'contract_legal_approved'
+  | 'contract_legal_returned'
+  | 'contract_finance_approved'
+  | 'contract_sent'
+  | 'contract_signed'
+  | 'contract_scan_uploaded'
+  | 'contract_scan_verified'
+  | 'contract_original'
+  | 'contract_activated'
+  | 'contract_terminated'
+  | 'payment_recorded'
+  | 'payments_imported'
+  | 'change_request_created'
+  | 'endorsement_created'
+  | 'endorsement_signed'
+  | 'claim_opinion_requested'
+  | 'claim_opinion_given'
+  | 'claim_decided'
+  | 'claim_decision_escalated'
+  | 'claim_decision_rejected'
+  | 'claim_reserve_changed'
+  | 'claim_flag_dismissed'
+  | 'claim_appealed'
+  | 'claim_appeal_resolved';
 
 export interface AuditEntry {
   id: UUID;
@@ -354,7 +394,7 @@ export interface AuditEntry {
   actorName: string;
   actorRole: Role;
   action: AuditAction;
-  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill' | 'parameter';
+  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill' | 'parameter' | 'deal' | 'quote' | 'contract' | 'endorsement' | 'invoice';
   targetId?: UUID;
   targetLabel?: string;                    // без ПДн: номер полиса или убытка, либо «Застрахованный #a1b2»
   reason?: string;

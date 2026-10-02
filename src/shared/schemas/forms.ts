@@ -486,3 +486,4 @@ export const reserveSchema = z.object({ amount: moneyInput, reason: text(5, 300,
 export const flagDismissSchema = z.object({ comment: text(5, 500, 'Комментарий обязателен: минимум 5 символов') });
 export const appealSchema = z.object({ text: text(10, 1000, 'Опишите, с чем вы не согласны: минимум 10 символов') });
 export const appealResolveSchema = z.object({ resolution: text(5, 1000, 'Решение по апелляции: минимум 5 символов') });
+export const contractCreateSchema = z.object({ dealId: uuid });
