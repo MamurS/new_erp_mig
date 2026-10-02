@@ -285,6 +285,17 @@ export const claimDetail: z.ZodType<D.ClaimDetail> = claimBase.extend({
   allowedTransitions: z.array(claimStatus),
   medicalReviewRequired: z.boolean(),
   blockedTransitions: z.array(z.object({ to: claimStatus, reason: z.string() })),
+  reserveHistory: z.array(z.object({ at: isoDateTime, byName: z.string(), from: money, to: money, reason: z.string() })).optional(),
+  settlement: z
+    .object({
+      canDecide: z.boolean(),
+      canApprovePending: z.boolean(),
+      canRequestOpinion: z.boolean(),
+      canGiveOpinion: z.boolean(),
+      canChangeReserve: z.boolean(),
+      authorityMax: money.nullable(),
+    })
+    .optional(),
 });
 
 const myClaimStatus = z.enum(['received', 'checking', 'approved', 'rejected', 'paid']);
