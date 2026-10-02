@@ -25,10 +25,11 @@ import {
 } from '../http';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
-import { toClaimDetail } from '../views';
+import { toClaimDetail, toClaimListItem } from '../views';
 import { isOverdue } from './dashboard';
 import { findInsured } from './insured';
 import { renderReceiptPng } from '../receipt';
+import { currentReserve, refreshFlags } from '../settlement-core';
 
 function findClaim(id: string): ClaimRow {
   const c = db().claims.find((x) => x.id === id);
@@ -59,6 +60,14 @@ export const claimHandlers = [
       if (url.searchParams.get('overdue') === '1') list = list.filter((c) => isOverdue(c, now));
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((c) => c.clientId === clientId);
+      // Tabs of the claims officer's workplace (LIFECYCLE_SPEC §13).
+      const tab = url.searchParams.get('tab');
+      if (tab === 'new') list = list.filter((c) => c.status === 'new' && c.handledBy !== 'assistance');
+      else if (tab === 'review') list = list.filter((c) => c.status === 'review' && !c.pendingDecision);
+      else if (tab === 'opinion') list = list.filter((c) => c.status === 'medical_review');
+      else if (tab === 'above') list = list.filter((c) => !!c.pendingDecision);
+      else if (tab === 'appeals') list = list.filter((c) => c.appeal?.status === 'open');
+      if (url.searchParams.get('flagged') === '1') list = list.filter((c) => c.flags?.some((f) => !f.dismissed));
       const term = q(url);
       if (term)
         list = list.filter(
@@ -76,11 +85,12 @@ export const claimHandlers = [
           status: (c) => c.status,
           slaDueAt: (c) => parseIso(c.slaDueAt),
           createdAt: (c) => parseIso(c.createdAt),
+          reserve: (c) => currentReserve(c),
         },
         'createdAt:desc',
       );
       const page = paginate(sorted, url);
-      return { ...page, items: page.items.map(({ publicRejectionReason: _p, ...c }) => c) };
+      return { ...page, items: page.items.map(toClaimListItem) };
     }),
   ),
   http.get(
@@ -149,8 +159,10 @@ export const claimHandlers = [
         updatedAt: tzIso(now),
         attachments: [],
         history: [{ at: tzIso(now), actorName: user.displayName, to: 'new', comment: 'Создан оператором' }],
+        handledBy: 'mig',
       };
       db().claims.unshift(claim);
+      refreshFlags(db(), claim);
       return { id: claim.id };
     }),
   ),

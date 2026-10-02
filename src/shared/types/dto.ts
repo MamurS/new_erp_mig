@@ -89,7 +89,13 @@ export type QueueType =
   | 'escalation'
   | 'rebill'
   | 'assistance_sla'
-  | 'complaint';
+  | 'complaint'
+  | 'deal'
+  | 'quote'
+  | 'contract'
+  | 'endorsement'
+  | 'invoice'
+  | 'appeal';
 export interface QueueItem {
   id: UUID;
   type: QueueType;

@@ -29,6 +29,11 @@ const TABS = [
   { key: 'registry', label: 'Реестры', action: 'registries.review' },
   { key: 'policy_change', label: 'Состав', action: 'policy_changes.decide' },
   { key: 'assistance', label: 'Ассистансы', action: 'rebills.review' },
+  { key: 'deal', label: 'Сделки', action: 'deals.manage' },
+  { key: 'quote', label: 'Котировки', action: 'quotes.approve' },
+  { key: 'contract', label: 'Договоры', action: 'contracts.legal_approve' },
+  { key: 'invoice', label: 'Счета', action: 'payments.record' },
+  { key: 'appeal', label: 'Апелляции', action: 'claims.decide' },
 ] as const;
 
 const TYPE_CHIP: Record<QueueItem['type'], { kind: string; label: string }> = {
@@ -43,6 +48,12 @@ const TYPE_CHIP: Record<QueueItem['type'], { kind: string; label: string }> = {
   rebill: { kind: 'peach', label: 'Счёт ассистанса' },
   assistance_sla: { kind: 'danger', label: 'SLA ассистанса нарушен' },
   complaint: { kind: 'danger', label: 'Жалоба' },
+  deal: { kind: 'accent', label: 'Сделка' },
+  quote: { kind: 'warning', label: 'Котировка' },
+  contract: { kind: 'sky', label: 'Договор' },
+  endorsement: { kind: 'sky', label: 'Доп. соглашение' },
+  invoice: { kind: 'peach', label: 'Счёт' },
+  appeal: { kind: 'danger', label: 'Апелляция' },
 };
 
 function greeting(now = new Date()): string {
@@ -98,6 +109,12 @@ export default function DashboardPage() {
     else if (row.type === 'assistance_sla' || row.type === 'complaint') navigate(`/staff/assistance/${row.entityId}`);
     else if (row.type === 'registry') navigate(`/staff/registries/${row.entityId}`);
     else if (row.type === 'policy_change') navigate(`/staff/policy-changes?clientId=${row.entityId}`);
+    else if (row.type === 'deal') navigate(`/staff/deals/${row.entityId}`);
+    else if (row.type === 'quote') navigate(`/staff/quotes/${row.entityId}`);
+    else if (row.type === 'contract') navigate(`/staff/contracts/${row.entityId}`);
+    else if (row.type === 'endorsement') navigate(`/staff/endorsements/${row.entityId}`);
+    else if (row.type === 'invoice') navigate('/staff/invoices');
+    else if (row.type === 'appeal') navigate(`/staff/claims/${row.entityId}`);
     else navigate(`/staff/appointments?status=${done.has(row.id) ? 'confirmed' : 'requested'}`);
   };
 

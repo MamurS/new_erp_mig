@@ -16,6 +16,7 @@ import { limitsFor, toMyClaim } from '../views';
 import { PROGRAMS } from '../programs';
 import { nextClaimNumber } from './claims';
 import { mockConfig } from '../config';
+import { handlerOf, refreshFlags, sha256Hex } from '../settlement-core';
 
 function requireInsured(request: Request): { user: SessionUser; me: InsuredRow } {
   const { user } = requireSession(request);
@@ -168,8 +169,10 @@ export const meHandlers = [
       const d = db();
       const claimId = randomId();
       const attachments: ClaimRow['attachments'] = [];
+      let receiptHash: string | undefined;
       for (const [idx, f] of files.entries()) {
         const { bytes, mime } = await readImage(f);
+        if (idx === 0) receiptHash = await sha256Hex(bytes);
         const fileId = randomId();
         d.files.push({ id: fileId, mime, bytes, claimId, insuredId: me.id });
         const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp';
@@ -194,8 +197,12 @@ export const meHandlers = [
         updatedAt: tzIso(now),
         attachments,
         history: [{ at: tzIso(now), actorName: 'Застрахованный (приложение)', to: 'new' }],
+        receiptHash,
+        // Reimbursements go to MIG's claims officer or to the assistance (handlesReimbursements, LIFECYCLE_SPEC §13).
+        handledBy: handlerOf(d, me.policyId),
       };
       d.claims.unshift(claim);
+      refreshFlags(d, claim);
       return toMyClaim(claim, me);
     }),
   ),
