@@ -28,7 +28,7 @@ export function kpDocumentTitle(number: string, clientName: string): string {
   return `${clean(number)} — ${clean(clientName)}`.slice(0, 150).trim();
 }
 
-export const KP_STATUS_LABEL = { draft: 'Черновик', sent: 'Отправлено', revoked: 'Отозвано' } as const;
+export const KP_STATUS_LABEL = { draft: 'Черновик', sent: 'Отправлено', revoked: 'Отозвано', accepted: 'Принято клиентом', declined: 'Отклонено клиентом' } as const;
 /** Chip kind per status (see src/shared/ui/chips.tsx). */
-export const KP_STATUS_CHIP = { draft: 'neutral', sent: 'success', revoked: 'danger' } as const;
+export const KP_STATUS_CHIP = { draft: 'neutral', sent: 'success', revoked: 'danger', accepted: 'success', declined: 'warning' } as const;
 export const KP_TEMPLATE_NAME = { gold: 'GOLD' } as const;

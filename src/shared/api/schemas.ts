@@ -8,8 +8,13 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoDateTime = z.string().min(10);
 const money = z.number();
 
-export const role = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured', 'clinic_registrar', 'clinic_admin', 'asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin']);
-export const staffRole = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin']);
+export const role = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'hr', 'insured', 'clinic_registrar', 'clinic_admin', 'asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin', 'sales_manager', 'legal', 'claims_officer']);
+export const staffAuthority: z.ZodType<T.StaffAuthority> = z.object({
+  quoteDiscountMaxPct: z.number().optional(),
+  quotePremiumMax: z.number().optional(),
+  claimDecisionMax: z.number().optional(),
+});
+export const staffRole = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer']);
 export const programCode = z.enum(['basic', 'standard', 'standard_plus', 'premium']);
 export const limitCategory = z.enum(['outpatient', 'dental', 'medicines', 'inpatient']);
 export const claimStatus = z.enum(['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid']);
@@ -36,6 +41,8 @@ export const sessionUser: z.ZodType<T.SessionUser> = z.object({
   clinicId: uuid.optional(),
   assistanceId: uuid.optional(),
   consentGivenAt: isoDateTime.optional(),
+  authority: staffAuthority.optional(),
+  canSign: z.boolean().optional(),
 });
 
 export const challenge: z.ZodType<D.ChallengeResponse> = z.object({
@@ -51,7 +58,7 @@ export const client: z.ZodType<T.Client> = z.object({
   legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
   name: z.string(),
   inn: z.string(),
-  status: z.enum(['draft', 'negotiation', 'active', 'renewal', 'expired']),
+  status: z.enum(['lead', 'draft', 'negotiation', 'active', 'renewal', 'expired']),
   managerId: uuid,
   managerName: z.string(),
   hrContact: z.object({ name: z.string(), phoneMasked: z.string(), emailMasked: z.string() }),
@@ -63,6 +70,11 @@ export const client: z.ZodType<T.Client> = z.object({
   lossRatio: z.number().nullable(),
   renewalDate: isoDate.optional(),
   createdAt: isoDateTime,
+  requisites: z
+    .object({ bank: z.string(), account: z.string(), mfo: z.string(), director: z.string(), directorBasis: z.string(), address: z.string().optional() })
+    .optional(),
+  estimatedHeadcount: z.number().optional(),
+  currentInsurer: z.string().optional(),
 });
 
 export function page<S extends z.ZodTypeAny>(item: S) {
@@ -105,6 +117,7 @@ export const policy: z.ZodType<T.Policy> = z.object({
   tariff: z.object({ employee: money, family: money }).optional(),
   familyCount: z.number().optional(),
   assistanceId: uuid.nullable().optional(),
+  contractId: uuid.optional(),
 });
 export const policyPage = page(policy);
 export const policyDetail: z.ZodType<D.PolicyDetail> = z.intersection(
@@ -128,6 +141,8 @@ const insuredBase = z.object({
   attachedClinicId: uuid,
   insuredFrom: isoDate,
   status: z.enum(['active', 'excluded']),
+  certificateNumber: z.string().optional(),
+  contractId: uuid.optional(),
 });
 export const insured: z.ZodType<T.Insured> = insuredBase;
 export const insuredListItem: z.ZodType<D.InsuredListItem> = z.object({
@@ -195,6 +210,21 @@ const claimEvent: z.ZodType<T.ClaimEvent> = z.object({
   to: claimStatus,
   comment: z.string().optional(),
 });
+const fraudFlag: z.ZodType<T.FraudFlag> = z.object({
+  id: uuid,
+  code: z.enum(['duplicate_receipt', 'frequent_claims', 'outside_coverage', 'before_exclusion', 'above_price']),
+  message: z.string(),
+  dismissed: z.object({ byName: z.string(), at: isoDateTime, comment: z.string() }).optional(),
+});
+const claimDecision = z.object({
+  kind: z.enum(['approve', 'partial', 'reject']),
+  amount: money,
+  clauseId: z.string().optional(),
+  reason: z.string(),
+  byId: uuid,
+  byName: z.string(),
+  at: isoDateTime,
+});
 const claimBase = z.object({
   id: uuid,
   number: z.string(),
@@ -215,6 +245,32 @@ const claimBase = z.object({
   attachments: z.array(attachment),
   history: z.array(claimEvent),
   approvedById: uuid.optional(),
+  reserve: money.optional(),
+  flags: z.array(fraudFlag).optional(),
+  opinion: z
+    .object({
+      requestedAt: isoDateTime,
+      requestedByName: z.string(),
+      question: z.string().optional(),
+      text: z.string().optional(),
+      recommendation: z.enum(['approve', 'partial', 'reject']).optional(),
+      byName: z.string().optional(),
+      at: isoDateTime.optional(),
+    })
+    .optional(),
+  decision: claimDecision.extend({ approvedByName: z.string().optional() }).optional(),
+  pendingDecision: claimDecision.extend({ required: money }).optional(),
+  appeal: z
+    .object({
+      at: isoDateTime,
+      by: z.enum(['insured', 'clinic']),
+      text: z.string(),
+      status: z.enum(['open', 'resolved']),
+      resolution: z.string().optional(),
+      resolvedAt: isoDateTime.optional(),
+    })
+    .optional(),
+  handledBy: z.enum(['mig', 'assistance']).optional(),
 });
 export const claim: z.ZodType<T.Claim> = claimBase;
 export const claimPage = page(claim);
@@ -251,6 +307,10 @@ export const myClaim: z.ZodType<T.MyClaim> = z.object({
   expectedPayoutBy: isoDate.optional(),
   rejectionReason: z.string().optional(),
   payoutCardMasked: z.string(),
+  clauseRef: z.string().optional(),
+  canAppeal: z.boolean().optional(),
+  appealStatus: z.enum(['open', 'resolved']).optional(),
+  letterAvailable: z.boolean().optional(),
 });
 export const myClaims = z.array(myClaim);
 
@@ -377,6 +437,9 @@ export const invoice: z.ZodType<T.Invoice> = z.object({
   issuedAt: isoDate,
   dueDate: isoDate,
   status: z.enum(['unpaid', 'paid', 'overdue']),
+  contractId: uuid.optional(),
+  endorsementId: uuid.optional(),
+  paid: money.optional(),
 });
 export const invoices = z.array(invoice);
 
@@ -395,6 +458,8 @@ export const staffUser: z.ZodType<T.StaffUser> = z.object({
   role: staffRole,
   active: z.boolean(),
   lastLoginAt: isoDateTime.optional(),
+  authority: staffAuthority,
+  signatory: z.object({ canSign: z.literal(true), basis: z.string() }).optional(),
 });
 export const staffUsers = z.array(staffUser);
 
@@ -552,12 +617,15 @@ export const kpDocument: z.ZodType<T.KpDocument> = z.object({
   params: kpParams,
   templateVersion: z.string(),
   totalPremium: z.number().int().nonnegative(),
-  status: z.enum(['draft', 'sent', 'revoked']),
+  status: z.enum(['draft', 'sent', 'revoked', 'accepted', 'declined']),
   createdById: uuid,
   createdByName: z.string(),
   createdByEmail: z.string(),
   createdAt: isoDateTime,
   sentAt: isoDateTime.optional(),
+  dealId: uuid.optional(),
+  quoteId: uuid.optional(),
+  response: z.object({ at: isoDateTime, byName: z.string(), via: z.enum(['hr', 'manager']), reason: z.string().optional() }).optional(),
 });
 export const kpDocuments = z.array(kpDocument);
 export const kpDefaults: z.ZodType<D.KpDefaults> = z.object({
@@ -623,6 +691,27 @@ const dmsParamKey = z.enum([
   'pinflChecksPerHour',
   'pinflFailsBeforeLock',
   'pinflLockMinutes',
+  'tariffBaseBasic',
+  'tariffBaseStandard',
+  'tariffBaseStandardPlus',
+  'tariffBasePremium',
+  'tariffCoef0to17',
+  'tariffCoef18to29',
+  'tariffCoef30to39',
+  'tariffCoef40to49',
+  'tariffCoef50to59',
+  'tariffCoef60plus',
+  'groupDiscountFrom',
+  'groupDiscountShare',
+  'paperOriginalReminderDays',
+  'overdueBlocksService',
+  'endorsementPeriodicity',
+  'refundRule',
+  'coverageStartRule',
+  'renewalLeadDays',
+  'fraudMaxClaimsPerMonth',
+  'fraudPriceExcessShare',
+  'fraudDaysBeforeExclusion',
 ]);
 /** Portals other than the MIG one receive only part of the values. */
 export const dmsParamValues: z.ZodType<Partial<T.DmsParamValues>> = z.record(dmsParamKey, z.number());

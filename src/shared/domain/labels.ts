@@ -15,6 +15,9 @@ export const ROLE_LABEL: Record<Role, string> = {
   doctor_expert: 'Врач-эксперт',
   accountant: 'Бухгалтер',
   admin: 'Администратор',
+  sales_manager: 'Менеджер по продажам',
+  legal: 'Юрист',
+  claims_officer: 'Специалист по убыткам',
   hr: 'HR клиента',
   insured: 'Застрахованный',
   clinic_registrar: 'Регистратор клиники',
@@ -33,6 +36,7 @@ export const PROGRAM_LABEL: Record<ProgramCode, string> = {
 };
 
 export const CLIENT_STATUS_LABEL: Record<ClientStatus, string> = {
+  lead: 'Лид',
   draft: 'Черновик',
   negotiation: 'Переговоры',
   active: 'Активен',
@@ -120,7 +124,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   dms_param_rejected: 'Изменение параметра ДМС отклонено',
 };
 
-export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin'] as const;
+export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer'] as const;
 export const CLINIC_ROLES = ['clinic_registrar', 'clinic_admin'] as const;
 export const ASSISTANCE_ROLES = ['asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin'] as const;
 export function isAssistRole(role: Role): role is (typeof ASSISTANCE_ROLES)[number] {
