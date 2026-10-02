@@ -1,0 +1,190 @@
+/*
+ * Contract rules (LIFECYCLE_SPEC §7–9): payment schedule, signing by each side with any method,
+ * the paper original, and the moment the contract comes into force. Pure functions.
+ */
+import type {
+  ActivationRule,
+  ContractStatus,
+  DealStage,
+  EndorsementStatus,
+  ISODate,
+  ISODateTime,
+  Money,
+  PaymentFrequency,
+  SideSignature,
+  Signing,
+  SignMethod,
+} from '@/shared/types';
+
+export type Side = 'mig' | 'client';
+
+export const SIGN_METHOD_LABEL: Record<SignMethod, string> = { eimzo: 'ЭЦП (E-IMZO)', edo: 'ЭДО', paper: 'Бумага', scan: 'Скан' };
+export const PAYMENT_FREQUENCY_LABEL: Record<PaymentFrequency, string> = { single: 'Единовременно', quarterly: 'Поквартально', monthly: 'Помесячно' };
+export const ACTIVATION_RULE_LABEL: Record<ActivationRule, string> = {
+  on_start_date: 'с даты начала срока страхования',
+  after_first_payment: 'с даты начала, но не раньше оплаты первого взноса',
+};
+export const EDO_PROVIDERS = ['Didox', 'Faktura.uz', 'Soliq ЭДО'] as const;
+
+export const CONTRACT_STATUS_LABEL: Record<ContractStatus, string> = {
+  draft: 'Черновик',
+  legal_review: 'У юриста',
+  approved: 'Согласован',
+  sent: 'Отправлен клиенту',
+  signing: 'Подписание',
+  signed: 'Подписан',
+  active: 'Действует',
+  terminated: 'Расторгнут',
+  expired: 'Истёк',
+};
+export const CONTRACT_STATUS_CHIP: Record<ContractStatus, string> = {
+  draft: 'neutral',
+  legal_review: 'warning',
+  approved: 'accent',
+  sent: 'accent',
+  signing: 'warning',
+  signed: 'success',
+  active: 'success',
+  terminated: 'danger',
+  expired: 'neutral',
+};
+export const ENDORSEMENT_STATUS_LABEL: Record<EndorsementStatus, string> = {
+  draft: 'Черновик',
+  legal_review: 'У юриста',
+  approved: 'Согласовано',
+  sent: 'Отправлено клиенту',
+  signing: 'Подписание',
+  signed: 'Подписано',
+};
+
+export const DEAL_STAGES: readonly DealStage[] = ['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active'];
+export const DEAL_STAGE_LABEL: Record<DealStage, string> = {
+  lead: 'Лид',
+  census: 'Данные для оценки',
+  quote: 'Котировка',
+  kp_sent: 'КП отправлено',
+  kp_accepted: 'КП принято',
+  contract_draft: 'Договор: черновик',
+  contract_review: 'Договор: согласование',
+  contract_sent: 'Договор отправлен',
+  signing: 'Подписание',
+  awaiting_payment: 'Ожидает оплаты',
+  active: 'Действует',
+  lost: 'Проиграна',
+};
+
+const DAY = 86_400_000;
+const dayNumber = (d: ISODate) => Math.round(Date.parse(`${d}T00:00:00Z`) / DAY);
+const fromDayNumber = (n: number): ISODate => new Date(n * DAY).toISOString().slice(0, 10);
+
+export function addMonths(date: ISODate, months: number): ISODate {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const target = new Date(Date.UTC(y, m - 1 + months, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(d, last))).toISOString().slice(0, 10);
+}
+
+export function addDays(date: ISODate, days: number): ISODate {
+  return fromDayNumber(dayNumber(date) + days);
+}
+
+/** Installments: equal parts (the last one takes the rounding remainder), due on the start date and every period after. */
+export function buildPaymentSchedule(total: Money, startDate: ISODate, frequency: PaymentFrequency): { dueDate: ISODate; amount: Money }[] {
+  const parts = frequency === 'single' ? 1 : frequency === 'quarterly' ? 4 : 12;
+  const step = frequency === 'quarterly' ? 3 : 1;
+  const base = Math.floor(total / parts / 1000) * 1000;
+  return Array.from({ length: parts }, (_, i) => ({
+    dueDate: addMonths(startDate, i * step),
+    amount: i === parts - 1 ? total - base * (parts - 1) : base,
+  }));
+}
+
+export function emptySigning(): Signing {
+  return { paperOriginal: { required: false } };
+}
+
+/** Records a counted signature of a side. Paper and scan switch on the paper original requirement. */
+export function addSignature(s: Signing, side: Side, sig: SideSignature): Signing {
+  if (s[side]) throw new Error(`${side} already signed`);
+  const paper = sig.method === 'paper' || sig.method === 'scan';
+  return {
+    ...s,
+    [side]: sig,
+    paperOriginal: { ...s.paperOriginal, required: s.paperOriginal.required || paper },
+    edoPending: side === 'client' && sig.method === 'edo' ? undefined : s.edoPending,
+  };
+}
+
+/** A scan counts only after a MIG employee verified it (LIFECYCLE_SPEC §8.4). */
+export function addPendingScan(s: Signing, side: Side, fileId: string, at: ISODateTime, byName: string): Signing {
+  return { ...s, pendingScans: [...(s.pendingScans ?? []).filter((p) => p.side !== side), { side, fileId, uploadedAt: at, uploadedByName: byName }] };
+}
+
+export function verifyScan(s: Signing, side: Side, verifier: { id: string; name: string }, at: ISODateTime, signerName: string): Signing {
+  const pending = s.pendingScans?.find((p) => p.side === side);
+  if (!pending) throw new Error('no scan');
+  const next = addSignature(s, side, { method: 'scan', signedAt: at, signerName, scanFileId: pending.fileId, scanVerifiedById: verifier.id, scanVerifiedByName: verifier.name });
+  return { ...next, pendingScans: (next.pendingScans ?? []).filter((p) => p.side !== side) };
+}
+
+export function isFullySigned(s: Signing): boolean {
+  return !!s.mig && !!s.client;
+}
+
+export function fullySignedAt(s: Signing): ISODateTime | null {
+  if (!s.mig || !s.client) return null;
+  return s.mig.signedAt > s.client.signedAt ? s.mig.signedAt : s.client.signedAt;
+}
+
+/** The client's paper original is still missing longer than `days` after signing: remind the manager (it never blocks the contract). */
+export function originalReminderDue(s: Signing, now: number, days: number): boolean {
+  const at = fullySignedAt(s);
+  if (!at || !s.paperOriginal.required || s.paperOriginal.clientOriginalReceivedAt) return false;
+  return now - Date.parse(at) > days * DAY;
+}
+
+/**
+ * Date the contract comes into force: the start date, or for `after_first_payment` not earlier than
+ * the day the first installment is paid in full. null — not yet.
+ */
+export function activationDate(
+  rule: ActivationRule,
+  startDate: ISODate,
+  schedule: readonly { dueDate: ISODate; amount: Money }[],
+  payments: readonly { amount: Money; paidAt: ISODate }[],
+): ISODate | null {
+  if (rule === 'on_start_date') return startDate;
+  const first = schedule[0]?.amount ?? 0;
+  let paid = 0;
+  for (const p of [...payments].sort((a, b) => (a.paidAt < b.paidAt ? -1 : 1))) {
+    paid += p.amount;
+    if (paid >= first) return p.paidAt > startDate ? p.paidAt : startDate;
+  }
+  return null;
+}
+
+export function contractNumber(year: number, seq: number): string {
+  return `ДМС-Д-${year}-${String(seq).padStart(6, '0')}`;
+}
+
+export function dealNumber(year: number, seq: number): string {
+  return `СД-${year}-${String(seq).padStart(6, '0')}`;
+}
+
+/** 'СЕРТ-2026-000123-0001': contract sequence and the person's index in it. */
+export function certificateNumber(contractNo: string, index: number): string {
+  const m = /^ДМС-Д-(\d{4})-(\d{6})$/.exec(contractNo);
+  return `СЕРТ-${m?.[1] ?? '0000'}-${m?.[2] ?? '000000'}-${String(index).padStart(4, '0')}`;
+}
+
+export function endorsementNumber(n: number, contractNo: string): string {
+  return `ДС-${n} к ${contractNo}`;
+}
+
+/** Which side still has to act and how, for the signing panel. */
+export function signingSummary(s: Signing): { side: Side; state: 'signed' | 'scan_pending' | 'edo_pending' | 'waiting' }[] {
+  return (['mig', 'client'] as const).map((side) => ({
+    side,
+    state: s[side] ? 'signed' : s.pendingScans?.some((p) => p.side === side) ? 'scan_pending' : side === 'client' && s.edoPending ? 'edo_pending' : 'waiting',
+  }));
+}
