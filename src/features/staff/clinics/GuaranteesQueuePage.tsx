@@ -1,4 +1,5 @@
 /* Guarantee letters queue (CLINIC_SPEC §5): doctor_expert approves / rejects / requests documents; four-eyes above the threshold. */
+import { AiHint } from '@/features/ai/AiHint';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import type { GuaranteeStatus } from '@/shared/types';
@@ -93,6 +94,9 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
         )
       }
     >
+      <div className="mb-3">
+        <AiHint subject={{ type: 'guarantee', id: g.id }} />
+      </div>
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
         <Kv label="Пациент">{g.insuredName}</Kv>
         <Kv label="Статус">

@@ -145,10 +145,17 @@ export const meHandlers = [
       const { bytes } = await readImage(file);
       if (mockConfig.latency[1] > 0) await delay(1000);
       const rng = mulberry32(hashString(`${me.id}:${bytes.length}`));
+      const providerName = pick(rng, ['Аптека «Шифо Фарм»', 'Аптека «Нур Дори»', 'Медцентр «Саломат Плюс»', 'Клиника «Мадад Мед»']);
+      // Fake OCR: a pharmacy receipt mixes medicines with vitamins and cosmetics; a clinic one has services.
+      const pool = providerName.startsWith('Аптека')
+        ? [pick(rng, ['Нурофен 200 мг', 'Амоксиклав 875 мг', 'Називин капли в нос', 'Смекта']), pick(rng, ['Парацетамол 500 мг', 'Но-шпа 40 мг', 'Лоратадин 10 мг']), pick(rng, ['Аквадетрим 10 мл', 'Витамин С шипучий', 'Компливит']), pick(rng, ['Крем для лица увлажняющий', 'Солнцезащитный крем SPF 50', 'Бальзам для губ'])]
+        : ['Приём терапевта', 'Общий анализ крови', pick(rng, ['ЭКГ с расшифровкой', 'УЗИ брюшной полости'])];
+      const items = pool.map((name) => ({ name, amount: int(rng, 15, 120) * 1000 }));
       const out: RecognizeResult = {
-        providerName: pick(rng, ['Аптека «Шифо Фарм»', 'Аптека «Нур Дори»', 'Медцентр «Саломат Плюс»', 'Клиника «Мадад Мед»']),
-        amount: int(rng, 85, 450) * 1000,
+        providerName,
+        amount: items.reduce((s, x) => s + x.amount, 0),
         serviceDate: isoDay(Date.now() - int(rng, 0, 3) * DAY),
+        items,
       };
       return out;
     }),

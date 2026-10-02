@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CalendarPlus, ChevronRight, Headphones, MapPin, MessageCircle, Phone, QrCode, Receipt, type LucideIcon } from 'lucide-react';
+import { Bell, CalendarPlus, ChevronRight, Headphones, MapPin, MessageCircle, Phone, QrCode, Receipt, type LucideIcon, ShieldQuestion } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import { useMe, useMeLimits, useMePolicy, useMyClaims } from '@/shared/api/queries/me';
 import { useMyAssistance } from '@/shared/api/queries/assist';
@@ -20,6 +20,7 @@ const TILES: { to: string; label: I18nKey; icon: LucideIcon; tone: string }[] = 
   { to: '/app/claims/new', label: 'tile.refund', icon: Receipt, tone: 'bg-peach text-peach-text' },
   { to: '/app/clinics', label: 'tile.clinics', icon: MapPin, tone: 'bg-sun text-sun-text' },
   { to: '/app/chat', label: 'tile.chat', icon: MessageCircle, tone: 'bg-accent-soft text-accent-text' },
+  { to: '/app/coverage', label: 'tile.coverage', icon: ShieldQuestion, tone: 'bg-rail text-text' },
 ];
 
 const CATEGORIES: LimitCategory[] = ['outpatient', 'dental', 'medicines', 'inpatient'];

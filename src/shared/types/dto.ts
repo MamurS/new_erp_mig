@@ -322,6 +322,8 @@ export interface RecognizeResult {
   providerName: string;
   amount: Money;
   serviceDate: ISODate;
+  /** Positions of the receipt (AI_COVERAGE_SPEC §4.1); their sum is `amount`. */
+  items?: { name: string; amount: Money }[];
 }
 /** GET /api/clients/:id/kp-defaults — prefilled parameters plus what the offer letter needs. */
 export interface KpDefaults {

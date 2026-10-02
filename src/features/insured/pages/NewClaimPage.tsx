@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, CreditCard, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import { useMe, useRecognize, useSubmitClaim } from '@/shared/api/queries/me';
+import { useAiCheck, useAiStatus } from '@/shared/api/queries/ai';
+import type { AiCheckResult } from '@/shared/types/dto';
 import { errorMessage } from '@/shared/api/client';
 import type { ClaimCategory } from '@/shared/types';
 import { checkImageFile, reencodeImage, RECEIPT_LIMITS, type FileCheckError } from '@/shared/lib/image';
@@ -43,7 +45,7 @@ const FIELD_ERR: Record<FieldKey, I18nKey> = {
 let photoSeq = 0;
 
 export default function NewClaimPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   useDocumentTitle(t('refund.title'));
   const navigate = useNavigate();
   const me = useMe();
@@ -64,6 +66,10 @@ export default function NewClaimPage() {
   const [errors, setErrors] = useState<Partial<Record<FieldKey, I18nKey>>>({});
   const [photoError, setPhotoError] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Receipt positions labelled by the coverage check (AI_COVERAGE_SPEC §4.1).
+  const aiStatus = useAiStatus();
+  const aiCheck = useAiCheck();
+  const [labelled, setLabelled] = useState<AiCheckResult | null>(null);
 
   // Revoke every preview URL on unmount.
   const photosRef = useRef<Photo[]>([]);
@@ -77,6 +83,14 @@ export default function NewClaimPage() {
       setAmount((v) => v || maskMoney(String(r.amount)));
       setServiceDate((v) => v || formatDate(r.serviceDate));
       setRecognized('ok');
+      if (r.items?.length && aiStatus.data?.scenarios.insured) {
+        try {
+          const res = await aiCheck.mutateAsync({ scenario: 'insured', items: r.items.map((x) => ({ text: x.name, amount: x.amount })), lang });
+          setLabelled(res.available ? res : null);
+        } catch {
+          setLabelled(null);
+        }
+      }
     } catch {
       setRecognized('failed');
     }
@@ -280,6 +294,49 @@ export default function NewClaimPage() {
               <p className="rounded-btn bg-peach px-4 py-3 font-semibold text-peach-text" role="status">
                 {t('refund.recognizeFailed')}
               </p>
+            )}
+
+            {labelled && labelled.items.length > 0 && (
+              <section className="rounded-card border border-border bg-surface p-4" aria-label={t('coverage.items')} data-testid="receipt-items">
+                <p className="mb-2 font-bold">{t('coverage.items')}</p>
+                <ul className="flex flex-col gap-2">
+                  {labelled.items.map((x) => (
+                    <li key={x.logId} className="flex items-center justify-between gap-2 text-[14px]" data-testid="receipt-item" data-label={x.receiptLabel}>
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">{x.input}</span>
+                        <span className="num text-muted">{formatMoney(x.amount ?? 0)}</span>
+                      </span>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-3 py-1 text-[13px] font-bold',
+                          x.receiptLabel === 'refund' ? 'bg-accent-soft text-accent-text' : x.receiptLabel === 'no_refund' ? 'bg-danger-soft text-danger-text' : 'bg-sun text-sun-text',
+                        )}
+                      >
+                        {t(`coverage.r.${x.receiptLabel ?? 'check'}`)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 rounded-btn bg-sky px-3 py-2 font-semibold text-sky-text" data-testid="receipt-expected">
+                  {t('coverage.expected', { amount: formatMoney(labelled.expectedReimbursement ?? 0) })}
+                </p>
+                {labelled.items.some((x) => x.receiptLabel === 'no_refund') && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="mt-2 h-11 w-full rounded-btn text-[14px] font-semibold"
+                    onClick={() => {
+                      const keep = labelled.items.filter((x) => x.receiptLabel !== 'no_refund');
+                      setLabelled({ ...labelled, items: keep });
+                      setAmount(maskMoney(String(keep.reduce((s, x) => s + (x.amount ?? 0), 0))));
+                      toast.success(t('coverage.removed'));
+                    }}
+                  >
+                    {t('coverage.removeNo')}
+                  </Button>
+                )}
+                <p className="mt-2 text-[12px] text-muted">{t('coverage.disclaimer')}</p>
+              </section>
             )}
 
             <Field label={t('refund.where')} error={err('providerName')}>

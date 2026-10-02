@@ -29,6 +29,7 @@ import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
 import { isNearLimit } from '@/shared/domain/limits';
 import { SettlementPanel } from '../claims/SettlementPanel';
+import { AiHint } from '@/features/ai/AiHint';
 
 const SOURCE_LABEL = { app: 'Приложение', clinic_invoice: 'Счёт клиники', operator: 'Куратор МИГ', assistance: 'Счёт ассистанса' } as const;
 
@@ -98,6 +99,7 @@ export default function ClaimCardPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-4">
           <LimitCheckCard claim={c} />
+          <AiHint subject={{ type: 'claim', id: c.id }} />
           <SettlementPanel claim={c} />
         </div>
         <Card title="История" bodyClassName="p-3">

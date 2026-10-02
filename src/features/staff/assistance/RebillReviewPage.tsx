@@ -17,6 +17,8 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { RebillLinesTable, RebillStatus, RebillSummaryBlock } from '@/features/assist/components';
 import { useTopbar } from '../topbar';
+import { useAiStatus, useRebillPrecheck } from '@/shared/api/queries/ai';
+import { Sparkles } from 'lucide-react';
 
 export default function RebillReviewPage() {
   const { rebillId = '' } = useParams();
@@ -32,6 +34,9 @@ export default function RebillReviewPage() {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string>();
   const [confirmPay, setConfirmPay] = useState(false);
+  const aiStatus = useAiStatus();
+  const precheck = useRebillPrecheck();
+  const canAi = useCan('ai.coverage.mig') && canReview && !!aiStatus.data?.scenarios.rebill;
 
   return (
     <QueryState query={q}>
@@ -62,6 +67,20 @@ export default function RebillReviewPage() {
                   Период {r.period}
                 </p>
               </div>
+              {canAi && reviewing && (
+                <Button
+                  variant="secondary"
+                  loading={precheck.isPending}
+                  onClick={() =>
+                    void precheck
+                      .mutateAsync(r.id)
+                      .then((x) => toast.success(`Предпроверка ИИ: проверено строк ${x.checked}, спорных ${x.flagged}`))
+                      .catch((e: unknown) => toast.error(errorMessage(e)))
+                  }
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden /> Предпроверка ИИ
+                </Button>
+              )}
               {canPayRole && payable && (
                 <Button disabled={sameAsAcceptor} title={sameAsAcceptor ? 'Счёт принимали вы: оплачивает другой сотрудник' : undefined} onClick={() => setConfirmPay(true)}>
                   Оплатить {formatMoney(toPay)}

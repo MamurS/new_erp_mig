@@ -93,6 +93,7 @@ const staffRoutes: RouteObject[] = [
   guarded('reports', sectionRoles('/staff/reports'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ReportsPage')) }]),
   guarded('audit', sectionRoles('/staff/audit'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/AuditPage')) }]),
   guarded('admin/users', sectionRoles('/staff/admin/users'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/UsersPage')) }]),
+  guarded('admin/ai', sectionRoles('/staff/admin/ai'), [{ index: true, lazy: lazy(() => import('@/features/staff/admin/AiAdminPage')) }]),
   guarded('admin/parameters', sectionRoles('/staff/admin/parameters'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ParametersPage')) }]),
 ];
 
@@ -174,6 +175,7 @@ const appRoutes: RouteObject[] = [
   { path: 'chat', lazy: lazy(() => import('@/features/insured/pages/ChatPage')) },
   { path: 'profile', lazy: lazy(() => import('@/features/insured/pages/ProfilePage')) },
   { path: 'certificate', lazy: lazy(() => import('@/features/insured/pages/CertificatePage')) },
+  { path: 'coverage', lazy: lazy(() => import('@/features/insured/pages/CoveragePage')) },
 ];
 
 export const routes: RouteObject[] = [

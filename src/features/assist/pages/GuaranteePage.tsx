@@ -1,4 +1,5 @@
 /* One guarantee letter for the assistance doctor: approve up to the authority limit, reject, ask for documents or escalate. */
+import { AiHint } from '@/features/ai/AiHint';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Download } from 'lucide-react';
@@ -112,6 +113,7 @@ export default function GuaranteePage() {
                   </ul>
                 )}
               </Card>
+              <AiHint subject={{ type: 'guarantee', id: g.id }} />
               {open && (
                 <Card title="Решение">
                   {over && (

@@ -640,6 +640,7 @@ export const recognizeResult: z.ZodType<D.RecognizeResult> = z.object({
   providerName: z.string(),
   amount: money,
   serviceDate: isoDate,
+  items: z.array(z.object({ name: z.string(), amount: money })).optional(),
 });
 export const consentResult = z.object({ consentGivenAt: isoDateTime });
 export const ok = z.object({ ok: z.literal(true) });
