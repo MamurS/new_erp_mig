@@ -117,7 +117,8 @@ export function addSignature(s: Signing, side: Side, sig: SideSignature): Signin
 
 /** A scan counts only after a MIG employee verified it (LIFECYCLE_SPEC §8.4). */
 export function addPendingScan(s: Signing, side: Side, fileId: string, at: ISODateTime, byName: string): Signing {
-  return { ...s, pendingScans: [...(s.pendingScans ?? []).filter((p) => p.side !== side), { side, fileId, uploadedAt: at, uploadedByName: byName }] };
+  // A scan means a paper document exists: its original is required from now on.
+  return { ...s, paperOriginal: { ...s.paperOriginal, required: true }, pendingScans: [...(s.pendingScans ?? []).filter((p) => p.side !== side), { side, fileId, uploadedAt: at, uploadedByName: byName }] };
 }
 
 export function verifyScan(s: Signing, side: Side, verifier: { id: string; name: string }, at: ISODateTime, signerName: string): Signing {

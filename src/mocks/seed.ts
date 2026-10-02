@@ -30,6 +30,7 @@ import { PROGRAMS, perPersonPremium } from './programs';
 import { seedClinics } from './seed-clinics';
 import { seedPolicyChanges } from './seed-policies';
 import { seedAssistance } from './seed-assistance';
+import { seedLifecycle } from './seed-lifecycle';
 
 // ---------- dictionaries ----------
 const UZ_MALE = ['Азиз', 'Бахтиёр', 'Жасур', 'Отабек', 'Шерзод', 'Фаррух', 'Улугбек', 'Санжар', 'Дилшод', 'Рустам', 'Тимур', 'Мансур', 'Бобур', 'Анвар'];
@@ -828,5 +829,6 @@ export function createSeed(opts: SeedOptions = {}): Db {
     smsOutbox: [],
   };
   seedAssistance(out, { now });
+  seedLifecycle(out, { now });
   return out;
 }

@@ -119,7 +119,10 @@ describe('KP API', () => {
     const hr = await login('hr@demo-client.uz');
     const docs = await call<{ kind: string; kpId?: string }[]>('/hr/documents', { sid: hr });
     const kpDocs = docs.data.filter((d) => d.kind === 'kp');
-    expect(kpDocs.map((d) => d.kpId)).toEqual([sent.id]);
+    // The seed also has the company's renewal offer (LIFECYCLE_SPEC §16); drafts are never listed.
+    expect(kpDocs.map((d) => d.kpId)).toContain(sent.id);
+    expect(kpDocs.map((d) => d.kpId)).not.toContain(draft.id);
+    expect(kpDocs.every((d) => db().kp.find((k) => k.id === d.kpId)?.status === 'sent')).toBe(true);
     expect((await call(`/kp/${sent.id}`, { sid: hr })).status).toBe(200);
     expect((await call(`/kp/${draft.id}`, { sid: hr })).status).toBe(404);
     expect((await call(`/clients/${demoClientId()}/kp`, { sid: hr })).status).toBe(403);

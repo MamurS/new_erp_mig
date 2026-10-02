@@ -179,7 +179,7 @@ export default function DashboardPage() {
         )}
         <Card title="Очередь" bodyClassName="p-0">
           <div role="tablist" aria-label="Тип задач" className="flex gap-1 border-b border-border-soft px-3 pt-2">
-            {TABS.filter((t) => !('action' in t) || can(user, t.action) || (t.key === 'registry' && can(user, 'registries.pay'))).map((t) => (
+            {TABS.filter((t) => !('action' in t) || can(user, t.action) || (t.key === 'registry' && can(user, 'registries.pay')) || (t.key === 'assistance' && can(user, 'assist.cases.manage', { sub: 'complaint' }))).map((t) => (
               <button
                 key={t.key}
                 role="tab"

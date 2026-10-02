@@ -185,7 +185,9 @@ describe('mock scoping (IDOR)', () => {
 describe('seed', () => {
   it('has the expected volumes', () => {
     const d = db();
-    expect(d.clients).toHaveLength(40);
+    // 40 clients of SPEC plus 2 leads and 4 prospects of LIFECYCLE_SPEC §16.
+    expect(d.clients).toHaveLength(46);
+    expect(d.clients.filter((c) => c.status === 'lead')).toHaveLength(2);
     expect(d.clinics).toHaveLength(30);
     // 12 staff of SPEC §2 plus 5 demo accounts of LIFECYCLE_SPEC §2.
     expect(d.staff).toHaveLength(17);

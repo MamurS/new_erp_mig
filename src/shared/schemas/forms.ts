@@ -320,6 +320,8 @@ export const assistanceContractSchema = z
     /** Individual authority; omitted — the DMS parameter `assistanceGuaranteeAuthority` applies. */
     guaranteeAuthorityLimit: z.number({ invalid_type_error: 'Укажите сумму' }).int().min(0).max(10_000_000_000).optional(),
     rebillPaymentDays: z.number({ invalid_type_error: 'Укажите срок' }).int().min(1, 'Не меньше 1 дня').max(90, 'Не больше 90 дней'),
+    /** Reimbursements of the insured are reviewed and paid by the assistance (default) or by MIG. */
+    handlesReimbursements: z.boolean().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.feeModel === 'percent_of_claims' && (v.feeValue <= 0 || v.feeValue >= 1)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['feeValue'], message: 'Доля от 0 до 1, например 0,07' });

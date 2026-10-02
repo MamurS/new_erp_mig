@@ -33,6 +33,7 @@ export const assistanceCompany: z.ZodType<T.AssistanceCompany> = brief.extend({
     feeModel,
     feeValue: z.number(),
     guaranteeAuthorityLimit: money.optional(),
+    handlesReimbursements: z.boolean().optional(),
     rebillPaymentDays: z.number(),
   }),
   kpi: kpi.optional(),
