@@ -141,6 +141,9 @@ const payment: z.ZodType<T.Payment> = z.object({
   purpose: z.string(),
   source: z.enum(['manual', '1c']),
   recordedByName: z.string(),
+  matchedBy: z.enum(['number', 'inn_amount', 'manual']).optional(),
+  bankPaymentId: uuid.optional(),
+  comment: z.string().optional(),
 });
 
 export const contractView: z.ZodType<D.ContractView> = z.object({
@@ -254,12 +257,13 @@ export const invoiceViews: z.ZodType<D.InvoiceView[]> = z.array(
     endorsementId: uuid.optional(),
     paid: money.optional(),
     clientName: z.string(),
+    clientInn: z.string().optional(),
     contractNumber: z.string().optional(),
     endorsementNumber: z.string().optional(),
   }),
 );
 export const paymentResult = payment;
-export const importResult: z.ZodType<D.ImportPaymentsResult> = z.object({ matched: z.number(), unmatched: z.array(z.object({ line: z.number(), reason: z.string() })), activated: z.number() });
+export const importResult: z.ZodType<D.ImportPaymentsResult> = z.object({ matched: z.number(), queued: z.number(), unmatched: z.array(z.object({ line: z.number(), reason: z.string() })), activated: z.number() });
 
 const certificate = z.object({
   insuredId: uuid,
@@ -303,3 +307,32 @@ export const claimLetter: z.ZodType<D.ClaimLetter> = z.object({
   amountClaimed: money,
   decision: z.object({ kind: z.enum(['approve', 'partial', 'reject']), amount: money, clauseRef: z.string().optional(), reason: z.string(), at: isoDateTime }),
 });
+
+export const bankPaymentView: z.ZodType<D.BankPaymentView> = z.object({
+  id: uuid,
+  date: isoDate,
+  amount: money,
+  payerInn: z.string(),
+  payerName: z.string().optional(),
+  purpose: z.string(),
+  reason: z.enum(['third_party', 'over_remaining', 'several_numbers', 'ambiguous', 'amount_mismatch', 'no_invoices', 'unknown_payer']),
+  importedAt: isoDateTime,
+  importedByName: z.string(),
+  allocated: money,
+  status: z.enum(['pending', 'allocated']),
+  allocations: z.array(z.object({ invoiceId: uuid, invoiceNumber: z.string(), amount: money, at: isoDateTime, byName: z.string(), comment: z.string().optional() })),
+  remaining: money,
+  candidates: z.array(
+    z.object({
+      invoiceId: uuid,
+      number: z.string(),
+      clientName: z.string(),
+      clientInn: z.string(),
+      contractNumber: z.string().optional(),
+      remaining: money,
+      dueDate: isoDate,
+      why: z.enum(['number', 'inn_amount', 'inn', 'amount']),
+    }),
+  ),
+});
+export const bankPaymentViews = z.array(bankPaymentView);

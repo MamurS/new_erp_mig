@@ -10,12 +10,13 @@ import { db, type ClaimRow, type InsuredRow } from '../db';
 import { API, body, conflict, forbidden, HttpError, notFound, param, requireSession, route, validate } from '../http';
 import { maskCard, maskPhone, maskPinfl } from '../mask';
 import { scheduleSaveDb } from '../persist';
-import { hashString, int, mulberry32, pick, randomId, randomToken } from '../rng';
-import { DAY, isoDay, parseIso, tzIso } from '../time';
+import { randomId, randomToken } from '../rng';
+import { DAY, parseIso, tzIso } from '../time';
 import { limitsFor, toMyClaim } from '../views';
 import { PROGRAMS } from '../programs';
 import { nextClaimNumber } from './claims';
 import { mockConfig } from '../config';
+import { recognizeReceipt } from '../receipts';
 import { handlerOf, refreshFlags, sha256Hex } from '../settlement-core';
 
 function requireInsured(request: Request): { user: SessionUser; me: InsuredRow } {
@@ -138,25 +139,14 @@ export const meHandlers = [
   http.post(
     `${API}/me/claims/recognize`,
     route(async ({ request }) => {
-      const { me } = requireInsured(request);
+      requireInsured(request);
       const form = await readForm(request);
       const file = form.get('file');
       if (!(file instanceof File)) throw new HttpError(422, 'validation', 'Добавьте фото чека', { file: 'Добавьте фото чека' });
       const { bytes } = await readImage(file);
       if (mockConfig.latency[1] > 0) await delay(1000);
-      const rng = mulberry32(hashString(`${me.id}:${bytes.length}`));
-      const providerName = pick(rng, ['Аптека «Шифо Фарм»', 'Аптека «Нур Дори»', 'Медцентр «Саломат Плюс»', 'Клиника «Мадад Мед»']);
-      // Fake OCR: a pharmacy receipt mixes medicines with vitamins and cosmetics; a clinic one has services.
-      const pool = providerName.startsWith('Аптека')
-        ? [pick(rng, ['Нурофен 200 мг', 'Амоксиклав 875 мг', 'Називин капли в нос', 'Смекта']), pick(rng, ['Парацетамол 500 мг', 'Но-шпа 40 мг', 'Лоратадин 10 мг']), pick(rng, ['Аквадетрим 10 мл', 'Витамин С шипучий', 'Компливит']), pick(rng, ['Крем для лица увлажняющий', 'Солнцезащитный крем SPF 50', 'Бальзам для губ'])]
-        : ['Приём терапевта', 'Общий анализ крови', pick(rng, ['ЭКГ с расшифровкой', 'УЗИ брюшной полости'])];
-      const items = pool.map((name) => ({ name, amount: int(rng, 15, 120) * 1000 }));
-      const out: RecognizeResult = {
-        providerName,
-        amount: items.reduce((s, x) => s + x.amount, 0),
-        serviceDate: isoDay(Date.now() - int(rng, 0, 3) * DAY),
-        items,
-      };
+      // Fake OCR from the image itself: the server repeats it on submission and never takes fiscal data from the client.
+      const out: RecognizeResult = recognizeReceipt(await sha256Hex(bytes));
       return out;
     }),
   ),
@@ -206,6 +196,7 @@ export const meHandlers = [
         attachments,
         history: [{ at: tzIso(now), actorName: 'Застрахованный (приложение)', to: 'new' }],
         receiptHash,
+        receiptFiscal: receiptHash ? recognizeReceipt(receiptHash).fiscal : undefined,
         // Reimbursements go to MIG's claims officer or to the assistance (handlesReimbursements, LIFECYCLE_SPEC §13).
         handledBy: handlerOf(d, me.policyId),
       };

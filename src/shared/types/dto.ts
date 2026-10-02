@@ -14,7 +14,10 @@ import type {
   Deal,
   DealEvent,
   Endorsement,
+  BankPayment,
   Payment,
+  PaymentCandidateWhy,
+  ReceiptFiscal,
   Quote,
   ReserveChange,
   StaffAuthority,
@@ -324,6 +327,8 @@ export interface RecognizeResult {
   serviceDate: ISODate;
   /** Positions of the receipt (AI_COVERAGE_SPEC §4.1); their sum is `amount`. */
   items?: { name: string; amount: Money }[];
+  /** Fiscal data of the receipt; the server recognizes it again from the uploaded photo, the client never sends it. */
+  fiscal?: ReceiptFiscal;
 }
 /** GET /api/clients/:id/kp-defaults — prefilled parameters plus what the offer letter needs. */
 export interface KpDefaults {
@@ -678,8 +683,25 @@ export interface EndorsementView extends Endorsement {
 
 export interface InvoiceView extends Invoice {
   clientName: string;
+  /** INN of the company (not personal data): manual allocation warns about a third-party payer. */
+  clientInn?: string;
   contractNumber?: string;
   endorsementNumber?: string;
+}
+
+export interface PaymentCandidateView {
+  invoiceId: UUID;
+  number: string;
+  clientName: string;
+  clientInn: string;
+  contractNumber?: string;
+  remaining: Money;
+  dueDate: ISODate;
+  why: PaymentCandidateWhy;
+}
+export interface BankPaymentView extends BankPayment {
+  remaining: Money;
+  candidates: PaymentCandidateView[];
 }
 
 export interface ChangeRequestView extends ChangeRequest {
@@ -704,6 +726,8 @@ export interface CertificateView {
 
 export interface ImportPaymentsResult {
   matched: number;
+  /** Sent to «Ручная разноска». */
+  queued: number;
   unmatched: { line: number; reason: string }[];
   activated: number;
 }

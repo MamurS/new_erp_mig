@@ -2,6 +2,7 @@
  * Deterministic seed (mulberry32, seed 20260929). Dates are relative to "now" so the prototype
  * always looks fresh. All companies, people and medical data are fictional.
  */
+import { fakeFiscal } from './receipts';
 import type {
   Appointment,
   AppointmentStatus,
@@ -22,7 +23,7 @@ import type {
   Role,
   Specialty,
 } from '@/shared/types';
-import { chance, digits, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
+import { chance, digits, hashString, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
 import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from './db';
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './credentials';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
@@ -575,6 +576,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
       history,
       approvedById,
       publicRejectionReason,
+      // Receipts from the app carry fiscal data recognized from the photo.
+      receiptFiscal: source === 'app' ? fakeFiscal(hashString(claimId), provider, isoDay(serviceMs), amount) : undefined,
     };
   };
 
@@ -826,6 +829,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     contractSeq: 120,
     contractInsured: [],
     payments: [],
+    bankPayments: [],
     changeRequests: [],
     endorsements: [],
     smsOutbox: [],

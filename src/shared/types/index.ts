@@ -200,6 +200,19 @@ export interface Claim {
   pendingDecision?: PendingClaimDecision;  // решение выше полномочий автора ждёт согласования
   appeal?: ClaimAppeal;
   handledBy?: 'mig' | 'assistance';        // кто рассматривает возмещение (handlesReimbursements)
+  receiptFiscal?: ReceiptFiscal;           // фискальные данные чека, распознанные сервером по фото
+}
+
+/** Fiscal data printed on a receipt (Uzbekistan online cash registers). */
+export interface ReceiptFiscal {
+  /** Fiscal sign (ФП): unique per receipt; may be unreadable on the photo. */
+  fiscalNumber?: string;
+  /** Local date and time of the receipt, 'YYYY-MM-DDTHH:mm'. */
+  issuedAt: string;
+  /** Receipt total (may differ from the claimed amount when positions were removed). */
+  amount: Money;
+  /** INN of the point of sale (a company, not personal data). */
+  sellerInn: string;
 }
 
 export type FraudFlagCode = 'duplicate_receipt' | 'frequent_claims' | 'outside_coverage' | 'before_exclusion' | 'above_price';
@@ -374,6 +387,7 @@ export type AuditAction =
   | 'contract_terminated'
   | 'payment_recorded'
   | 'payments_imported'
+  | 'payment_allocated'
   | 'change_request_created'
   | 'endorsement_created'
   | 'endorsement_signed'
@@ -1029,6 +1043,34 @@ export interface Payment {
   purpose: string;
   source: 'manual' | '1c';
   recordedByName: string;
+  /** How a statement payment found its invoice; `manual` — allocated by the accountant. */
+  matchedBy?: 'number' | 'inn_amount' | 'manual';
+  /** The statement line it came from (manual allocation). */
+  bankPaymentId?: UUID;
+  /** Required when the payer's INN differs from the invoiced client. */
+  comment?: string;
+}
+
+/** Why a statement payment was not matched automatically. */
+export type PaymentQueueReason = 'third_party' | 'over_remaining' | 'several_numbers' | 'ambiguous' | 'amount_mismatch' | 'no_invoices' | 'unknown_payer';
+/** Why an invoice is suggested for a queued payment. */
+export type PaymentCandidateWhy = 'number' | 'inn_amount' | 'inn' | 'amount';
+
+/** A statement payment waiting for manual allocation («Ручная разноска»). */
+export interface BankPayment {
+  id: UUID;
+  date: ISODate;
+  amount: Money;
+  payerInn: string;
+  payerName?: string;
+  purpose: string;
+  reason: PaymentQueueReason;
+  importedAt: ISODateTime;
+  importedByName: string;
+  /** Already allocated to invoices; the rest stays in the queue. */
+  allocated: Money;
+  status: 'pending' | 'allocated';
+  allocations: { invoiceId: UUID; invoiceNumber: string; amount: Money; at: ISODateTime; byName: string; comment?: string }[];
 }
 
 export type ChangeRequestType = 'add_insured' | 'exclude_insured' | 'change_program' | 'other';

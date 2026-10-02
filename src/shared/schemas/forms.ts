@@ -463,6 +463,15 @@ export const paymentSchema = z.object({
   paidAt: isoDateInput,
   purpose: z.string().trim().max(300).optional(),
 });
+/** «Ручная разноска»: a queued statement payment split across one or more invoices. */
+export const paymentAllocationSchema = z.object({
+  lines: z
+    .array(z.object({ invoiceId: uuid, amount: z.number({ invalid_type_error: 'Укажите сумму' }).int('Целая сумма').min(1, 'Сумма больше нуля').max(100_000_000_000) }))
+    .min(1, 'Выберите счёт')
+    .max(10),
+  comment: z.string().trim().max(500, 'Не длиннее 500 символов').optional(),
+});
+export type PaymentAllocationInput = z.infer<typeof paymentAllocationSchema>;
 export const changeRequestCreateSchema = z.object({
   contractId: uuid,
   type: z.enum(['change_program', 'other']),

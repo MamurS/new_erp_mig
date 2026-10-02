@@ -1,4 +1,4 @@
-import { BadgeCheck, BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FilePen, FileSignature, FileText, Handshake, Hospital, Kanban, LayoutDashboard, Landmark, PiggyBank, Receipt, ReceiptText, ScrollText, Settings2, SlidersHorizontal, Sparkles, type LucideIcon, UserPlus, Users } from 'lucide-react';
+import { BadgeCheck, Banknote, BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FilePen, FileSignature, FileText, Handshake, Hospital, Kanban, LayoutDashboard, Landmark, PiggyBank, Receipt, ReceiptText, ScrollText, Settings2, SlidersHorizontal, Sparkles, type LucideIcon, UserPlus, Users } from 'lucide-react';
 import type { StaffRole } from '@/shared/types';
 
 export interface StaffSection {
@@ -21,6 +21,7 @@ export const STAFF_SECTIONS: StaffSection[] = [
   { path: '/staff/contracts', label: 'Договоры', icon: FileSignature, roles: ['operator', 'underwriter', 'accountant', 'sales_manager', 'legal'], inNav: true },
   { path: '/staff/endorsements', label: 'Доп. соглашения', icon: FilePen, roles: ['underwriter', 'sales_manager', 'legal', 'accountant'], inNav: true },
   { path: '/staff/invoices', label: 'Счета и оплаты', icon: Landmark, roles: ['underwriter', 'accountant', 'sales_manager'], inNav: true },
+  { path: '/staff/invoices/queue', label: 'Ручная разноска', icon: Banknote, roles: ['accountant'], inNav: true },
   { path: '/staff/policies', label: 'Полисы', icon: FileText, roles: ['operator', 'underwriter', 'accountant', 'sales_manager'], inNav: true },
   { path: '/staff/claims', label: 'Убытки', icon: Receipt, roles: ['operator', 'doctor_expert', 'accountant', 'claims_officer'], inNav: true },
   { path: '/staff/appointments', label: 'Записи к врачу', icon: CalendarClock, roles: ['operator', 'doctor_expert'], inNav: true },

@@ -2,7 +2,7 @@
  * Claims settlement by claims_officer (LIFECYCLE_SPEC §13): authority routing, decision rules,
  * reserves and fraud flags. Flags are hints for a person, never an automatic refusal.
  */
-import type { Claim, ClaimDecisionKind, FraudFlagCode, ISODate, Money, ReserveChange, StaffAuthority } from '@/shared/types';
+import type { Claim, ClaimDecisionKind, FraudFlagCode, ISODate, Money, ReceiptFiscal, ReserveChange, StaffAuthority } from '@/shared/types';
 
 export const DECISION_KIND_LABEL: Record<ClaimDecisionKind, string> = { approve: 'Одобрено полностью', partial: 'Одобрено частично', reject: 'Отказано' };
 
@@ -63,10 +63,17 @@ export function reserveOn(history: readonly ReserveChange[], date: ISODate): Mon
 
 // ---------------------------------------------------------------- fraud flags
 
+type ReceiptSide = Pick<Claim, 'id' | 'insuredId' | 'amountClaimed' | 'serviceDate' | 'providerName'> & {
+  number?: string;
+  source?: Claim['source'];
+  receiptHash?: string;
+  receiptFiscal?: ReceiptFiscal;
+};
+
 export interface FlagContext {
-  claim: Pick<Claim, 'id' | 'insuredId' | 'amountClaimed' | 'serviceDate' | 'providerName' | 'createdAt'> & { receiptHash?: string; expectedPrice?: Money };
-  /** Other claims of the same insured person (and receipts of anyone for the hash check). */
-  others: readonly (Pick<Claim, 'id' | 'insuredId' | 'amountClaimed' | 'serviceDate' | 'providerName'> & { receiptHash?: string })[];
+  claim: ReceiptSide & Pick<Claim, 'createdAt'> & { expectedPrice?: Money };
+  /** Every other claim of every insured person: the same receipt may come from a colleague or a relative. */
+  others: readonly ReceiptSide[];
   coverageFrom: ISODate;
   coverageTo: ISODate;
   excludedFrom?: ISODate;
@@ -74,22 +81,45 @@ export interface FlagContext {
 }
 
 const day = (d: string) => Math.round(Date.parse(`${d.slice(0, 10)}T00:00:00Z`) / 86_400_000);
+const point = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** A claim with a receipt behind it: invoices of clinics are compared by registries, not here. */
+const hasReceipt = (c: ReceiptSide) => !!c.receiptFiscal || !!c.receiptHash || c.source === 'app';
+
+/**
+ * How two receipts are the same one: by the fiscal sign when both have it; otherwise by amount, date
+ * and point of sale (the seller's INN, or the provider's name when a receipt has no fiscal data).
+ */
+export function sameReceipt(a: ReceiptSide, b: ReceiptSide): 'fiscal' | 'details' | null {
+  if (!hasReceipt(a) || !hasReceipt(b)) return null;
+  const fa = a.receiptFiscal;
+  const fb = b.receiptFiscal;
+  if (fa?.fiscalNumber && fb?.fiscalNumber) return fa.fiscalNumber === fb.fiscalNumber ? 'fiscal' : null;
+  const amount = (c: ReceiptSide) => c.receiptFiscal?.amount ?? c.amountClaimed;
+  const date = (c: ReceiptSide) => c.receiptFiscal?.issuedAt.slice(0, 10) ?? c.serviceDate;
+  const samePoint = fa && fb ? fa.sellerInn === fb.sellerInn : point(a.providerName) === point(b.providerName);
+  return amount(a) === amount(b) && date(a) === date(b) && samePoint ? 'details' : null;
+}
 
 /** All flags of a claim with explanations (no personal data in the messages). */
 export function detectFlags(ctx: FlagContext): { code: FraudFlagCode; message: string }[] {
   const c = ctx.claim;
   const out: { code: FraudFlagCode; message: string }[] = [];
-  const same = ctx.others.find(
-    (o) =>
-      o.id !== c.id &&
-      ((o.insuredId === c.insuredId && o.amountClaimed === c.amountClaimed && o.serviceDate === c.serviceDate && o.providerName.trim().toLowerCase() === c.providerName.trim().toLowerCase()) ||
-        (!!c.receiptHash && o.receiptHash === c.receiptHash)),
-  );
-  if (same) {
-    out.push({
-      code: 'duplicate_receipt',
-      message: same.receiptHash && same.receiptHash === c.receiptHash ? 'Изображение чека совпадает с чеком другого обращения' : 'Та же сумма, дата и аптека или клиника, что в другом обращении',
-    });
+  const twins = ctx.others
+    .filter((o) => o.id !== c.id)
+    .map((o) => ({ o, by: sameReceipt(c, o), image: !!c.receiptHash && o.receiptHash === c.receiptHash }))
+    .filter((x) => x.by || x.image);
+  const first = twins.find((x) => x.by === 'fiscal') ?? twins.find((x) => x.by) ?? twins[0];
+  if (first) {
+    const ref = `${first.o.number ? ` ${first.o.number}` : ''}${first.o.insuredId !== c.insuredId ? ' другого застрахованного' : ''}`;
+    const head =
+      first.by === 'fiscal'
+        ? `Фискальный номер чека совпадает с чеком обращения${ref}`
+        : first.by === 'details'
+          ? `Та же сумма, дата и точка продажи, что в чеке обращения${ref}`
+          : `Изображение чека совпадает с чеком обращения${ref}`;
+    const extra = [first.by && first.image ? 'изображение чека тоже совпадает' : '', twins.length > 1 ? `совпадений: ${twins.length}` : ''].filter(Boolean).join('; ');
+    out.push({ code: 'duplicate_receipt', message: extra ? `${head} (${extra})` : head });
   }
   const month = c.serviceDate.slice(0, 7);
   const inMonth = ctx.others.filter((o) => o.insuredId === c.insuredId && o.serviceDate.slice(0, 7) === month).length + 1;

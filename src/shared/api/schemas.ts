@@ -225,6 +225,12 @@ const claimDecision = z.object({
   byName: z.string(),
   at: isoDateTime,
 });
+const receiptFiscal: z.ZodType<T.ReceiptFiscal> = z.object({
+  fiscalNumber: z.string().optional(),
+  issuedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
+  amount: money,
+  sellerInn: z.string(),
+});
 const claimBase = z.object({
   id: uuid,
   number: z.string(),
@@ -271,6 +277,7 @@ const claimBase = z.object({
     })
     .optional(),
   handledBy: z.enum(['mig', 'assistance']).optional(),
+  receiptFiscal: receiptFiscal.optional(),
 });
 export const claim: z.ZodType<T.Claim> = claimBase;
 export const claimPage = page(claim);
@@ -440,6 +447,7 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'contract_terminated',
     'payment_recorded',
     'payments_imported',
+    'payment_allocated',
     'change_request_created',
     'endorsement_created',
     'endorsement_signed',
@@ -641,6 +649,7 @@ export const recognizeResult: z.ZodType<D.RecognizeResult> = z.object({
   amount: money,
   serviceDate: isoDate,
   items: z.array(z.object({ name: z.string(), amount: money })).optional(),
+  fiscal: receiptFiscal.optional(),
 });
 export const consentResult = z.object({ consentGivenAt: isoDateTime });
 export const ok = z.object({ ok: z.literal(true) });

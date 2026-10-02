@@ -133,12 +133,15 @@ export default function InvoicesPage() {
     <>
       <PageHeader
         title="Счета и оплаты"
-        subtitle="Счета формируются после подписания по графику платежей. Договор вступает в силу по своему правилу — обычно после первой оплаты"
+        subtitle="Счета формируются после подписания по графику платежей. Выписка 1С сопоставляется по номеру счёта в назначении, затем по ИНН и точной сумме; остальное — в ручную разноску"
         actions={
           canPay && (
             <>
-              <Button variant="secondary" size="sm" onClick={() => downloadText(toCsv(['date', 'amount', 'inn', 'purpose'], [['2026-10-01', '1000000', '301234567', 'Оплата по счёту']]), 'statement-1c-template.csv')}>
+              <Button variant="secondary" size="sm" onClick={() => downloadText(toCsv(['date', 'amount', 'inn', 'purpose', 'payer'], [['2026-10-01', '1000000', '301234567', 'Оплата по счёту СЧ-2026-002001', 'ООО «Плательщик»']]), 'statement-1c-template.csv')}>
                 <Download className="h-3.5 w-3.5" aria-hidden /> Шаблон выписки
+              </Button>
+              <Button asChild variant="secondary" size="sm">
+                <Link to="/staff/invoices/queue">Ручная разноска</Link>
               </Button>
               <CsvFileButton label="Загрузить выписку из 1С" ariaLabel="Файл выписки из 1С" busy={import1c.isPending} maxBytes={1024 * 1024} onText={(t) => void onStatement(t)} />
             </>
@@ -147,7 +150,15 @@ export default function InvoicesPage() {
       />
       {result && (
         <div className="mb-3 rounded-card border border-border bg-surface px-3 py-2 text-[13px]" data-testid="import-result" role="status">
-          Сопоставлено: {result.matched} · не найдено: {result.unmatched.length} · договоров вступило в силу: {result.activated}
+          Сопоставлено: {result.matched} · в ручную разноску: {result.queued} · ошибок в строках: {result.unmatched.length} · договоров вступило в силу: {result.activated}
+          {result.queued > 0 && (
+            <>
+              {' '}
+              <Link className="text-accent-text hover:underline" to="/staff/invoices/queue">
+                Перейти к ручной разноске
+              </Link>
+            </>
+          )}
           {result.unmatched.length > 0 && (
             <ul className="mt-1 list-disc pl-5 text-muted">
               {result.unmatched.slice(0, 10).map((u) => (
