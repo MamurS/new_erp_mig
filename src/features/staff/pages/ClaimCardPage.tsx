@@ -85,6 +85,25 @@ export default function ClaimCardPage() {
               <Kv label="Создан">{formatDateTime(c.createdAt)}</Kv>
             </dl>
           </Card>
+          {c.receiptFiscal && (
+            <Card title="Фискальные данные чека">
+              <dl className="divide-y divide-border-soft" data-testid="receipt-fiscal">
+                <Kv label="Фискальный номер">{c.receiptFiscal.fiscalNumber ? <span className="num">{c.receiptFiscal.fiscalNumber}</span> : <span className="text-muted">не распознан</span>}</Kv>
+                <Kv label="Дата и время">
+                  <span className="num">
+                    {formatDate(c.receiptFiscal.issuedAt.slice(0, 10))} {c.receiptFiscal.issuedAt.slice(11, 16)}
+                  </span>
+                </Kv>
+                <Kv label="Сумма чека">
+                  <span className="num">{formatMoney(c.receiptFiscal.amount)}</span>
+                </Kv>
+                <Kv label="ИНН точки продажи">
+                  <span className="num">{c.receiptFiscal.sellerInn}</span>
+                </Kv>
+              </dl>
+              <p className="mt-2 text-[12px] text-muted">Распознано сервером по фото чека. Подлинность по QR налоговой проверяется на бэкенде.</p>
+            </Card>
+          )}
           <Card title="Вложения" bodyClassName="p-2">
             {c.attachments.length === 0 ? (
               <p className="p-2 text-muted">Вложений нет</p>

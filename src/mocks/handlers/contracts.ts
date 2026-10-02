@@ -6,8 +6,9 @@
  */
 import { http, HttpResponse } from 'msw';
 import Papa from 'papaparse';
-import type { ClauseOverride, Contract, Endorsement, Payment, SessionUser, Signing } from '@/shared/types';
-import type { CertificateView, ChangeRequestView, ContractView, EndorsementView, ImportPaymentsResult, InvoiceView } from '@/shared/types/dto';
+import type { BankPayment, ClauseOverride, Contract, Endorsement, Payment, SessionUser, Signing } from '@/shared/types';
+import type { BankPaymentView, CertificateView, ChangeRequestView, ContractView, EndorsementView, ImportPaymentsResult, InvoiceView } from '@/shared/types/dto';
+import { checkAllocation, matchPayment, remainingOf, statementLineKey, type OpenInvoice } from '@/shared/domain/payments';
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
 import { addDays, addPendingScan, addSignature, buildPaymentSchedule, contractNumber, originalReminderDue, verifyScan, type Side } from '@/shared/domain/contracts';
@@ -23,6 +24,7 @@ import {
   legalApproveSchema,
   legalReturnSchema,
   originalsSchema,
+  paymentAllocationSchema,
   paymentSchema,
   scanVerifySchema,
   signSchema,
@@ -407,15 +409,26 @@ function invoiceView(d: Db, i: ReturnType<typeof refreshInvoice>): InvoiceView {
   return {
     ...i,
     clientName: client ? `${client.legalForm} «${client.name}»` : '—',
+    clientInn: client?.inn,
     contractNumber: i.contractId ? d.contracts.find((c) => c.id === i.contractId)?.number : undefined,
     endorsementNumber: i.endorsementId ? d.endorsements.find((e) => e.id === i.endorsementId)?.number : undefined,
   };
 }
 
-async function recordPayment(d: Db, user: SessionUser, invoiceId: string, amount: number, paidAt: string, payerInn: string, purpose: string, source: Payment['source']): Promise<Payment> {
+async function recordPayment(
+  d: Db,
+  user: SessionUser,
+  invoiceId: string,
+  amount: number,
+  paidAt: string,
+  payerInn: string,
+  purpose: string,
+  source: Payment['source'],
+  extra: Pick<Payment, 'matchedBy' | 'bankPaymentId' | 'docNumber' | 'comment'> = {},
+): Promise<Payment> {
   const inv = d.invoices.find((i) => i.id === invoiceId);
   if (!inv) throw notFound();
-  const p: Payment = { id: randomId(), invoiceId: inv.id, contractId: inv.contractId, amount, paidAt, payerInn, purpose, source, recordedByName: user.displayName };
+  const p: Payment = { id: randomId(), invoiceId: inv.id, contractId: inv.contractId, amount, paidAt, payerInn, purpose, source, recordedByName: user.displayName, ...extra };
   d.payments.unshift(p);
   inv.paid = (inv.paid ?? 0) + amount;
   refreshInvoice(inv);
@@ -425,6 +438,33 @@ async function recordPayment(d: Db, user: SessionUser, invoiceId: string, amount
     await refreshContract(d, c);
   }
   return p;
+}
+
+/** Contract invoices with the client's INN, as the matching rules see them. */
+function openInvoices(d: Db): OpenInvoice[] {
+  return d.invoices
+    .filter((i) => i.contractId)
+    .map((i) => ({ id: i.id, number: i.number, clientId: i.clientId, clientInn: d.clients.find((c) => c.id === i.clientId)?.inn ?? '', amount: i.amount, paid: i.paid ?? 0, dueDate: i.dueDate }));
+}
+
+/** A queued payment with fresh candidates for what is left of it. */
+function bankPaymentView(d: Db, b: BankPayment): BankPaymentView {
+  const remaining = b.amount - b.allocated;
+  const all = openInvoices(d);
+  const m = b.status === 'pending' ? matchPayment({ amount: remaining, payerInn: b.payerInn, purpose: b.purpose }, all) : undefined;
+  // A queued payment is never allocated automatically: an exact match found later is offered as a candidate.
+  const cands = !m ? [] : m.kind === 'manual' ? m.candidates : [{ invoiceId: m.invoiceId, why: m.by }];
+  return {
+    ...b,
+    remaining,
+    candidates: cands.flatMap((c) => {
+      const inv = all.find((i) => i.id === c.invoiceId);
+      const row = d.invoices.find((i) => i.id === c.invoiceId);
+      if (!inv || !row) return [];
+      const view = invoiceView(d, row);
+      return [{ invoiceId: inv.id, number: inv.number, clientName: view.clientName, clientInn: inv.clientInn, contractNumber: view.endorsementNumber ?? view.contractNumber, remaining: remainingOf(inv), dueDate: inv.dueDate, why: c.why }];
+    }),
+  };
 }
 
 function certificates(d: Db, policyId: string): CertificateView[] {
@@ -706,32 +746,91 @@ export const contractHandlers = [
       if (text.length > 1024 * 1024) throw new HttpError(413, 'validation', 'Файл больше 1 МБ');
       const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true });
       const fields = parsed.meta.fields ?? [];
-      const missing = ['date', 'amount', 'inn', 'purpose'].filter((f) => !fields.includes(f));
+      const missing = ['doc_number', 'date', 'amount', 'inn', 'purpose'].filter((f) => !fields.includes(f));
       if (missing.length) throw new HttpError(422, 'validation', `Нет столбцов: ${missing.join(', ')}`);
+      if (parsed.data.length > 5000) throw new HttpError(422, 'validation', 'Не больше 5000 строк в выписке');
       const d = db();
-      const out: ImportPaymentsResult = { matched: 0, unmatched: [], activated: 0 };
+      const out: ImportPaymentsResult = { matched: 0, queued: 0, skipped: 0, unmatched: [], activated: 0 };
+      const seen = new Set(d.statementKeys);
       const activeBefore = d.contracts.filter((c) => c.status === 'active').length;
       for (const [k, row] of parsed.data.entries()) {
         const line = k + 2;
         const amount = Number((row.amount ?? '').replace(/\s/g, ''));
         const date = (row.date ?? '').trim();
-        const inn = (row.inn ?? '').replace(/\D/g, '');
-        if (!Number.isInteger(amount) || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const inn = (row.inn ?? '').replace(/\D/g, '').slice(0, 14);
+        if (!Number.isInteger(amount) || amount <= 0 || amount > 100_000_000_000 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
           out.unmatched.push({ line, reason: 'Дата ГГГГ-ММ-ДД и сумма — целое число' });
           continue;
         }
-        const client = d.clients.find((c) => c.inn === inn);
-        const inv = client ? d.invoices.filter((i) => i.clientId === client.id && i.contractId && (i.paid ?? 0) < i.amount).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0] : undefined;
-        if (!inv) {
-          out.unmatched.push({ line, reason: client ? 'У плательщика нет неоплаченных счетов' : 'Плательщик с таким ИНН не найден' });
+        const docNumber = (row.doc_number ?? '').trim().slice(0, 40);
+        if (!docNumber) {
+          out.unmatched.push({ line, reason: 'Нет номера платёжного документа' });
           continue;
         }
-        await recordPayment(d, user, inv.id, Math.min(amount, inv.amount - (inv.paid ?? 0)), date, inn, (row.purpose ?? '').slice(0, 300), '1c');
-        out.matched += 1;
+        // A repeated upload (or the same line twice in one file) changes nothing.
+        const key = statementLineKey({ docNumber, date, amount, payerInn: inn });
+        if (seen.has(key)) {
+          out.skipped += 1;
+          continue;
+        }
+        seen.add(key);
+        d.statementKeys.push(key);
+        const purpose = (row.purpose ?? '').trim().slice(0, 300);
+        // Matching runs line by line on the current state: an earlier line of the same statement may pay an invoice off.
+        const m = matchPayment({ amount, payerInn: inn, purpose }, openInvoices(d));
+        if (m.kind === 'matched') {
+          await recordPayment(d, user, m.invoiceId, amount, date, inn, purpose, '1c', { matchedBy: m.by, docNumber });
+          out.matched += 1;
+          continue;
+        }
+        const payerName = (row.payer ?? '').trim().slice(0, 200) || undefined;
+        d.bankPayments.unshift({ id: randomId(), docNumber, date, amount, payerInn: inn, payerName, purpose, reason: m.reason, importedAt: tzIso(Date.now()), importedByName: user.displayName, allocated: 0, status: 'pending', allocations: [] });
+        out.queued += 1;
       }
       out.activated = d.contracts.filter((c) => c.status === 'active').length - activeBefore;
-      audit(user, 'payments_imported', { targetType: 'invoice', targetLabel: `Выписка 1С: сопоставлено ${out.matched}, не найдено ${out.unmatched.length}` });
+      audit(user, 'payments_imported', { targetType: 'invoice', targetLabel: `Выписка 1С: сопоставлено ${out.matched}, в ручную разноску ${out.queued}, пропущено как повтор ${out.skipped}, ошибок ${out.unmatched.length}` });
       return out;
+    }),
+  ),
+  http.get(
+    `${API}/payments/queue`,
+    route(async ({ request, url }) => {
+      const { user } = requireSession(request);
+      requirePermission(user, 'payments.record');
+      const d = db();
+      const status = url.searchParams.get('status') === 'allocated' ? 'allocated' : 'pending';
+      return d.bankPayments.filter((b) => b.status === status).map((b) => bankPaymentView(d, b));
+    }),
+  ),
+  http.post(
+    `${API}/payments/queue/:id/allocate`,
+    route(async (ctx) => {
+      const { user } = requireSession(ctx.request);
+      requirePermission(user, 'payments.record');
+      const d = db();
+      const b = d.bankPayments.find((x) => x.id === param(ctx, 'id'));
+      if (!b) throw notFound();
+      if (b.status !== 'pending') throw conflict('Платёж уже разнесён');
+      const input = await body(ctx.request, paymentAllocationSchema);
+      if (new Set(input.lines.map((l) => l.invoiceId)).size !== input.lines.length) throw new HttpError(422, 'validation', 'Счёт указан дважды');
+      const all = openInvoices(d);
+      const lines = input.lines.map((l) => {
+        const invoice = all.find((i) => i.id === l.invoiceId);
+        if (!invoice) throw notFound();
+        return { invoice, amount: l.amount };
+      });
+      const error = checkAllocation(b, lines, input.comment);
+      if (error) throw new HttpError(422, 'validation', error, /комментарий/.test(error) ? { comment: error } : undefined);
+      const comment = input.comment || undefined;
+      for (const l of lines) {
+        await recordPayment(d, user, l.invoice.id, l.amount, b.date, b.payerInn, b.purpose, '1c', { matchedBy: 'manual', bankPaymentId: b.id, docNumber: b.docNumber, comment });
+        b.allocations.push({ invoiceId: l.invoice.id, invoiceNumber: l.invoice.number, amount: l.amount, at: tzIso(Date.now()), byName: user.displayName, comment });
+        b.allocated += l.amount;
+        const foreign = l.invoice.clientInn !== b.payerInn;
+        audit(user, 'payment_allocated', { targetType: 'invoice', targetId: l.invoice.id, targetLabel: `${l.invoice.number}: ${l.amount}${foreign ? ' (плательщик — третье лицо)' : ''}`, reason: comment });
+      }
+      if (b.allocated >= b.amount) b.status = 'allocated';
+      return bankPaymentView(d, b);
     }),
   ),
 

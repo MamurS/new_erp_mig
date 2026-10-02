@@ -150,6 +150,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   contract_terminated: 'Договор расторгнут',
   payment_recorded: 'Оплата отмечена',
   payments_imported: 'Выписка из 1С загружена',
+  payment_allocated: 'Платёж разнесён вручную',
   change_request_created: 'Заявка на изменение',
   endorsement_created: 'Сформировано доп. соглашение',
   endorsement_signed: 'Доп. соглашение подписано',

@@ -198,9 +198,34 @@ describe('claims settlement', () => {
   };
   const codes = (ctx: FlagContext) => detectFlags(ctx).map((f) => f.code);
   it('no flags for an ordinary claim', () => expect(codes(base)).toEqual([]));
-  it('duplicate receipt: same amount, date and pharmacy, or the same image hash', () => {
-    expect(codes({ ...base, others: [{ id: 'c0', insuredId: 'i1', amountClaimed: 250_000, serviceDate: '2026-09-15', providerName: 'аптека «дори-дармон» ' }] })).toEqual(['duplicate_receipt']);
-    expect(codes({ ...base, claim: { ...base.claim, receiptHash: 'h' }, others: [{ id: 'x', insuredId: 'i9', amountClaimed: 1, serviceDate: '2026-01-01', providerName: 'X', receiptHash: 'h' }] })).toEqual(['duplicate_receipt']);
+  describe('duplicate receipt across all insured', () => {
+    const fiscal = { fiscalNumber: '412345678901', issuedAt: '2026-09-15T14:05', amount: 250_000, sellerInn: '201234567' };
+    const mine = { ...base.claim, source: 'app' as const, receiptFiscal: fiscal };
+    const theirs = { id: 'c0', number: 'У-2026-000100', insuredId: 'i9', amountClaimed: 120_000, serviceDate: '2026-09-15', providerName: 'Другая подпись', source: 'app' as const };
+    const message = (ctx: FlagContext) => detectFlags(ctx).find((f) => f.code === 'duplicate_receipt')?.message;
+    it('the same fiscal number of another person is a duplicate, whatever the claimed amount', () => {
+      expect(message({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...fiscal } }] })).toBe('Фискальный номер чека совпадает с чеком обращения У-2026-000100 другого застрахованного');
+    });
+    it('different fiscal numbers are different receipts even with the same amount, date and point', () => {
+      expect(codes({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...fiscal, fiscalNumber: '499999999999' } }] })).toEqual([]);
+    });
+    it('without a fiscal number: receipt amount, date and seller INN', () => {
+      const unreadable = { ...fiscal, fiscalNumber: undefined, issuedAt: '2026-09-15T18:40' };
+      expect(message({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: unreadable }] })).toMatch(/^Та же сумма, дата и точка продажи, что в чеке обращения У-2026-000100/);
+      expect(codes({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...unreadable, sellerInn: '209999999' } }] })).toEqual([]);
+      expect(codes({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...unreadable, issuedAt: '2026-09-16T09:00' } }] })).toEqual([]);
+    });
+    it('receipts without fiscal data fall back to the claimed amount, date and provider name', () => {
+      expect(codes({ ...base, claim: { ...base.claim, source: 'app' }, others: [{ ...theirs, amountClaimed: 250_000, providerName: 'аптека  «дори-дармон» ' }] })).toEqual(['duplicate_receipt']);
+    });
+    it('clinic invoices are not receipts: two patients with the same price on the same day are not flagged', () => {
+      const visit = { ...base.claim, source: 'clinic_invoice' as const };
+      expect(codes({ ...base, claim: visit, others: [{ ...theirs, source: 'clinic_invoice', amountClaimed: 250_000, providerName: base.claim.providerName }] })).toEqual([]);
+    });
+    it('the image hash stays an extra sign: alone it flags, next to the fiscal match it is mentioned', () => {
+      expect(message({ ...base, claim: { ...base.claim, receiptHash: 'h' }, others: [{ ...theirs, receiptHash: 'h' }] })).toMatch(/^Изображение чека совпадает/);
+      expect(message({ ...base, claim: { ...mine, receiptHash: 'h' }, others: [{ ...theirs, receiptFiscal: { ...fiscal }, receiptHash: 'h' }] })).toMatch(/\(изображение чека тоже совпадает\)$/);
+    });
   });
   it('frequent claims above N per month', () => {
     const others = Array.from({ length: P.fraudMaxClaimsPerMonth }, (_, i) => ({ id: `o${i}`, insuredId: 'i1', amountClaimed: 1000 + i, serviceDate: '2026-09-0' + ((i % 9) + 1), providerName: `P${i}` }));

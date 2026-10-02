@@ -11,6 +11,7 @@ import { buildPaymentSchedule, certificateNumber, contractNumber, dealNumber, de
 import { defaultEndDate, tariffOf } from '@/shared/domain/policies';
 import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
 import { detectFlags } from '@/shared/domain/settlement';
+import { statementLineKey } from '@/shared/domain/payments';
 import { DOC_TEMPLATES } from '@/features/documents/templates';
 import type { ChangeRequestRow, ClaimRow, ClientRow, Db } from './db';
 import { DEMO_INSURED_PHONE } from './credentials';
@@ -337,6 +338,43 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     inv.contractId = demoContract.id;
     inv.paid = inv.status === 'paid' ? inv.amount : 0;
   }
+  // «Ручная разноска»: a payment by a holding company for the demo client, and one from an unknown payer.
+  const accountant = d.staff.find((u) => u.role === 'accountant');
+  const upcoming = d.invoices.find((i) => i.clientId === demoClient.id && i.contractId === demoContract.id && i.status !== 'paid');
+  if (upcoming) {
+    d.bankPayments.push({
+      id: id(),
+      docNumber: '4817',
+      date: isoDay(now - DAY),
+      amount: upcoming.amount,
+      payerInn: '302998877',
+      payerName: 'ООО «Демо Холдинг Групп»',
+      purpose: `Оплата за ${demoClient.legalForm} «${demoClient.name}» по счёту ${upcoming.number}, договор ${demoContract.number}`,
+      reason: 'third_party',
+      importedAt: at(1),
+      importedByName: accountant?.fullName ?? 'Бухгалтер',
+      allocated: 0,
+      status: 'pending',
+      allocations: [],
+    });
+  }
+  d.bankPayments.push({
+    id: id(),
+    docNumber: '4790',
+    date: isoDay(now - 2 * DAY),
+    amount: 12_500_000,
+    payerInn: '301556677',
+    payerName: 'ООО «Ташкент Сервис Трейд»',
+    purpose: 'Оплата по договору страхования ДМС',
+    reason: 'unknown_payer',
+    importedAt: at(2),
+    importedByName: accountant?.fullName ?? 'Бухгалтер',
+    allocated: 0,
+    status: 'pending',
+    allocations: [],
+  });
+  // These lines were imported: uploading the same statement again skips them.
+  for (const b of d.bankPayments) d.statementKeys.push(statementLineKey({ docNumber: b.docNumber ?? '', date: b.date, amount: b.amount, payerInn: b.payerInn }));
   event(demoDeal.id, 1, 'Система', `Договор ${demoContract.number} действует: полис ${demoPolicy.number}`);
 
   const request = (type: ChangeRequest['type'], insuredId: string, effective: string, status: ChangeRequest['status'], description: string): ChangeRequestRow => {
@@ -483,14 +521,14 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   const flagged = take(4);
   if (flagged.length === 4) {
     const [dup, freq, outside, price] = flagged as [ClaimRow, ClaimRow, ClaimRow, ClaimRow];
-    const twin = d.claims.find((x) => x.insuredId === dup.insuredId && x.id !== dup.id) ?? d.claims.find((x) => x.id !== dup.id)!;
+    // The same pharmacy receipt claimed by two different insured people: the fiscal sign gives it away.
+    const twin = d.claims.find((x) => x.id !== dup.id && x.insuredId !== dup.insuredId && x.receiptFiscal?.fiscalNumber && x.status === 'paid') ?? d.claims.find((x) => x.id !== dup.id && x.receiptFiscal?.fiscalNumber)!;
+    dup.source = 'app';
+    dup.category = twin.category;
     dup.amountClaimed = twin.amountClaimed;
     dup.serviceDate = twin.serviceDate;
     dup.providerName = twin.providerName;
-    dup.insuredId = twin.insuredId;
-    dup.insuredName = twin.insuredName;
-    dup.clientId = twin.clientId;
-    dup.clientName = twin.clientName;
+    dup.receiptFiscal = { ...twin.receiptFiscal! };
     const month = freq.serviceDate.slice(0, 7);
     for (const x of d.claims.filter((o) => o.insuredId !== freq.insuredId).slice(0, DMS_DEFAULTS.fraudMaxClaimsPerMonth + 1)) {
       if (x.id === freq.id) continue;
@@ -526,7 +564,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const p = i ? d.policies.find((x) => x.id === i.policyId) : undefined;
     const found = detectFlags({
       claim: c,
-      others: d.claims.filter((o) => o.id !== c.id && o.insuredId === c.insuredId),
+      others: d.claims.filter((o) => o.id !== c.id),
       coverageFrom: i?.insuredFrom ?? p?.startDate ?? '0000-01-01',
       coverageTo: p?.endDate ?? '9999-12-31',
       excludedFrom: i?.excludedFrom,

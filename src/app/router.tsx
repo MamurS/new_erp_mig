@@ -58,6 +58,7 @@ const staffRoutes: RouteObject[] = [
     { path: ':endorsementId', lazy: lazy(() => import('@/features/staff/lifecycle/EndorsementPage')) },
   ]),
   guarded('invoices', sectionRoles('/staff/invoices'), [{ index: true, lazy: lazy(() => import('@/features/staff/lifecycle/InvoicesPage')) }]),
+  guarded('invoices/queue', sectionRoles('/staff/invoices/queue'), [{ index: true, lazy: lazy(() => import('@/features/staff/lifecycle/PaymentQueuePage')) }]),
   guarded('reports/reserves', sectionRoles('/staff/reports/reserves'), [{ index: true, lazy: lazy(() => import('@/features/staff/lifecycle/ReservesReportPage')) }]),
   guarded('kp/:kpId', sectionRoles('/staff/clients'), [{ index: true, lazy: lazy(() => import('@/features/kp/KpPage')) }]),
   guarded('insured/:insuredId', INSURED_CARD_ROLES, [{ index: true, lazy: lazy(() => import('@/features/staff/pages/InsuredCardPage')) }]),

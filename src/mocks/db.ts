@@ -12,6 +12,7 @@ import type {
   Deal,
   DealEvent,
   Endorsement,
+  BankPayment,
   Payment,
   Quote,
   ReserveChange,
@@ -302,6 +303,10 @@ export interface Db {
   /** Appendix 2 lists in the HR import format: personal data stays on the server. */
   contractInsured: { contractId: UUID; rows: ContractInsuredRow[] }[];
   payments: Payment[];
+  /** Statement payments waiting for manual allocation («Ручная разноска»). */
+  bankPayments: BankPayment[];
+  /** Keys of imported statement lines (`statementLineKey`): a repeated upload is skipped. */
+  statementKeys: string[];
   changeRequests: ChangeRequestRow[];
   endorsements: Endorsement[];
   /** SMS invitations of the insured (imitation). */

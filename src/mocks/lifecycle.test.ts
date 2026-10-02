@@ -9,7 +9,7 @@ import type { ClaimDetail, ContractView, DealCard, DealView, EndorsementView, Qu
 import type { Claim, KpDocument, MyClaim } from '@/shared/types';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
-import { currentReserve } from './settlement-core';
+import { currentReserve, refreshFlags } from './settlement-core';
 
 const BASE = 'http://localhost/api';
 const server = createMockServer();
@@ -170,10 +170,11 @@ describe('full path of a new client (§17 e2e 1 on the API)', () => {
     expect((await call('/payments', { method: 'POST', sid: sales, json: { invoiceId: first.id, amount: 1000, paidAt: today() } })).status).toBe(403);
     expect((await call('/payments', { method: 'POST', sid: acc, json: { invoiceId: first.id, amount: 1000, paidAt: today() } })).status).toBe(201);
     expect((await call<ContractView>(`/contracts/${contract.id}`, { sid: sales })).data.status).toBe('signed'); // partial
-    const csv = `date,amount,inn,purpose\n${today()},${first.amount - 1000},${lead.inn},Оплата по договору\n${today()},5000,999999999,Чужой платёж`;
-    const imported = await call<{ matched: number; unmatched: unknown[]; activated: number }>('/payments/import-1c', { method: 'POST', sid: acc, text: csv });
-    expect(imported.data).toMatchObject({ matched: 1, activated: 1 });
-    expect(imported.data.unmatched).toHaveLength(1);
+    const csv = `doc_number,date,amount,inn,purpose\n101,${today()},${first.amount - 1000},${lead.inn},Оплата по договору\n102,${today()},5000,999999999,Чужой платёж`;
+    const imported = await call<{ matched: number; queued: number; unmatched: unknown[]; activated: number }>('/payments/import-1c', { method: 'POST', sid: acc, text: csv });
+    // The remainder of the first installment matches by INN and exact amount; the stranger goes to manual allocation.
+    expect(imported.data).toMatchObject({ matched: 1, queued: 1, activated: 1 });
+    expect(imported.data.unmatched).toHaveLength(0);
     expect((await call<ContractView>(`/contracts/${contract.id}`, { sid: sales })).data.status).toBe('active');
   });
 });
@@ -357,6 +358,73 @@ describe('claims settlement (§13)', () => {
     const ok = await call<ClaimDetail>(`/claims/${row.id}/flags/${flag.id}/dismiss`, { method: 'POST', sid: officer, json: { comment: 'Два разных чека, проверено по фото' } });
     expect(ok.data.flags?.find((f) => f.id === flag.id)?.dismissed?.comment).toBe('Два разных чека, проверено по фото');
     expect(first.status).toBe(200);
+  });
+});
+
+describe('duplicate receipts by fiscal data', () => {
+  const photo = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9, 8, 7, 6, 5]);
+  const send = (sid: string, amount: string) => {
+    const f = new FormData();
+    f.set('category', 'medicines');
+    f.set('amount', amount);
+    f.set('serviceDate', today());
+    f.set('providerName', 'Аптека');
+    f.set('files', new Blob([photo], { type: 'image/jpeg' }), 'r.jpg');
+    return call<{ id: string }>('/me/claims', { method: 'POST', sid, form: f });
+  };
+
+  it('recognition returns fiscal data; the same receipt from another insured person is flagged; the server ignores fiscal data from the client', async () => {
+    const me = await loginPhone('+998900000001');
+    const f = new FormData();
+    f.set('file', new Blob([photo], { type: 'image/jpeg' }), 'r.jpg');
+    const rec = await call<{ amount: number; fiscal?: { fiscalNumber?: string; issuedAt: string; amount: number; sellerInn: string } }>('/me/claims/recognize', { method: 'POST', sid: me, form: f });
+    expect(rec.status).toBe(200);
+    expect(rec.data.fiscal).toMatchObject({ amount: rec.data.amount, sellerInn: expect.stringMatching(/^\d{9}$/), issuedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/) });
+
+    const first = await send(me, '150000');
+    expect(first.status).toBe(200);
+    expect(db().claims.find((c) => c.id === first.data.id)!.flags?.some((x) => x.code === 'duplicate_receipt')).toBe(false);
+    expect(db().claims.find((c) => c.id === first.data.id)!.receiptFiscal).toEqual(rec.data.fiscal);
+
+    // A colleague sends the same receipt with another amount (and a forged fiscal number in the form, which is ignored).
+    const other = db().insured.find((i) => i.appStatus === 'active' && i.phone !== '+998900000001' && i.status === 'active')!;
+    const sid = await loginPhone(other.phone);
+    const g = new FormData();
+    g.set('category', 'medicines');
+    g.set('amount', '90000');
+    g.set('serviceDate', today());
+    g.set('providerName', 'Другая аптека');
+    g.set('fiscalNumber', '100000000000');
+    g.set('files', new Blob([photo], { type: 'image/jpeg' }), 'r.jpg');
+    const second = await call<{ id: string }>('/me/claims', { method: 'POST', sid, form: g });
+    expect(second.status).toBe(200);
+    const row = db().claims.find((c) => c.id === second.data.id)!;
+    expect(row.receiptFiscal).toEqual(rec.data.fiscal);
+    const flag = row.flags!.find((x) => x.code === 'duplicate_receipt')!;
+    const firstNumber = db().claims.find((c) => c.id === first.data.id)!.number;
+    expect(flag.message).toContain(firstNumber);
+    expect(flag.message).toContain('другого застрахованного');
+    expect(flag.message).toContain('изображение чека тоже совпадает');
+
+    // The staff card shows the fiscal data; the insured person never sees the flags.
+    const officer = await login('claims@demo.mig.uz');
+    const card = await call<ClaimDetail>(`/claims/${row.id}`, { sid: officer });
+    expect(card.data.receiptFiscal).toEqual(rec.data.fiscal);
+    const mine = await call<Record<string, unknown>>(`/me/claims/${row.id}`, { sid });
+    expect(mine.data.flags).toBeUndefined();
+  });
+
+  it('a different photo of the same receipt is caught by the fiscal number alone', async () => {
+    const me = await loginPhone('+998900000001');
+    const first = await send(me, '150000');
+    const original = db().claims.find((c) => c.id === first.data.id)!;
+    // Another photo: another image hash, but the recognizer read the same fiscal data.
+    const other = db().claims.find((c) => c.source === 'app' && c.insuredId !== original.insuredId && c.receiptFiscal?.fiscalNumber)!;
+    other.receiptFiscal = { ...original.receiptFiscal!, fiscalNumber: original.receiptFiscal!.fiscalNumber ?? '412345678901' };
+    original.receiptFiscal = { ...other.receiptFiscal };
+    original.flags = [];
+    const flags = refreshFlags(db(), original);
+    expect(flags.find((x) => x.code === 'duplicate_receipt')?.message).toBe(`Фискальный номер чека совпадает с чеком обращения ${other.number} другого застрахованного`);
   });
 });
 

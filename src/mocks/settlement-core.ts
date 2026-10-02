@@ -56,7 +56,7 @@ export function refreshFlags(d: Db, c: ClaimRow): FraudFlag[] {
   const policy = i ? d.policies.find((p) => p.id === i.policyId) : undefined;
   const found = detectFlags({
     claim: c,
-    others: d.claims.filter((o) => o.id !== c.id && (o.insuredId === c.insuredId || (!!c.receiptHash && o.receiptHash === c.receiptHash))),
+    others: d.claims.filter((o) => o.id !== c.id),
     coverageFrom: i?.insuredFrom ?? policy?.startDate ?? '0000-01-01',
     coverageTo: policy?.endDate ?? '9999-12-31',
     excludedFrom: i?.excludedFrom,

@@ -411,6 +411,10 @@ test('6. Duplicate receipt: the second identical receipt is flagged; the flag is
   await page.goto(`/staff/claims/${second}`);
   const flag = page.getByTestId('flag').filter({ hasText: 'Повтор чека' });
   await expect(flag).toBeVisible();
+  // The server recognized fiscal data from the photo: the match is by the fiscal sign (or amount, date and point).
+  await expect(flag).toContainText(/Фискальный номер чека совпадает|Та же сумма, дата и точка продажи/);
+  await expect(flag).toContainText('изображение чека тоже совпадает');
+  await expect(page.getByTestId('receipt-fiscal')).toContainText(/ИНН точки продажи\s*\d{9}/);
   await flag.getByRole('button', { name: 'Снять флаг' }).click();
   const dialog = page.getByRole('dialog', { name: 'Снять флаг' });
   await dialog.getByRole('button', { name: 'Снять флаг' }).click();
