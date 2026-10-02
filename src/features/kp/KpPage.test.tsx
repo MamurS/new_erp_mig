@@ -73,6 +73,7 @@ describe('KP screen', () => {
   it('shows validation errors and does not save invalid parameters', async () => {
     const user = userEvent.setup();
     const { router } = renderNew();
+    const before = db().kp.length;
     const employees = await screen.findByLabelText('Сотрудников');
     await user.clear(employees);
     const end = screen.getByLabelText('Окончание');
@@ -83,7 +84,7 @@ describe('KP screen', () => {
     expect(screen.getByText('Окончание должно быть позже начала')).toBeInTheDocument();
     expect(employees).toHaveAttribute('aria-invalid', 'true');
     expect(router.state.location.pathname).toMatch(/\/kp\/new$/);
-    expect(db().kp).toHaveLength(0);
+    expect(db().kp).toHaveLength(before);
     // the preview keeps the last valid state
     expect(frameHtml().match(/<div class="page">/g)).toHaveLength(17);
   });

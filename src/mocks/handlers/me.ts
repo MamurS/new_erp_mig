@@ -16,6 +16,7 @@ import { limitsFor, toMyClaim } from '../views';
 import { PROGRAMS } from '../programs';
 import { nextClaimNumber } from './claims';
 import { mockConfig } from '../config';
+import { handlerOf, refreshFlags, sha256Hex } from '../settlement-core';
 
 function requireInsured(request: Request): { user: SessionUser; me: InsuredRow } {
   const { user } = requireSession(request);
@@ -88,6 +89,7 @@ export const meHandlers = [
         startDate: p.startDate,
         endDate: p.endDate,
         limits: PROGRAMS[p.program].limits,
+        ...(me.certificateNumber ? { certificateNumber: me.certificateNumber } : {}),
       };
       return out;
     }),
@@ -143,10 +145,17 @@ export const meHandlers = [
       const { bytes } = await readImage(file);
       if (mockConfig.latency[1] > 0) await delay(1000);
       const rng = mulberry32(hashString(`${me.id}:${bytes.length}`));
+      const providerName = pick(rng, ['Аптека «Шифо Фарм»', 'Аптека «Нур Дори»', 'Медцентр «Саломат Плюс»', 'Клиника «Мадад Мед»']);
+      // Fake OCR: a pharmacy receipt mixes medicines with vitamins and cosmetics; a clinic one has services.
+      const pool = providerName.startsWith('Аптека')
+        ? [pick(rng, ['Нурофен 200 мг', 'Амоксиклав 875 мг', 'Називин капли в нос', 'Смекта']), pick(rng, ['Парацетамол 500 мг', 'Но-шпа 40 мг', 'Лоратадин 10 мг']), pick(rng, ['Аквадетрим 10 мл', 'Витамин С шипучий', 'Компливит']), pick(rng, ['Крем для лица увлажняющий', 'Солнцезащитный крем SPF 50', 'Бальзам для губ'])]
+        : ['Приём терапевта', 'Общий анализ крови', pick(rng, ['ЭКГ с расшифровкой', 'УЗИ брюшной полости'])];
+      const items = pool.map((name) => ({ name, amount: int(rng, 15, 120) * 1000 }));
       const out: RecognizeResult = {
-        providerName: pick(rng, ['Аптека «Шифо Фарм»', 'Аптека «Нур Дори»', 'Медцентр «Саломат Плюс»', 'Клиника «Мадад Мед»']),
-        amount: int(rng, 85, 450) * 1000,
+        providerName,
+        amount: items.reduce((s, x) => s + x.amount, 0),
         serviceDate: isoDay(Date.now() - int(rng, 0, 3) * DAY),
+        items,
       };
       return out;
     }),
@@ -168,8 +177,10 @@ export const meHandlers = [
       const d = db();
       const claimId = randomId();
       const attachments: ClaimRow['attachments'] = [];
+      let receiptHash: string | undefined;
       for (const [idx, f] of files.entries()) {
         const { bytes, mime } = await readImage(f);
+        if (idx === 0) receiptHash = await sha256Hex(bytes);
         const fileId = randomId();
         d.files.push({ id: fileId, mime, bytes, claimId, insuredId: me.id });
         const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp';
@@ -194,8 +205,12 @@ export const meHandlers = [
         updatedAt: tzIso(now),
         attachments,
         history: [{ at: tzIso(now), actorName: 'Застрахованный (приложение)', to: 'new' }],
+        receiptHash,
+        // Reimbursements go to MIG's claims officer or to the assistance (handlesReimbursements, LIFECYCLE_SPEC §13).
+        handledBy: handlerOf(d, me.policyId),
       };
       d.claims.unshift(claim);
+      refreshFlags(d, claim);
       return toMyClaim(claim, me);
     }),
   ),

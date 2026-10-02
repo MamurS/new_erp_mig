@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Send } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { useChat, useSendChat } from '@/shared/api/queries/me';
@@ -57,7 +58,9 @@ export default function ChatPage() {
   const q = useChat();
   const send = useSendChat();
   const assistance = useMyAssistance();
-  const [text, setText] = useState('');
+  // «Уточнить у ассистанса» from the coverage check opens the chat with the question typed in (router state, not the URL).
+  const draft = (useLocation().state as { draft?: unknown } | null)?.draft;
+  const [text, setText] = useState(typeof draft === 'string' ? draft.slice(0, CHAT_MAX) : '');
   const endRef = useRef<HTMLDivElement>(null);
   const count = q.data?.length ?? 0;
 

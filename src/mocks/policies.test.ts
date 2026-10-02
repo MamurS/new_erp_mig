@@ -86,7 +86,7 @@ describe('policy issuance', () => {
 describe('changes of the insured list', () => {
   const newbie = { fullName: 'Новиков Новик Новикович', birthDate: '01.02.1995', pinfl: '30102950000077', phone: '901234599', position: 'Стажёр' };
 
-  it('HR adding a person creates a request, not an insured person; approval applies it with pro-rata premium and an endorsement', async () => {
+  it('HR adding a person creates a request, not an insured person; approval applies it with pro-rata premium and a request for the endorsement', async () => {
     const hr = await login('hr@demo-client.uz');
     const before = db().insured.length;
     const policy = db().policies.find((p) => p.id === db().clients.find((c) => c.id === db().hrUsers[0]!.companyId)!.activePolicyId)!;
@@ -107,10 +107,14 @@ describe('changes of the insured list', () => {
     const op = await login('operator@demo.mig.uz');
     expect((await call('/policy-changes/decision', { method: 'POST', sid: op, json: { ids: [req.id], decision: 'approve' } })).status).toBe(403);
     const ok = await call<{ approved: number; endorsements: number }>('/policy-changes/decision', { method: 'POST', sid: uw, json: { ids: [req.id], decision: 'approve' } });
-    expect(ok.data).toEqual({ approved: 1, rejected: 0, endorsements: 1 });
+    // The demo company's policy is issued under a contract (LIFECYCLE_SPEC §16): the accepted change waits
+    // for the monthly endorsement instead of an immediate document.
+    expect(ok.data).toEqual({ approved: 1, rejected: 0, endorsements: 0 });
     expect(db().insured.length).toBe(before + 1);
     expect(policy.premium).toBe(premium + req.premiumDelta);
-    expect(db().documents.some((x) => x.kind === 'endorsement' && x.title.includes(policy.number) && x.title.includes('прикреплено 1'))).toBe(true);
+    const cr = db().changeRequests.find((c) => c.policyChangeId === req.id)!;
+    expect(cr).toMatchObject({ type: 'add_insured', status: 'pending', contractId: policy.contractId, effectiveDate: tomorrow });
+    expect(db().insured.find((i) => i.id === cr.insuredId)?.certificateNumber).toMatch(/^СЕРТ-/);
     expect((await call('/policy-changes/decision', { method: 'POST', sid: uw, json: { ids: [req.id], decision: 'approve' } })).status).toBe(409);
     const mine = await call<{ items: HrEmployee[] }>(`/hr/employees?q=${encodeURIComponent('новик новикович')}`, { sid: hr });
     expect(mine.data.items.map((e) => e.status)).toEqual(['active']);

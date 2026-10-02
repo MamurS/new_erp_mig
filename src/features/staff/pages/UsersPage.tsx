@@ -14,8 +14,12 @@ import { Select } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 import { Tooltip } from '@/shared/ui/tooltip';
 import { useTopbar } from '../topbar';
+import { AuthorityChangesCard, AuthorityDialog, authoritySummary } from '../admin/Authority';
 
 type Pending = { kind: 'role'; user: StaffUser; role: StaffRole } | { kind: 'active'; user: StaffUser; active: boolean };
+
+/** Roles with personal authority or the right to sign for MIG. */
+const AUTHORITY_ROLES: StaffRole[] = ['underwriter', 'claims_officer', 'sales_manager'];
 
 export default function UsersPage() {
   useDocumentTitle('Пользователи и роли');
@@ -24,6 +28,7 @@ export default function UsersPage() {
   const list = useAdminUsers();
   const patch = usePatchUser();
   const [pending, setPending] = useState<Pending | null>(null);
+  const [authorityOf, setAuthorityOf] = useState<StaffUser | null>(null);
 
   const cols: Column<StaffUser>[] = [
     {
@@ -70,6 +75,21 @@ export default function UsersPage() {
         );
       },
     },
+    {
+      key: 'authority',
+      header: 'Полномочия',
+      cell: (u) =>
+        AUTHORITY_ROLES.includes(u.role) ? (
+          <span className="flex items-center gap-2">
+            <span className="text-[12px] text-muted">{authoritySummary(u.authority, u.signatory)}</span>
+            {u.id !== me.id && u.active && (
+              <Button size="sm" variant="ghost" onClick={() => setAuthorityOf(u)} aria-label={`Полномочия: ${u.fullName}`}>
+                Изменить
+              </Button>
+            )}
+          </span>
+        ) : null,
+    },
     { key: 'status', header: 'Статус', cell: (u) => <StatusDot tone={u.active ? 'success' : 'muted'}>{u.active ? 'Активен' : 'Деактивирован'}</StatusDot> },
     { key: 'last', header: 'Последний вход', cell: (u) => <span className="text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
     {
@@ -112,9 +132,11 @@ export default function UsersPage() {
         <h1 className="text-[22px] font-bold">Пользователи и роли</h1>
         <p className="text-muted">Сотрудники MIG с доступом к порталу. У администратора нет доступа к медданным и убыткам.</p>
       </div>
+      <AuthorityChangesCard />
       <div className="rounded-card border border-border bg-surface">
         <DataTable caption="Сотрудники" columns={cols} rows={list.data} rowKey={(u) => u.id} loading={list.isLoading} error={list.error} onRetry={() => void list.refetch()} rowHeight={52} />
       </div>
+      {authorityOf && <AuthorityDialog user={authorityOf} onClose={() => setAuthorityOf(null)} />}
       <ConfirmDialog
         open={!!pending}
         onOpenChange={(o) => !o && setPending(null)}

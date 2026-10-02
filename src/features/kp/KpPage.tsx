@@ -28,7 +28,7 @@ import { MaskedInput } from '@/shared/ui/masked-input';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
-import { printKpFrame } from './KpFrame';
+import { printDocFrame } from '@/features/documents/DocFrame';
 import { KpPreview } from './KpPreview';
 import { PRINT_HINT } from './KpDownloadButton';
 import { kpContextOf, kpSrcdoc, renderKp, type KpRenderContext } from './render';
@@ -178,7 +178,7 @@ function KpEditor({ clientId, policyId, initial, letter, kp }: { clientId: strin
     if (!kp) return;
     try {
       await downloaded.mutateAsync(kp.id);
-      await printKpFrame(frame.current);
+      await printDocFrame(frame.current);
     } catch (e) {
       toast.error(errorMessage(e));
     }

@@ -39,7 +39,7 @@ const POLICY_TABLE = `
 | \`policy_changes.decide\` | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 `;
 
-/** ASSISTANCE_SPEC §10, verbatim. Columns: asst_operator, asst_doctor, asst_billing, asst_admin, operator, doctor_expert, accountant, underwriter, admin. */
+/** ASSISTANCE_SPEC §10, verbatim, except `rebills.review` × operator: LIFECYCLE_SPEC §14 moved it to claims_officer. Columns: asst_operator, asst_doctor, asst_billing, asst_admin, operator, doctor_expert, accountant, underwriter, admin. */
 const ASSIST_TABLE = `
 | \`assist.insured.search\` | свои | свои | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | \`assist.insured.reveal_pii\` | свои, причина | свои, причина | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ |
@@ -50,7 +50,7 @@ const ASSIST_TABLE = `
 | \`assist.registries.review\` | ✗ | свои | свои | ✗ | без ассистанса | ✗ | ✗ | ✗ | ✗ |
 | \`assist.clinic_payments.record\` | ✗ | ✗ | свои | ✗ | ✗ | ✗ | без ассистанса | ✗ | ✗ |
 | \`assist.rebills.submit\` | ✗ | ✗ | свои | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| \`rebills.review\` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| \`rebills.review\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | \`rebills.pay\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓, не тот, кто принял | ✗ | ✗ |
 | \`qa.review\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ |
 | \`assistance.assign\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
@@ -122,6 +122,49 @@ const PARAMS_TABLE = `
 | \`dms_params.propose\` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | \`dms_params.approve\` | ✗ | ✓, кроме своих | ✗ | ✗ | ✓, кроме своих | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 `;
+/** LIFECYCLE_SPEC §14, verbatim. Columns: sales_manager, underwriter, legal, claims_officer, operator, doctor_expert, accountant, hr. */
+const LIFECYCLE_TABLE = `
+| \`leads.manage\`, \`deals.manage\` | ✓ (свои и общие) | чтение | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`census.upload\` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`quotes.calculate\` | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`quotes.approve\` | ✗ | в пределах полномочий | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`kp.send\` | ✓ (по утверждённой котировке) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`kp.respond\` | отметка вручную | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | своя компания |
+| \`contracts.draft\` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`contracts.legal_approve\` | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`contracts.sign_mig\` | только подписант | только подписант | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`contracts.sign_client\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | своя компания |
+| \`contracts.verify_scan\`, \`contracts.originals\` | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| \`payments.record\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
+| \`endorsements.manage\` | ✓ | утверждение сумм | ✗ | ✗ | ✗ | ✗ | ✗ | заявки своей компании |
+| \`claims.decide\` | ✗ | ✗ | ✗ | в пределах полномочий | ✗ | ✗ | ✗ | ✗ |
+| \`claims.medical_opinion\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| \`claims.reserves\` | ✗ | чтение | ✗ | ✓ | ✗ | ✗ | чтение | ✗ |
+| \`rebills.review\` | ✗ | ✗ | ✗ | ✓ (было у operator) | ✗ | ✗ | ✗ | ✗ |
+| \`staff.authority.manage\` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ (только \`admin\` + второй) |
+`;
+/** Read rights the lifecycle screens need, not named in §14 (DECISIONS: «Жизненный цикл»). Same columns. */
+const LIFECYCLE_READ_TABLE = `
+| \`contracts.read\` | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | своя компания |
+| \`invoices.read\` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | своя компания |
+`;
+const multi = (table: string) =>
+  table
+    .trim()
+    .split('\n')
+    .map((line) => line.split('|').slice(1, -1).map((c) => c.trim()))
+    .flatMap(([action, ...cells]) => [...action!.matchAll(/`([^`]+)`/g)].map((m) => ({ action: m[1] as Action, cells })));
+/** AI_COVERAGE_SPEC §5, verbatim: action → who. */
+const AI_TABLE: Record<string, string> = {
+  'ai.coverage.self': '`insured`: только свой полис',
+  'ai.coverage.clinic': '`clinic_*`: только через визит',
+  'ai.coverage.assist': '`asst_doctor`, `asst_operator`: свои застрахованные',
+  'ai.coverage.mig': '`claims_officer`, `doctor_expert`, `operator`',
+  'ai.feedback': 'все, кто видит подсказку в рабочих экранах',
+  'ai.admin': '`admin` (с подтверждением второго)',
+};
+const AI_ACTIONS = Object.keys(AI_TABLE) as Action[];
+const lifecycleRows = [...multi(LIFECYCLE_TABLE), ...multi(LIFECYCLE_READ_TABLE)];
 const rows = parse(TABLE);
 const paramRows = parse(PARAMS_TABLE);
 const clinicRows = parse(CLINIC_TABLE);
@@ -137,7 +180,10 @@ const ASSIST_ROLES: Role[] = ['asst_operator', 'asst_doctor', 'asst_billing', 'a
 
 describe('permissions matrix (SPEC §4)', () => {
   it('covers every action exactly', () => {
-    expect([...rows, ...clinicRows, ...policyRows, ...assistRows, ...paramRows].map((r) => r.action).sort()).toEqual([...ACTIONS].sort());
+    const earlier = [...rows, ...clinicRows, ...policyRows, ...assistRows, ...paramRows].map((r) => r.action);
+    // LIFECYCLE §14 also restates `kp.send` and `rebills.review` of the earlier tables.
+    const added = lifecycleRows.map((r) => r.action).filter((a) => !earlier.includes(a));
+    expect([...earlier, ...added, ...AI_ACTIONS].sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -320,7 +366,8 @@ describe('assistance permissions matrix (ASSISTANCE_SPEC §10)', () => {
   }
 
   it('assistance roles have none of the rights of the earlier tables', () => {
-    const own = new Set(assistRows.map((r) => r.action));
+    // The AI actions of assistances (AI_COVERAGE_SPEC §5) are tested in their own block.
+    const own = new Set([...assistRows.map((r) => r.action), 'ai.coverage.assist', 'ai.feedback']);
     for (const role of ASSIST_ROLES)
       for (const action of ACTIONS.filter((a) => !own.has(a))) {
         expect(can(userFor(role), action), `${role} ${action}`).toBe(false);
@@ -351,4 +398,79 @@ describe('DMS parameters permissions', () => {
       });
     });
   }
+});
+
+describe('lifecycle permissions matrix (LIFECYCLE_SPEC §14)', () => {
+  const columns: Role[] = ['sales_manager', 'underwriter', 'legal', 'claims_officer', 'operator', 'doctor_expert', 'accountant', 'hr'];
+  const others: Role[] = ['admin', 'insured', 'clinic_registrar', 'clinic_admin', ...ASSIST_ROLES];
+  const signer = (role: Role, canSign: boolean): SessionUser => ({ ...userFor(role), canSign });
+  for (const { action, cells } of lifecycleRows) {
+    columns.forEach((role, i) => {
+      const cell = cells[i]!;
+      it(`${action} × ${role} = ${cell}`, () => {
+        const user = userFor(role);
+        if (cell.startsWith('✗')) {
+          expect(can(user, action)).toBe(false);
+          expect(can(user, action, { companyId: COMPANY })).toBe(false);
+          expect(can(user, action, { sub: 'read' })).toBe(false);
+          return;
+        }
+        if (cell.startsWith('✓') || cell === 'в пределах полномочий') {
+          // «в пределах полномочий»: the amount is checked by the data layer against StaffAuthority
+          expect(can(user, action)).toBe(true);
+          return;
+        }
+        if (cell === 'только подписант') {
+          expect(can(signer(role, true), action)).toBe(true);
+          expect(can(signer(role, false), action)).toBe(false);
+          return;
+        }
+        const sub = { чтение: 'read', 'отметка вручную': 'manual', 'утверждение сумм': 'approve_amounts' }[cell];
+        if (sub) {
+          expect(can(user, action)).toBe(false);
+          expect(can(user, action, { sub })).toBe(true);
+          expect(can(user, action, { sub: 'anything_else' })).toBe(false);
+          return;
+        }
+        expect(['своя компания', 'заявки своей компании']).toContain(cell);
+        expect(can(user, action, { companyId: COMPANY })).toBe(true);
+        expect(can(user, action, { companyId: OTHER_COMPANY })).toBe(false);
+      });
+    });
+    if (action !== 'staff.authority.manage')
+      for (const role of others)
+        it(`${action} × ${role} = ✗`, () => {
+          expect(can(userFor(role), action)).toBe(false);
+          expect(can(userFor(role), action, { companyId: COMPANY, insuredId: INSURED, clinicId: CLINIC, assistanceId: ASSIST, sub: 'read' })).toBe(false);
+        });
+  }
+  it('staff.authority.manage: only an admin, and the second person is never the proposer', () => {
+    const admin = userFor('admin');
+    expect(can(admin, 'staff.authority.manage')).toBe(true);
+    expect(can(admin, 'staff.authority.manage', { sub: 'approve', createdById: '99999999-9999-4999-8999-999999999999' })).toBe(true);
+    expect(can(admin, 'staff.authority.manage', { sub: 'approve', createdById: admin.id })).toBe(false);
+  });
+});
+
+describe('AI permissions (AI_COVERAGE_SPEC §5)', () => {
+  const ALL: Role[] = [...ROLES, ...ASSIST_ROLES, 'sales_manager', 'legal', 'claims_officer'];
+  const allowed = (action: Action) => ALL.filter((r) => can({ ...userFor(r), canSign: true }, action, { insuredId: INSURED, companyId: COMPANY, clinicId: CLINIC, assistanceId: ASSIST, createdById: '99999999-9999-4999-8999-999999999999' }));
+  it('only the roles of the table', () => {
+    expect(allowed('ai.coverage.self')).toEqual(['insured']);
+    expect(allowed('ai.coverage.clinic')).toEqual(['clinic_registrar', 'clinic_admin']);
+    expect(allowed('ai.coverage.assist')).toEqual(['asst_operator', 'asst_doctor']);
+    expect(allowed('ai.coverage.mig').sort()).toEqual(['claims_officer', 'doctor_expert', 'operator']);
+    // «все, кто видит подсказку в рабочих экранах»: the hint is shown to MIG and assistance decision makers
+    expect(allowed('ai.feedback').sort()).toEqual(['asst_doctor', 'asst_operator', 'claims_officer', 'doctor_expert', 'operator']);
+    expect(allowed('ai.admin')).toEqual(['admin']);
+    expect(Object.keys(AI_TABLE)).toHaveLength(6);
+  });
+  it('scopes: own policy, own clinic, own assistance; the admin never confirms own change; HR has nothing', () => {
+    expect(can(userFor('insured'), 'ai.coverage.self', { insuredId: OTHER_INSURED })).toBe(false);
+    expect(can(userFor('clinic_registrar'), 'ai.coverage.clinic', { clinicId: OTHER_CLINIC })).toBe(false);
+    expect(can(userFor('asst_doctor'), 'ai.coverage.assist', { assistanceId: OTHER_ASSIST })).toBe(false);
+    const admin = userFor('admin');
+    expect(can(admin, 'ai.admin', { createdById: admin.id })).toBe(false);
+    for (const a of AI_ACTIONS) expect(can(userFor('hr'), a, { companyId: COMPANY })).toBe(false);
+  });
 });

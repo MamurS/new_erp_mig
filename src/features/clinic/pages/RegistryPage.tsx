@@ -4,7 +4,10 @@ import { Link, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { Download, Send, Trash2 } from 'lucide-react';
+import { Download, Send, Sparkles, Trash2 } from 'lucide-react';
+import type { AiCheckItem } from '@/shared/types/dto';
+import { useAiStatus, useRegistryAiCheck } from '@/shared/api/queries/ai';
+import { VERDICT_SHORT } from '@/features/ai/labels';
 import type { RegistryLine } from '@/shared/types';
 import { registryLineInput } from '@/shared/integration/schemas';
 import { useAddRegistryLine, useClinicPriceList, useClinicRegistry, useClinicVisits, useDeleteRegistryLine, useDisputeLine, useSubmitRegistry } from '@/shared/api/queries/clinic';
@@ -148,6 +151,11 @@ function DisputeDialog({ registryId, line, onClose }: { registryId: string; line
   );
 }
 
+/** A line is at risk when the coverage check does not expect it to be paid as is. */
+function risky(x: AiCheckItem): boolean {
+  return x.needsSpecialist || !['covered', 'needs_guarantee'].includes(x.verdict.decision);
+}
+
 export default function RegistryPage() {
   useDocumentTitle('Реестр');
   const { registryId = '' } = useParams();
@@ -155,6 +163,10 @@ export default function RegistryPage() {
   const submit = useSubmitRegistry();
   const del = useDeleteRegistryLine();
   const [disputing, setDisputing] = useState<RegistryLine | null>(null);
+  // «Проверить строки» (AI_COVERAGE_SPEC §4.2): lines likely to be rejected are highlighted; sending is still allowed.
+  const aiStatus = useAiStatus();
+  const aiCheck = useRegistryAiCheck();
+  const [aiLines, setAiLines] = useState<Record<string, AiCheckItem>>({});
 
   if (q.isLoading) return <SkeletonRows rows={8} />;
   if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -190,6 +202,12 @@ export default function RegistryPage() {
       header: 'Статус',
       cell: (l) => (
         <span className="flex flex-col gap-0.5">
+          {aiLines[l.id] && risky(aiLines[l.id]!) && (
+            <span className="rounded-btn bg-warning-soft px-1.5 py-0.5 text-[12px] text-warning-text" data-testid="line-ai-risk">
+              Скорее всего отклонят: {VERDICT_SHORT[aiLines[l.id]!.needsSpecialist ? 'unknown' : aiLines[l.id]!.verdict.decision]}
+              {aiLines[l.id]!.clauses[0] ? ` (${aiLines[l.id]!.clauses[0]!.label})` : ''}
+            </span>
+          )}
           {draft ? (
             r.problems[l.id] ? (
               <span className="text-[12px] text-danger-text" data-testid="line-problem">
@@ -248,6 +266,24 @@ export default function RegistryPage() {
             {!draft && (
               <Button variant="secondary" onClick={act}>
                 <Download className="h-4 w-4" aria-hidden /> Акт сверки (CSV)
+              </Button>
+            )}
+            {draft && !!aiStatus.data?.scenarios.clinic && r.lines.length > 0 && (
+              <Button
+                variant="secondary"
+                loading={aiCheck.isPending}
+                onClick={() =>
+                  void aiCheck
+                    .mutateAsync(r.id)
+                    .then((res) => {
+                      setAiLines(Object.fromEntries(res.items.filter((x) => x.subjectId).map((x) => [x.subjectId!, x])));
+                      const n = res.items.filter(risky).length;
+                      toast.success(n ? `Строк с риском отказа: ${n}` : 'Все строки, скорее всего, примут');
+                    })
+                    .catch((e: unknown) => toast.error(errorMessage(e)))
+                }
+              >
+                <Sparkles className="h-4 w-4" aria-hidden /> Проверить строки
               </Button>
             )}
             {draft && (

@@ -11,6 +11,11 @@ import { assistanceName, currentAssistance, linesOf, subTotals } from '../assist
 import { API, forbidden, requireSession, route } from '../http';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { dmsParam } from '../params';
+import { canApproveDecision } from '@/shared/domain/settlement';
+import { canApproveQuote } from '@/shared/domain/tariff';
+import { originalReminderDue } from '@/shared/domain/contracts';
+import { currentReserve } from '../settlement-core';
+import { dealContract, latestQuote, toDealView } from '../lifecycle-core';
 
 export function requireStaff(user: SessionUser): void {
   if (!isStaffRole(user.role)) throw forbidden();
@@ -117,6 +122,32 @@ function kpisFor(d: Db, user: SessionUser, now: number): Kpi[] {
         { key: 'premium', label: 'Премия портфеля', value: d.policies.filter((p) => p.status === 'active').reduce((s, p) => s + p.premium, 0), format: 'money' },
       ];
     }
+    case 'sales_manager': {
+      const open = d.deals.filter((x) => x.stage !== 'lost' && x.stage !== 'active');
+      const signing = d.contracts.filter((c) => c.status === 'sent' || c.status === 'signing');
+      return [
+        { key: 'deals', label: 'Открытые сделки', value: open.length, format: 'number', to: '/staff/deals' },
+        { key: 'kp', label: 'КП ждут ответа', value: open.filter((x) => x.stage === 'kp_sent').length, format: 'number', to: '/staff/deals' },
+        { key: 'signing', label: 'Договоры на подписании', value: signing.length, format: 'number', to: '/staff/deals' },
+        { key: 'pipeline', label: 'Премия в воронке', value: open.reduce((s, x) => s + (latestQuote(d, x.id)?.total ?? 0), 0), format: 'money' },
+      ];
+    }
+    case 'legal': {
+      const review = [...d.contracts.filter((c) => c.status === 'legal_review'), ...d.endorsements.filter((e) => e.status === 'legal_review')];
+      return [
+        { key: 'legal', label: 'На согласовании', value: review.length, format: 'number', tone: review.length ? 'warning' : 'default' },
+        { key: 'changed', label: 'Изменённых пунктов', value: review.reduce((s, x) => s + x.clauseOverrides.length, 0), format: 'number' },
+      ];
+    }
+    case 'claims_officer': {
+      const mine = d.claims.filter((c) => c.handledBy !== 'assistance');
+      return [
+        { key: 'new', label: 'Новые', value: mine.filter((c) => c.status === 'new').length, format: 'number', to: '/staff/claims?tab=new' },
+        { key: 'review', label: 'На рассмотрении', value: mine.filter((c) => c.status === 'review').length, format: 'number', to: '/staff/claims?tab=review' },
+        { key: 'above', label: 'Ждут согласования', value: d.claims.filter((c) => c.pendingDecision).length, format: 'number', tone: 'warning', to: '/staff/claims?tab=above' },
+        { key: 'reserve', label: 'Резерв заявленных убытков', value: d.claims.reduce((s, c) => s + currentReserve(c), 0), format: 'money', to: '/staff/reports/reserves' },
+      ];
+    }
     case 'admin':
     default: {
       const dayAgo = now - DAY;
@@ -183,10 +214,16 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all' | 'as
       operator: ['new', 'review'],
       doctor_expert: ['medical_review'],
       accountant: ['approved', 'to_pay'],
+      claims_officer: ['new', 'review'],
     };
     const statuses = relevant[user.role] ?? [];
     for (const c of d.claims) {
       if (!statuses.includes(c.status)) continue;
+      // Reimbursements handled by the assistance are not in MIG's queue (handlesReimbursements).
+      if (user.role === 'claims_officer' && c.handledBy === 'assistance') continue;
+      if (user.role === 'claims_officer' && c.pendingDecision) continue;
+      // The doctor's queue: claims where an opinion was requested and not given yet.
+      if (user.role === 'doctor_expert' && c.opinion?.text) continue;
       const overdue = isOverdue(c, now);
       items.push({
         id: c.id,
@@ -314,7 +351,57 @@ export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all' | 'as
       });
     }
   }
-  if ((assistanceTab || type === 'assistance_sla' || type === 'complaint') && can(user, 'rebills.review')) {
+  // ---- contract lifecycle and settlement (LIFECYCLE_SPEC) ----
+  if ((type === 'all' || type === 'claim' || type === 'appeal') && can(user, 'claims.decide')) {
+    const me = d.staff.find((s) => s.id === user.id);
+    for (const c of d.claims) {
+      if (c.pendingDecision && me && canApproveDecision(me, c.pendingDecision) && type !== 'appeal') {
+        items.push({ id: `${c.id}:approve`, type: 'claim', entityId: c.id, who: c.insuredName, details: `${c.number} · решение ${c.pendingDecision.byName} · ${formatMoney(c.pendingDecision.required)}`, status: 'Нужно согласование', statusTone: 'warning', dueAt: c.slaDueAt, action: 'open' });
+      }
+      if (c.appeal?.status === 'open' && type !== 'claim') {
+        items.push({ id: `${c.id}:appeal`, type: 'appeal', entityId: c.id, who: c.insuredName, details: `${c.number} · ${c.appeal.text.slice(0, 60)}`, status: 'Апелляция', statusTone: 'danger', dueAt: tzIso(parseIso(c.appeal.at) + 5 * DAY), action: 'open' });
+      }
+    }
+  }
+  if (type === 'all' || type === 'deal' || type === 'quote' || type === 'contract' || type === 'invoice' || type === 'endorsement') {
+    const me = d.staff.find((s) => s.id === user.id);
+    if (can(user, 'quotes.approve') && me && (type === 'all' || type === 'quote')) {
+      for (const q of d.quotes.filter((x) => x.status === 'pending_approval' && canApproveQuote(me, x))) {
+        const deal = d.deals.find((x) => x.id === q.dealId);
+        items.push({ id: q.id, type: 'quote', entityId: q.id, who: deal ? toDealView(d, deal).clientName : 'Котировка', details: `${deal?.number ?? ''} · премия ${formatMoney(q.total)} · скидка ${formatPercent(q.discountFromTariffPct)}`, status: 'Нужно утверждение', statusTone: 'warning', dueAt: q.updatedAt ?? tzIso(now), action: 'open' });
+      }
+      for (const c of d.contracts.filter((x) => x.financeDiffers && !x.financeApprovedByName && x.status === 'draft')) {
+        items.push({ id: `${c.id}:finance`, type: 'contract', entityId: c.id, who: c.clientName, details: `${c.number} · финансовые условия отличаются от котировки`, status: 'Утвердить условия', statusTone: 'warning', dueAt: c.createdAt, action: 'open' });
+      }
+    }
+    if (can(user, 'contracts.legal_approve') && (type === 'all' || type === 'contract' || type === 'endorsement')) {
+      for (const c of d.contracts.filter((x) => x.status === 'legal_review')) {
+        items.push({ id: c.id, type: 'contract', entityId: c.id, who: c.clientName, details: `${c.number} · изменено пунктов: ${c.clauseOverrides.length}`, status: 'На согласовании', statusTone: 'warning', dueAt: c.createdAt, action: 'open' });
+      }
+      for (const e of d.endorsements.filter((x) => x.status === 'legal_review')) {
+        items.push({ id: e.id, type: 'endorsement', entityId: e.id, who: e.number, details: `изменено пунктов: ${e.clauseOverrides.length}`, status: 'На согласовании', statusTone: 'warning', dueAt: e.createdAt ?? tzIso(now), action: 'open' });
+      }
+    }
+    if (can(user, 'deals.manage') && (type === 'all' || type === 'deal')) {
+      const days = dmsParam('paperOriginalReminderDays');
+      for (const deal of d.deals.filter((x) => x.stage !== 'lost')) {
+        const c = dealContract(d, deal.id);
+        const name = toDealView(d, deal).clientName;
+        if (deal.stage === 'kp_accepted') items.push({ id: deal.id, type: 'deal', entityId: deal.id, who: name, details: `${deal.number} · КП принято`, status: 'Подготовить договор', statusTone: 'info', dueAt: deal.updatedAt, action: 'open' });
+        if (c?.status === 'draft' && c.legalComment) items.push({ id: `${deal.id}:legal`, type: 'deal', entityId: deal.id, who: name, details: `${c.number} · ${c.legalComment.slice(0, 60)}`, status: 'Юрист вернул', statusTone: 'warning', dueAt: deal.updatedAt, action: 'open' });
+        if (c && originalReminderDue(c.signing, now, days)) items.push({ id: `${deal.id}:orig`, type: 'deal', entityId: deal.id, who: name, details: `${c.number} · оригинал не получен дольше ${days} дн.`, status: 'Нет оригинала', statusTone: 'warning', dueAt: c.signing.client?.signedAt ?? deal.updatedAt, action: 'open' });
+        const overdue = c ? d.invoices.filter((i) => i.contractId === c.id && i.status === 'overdue') : [];
+        if (overdue.length) items.push({ id: `${deal.id}:pay`, type: 'deal', entityId: deal.id, who: name, details: `${c!.number} · просрочено взносов: ${overdue.length}`, status: 'Просрочка оплаты', statusTone: 'danger', dueAt: overdue[0]!.dueDate, action: 'open' });
+      }
+    }
+    if (can(user, 'payments.record') && (type === 'all' || type === 'invoice')) {
+      for (const i of d.invoices.filter((x) => x.contractId && x.status !== 'paid' && parseIso(x.dueDate) - now <= 7 * DAY)) {
+        items.push({ id: i.id, type: 'invoice', entityId: i.id, who: d.clients.find((c) => c.id === i.clientId)?.name ?? 'Клиент', details: `${i.number} · ${formatMoney(i.amount - (i.paid ?? 0))}`, status: i.status === 'overdue' ? 'Просрочен' : 'К оплате', statusTone: i.status === 'overdue' ? 'danger' : 'info', dueAt: tzIso(parseIso(i.dueDate)), action: 'open' });
+      }
+    }
+  }
+  // The curator keeps service and KPIs of assistances: SLA breaches and complaints (LIFECYCLE_SPEC §2).
+  if ((assistanceTab || type === 'assistance_sla' || type === 'complaint') && can(user, 'assist.cases.manage', { sub: 'complaint' })) {
     for (const a of d.assistances) {
       const breached = d.cases.filter((c) => c.assistanceId === a.id && c.status !== 'resolved' && parseIso(c.slaDueAt) < now);
       if (breached.length && type !== 'complaint') {
@@ -374,7 +461,7 @@ export const dashboardHandlers = [
       const { user } = requireSession(request);
       requireStaff(user);
       const t = url.searchParams.get('type');
-      const type = (['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change', 'escalation', 'rebill', 'assistance_sla', 'complaint', 'assistance'] as const).find((x) => x === t) ?? 'all';
+      const type = (['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change', 'escalation', 'rebill', 'assistance_sla', 'complaint', 'assistance', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'appeal'] as const).find((x) => x === t) ?? 'all';
       return queueFor(db(), user, type, Date.now()).slice(0, 50);
     }),
   ),

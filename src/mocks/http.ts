@@ -113,8 +113,8 @@ export function sessionUserFor(d: Db, userId: string, role: Role): SessionUser |
   }
   const s = d.staff.find((u) => u.id === userId);
   if (!s || !s.active) return null;
-  // Role is always taken from the server-side record, never from the request.
-  return { id: s.id, role: s.role, displayName: s.fullName };
+  // Role, authority and the signatory flag are always taken from the server-side record, never from the request.
+  return { id: s.id, role: s.role, displayName: s.fullName, authority: s.authority, ...(s.signatory?.canSign ? { canSign: true } : {}) };
 }
 
 /** Resolves the session from the bearer token. Client-supplied role headers are ignored. */

@@ -3,6 +3,7 @@
  * «Войти как…» performs a real login through the mock API, it never changes the role client-side.
  */
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, FlaskConical, RotateCcw } from 'lucide-react';
@@ -20,28 +21,29 @@ import { MisSimulator } from './MisSimulator';
 import { AssistSimulator } from './AssistSimulator';
 import { DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from '@/mocks/credentials';
 
-const ACCOUNTS: { role: Role; login: string }[] = [
-  ...DEMO_STAFF.map((s) => ({ role: s.role as Role, login: s.email })),
+/** One entry per demo account: a role may have several (e.g. a claims officer and their head). */
+const ACCOUNTS: { role: Role; login: string; label?: string }[] = [
+  ...DEMO_STAFF.map((s) => ({ role: s.role as Role, login: s.email, label: s.label })),
   { role: 'hr', login: DEMO_HR.email },
   ...DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, login: c.email })),
   ...DEMO_ASSIST_USERS.map((c) => ({ role: c.role as Role, login: c.email })),
   { role: 'insured', login: '+998 90 000 00 01' },
 ];
 
-async function loginAs(role: Role): Promise<Role> {
+async function loginAs(acc: (typeof ACCOUNTS)[number]): Promise<Role> {
   const current = getSession();
   if (current) await request('/auth/logout', { method: 'POST' }).catch(() => undefined);
   let challengeId: string;
-  if (role === 'insured') {
+  if (acc.role === 'insured') {
     challengeId = (await request('/auth/phone', { method: 'POST', body: { phone: DEMO_INSURED_PHONE }, schema: S.challenge })).challengeId;
     const res = await request('/auth/phone/verify', { method: 'POST', body: { challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
-    setSession(res);
+    // Commit the new session (and any guard redirect it causes) before the caller navigates home.
+    flushSync(() => setSession(res));
     return res.user.role;
   }
-  const acc = ACCOUNTS.find((a) => a.role === role)!;
   challengeId = (await request('/auth/login', { method: 'POST', body: { email: acc.login, password: DEMO_PASSWORD }, schema: S.challenge })).challengeId;
   const res = await request('/auth/otp', { method: 'POST', body: { challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
-  setSession(res);
+  flushSync(() => setSession(res));
   return res.user.role;
 }
 
@@ -80,17 +82,17 @@ function DemoBanner() {
               Войти как… <ChevronDown className="h-3 w-3" aria-hidden />
             </button>
           </MenuTrigger>
-          <MenuContent>
+          <MenuContent className="max-h-[calc(100vh-56px)] overflow-y-auto">
             {ACCOUNTS.map((a) => (
               <MenuItem
-                key={a.role}
+                key={a.login}
                 onSelect={async () => {
                   setBusy(true);
                   try {
                     qc.clear();
-                    const role = await loginAs(a.role);
+                    const role = await loginAs(a);
                     navigate(homeFor(role));
-                    toast.success(`Вы вошли как «${ROLE_LABEL[role]}»`);
+                    toast.success(`Вы вошли как «${a.label ?? ROLE_LABEL[role]}»`);
                   } catch (e) {
                     toast.error(errorMessage(e));
                   } finally {
@@ -99,7 +101,7 @@ function DemoBanner() {
                 }}
               >
                 <span className="flex flex-col">
-                  <span>{ROLE_LABEL[a.role]}</span>
+                  <span>{a.label ?? ROLE_LABEL[a.role]}</span>
                   <span className="text-[11px] text-muted">{a.login}</span>
                 </span>
               </MenuItem>
@@ -160,7 +162,7 @@ function DemoBanner() {
 
 function StaffLoginHints({ onPick }: { onPick: (email: string, password: string) => void }) {
   const list = [
-    ...DEMO_STAFF.map((s) => ({ role: s.role as Role, email: s.email })),
+    ...DEMO_STAFF.map((s) => ({ role: s.role as Role, email: s.email, label: s.label })),
     { role: 'hr' as Role, email: DEMO_HR.email },
     ...DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, email: c.email })),
     ...DEMO_ASSIST_USERS.map((c) => ({ role: c.role as Role, email: c.email })),
@@ -174,7 +176,7 @@ function StaffLoginHints({ onPick }: { onPick: (email: string, password: string)
         {list.map((a) => (
           <li key={a.email} className="flex items-center justify-between gap-2 rounded-btn px-2 py-1 hover:bg-rail">
             <span className="min-w-0">
-              <span className="block text-[12px] font-medium">{ROLE_LABEL[a.role]}</span>
+              <span className="block text-[12px] font-medium">{('label' in a && a.label) || ROLE_LABEL[a.role]}</span>
               <span className="block truncate text-[12px] text-muted">{a.email}</span>
             </span>
             <button type="button" className="text-[12px] font-medium text-accent-text hover:underline" onClick={() => onPick(a.email, DEMO_PASSWORD)}>

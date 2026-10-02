@@ -4,7 +4,11 @@ import type { Policy } from '@/shared/types';
 import type { PolicyChangeDecisionResult, PolicyListCheck } from '@/shared/types/dto';
 import { DRAFT_IF_STARTS_IN_DAYS, policyPeriodProblem, policyPremium } from '@/shared/domain/policies';
 import { policyChangeDecisionSchema, policyIssueSchema } from '@/shared/schemas/forms';
-import { db, type HrUserRow } from '../db';
+import { db, type ChangeRequestRow, type HrUserRow } from '../db';
+import { certificateNumber } from '@/shared/domain/contracts';
+import { COVERAGE_START_RULES, PERIODICITIES } from '@/shared/domain/endorsements';
+import { dmsParam } from '../params';
+import { createEndorsement } from '../lifecycle-core';
 import { API, audit, body, conflict, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
 import { DEMO_PASSWORD } from '../credentials';
 import { activePolicyOf, createInsured, endorsementDoc, nextPolicyNumber, parsePolicyList, refreshPolicyTotals, toPolicyChange } from '../policy-core';
@@ -125,11 +129,21 @@ export const policyHandlers = [
         for (const [policyId, group] of byPolicy) {
           const policy = d.policies.find((p) => p.id === policyId)!;
           const client = d.clients.find((c) => c.id === policy.clientId)!;
+          // A policy issued under a contract: accepted changes accumulate into an endorsement (LIFECYCLE_SPEC §11).
+          const contract = policy.contractId ? d.contracts.find((c) => c.id === policy.contractId && c.status === 'active') : undefined;
+          const deferred = !!contract && COVERAGE_START_RULES[dmsParam('coverageStartRule')] === 'from_endorsement_signed';
+          const requests: ChangeRequestRow[] = [];
           let delta = 0;
           for (const r of group) {
-            if (r!.kind === 'add') {
+            if (r!.kind === 'add' && deferred) {
+              // Coverage starts when the endorsement is signed: the person is created then.
+            } else if (r!.kind === 'add') {
               const person = createInsured(d, client, policy, { ...r!, ...r!.newPerson! }, r!.effectiveDate, 'invited');
               r!.insuredId = person.id;
+              if (contract) {
+                person.contractId = contract.id;
+                person.certificateNumber = certificateNumber(contract.number, d.insured.filter((i) => i.contractId === contract.id).length);
+              }
             } else {
               const person = d.insured.find((i) => i.id === r!.insuredId)!;
               person.status = 'excluded';
@@ -137,9 +151,38 @@ export const policyHandlers = [
               person.updatedAt = at;
             }
             // The assistance of the policy sees the change at once (ASSISTANCE_SPEC §5.7).
-            await notifyAssistance(d, currentAssistance(d, policy.id), r!.kind === 'add' ? 'insured.added' : 'insured.excluded', r!.insuredId!);
+            if (r!.insuredId) await notifyAssistance(d, currentAssistance(d, policy.id), r!.kind === 'add' ? 'insured.added' : 'insured.excluded', r!.insuredId);
             delta += r!.premiumDelta;
             Object.assign(r!, { status: 'approved', decidedAt: at, decidedByName: user.displayName });
+            if (contract) {
+              const short = r!.fullName.split(' ').map((w, k) => (k === 0 ? w : `${w[0] ?? ''}.`)).join(' ');
+              const cr: ChangeRequestRow = {
+                id: randomId(),
+                contractId: contract.id,
+                type: r!.kind === 'add' ? 'add_insured' : 'exclude_insured',
+                effectiveDate: r!.effectiveDate,
+                insuredId: r!.insuredId,
+                payload: { familyMembers: r!.familyMembers },
+                requestedBy: { id: r!.requestedById, role: 'hr', name: r!.requestedByName },
+                status: 'pending',
+                createdAt: at,
+                description: `${r!.kind === 'add' ? 'Включение' : 'Исключение'}: ${short} (${r!.position})`,
+                policyChangeId: r!.id,
+                ...(r!.kind === 'add' && deferred ? { newPerson: { fullName: r!.fullName, position: r!.position, familyMembers: r!.familyMembers, ...r!.newPerson! } } : {}),
+              };
+              d.changeRequests.unshift(cr);
+              requests.push(cr);
+            }
+          }
+          if (contract) {
+            // Premium of the policy follows at once; the endorsement documents it (monthly, or one per change).
+            policy.premium = Math.max(0, policy.premium + delta);
+            refreshPolicyTotals(d, policy);
+            if (PERIODICITIES[dmsParam('endorsementPeriodicity')] === 'per_change') {
+              for (const cr of requests) createEndorsement(d, contract, [cr], 'changes');
+              out.endorsements += requests.length;
+            }
+            continue;
           }
           policy.premium = Math.max(0, policy.premium + delta);
           refreshPolicyTotals(d, policy);

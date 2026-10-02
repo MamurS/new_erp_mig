@@ -76,6 +76,14 @@ export default function CardPage() {
                 <dt className="text-[12px] text-muted">{t('card.program')}</dt>
                 <dd className="font-bold">{policy.data.programName}</dd>
               </div>
+              {policy.data.certificateNumber && (
+                <div className="col-span-2 rounded-btn bg-rail px-3 py-2">
+                  <dt className="text-[12px] text-muted">{t('card.certificate')}</dt>
+                  <dd className="num text-[14px] font-bold" data-testid="card-certificate">
+                    {policy.data.certificateNumber}
+                  </dd>
+                </div>
+              )}
             </dl>
           )}
           {(me.isError || policy.isError) && (

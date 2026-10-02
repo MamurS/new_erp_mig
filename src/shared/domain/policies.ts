@@ -1,12 +1,13 @@
 /* Policy issuance and changes of the insured list (POLICY_SPEC §3): tariffs, premium, pro-rata. */
 import type { ISODate, Money, Policy, PolicyChangeKind, PolicyChangeStatus, PolicyTariff, ProgramCode } from '@/shared/types';
+import { DMS_DEFAULTS, TARIFF_BASE_KEY } from '@/shared/config/dmsParameters';
 
-/** Demo annual tariff per employee. A family member costs FAMILY_SHARE of it. */
+/** Demo annual tariff per employee: the base rates of «Параметры ДМС». A family member costs FAMILY_SHARE of it. */
 export const BASE_TARIFF: Record<ProgramCode, Money> = {
-  basic: 2_500_000,
-  standard: 3_800_000,
-  standard_plus: 5_200_000,
-  premium: 7_000_000,
+  basic: DMS_DEFAULTS[TARIFF_BASE_KEY.basic],
+  standard: DMS_DEFAULTS[TARIFF_BASE_KEY.standard],
+  standard_plus: DMS_DEFAULTS[TARIFF_BASE_KEY.standard_plus],
+  premium: DMS_DEFAULTS[TARIFF_BASE_KEY.premium],
 };
 export const FAMILY_SHARE = 0.8;
 export const POLICY_CSV_MAX_ROWS = 5000;

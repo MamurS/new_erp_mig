@@ -16,7 +16,7 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { Modal } from '@/shared/ui/dialog';
-import { Field, Input, Textarea } from '@/shared/ui/input';
+import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { Card } from '@/shared/ui/page';
 import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
@@ -72,9 +72,23 @@ function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void })
         <p className="text-[13px]">
           Сейчас: <span className="num font-semibold">{formatDmsParam(p.key, p.value)}</span> · допустимо от {formatDmsParam(p.key, def.min)} до {formatDmsParam(p.key, def.max)}
         </p>
-        <Field label={unit ? `Новое значение, ${unit}` : 'Новое значение'} error={errors.value}>
-          {(a) => <Input {...a} inputMode="decimal" maxLength={16} value={value} onChange={(e) => setValue(e.target.value)} />}
-        </Field>
+        {def.options ? (
+          <Field label="Новое значение" error={errors.value}>
+            {(a) => (
+              <Select {...a} value={value} onChange={(e) => setValue(e.target.value)}>
+                {def.options?.map((o, i) => (
+                  <option key={o} value={String(i)}>
+                    {o}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        ) : (
+          <Field label={unit ? `Новое значение, ${unit}` : 'Новое значение'} error={errors.value}>
+            {(a) => <Input {...a} inputMode="decimal" maxLength={16} value={value} onChange={(e) => setValue(e.target.value)} />}
+          </Field>
+        )}
         <Field label="Основание" error={errors.reason} hint="Например, номер приказа или решение правления">
           {(a) => <Textarea {...a} rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
         </Field>

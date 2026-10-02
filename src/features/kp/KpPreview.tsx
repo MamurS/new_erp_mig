@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { KP_PAGE_COUNT } from '@/shared/domain/kp';
 import { cn } from '@/shared/lib/cn';
-import { KpFrame } from './KpFrame';
+import { DocFrame } from '@/features/documents/DocFrame';
 import { KP_PAGE_GAP, KP_PAGE_HEIGHT, KP_PAGE_WIDTH } from './render';
 
 const PREVIEW_HEIGHT = KP_PAGE_COUNT * KP_PAGE_HEIGHT + (KP_PAGE_COUNT - 1) * KP_PAGE_GAP;
@@ -40,7 +40,7 @@ export function KpPreview({ frameRef, title, html, className }: { frameRef: RefO
       </div>
       <div ref={box} onScroll={onScroll} className="h-[calc(100vh-11rem)] min-h-[480px] overflow-y-auto overflow-x-hidden p-4">
         <div className="mx-auto" style={{ width: KP_PAGE_WIDTH * scale, height: PREVIEW_HEIGHT * scale }}>
-          <KpFrame
+          <DocFrame
             ref={frameRef}
             title={title}
             html={html}

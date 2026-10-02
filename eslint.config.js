@@ -22,10 +22,10 @@ const htmlSinks = [
     message: 'String-based timers are forbidden.',
   },
 ];
-// HTML strings may be rendered only by src/features/kp/KpFrame.tsx (sandboxed iframe, see DECISIONS.md).
+// HTML strings may be rendered only by src/features/documents/DocFrame.tsx (sandboxed iframe, see DECISIONS.md).
 const srcDocSink = {
   selector: "JSXAttribute[name.name='srcDoc'], Property[key.name='srcdoc'], AssignmentExpression[left.property.name='srcdoc']",
-  message: 'srcDoc is allowed only in src/features/kp/KpFrame.tsx (sandboxed KP frame).',
+  message: 'srcDoc is allowed only in src/features/documents/DocFrame.tsx (sandboxed document frame).',
 };
 
 const storageLocal = [
@@ -82,7 +82,7 @@ export default tseslint.config(
   },
   {
     // The single place allowed to render an HTML string: a sandboxed iframe without scripts.
-    files: ['src/features/kp/KpFrame.tsx'],
+    files: ['src/features/documents/DocFrame.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...htmlSinks] },
   },
   {

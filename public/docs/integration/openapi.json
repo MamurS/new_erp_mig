@@ -1543,7 +1543,8 @@
                           "over_limit",
                           "no_guarantee",
                           "duplicate",
-                          "price_mismatch"
+                          "price_mismatch",
+                          "ai_disagrees"
                         ]
                       },
                       "message": {

@@ -85,7 +85,8 @@ test('KP 1. Underwriter prepares an offer from the queue, sends it; only this co
   // HR of another company does not
   await loginByEmail(page, 'hr@demo-client.uz', /\/hr$/);
   await page.goto('/hr/documents');
-  await expect(page.getByText('Предложений пока нет')).toBeVisible();
+  // The demo company has its own renewal offer (LIFECYCLE_SPEC §16), not this one.
+  await expect(page.getByRole('list', { name: 'Коммерческие предложения' })).toBeVisible();
   expect(await page.locator('body').innerText()).not.toContain(kp.number);
   expect((await api(page, 'GET', `/kp/${kpId}`)).status).toBe(404);
 });

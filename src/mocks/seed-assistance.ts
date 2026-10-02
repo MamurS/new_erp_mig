@@ -71,6 +71,8 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
       // The second company has an individual authority in its contract; the others use the DMS parameter.
       ...(k === 1 ? { guaranteeAuthorityLimit: 12_000_000 } : {}),
       rebillPaymentDays: 10,
+      // The first company passes reimbursements of the insured to MIG's claims officer (LIFECYCLE_SPEC §13).
+      ...(k === 0 ? { handlesReimbursements: false } : {}),
     },
   }));
   const [A1, A2, A3] = assistances as [AssistanceCompany, AssistanceCompany, AssistanceCompany];

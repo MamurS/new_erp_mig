@@ -12,6 +12,7 @@ export const CLAIM_TONE: Record<ClaimStatus, Tone> = {
 };
 
 export const CLIENT_TONE: Record<ClientStatus, Tone> = {
+  lead: 'info',
   draft: 'muted',
   negotiation: 'info',
   active: 'success',

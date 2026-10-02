@@ -23,7 +23,24 @@ type Only = { only: string | readonly string[] };
 type NoAssistance = 'no_assistance';
 /** Allowed for escalations from an assistance company and for records without one. */
 type EscalatedOrNoAssistance = 'escalated_or_no_assistance';
-export type Rule = boolean | Own | Masked | NameOnly | ExceptOwn | Transitions | ViaVisit | FourEyesAboveThreshold | Only | NoAssistance | EscalatedOrNoAssistance;
+/** Allowed; the data layer routes it to someone with more authority when it is above the user's (LIFECYCLE_SPEC §2). */
+type WithinAuthority = 'within_authority';
+/** Only an employee who is a signatory of MIG (StaffUser.signatory). */
+type Signatory = 'signatory';
+export type Rule =
+  | boolean
+  | Own
+  | Masked
+  | NameOnly
+  | ExceptOwn
+  | Transitions
+  | ViaVisit
+  | FourEyesAboveThreshold
+  | Only
+  | NoAssistance
+  | EscalatedOrNoAssistance
+  | WithinAuthority
+  | Signatory;
 
 type Row = Record<Role, Rule>;
 
@@ -31,10 +48,10 @@ const no = false;
 const yes = true;
 
 export const PERMISSIONS = {
-  'clients.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'clients.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'policies.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'policies.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'clients.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: yes, claims_officer: no },
+  'clients.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'policies.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: yes },
+  'policies.write': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
   'insured.read': {
     operator: 'masked',
     underwriter: 'masked',
@@ -49,10 +66,13 @@ export const PERMISSIONS = {
     asst_doctor: no,
     asst_billing: no,
     asst_admin: no,
+    sales_manager: no,
+    legal: no,
+    claims_officer: 'masked',
   },
-  'insured.reveal_pii': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'medical.read': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'claims.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: yes, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'insured.reveal_pii': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'medical.read': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'claims.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: yes, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
   'claims.transition': {
     operator: {
       transitions: [
@@ -84,12 +104,22 @@ export const PERMISSIONS = {
     asst_doctor: no,
     asst_billing: no,
     asst_admin: no,
+    sales_manager: no,
+    legal: no,
+    // Decisions (approve, reject) go through /claims/:id/decide with a clause reference (LIFECYCLE_SPEC §13).
+    claims_officer: {
+      transitions: [
+        ['new', 'review'],
+        ['review', 'medical_review'],
+        ['medical_review', 'review'],
+      ],
+    },
   },
-  'claims.create': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'appointments.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'clinics.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: no, admin: yes, hr: no, insured: yes, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'limits.request_change': { operator: yes, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'claims.create': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'appointments.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'clinics.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: no, admin: yes, hr: no, insured: yes, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'limits.request_change': { operator: yes, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
   'limits.approve_change': {
     operator: no,
     underwriter: 'except_own',
@@ -104,51 +134,82 @@ export const PERMISSIONS = {
     asst_doctor: no,
     asst_billing: no,
     asst_admin: no,
+    sales_manager: no,
+    legal: no,
+    claims_officer: no,
   },
-  'reports.read': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'exports.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'audit.read': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'kp.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'kp.send': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'kp.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'hr.employees.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'policy_changes.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'policy_changes.request': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'policy_changes.decide': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'reports.read': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'exports.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'audit.read': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'kp.create': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'kp.send': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'kp.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: yes, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: yes, claims_officer: no },
+  'hr.employees.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'policy_changes.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'policy_changes.request': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'policy_changes.decide': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
   // ---- clinics (CLINIC_SPEC §8) ----
-  'clinic.check_patient': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'clinic.appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'guarantees.request': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'via_visit', clinic_admin: 'via_visit', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'guarantees.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'guarantees.decide': { operator: no, underwriter: no, doctor_expert: 'four_eyes_above_threshold', accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'registries.submit': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'registries.review': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'registries.pay': { operator: no, underwriter: no, doctor_expert: no, accountant: yes, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'clinic.integration.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'clinic.users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'first_admin' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'clinics.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'clinic.check_patient': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'clinic.appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'guarantees.request': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'via_visit', clinic_admin: 'via_visit', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'guarantees.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'own', clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'guarantees.decide': { operator: no, underwriter: no, doctor_expert: 'four_eyes_above_threshold', accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'registries.submit': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'registries.review': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'registries.pay': { operator: no, underwriter: no, doctor_expert: no, accountant: yes, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'clinic.integration.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'clinic.users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'first_admin' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: 'own', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'clinics.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
   // ---- assistance companies (ASSISTANCE_SPEC §10) ----
-  'assist.insured.search': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no },
-  'assist.insured.reveal_pii': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no },
-  'assist.medical.read': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: 'own', asst_billing: no, asst_admin: no },
-  'assist.cases.manage': { operator: { only: ['read', 'complaint'] }, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no },
-  'assist.appointments.manage': { operator: 'no_assistance', underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: no, asst_billing: no, asst_admin: no },
-  'assist.guarantees.decide': { operator: no, underwriter: no, doctor_expert: 'escalated_or_no_assistance', accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: 'own', asst_billing: no, asst_admin: no },
-  'assist.registries.review': { operator: 'no_assistance', underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: 'own', asst_billing: 'own', asst_admin: no },
-  'assist.clinic_payments.record': { operator: no, underwriter: no, doctor_expert: no, accountant: 'no_assistance', admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: 'own', asst_admin: no },
-  'assist.rebills.submit': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: 'own', asst_admin: no },
-  'rebills.review': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'rebills.pay': { operator: no, underwriter: no, doctor_expert: no, accountant: 'except_own', admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'qa.review': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'assistance.assign': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'assistance.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'assist.users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: 'own' },
-  'assist.integration.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: 'own' },
+  'assist.insured.search': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.insured.reveal_pii': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.medical.read': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.cases.manage': { operator: { only: ['read', 'complaint'] }, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.appointments.manage': { operator: 'no_assistance', underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.guarantees.decide': { operator: no, underwriter: no, doctor_expert: 'escalated_or_no_assistance', accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.registries.review': { operator: 'no_assistance', underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: 'own', asst_billing: 'own', asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.clinic_payments.record': { operator: no, underwriter: no, doctor_expert: no, accountant: 'no_assistance', admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: 'own', asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.rebills.submit': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: 'own', asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'rebills.review': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'rebills.pay': { operator: no, underwriter: no, doctor_expert: no, accountant: 'except_own', admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'qa.review': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assistance.assign': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assistance.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'assist.users.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: 'own', sales_manager: no, legal: no, claims_officer: no },
+  'assist.integration.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: { only: 'revoke_keys' }, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: 'own', sales_manager: no, legal: no, claims_officer: no },
   // ---- DMS business parameters (/staff/admin/parameters): an admin proposes, a second admin or underwriter confirms ----
-  'dms_params.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: yes, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'dms_params.propose': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
-  'dms_params.approve': { operator: no, underwriter: 'except_own', doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no },
+  'dms_params.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: yes, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: yes, claims_officer: yes },
+  'dms_params.propose': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'dms_params.approve': { operator: no, underwriter: 'except_own', doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  // ---- contract lifecycle and claims settlement (LIFECYCLE_SPEC §14) ----
+  'leads.manage': { operator: no, underwriter: { only: 'read' }, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'deals.manage': { operator: no, underwriter: { only: 'read' }, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'census.upload': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'quotes.calculate': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'quotes.approve': { operator: no, underwriter: 'within_authority', doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'kp.respond': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: { only: 'manual' }, legal: no, claims_officer: no },
+  'contracts.read': { operator: yes, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: yes, claims_officer: no },
+  'contracts.draft': { operator: no, underwriter: yes, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'contracts.legal_approve': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: yes, claims_officer: no },
+  'contracts.sign_mig': { operator: no, underwriter: 'signatory', doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: 'signatory', legal: no, claims_officer: no },
+  'contracts.sign_client': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'contracts.verify_scan': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: yes, claims_officer: no },
+  'contracts.originals': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: yes, claims_officer: no },
+  'payments.record': { operator: no, underwriter: no, doctor_expert: no, accountant: yes, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'invoices.read': { operator: no, underwriter: yes, doctor_expert: no, accountant: yes, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'endorsements.manage': { operator: no, underwriter: { only: 'approve_amounts' }, doctor_expert: no, accountant: no, admin: no, hr: 'own', insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: yes, legal: no, claims_officer: no },
+  'claims.decide': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: 'within_authority' },
+  'claims.medical_opinion': { operator: no, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'claims.reserves': { operator: no, underwriter: { only: 'read' }, doctor_expert: no, accountant: { only: 'read' }, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'staff.authority.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  // ---- AI coverage check (AI_COVERAGE_SPEC §5) ----
+  'ai.coverage.self': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'ai.coverage.clinic': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: 'via_visit', clinic_admin: 'via_visit', asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'ai.coverage.assist': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'ai.coverage.mig': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'ai.feedback': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
+  'ai.admin': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
 } as const satisfies Record<string, Row>;
 
 export type Action = keyof typeof PERMISSIONS;
@@ -174,7 +235,7 @@ export interface PermissionContext {
   to?: ClaimStatus;
 }
 
-type MinimalUser = Pick<SessionUser, 'id' | 'role' | 'companyId' | 'insuredId' | 'clinicId' | 'assistanceId'>;
+type MinimalUser = Pick<SessionUser, 'id' | 'role' | 'companyId' | 'insuredId' | 'clinicId' | 'assistanceId' | 'canSign'>;
 
 export function ruleFor(role: Role, action: Action): Rule {
   return (PERMISSIONS[action] as Row)[role];
@@ -207,7 +268,8 @@ export function can(user: MinimalUser | null | undefined, action: Action, ctx?: 
   if (rule === false) return false;
   if (rule === true || rule === 'masked' || rule === 'name_only') return true;
   if (rule === 'own' || rule === 'via_visit') return ownMatches(user, ctx);
-  if (rule === 'four_eyes_above_threshold') return true;
+  if (rule === 'four_eyes_above_threshold' || rule === 'within_authority') return true;
+  if (rule === 'signatory') return user.canSign === true;
   if (typeof rule === 'object' && 'only' in rule) return ctx?.sub !== undefined && (typeof rule.only === 'string' ? ctx.sub === rule.only : rule.only.includes(ctx.sub));
   // Scope rules without a record are checked by the data layer.
   if (rule === 'no_assistance') return ctx?.assistanceId === undefined || ctx.assistanceId === null;

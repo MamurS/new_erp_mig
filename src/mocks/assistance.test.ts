@@ -204,7 +204,9 @@ describe('rebills (§5.5, §13.4–13.5)', () => {
     for (const l of unpaid) expect(draft.data.lines.map((x) => x.registryLineId)).toContain(l.id);
     expect((await call(`/assist/rebills/${draft.data.id}/submit`, { method: 'POST', sid: billing })).status).toBe(200);
 
-    const curator = await login('operator@demo.mig.uz');
+    // Lines of assistance rebills are reviewed by the claims officer (LIFECYCLE_SPEC §2: moved from the curator).
+    expect((await call(`/rebills/${draft.data.id}/lines/${draft.data.lines[0]!.id}/decision`, { method: 'POST', sid: await login('operator@demo.mig.uz'), json: { decision: 'accept' } })).status).toBe(403);
+    const curator = await login('claims@demo.mig.uz');
     const lines = draft.data.lines;
     const rejected = await call(`/rebills/${draft.data.id}/lines/${lines[0]!.id}/decision`, { method: 'POST', sid: curator, json: { decision: 'reject', reason: 'Нет подтверждения оплаты' } });
     expect(rejected.status).toBe(200);

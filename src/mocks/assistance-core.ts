@@ -214,7 +214,7 @@ export function checksFor(d: Db, rebill: Pick<Rebill, 'id' | 'assistanceId'>, li
     if (usage) limitLeft = usage.limit - usage.used + (l.status === 'accepted' ? l.amount : 0);
   }
   const policyActive = !!policy && !!who && policy.startDate <= l.serviceDate && l.serviceDate <= policy.endDate && who.insuredFrom <= l.serviceDate && (!who.excludedFrom || l.serviceDate < who.excludedFrom);
-  return rebillChecks({
+  const checks = rebillChecks({
     accepted: l.status === 'accepted',
     paidToClinic: !!l.payment,
     policyActive,
@@ -227,6 +227,9 @@ export function checksFor(d: Db, rebill: Pick<Rebill, 'id' | 'assistanceId'>, li
     price: l.price,
     contractPrice: contract?.price ?? null,
   });
+  // The AI precheck (AI_COVERAGE_SPEC §4.4) adds its flag next to the automatic checks.
+  const ai = d.ai.rebillFlags[l.id];
+  return ai ? [...checks, { code: 'ai_disagrees', message: ai }] : checks;
 }
 
 export function toRebillLine(d: Db, r: Registry, l: RegistryLine): RebillLine {

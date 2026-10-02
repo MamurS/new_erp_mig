@@ -96,8 +96,9 @@ test('2. HR adds an employee → pending; the underwriter approves; HR sees them
   await page.goto('/hr?q=Заявкин');
   const row = page.getByRole('row').filter({ hasText: 'Заявкин Заяв Заявович' });
   await expect(row).toContainText('Приглашён');
-  await page.goto('/hr/documents');
-  await expect(page.getByText(/Дополнительное соглашение № \d+ к полису ДМС-.*прикреплено 1/).first()).toBeVisible();
+  // The demo company works under a contract (LIFECYCLE_SPEC §11): the approved change waits for the monthly endorsement.
+  await page.goto('/hr/contracts');
+  await expect(page.getByTestId('hr-change-requests')).toContainText('Заявкин З.');
 });
 
 test('3. HR requests an exclusion, the underwriter rejects it with a reason, HR sees the reason and the employee stays active', async ({ page }) => {

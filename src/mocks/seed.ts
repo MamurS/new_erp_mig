@@ -30,6 +30,8 @@ import { PROGRAMS, perPersonPremium } from './programs';
 import { seedClinics } from './seed-clinics';
 import { seedPolicyChanges } from './seed-policies';
 import { seedAssistance } from './seed-assistance';
+import { seedLifecycle } from './seed-lifecycle';
+import { defaultAiSettings } from '@/features/ai/settings';
 
 // ---------- dictionaries ----------
 const UZ_MALE = ['Азиз', 'Бахтиёр', 'Жасур', 'Отабек', 'Шерзод', 'Фаррух', 'Улугбек', 'Санжар', 'Дилшод', 'Рустам', 'Тимур', 'Мансур', 'Бобур', 'Анвар'];
@@ -188,6 +190,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
     fullName: s.fullName,
     email: s.email,
     role: s.role,
+    authority: s.authority ?? {},
+    ...(s.signatory ? { signatory: s.signatory } : {}),
     active: true,
     password: DEMO_PASSWORD,
     lastLoginAt: tzIso(now - int(rng, 1, 48) * 3600_000),
@@ -201,6 +205,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
       fullName: `${first} ${surname}`,
       email: `${translit(first)}.${translit(surname)}${i}@mig.example`,
       role,
+      authority: {},
       active: i !== 6,
       password: DEMO_PASSWORD,
       lastLoginAt: tzIso(now - int(rng, 1, 400) * 3600_000),
@@ -810,7 +815,22 @@ export function createSeed(opts: SeedOptions = {}): Db {
     rebills: [],
     qaSamples: [],
     dmsParams: { values: {}, changes: [] },
+    ai: { settings: defaultAiSettings(), changes: [], logs: [], rebillFlags: {} },
+    authorityChanges: [],
+    deals: [],
+    dealEvents: [],
+    dealSeq: 40,
+    censuses: [],
+    quotes: [],
+    contracts: [],
+    contractSeq: 120,
+    contractInsured: [],
+    payments: [],
+    changeRequests: [],
+    endorsements: [],
+    smsOutbox: [],
   };
   seedAssistance(out, { now });
+  seedLifecycle(out, { now });
   return out;
 }

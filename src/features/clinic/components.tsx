@@ -23,6 +23,7 @@ import { Chip } from '@/shared/ui/chips';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
+import { ClinicCoverage } from '@/features/ai/ClinicCoverage';
 
 export function PageTitle({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
@@ -232,6 +233,7 @@ export function GuaranteeRequestDialog({ visitId, open, onOpenChange, onDone }: 
         <Field label="Код МКБ-10" error={errors.icd10?.message} hint="Например, K35.8">
           {(a) => <Input {...a} autoComplete="off" maxLength={8} {...form.register('icd10')} />}
         </Field>
+        <ClinicCoverage visitId={visitId} serviceCode={form.watch('serviceCode')} icd10={form.watch('icd10')} />
         <Field label="Предполагаемая стоимость, UZS" error={errors.estimatedCost?.message}>
           {(a) => <Input {...a} inputMode="numeric" {...form.register('estimatedCost', { setValueAs: (v: string | number) => Number(String(v).replace(/\s/g, '')) })} />}
         </Field>

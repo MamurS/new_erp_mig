@@ -8,6 +8,10 @@ import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from './mask
 import { PROGRAMS } from './programs';
 import { limitExtras } from './assistance-core';
 import { DAY, isoDay, parseIso } from './time';
+import { can } from '@/shared/auth/permissions';
+import { canApproveDecision } from '@/shared/domain/settlement';
+import { clauseLabel } from '@/features/documents/templates';
+import { currentReserve, reserveTimeline } from './settlement-core';
 
 export function insuredCountFor(d: Db, clientId: string): number {
   return d.insured.filter((i) => i.clientId === clientId && i.status === 'active').length;
@@ -119,14 +123,32 @@ export function toClaimDetail(d: Db, c: ClaimRow, user: SessionUser): ClaimDetai
   const remaining = Math.max(0, usage.limit - usedExcl);
   const payout = c.amountApproved ?? c.amountClaimed;
   const t = claimTransitions(user, c);
-  const { publicRejectionReason: _p, ...claim } = c;
+  const { publicRejectionReason: _p, reserveHistory: _r, receiptHash: _h, expectedPrice: _e, registryLineId: _l, ...claim } = c;
+  const staff = d.staff.find((s) => s.id === user.id);
+  const open = ['new', 'review', 'medical_review'].includes(c.status);
   return {
     ...claim,
+    reserve: currentReserve(c),
+    reserveHistory: can(user, 'claims.reserves') || can(user, 'claims.reserves', { sub: 'read' }) ? reserveTimeline(c) : undefined,
     limitCheck: { category: cat, limit: usage.limit, used: usedExcl, remaining, remainingAfter: remaining - payout },
     allowedTransitions: t.allowed,
     blockedTransitions: t.blocked,
     medicalReviewRequired: requiresMedicalReview(c),
+    settlement: {
+      canDecide: can(user, 'claims.decide') && ((open && !c.pendingDecision) || c.appeal?.status === 'open'),
+      canApprovePending: !!c.pendingDecision && !!staff && canApproveDecision(staff, c.pendingDecision),
+      canRequestOpinion: can(user, 'claims.decide') && (c.status === 'new' || c.status === 'review'),
+      canGiveOpinion: can(user, 'claims.medical_opinion') && !!c.opinion && !c.opinion.text,
+      canChangeReserve: can(user, 'claims.reserves') && open,
+      authorityMax: staff?.authority.claimDecisionMax ?? null,
+    },
   };
+}
+
+/** List row: the claim without internal fields, with the current reserve. */
+export function toClaimListItem(c: ClaimRow) {
+  const { publicRejectionReason: _p, reserveHistory: _r, receiptHash: _h, expectedPrice: _e, registryLineId: _l, ...claim } = c;
+  return { ...claim, reserve: currentReserve(c) };
 }
 
 export function toMyClaim(c: ClaimRow, i: InsuredRow): MyClaim {
@@ -157,5 +179,11 @@ export function toMyClaim(c: ClaimRow, i: InsuredRow): MyClaim {
   if (status === 'approved') out.expectedPayoutBy = isoDay(Date.now() + 2 * DAY);
   if (status === 'received' || status === 'checking') out.expectedPayoutBy = isoDay(parseIso(c.slaDueAt) + 2 * DAY);
   if (status === 'rejected') out.rejectionReason = c.publicRejectionReason ?? 'Услуга не входит в программу страхования';
+  // Partial approval: the reason for the difference is explained too (LIFECYCLE_SPEC §13).
+  if (c.decision?.kind === 'partial') out.rejectionReason = c.decision.reason;
+  if (c.decision?.clauseId) out.clauseRef = clauseLabel(c.decision.clauseId);
+  out.canAppeal = (status === 'rejected' || c.decision?.kind === 'partial') && !c.appeal;
+  if (c.appeal) out.appealStatus = c.appeal.status;
+  out.letterAvailable = !!c.decision;
   return out;
 }

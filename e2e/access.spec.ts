@@ -16,6 +16,9 @@ const FORBIDDEN_ROUTES: Record<Role, string[]> = {
   asst_doctor: ['/staff', '/staff/guarantees', '/assist/rebills', '/assist/users', '/assist/chat'],
   asst_billing: ['/staff', '/assist/insured', '/assist/cases', '/assist/users'],
   asst_admin: ['/staff', '/assist/insured', '/assist/rebills', '/hr'],
+  sales_manager: ['/staff/claims', '/staff/audit', '/staff/admin/users', '/staff/rebills', '/hr'],
+  legal: ['/staff/claims', '/staff/deals', '/staff/audit', '/staff/reports/reserves', '/hr'],
+  claims_officer: ['/staff/deals', '/staff/clients', '/staff/audit', '/staff/admin/users', '/hr'],
 };
 
 test.describe('2. Route matrix: forbidden routes lead to /403', () => {
@@ -45,6 +48,9 @@ const FORBIDDEN_API: Record<Role, [string, string, unknown?][]> = {
   asst_billing: [['GET', '/clients'], ['GET', '/assist/insured?q=а'], ['GET', '/assist/cases'], ['GET', '/rebills'], ['GET', '/assist/integration/keys']],
   asst_admin: [['GET', '/clients'], ['GET', '/assist/insured?q=а'], ['GET', '/assist/rebills'], ['GET', '/assistance']],
   clinic_admin: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/audit'], ['GET', '/guarantees'], ['GET', '/registries'], ['GET', '/hr/employees'], ['POST', '/clinics', {}]],
+  sales_manager: [['GET', '/claims'], ['GET', '/audit'], ['GET', '/reports/reserves'], ['POST', '/payments', {}]],
+  legal: [['GET', '/claims'], ['GET', '/claims/00000000-0000-4000-8000-000000000000'], ['GET', '/reports/claims-register'], ['GET', '/audit']],
+  claims_officer: [['GET', '/deals'], ['GET', '/audit'], ['POST', '/quotes', {}], ['GET', '/admin/users']],
 };
 
 test.describe('3. API matrix: forbidden endpoints answer 403/404', () => {

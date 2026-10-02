@@ -1,15 +1,46 @@
 /* Demo accounts of the mock server (SPEC §2). */
-import type { StaffRole } from '@/shared/types';
+import type { StaffAuthority, StaffRole } from '@/shared/types';
 
 export const DEMO_PASSWORD = 'Demo-2026!';
 export const DEMO_CODE = '000000';
 
-export const DEMO_STAFF: { role: StaffRole; email: string; fullName: string }[] = [
+export interface DemoStaff {
+  role: StaffRole;
+  email: string;
+  fullName: string;
+  /** Shown in «Войти как…» when one role has several demo accounts. */
+  label?: string;
+  authority?: StaffAuthority;
+  signatory?: { canSign: true; basis: string };
+}
+
+export const DEMO_STAFF: DemoStaff[] = [
   { role: 'operator', email: 'operator@demo.mig.uz', fullName: 'Нигора Юсупова' },
-  { role: 'underwriter', email: 'underwriter@demo.mig.uz', fullName: 'Дмитрий Соколов' },
+  { role: 'underwriter', email: 'underwriter@demo.mig.uz', fullName: 'Дмитрий Соколов', authority: { quoteDiscountMaxPct: 0.1, quotePremiumMax: 5_000_000_000 } },
   { role: 'doctor_expert', email: 'doctor@demo.mig.uz', fullName: 'Шахноза Рахимова' },
   { role: 'accountant', email: 'accountant@demo.mig.uz', fullName: 'Елена Морозова' },
   { role: 'admin', email: 'admin@demo.mig.uz', fullName: 'Тимур Алиев' },
+  // The second person of four-eyes on staff authority (LIFECYCLE_SPEC §14: «только admin + второй»).
+  { role: 'admin', email: 'admin2@demo.mig.uz', fullName: 'Сардор Назаров', label: 'Второй администратор' },
+  // LIFECYCLE_SPEC §2
+  { role: 'sales_manager', email: 'sales@demo.mig.uz', fullName: 'Азиз Каримов' },
+  { role: 'legal', email: 'legal@demo.mig.uz', fullName: 'Наталья Ким' },
+  { role: 'claims_officer', email: 'claims@demo.mig.uz', fullName: 'Бобур Хасанов', authority: { claimDecisionMax: 5_000_000 } },
+  {
+    role: 'claims_officer',
+    email: 'claims-head@demo.mig.uz',
+    fullName: 'Лола Саидова',
+    label: 'Руководитель урегулирования убытков',
+    authority: { claimDecisionMax: 50_000_000 },
+  },
+  {
+    role: 'underwriter',
+    email: 'underwriter-head@demo.mig.uz',
+    fullName: 'Рустам Иргашев',
+    label: 'Руководитель андеррайтинга',
+    authority: { quoteDiscountMaxPct: 0.25 },
+    signatory: { canSign: true, basis: 'Доверенность № 14 от 05.01.2026' },
+  },
 ];
 export const DEMO_HR = { email: 'hr@demo-client.uz', fullName: 'Малика Турсунова' };
 export const DEMO_INSURED_PHONE = '+998900000001';
