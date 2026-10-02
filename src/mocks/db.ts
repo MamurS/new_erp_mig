@@ -2,6 +2,16 @@
  * In-memory "server" database. Rows hold full (unmasked) values; handlers mask on output.
  */
 import type {
+  AuthorityChange,
+  Census,
+  ChangeRequest,
+  Contract,
+  Deal,
+  DealEvent,
+  Endorsement,
+  Payment,
+  Quote,
+  ReserveChange,
   DmsParamChange,
   DmsParamKey,
   Appointment,
@@ -155,6 +165,12 @@ export interface ClaimRow extends Claim {
   publicRejectionReason?: string;
   /** Set for claims created from an accepted line of a clinic registry. */
   registryLineId?: UUID;
+  /** History of the claim reserve with authors (LIFECYCLE_SPEC §13). */
+  reserveHistory?: ReserveChange[];
+  /** SHA-256 of the receipt image (duplicate check). */
+  receiptHash?: string;
+  /** Price of the service by the price list, when known (flag «Сумма выше прайса»). */
+  expectedPrice?: number;
 }
 export interface FileRow {
   id: UUID;
@@ -168,6 +184,10 @@ export interface FileRow {
   guaranteeId?: UUID;
   clinicId?: UUID;
   fileName?: string;
+  /** Signed scan of a contract or an endorsement: visible to MIG staff with contracts.read and the client's HR. */
+  contractId?: UUID;
+  endorsementId?: UUID;
+  clientId?: UUID;
 }
 export interface ChatRow extends ChatMessage {
   insuredId: UUID;
@@ -198,6 +218,21 @@ export interface InsuredDocRow {
   insuredId: UUID;
   title: string;
   createdAt: string;
+}
+
+export interface ContractInsuredRow {
+  fullName: string;
+  birthDate: string;
+  pinfl: string;
+  phone: string;
+  position: string;
+  familyMembers: number;
+}
+/** A lifecycle change request; a new person's data stays on the server. */
+export interface ChangeRequestRow extends ChangeRequest {
+  newPerson?: { fullName: string; birthDate: string; pinfl: string; phone: string; position: string; familyMembers: number };
+  /** Policy change of POLICY_SPEC the request came from. */
+  policyChangeId?: UUID;
 }
 
 export interface Db {
@@ -252,6 +287,22 @@ export interface Db {
   clinicContracts: ClinicContract[];
   rebills: Rebill[];
   qaSamples: QaSample[];
+  // ---- contract lifecycle and settlement (LIFECYCLE_SPEC) ----
+  authorityChanges: AuthorityChange[];
+  deals: Deal[];
+  dealEvents: DealEvent[];
+  dealSeq: number;
+  censuses: Census[];
+  quotes: Quote[];
+  contracts: Contract[];
+  contractSeq: number;
+  /** Appendix 2 lists in the HR import format: personal data stays on the server. */
+  contractInsured: { contractId: UUID; rows: ContractInsuredRow[] }[];
+  payments: Payment[];
+  changeRequests: ChangeRequestRow[];
+  endorsements: Endorsement[];
+  /** SMS invitations of the insured (imitation). */
+  smsOutbox: { at: string; insuredId: UUID; text: string }[];
   // ---- DMS business parameters: only values changed from the demo defaults are stored ----
   dmsParams: {
     values: Partial<Record<DmsParamKey, { value: number; changedAt: string; changedByName: string }>>;

@@ -1,5 +1,17 @@
 /* Screen-level DTOs. Part of the API contract, alongside ./index.ts. */
 import type {
+  Census,
+  ChangeRequest,
+  ClaimDecisionKind,
+  Contract,
+  Deal,
+  DealEvent,
+  Endorsement,
+  Payment,
+  Quote,
+  ReserveChange,
+  StaffAuthority,
+  StaffRole,
   DmsParamChange,
   DmsParameter,
   AppStatus,
@@ -184,6 +196,16 @@ export interface ClaimDetail extends Claim {
   medicalReviewRequired: boolean;
   /** Hints for transitions that exist for the role but are blocked by a rule. */
   blockedTransitions: { to: ClaimStatus; reason: string }[];
+  reserveHistory?: ReserveChange[];
+  /** What the viewer may do in the settlement panel (claims_officer, doctor_expert). */
+  settlement?: {
+    canDecide: boolean;
+    canApprovePending: boolean;
+    canRequestOpinion: boolean;
+    canGiveOpinion: boolean;
+    canChangeReserve: boolean;
+    authorityMax: Money | null;
+  };
 }
 
 // ---- reports ----
@@ -545,4 +567,155 @@ export interface AssistanceReportRow {
 export interface DmsParamsView {
   parameters: DmsParameter[];
   changes: DmsParamChange[];
+}
+
+// ---------------- contract lifecycle (LIFECYCLE_SPEC) ----------------
+export interface DealView extends Deal {
+  clientName: string;
+  ownerName: string;
+  underwriterName?: string;
+  /** Latest known annual premium: contract, approved quote or draft quote. */
+  premium: Money | null;
+  quoteId?: UUID;
+  quoteStatus?: Quote['status'];
+  kpId?: UUID;
+  kpStatus?: KpDocument['status'];
+  contractId?: UUID;
+  contractStatus?: Contract['status'];
+}
+
+export interface DealCard extends DealView {
+  client: Client;
+  census: Census | null;
+  quote: Quote | null;
+  kp: KpDocument | null;
+  contract: ContractSummary | null;
+  events: DealEvent[];
+  reminders: string[];
+}
+
+export interface ContractSummary {
+  id: UUID;
+  number: string;
+  version: number;
+  status: Contract['status'];
+  total: Money;
+  startDate: ISODate;
+  endDate: ISODate;
+}
+
+export interface QuoteView extends Quote {
+  dealNumber: string;
+  clientName: string;
+  census: Census | null;
+  /** Why the author cannot approve alone; null — within authority. */
+  authorityProblem: string | null;
+  canApprove: boolean;
+  canEdit: boolean;
+}
+
+export interface SignatoryOption {
+  id: UUID;
+  fullName: string;
+  role: StaffRole;
+  basis: string;
+}
+
+export interface ContractView extends Contract {
+  client: Client;
+  dealNumber: string;
+  migSignatory: SignatoryOption | null;
+  signatories: SignatoryOption[];
+  /** Appendix 2 without PINFL and phones. */
+  insuredRows: { fullName: string; position: string; familyMembers: number }[];
+  invoices: Invoice[];
+  payments: Payment[];
+  endorsements: EndorsementSummary[];
+  quote: Pick<Quote, 'id' | 'premiumEmployee' | 'premiumFamily' | 'total' | 'program'> | null;
+  /** The client's paper original is overdue (LIFECYCLE_SPEC §8). */
+  originalOverdue: boolean;
+  assistanceName?: string;
+}
+
+export interface EndorsementSummary {
+  id: UUID;
+  number: string;
+  kind: 'changes' | 'termination';
+  status: Endorsement['status'];
+  total: Money;
+  createdAt?: ISODateTime;
+}
+
+export interface EndorsementView extends Endorsement {
+  contractNumber: string;
+  clientId: UUID;
+  clientName: string;
+  clientInn: string;
+  migSignatory: SignatoryOption | null;
+  clientSignatoryName: string;
+  requests: ChangeRequest[];
+  needsAmountApproval: boolean;
+}
+
+export interface InvoiceView extends Invoice {
+  clientName: string;
+  contractNumber?: string;
+  endorsementNumber?: string;
+}
+
+export interface ChangeRequestView extends ChangeRequest {
+  contractNumber: string;
+  clientName: string;
+  endorsementNumber?: string;
+}
+
+export interface CertificateView {
+  insuredId: UUID;
+  fullName: string;
+  certificateNumber: string;
+  insuredFrom: ISODate;
+  policyNumber: string;
+  policyEndDate: ISODate;
+  program: ProgramCode;
+  clientName: string;
+  contractNumber: string;
+  assistanceName: string;
+  assistancePhone: string;
+}
+
+export interface ImportPaymentsResult {
+  matched: number;
+  unmatched: { line: number; reason: string }[];
+  activated: number;
+}
+
+export interface ReserveReportRow {
+  key: string;
+  label: string;
+  claims: number;
+  reserve: Money;
+}
+
+export interface ReserveReport {
+  date: ISODate;
+  total: Money;
+  claims: number;
+  byClient: ReserveReportRow[];
+  byAssistance: ReserveReportRow[];
+  byCategory: ReserveReportRow[];
+}
+
+export interface StaffDirectoryItem {
+  id: UUID;
+  fullName: string;
+  role: StaffRole;
+  authority: StaffAuthority;
+  canSign: boolean;
+}
+
+export interface ClaimLetter {
+  claimNumber: string;
+  insuredName: string;
+  amountClaimed: Money;
+  decision: { kind: ClaimDecisionKind; amount: Money; clauseRef?: string; reason: string; at: ISODateTime };
 }

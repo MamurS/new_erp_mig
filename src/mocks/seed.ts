@@ -813,6 +813,19 @@ export function createSeed(opts: SeedOptions = {}): Db {
     rebills: [],
     qaSamples: [],
     dmsParams: { values: {}, changes: [] },
+    authorityChanges: [],
+    deals: [],
+    dealEvents: [],
+    dealSeq: 40,
+    censuses: [],
+    quotes: [],
+    contracts: [],
+    contractSeq: 120,
+    contractInsured: [],
+    payments: [],
+    changeRequests: [],
+    endorsements: [],
+    smsOutbox: [],
   };
   seedAssistance(out, { now });
   return out;
