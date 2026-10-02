@@ -3,18 +3,9 @@
  * Every value that ends up in HTML goes through escapeHtml(), including already formatted numbers.
  */
 import type { Client, ISODate, KpLang, KpPaymentTerms } from '@/shared/types';
+import { escapeHtml } from '@/features/documents/html';
 
-const HTML_ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-export function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch] ?? ch);
-}
+export { escapeHtml };
 
 function assertAmount(n: number): void {
   if (!Number.isSafeInteger(n) || n < 0) throw new RangeError('Amount must be a non-negative safe integer');

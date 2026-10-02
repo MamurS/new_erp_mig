@@ -10,7 +10,7 @@ import { Button } from '@/shared/ui/button';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { HR_BTN, HrHeader } from '@/features/hr/ui';
-import { printKpFrame } from './KpFrame';
+import { printDocFrame } from '@/features/documents/DocFrame';
 import { PRINT_HINT } from './KpDownloadButton';
 import { KpPreview } from './KpPreview';
 import { kpDocumentHtml } from './render';
@@ -30,7 +30,7 @@ export default function KpViewPage() {
   const download = async () => {
     try {
       await downloaded.mutateAsync(kp.id);
-      await printKpFrame(frame.current);
+      await printDocFrame(frame.current);
     } catch (e) {
       toast.error(errorMessage(e));
     }

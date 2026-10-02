@@ -11,7 +11,7 @@ import { errorMessage, request } from '@/shared/api/client';
 import * as S from '@/shared/api/schemas';
 import { Button, type ButtonProps } from '@/shared/ui/button';
 import { toast } from '@/shared/ui/toast';
-import { KpFrame, printKpFrame } from './KpFrame';
+import { DocFrame, printDocFrame } from '@/features/documents/DocFrame';
 
 export const PRINT_HINT = 'В окне печати выберите «Сохранить как PDF»';
 
@@ -41,7 +41,7 @@ export function KpDownloadButton({ kpId, number, label = 'Скачать PDF', .
     try {
       await downloaded.mutateAsync(kpId);
       toast.info(PRINT_HINT);
-      await printKpFrame(frame.current);
+      await printDocFrame(frame.current);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -57,7 +57,7 @@ export function KpDownloadButton({ kpId, number, label = 'Скачать PDF', .
         {label}
       </Button>
       {doc && (
-        <KpFrame
+        <DocFrame
           ref={frame}
           html={doc.html}
           title={doc.title}

@@ -6,6 +6,8 @@ export interface KpTemplate {
   id: 'gold';
   name: string;
   version: string;
+  /** Approved by MIG: the pinned-hash test of src/features/documents/templates.test.ts applies. */
+  approved: boolean;
   /** Brochure pages per language/variant (the offer letter is added in front). */
   pages: Readonly<Record<`${KpLang}-${KpVariant}`, readonly string[]>>;
   languages: readonly KpLang[];
@@ -19,6 +21,7 @@ export const KP_TEMPLATES = {
     id: 'gold',
     name: 'GOLD',
     version: GOLD_TEMPLATE_VERSION,
+    approved: true,
     pages: GOLD_TEMPLATES,
     languages: ['ru', 'en'],
     variants: ['white', 'grey', 'black'],
