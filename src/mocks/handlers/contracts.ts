@@ -629,7 +629,8 @@ export const contractHandlers = [
       } else requirePermission(user, 'contracts.draft');
       if (c.status === 'active' || c.status === 'signed' || c.status === 'terminated' || c.status === 'expired') throw conflict('Список застрахованных подписанного договора меняется доп. соглашением');
       const parsed = parsePolicyList(await ctx.request.text());
-      if (parsed.errors.length) return HttpResponse.json({ code: 'validation', message: 'В файле есть ошибки', errors: parsed.errors.slice(0, 50) }, { status: 422 });
+      if (parsed.errors.length)
+        throw new HttpError(422, 'validation', `В файле есть ошибки (${parsed.errors.length}): ${parsed.errors.slice(0, 3).map((e) => `строка ${e.row} — ${e.message}`).join('; ')}`);
       const rows = parsed.rows.map((r) => ({ fullName: r.fullName, birthDate: r.birthDate, pinfl: r.pinfl, phone: r.phone, position: r.position, familyMembers: r.familyMembers ?? 0 }));
       d.contractInsured = [...d.contractInsured.filter((x) => x.contractId !== c.id), { contractId: c.id, rows }];
       c.insuredListId = c.id;

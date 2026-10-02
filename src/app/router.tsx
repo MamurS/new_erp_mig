@@ -43,6 +43,22 @@ const staffRoutes: RouteObject[] = [
       children: [{ index: true, lazy: lazy(() => import('@/features/staff/policies/PolicyIssuePage')) }],
     },
   ]),
+  guarded('deals', sectionRoles('/staff/deals'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/lifecycle/DealsPage')) },
+    { path: ':dealId', lazy: lazy(() => import('@/features/staff/lifecycle/DealCardPage')) },
+    { path: ':dealId/census', lazy: lazy(() => import('@/features/staff/lifecycle/CensusPage')) },
+  ]),
+  guarded('quotes/:quoteId', sectionRoles('/staff/quotes'), [{ index: true, lazy: lazy(() => import('@/features/staff/lifecycle/QuotePage')) }]),
+  guarded('contracts', sectionRoles('/staff/contracts'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/lifecycle/ContractsPage')) },
+    { path: ':contractId', lazy: lazy(() => import('@/features/staff/lifecycle/ContractPage')) },
+  ]),
+  guarded('endorsements', sectionRoles('/staff/endorsements'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/lifecycle/EndorsementsPage')) },
+    { path: ':endorsementId', lazy: lazy(() => import('@/features/staff/lifecycle/EndorsementPage')) },
+  ]),
+  guarded('invoices', sectionRoles('/staff/invoices'), [{ index: true, lazy: lazy(() => import('@/features/staff/lifecycle/InvoicesPage')) }]),
+  guarded('reports/reserves', sectionRoles('/staff/reports/reserves'), [{ index: true, lazy: lazy(() => import('@/features/staff/lifecycle/ReservesReportPage')) }]),
   guarded('kp/:kpId', sectionRoles('/staff/clients'), [{ index: true, lazy: lazy(() => import('@/features/kp/KpPage')) }]),
   guarded('insured/:insuredId', INSURED_CARD_ROLES, [{ index: true, lazy: lazy(() => import('@/features/staff/pages/InsuredCardPage')) }]),
   guarded('policies', sectionRoles('/staff/policies'), [

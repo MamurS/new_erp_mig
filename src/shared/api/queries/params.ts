@@ -19,6 +19,13 @@ export function useDmsParam(key: DmsParamKey): number {
   return q.data?.[key] ?? DMS_DEFAULTS[key];
 }
 
+/** All current values (the quote calculator previews the tariff with them). */
+export function useDmsParamValues(): Record<DmsParamKey, number> {
+  const session = useSession();
+  const q = useQuery({ queryKey: pk.values, queryFn: () => request('/params/values', { schema: S.dmsParamValues }), enabled: !!session, staleTime: 5 * 60_000 });
+  return { ...DMS_DEFAULTS, ...q.data };
+}
+
 export const useDmsParams = () => useQuery({ queryKey: pk.view, queryFn: () => request('/params', { schema: S.dmsParamsView }) });
 
 function useParamsMutation<V, R>(fn: (v: V) => Promise<R>) {

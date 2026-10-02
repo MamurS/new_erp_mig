@@ -7,6 +7,7 @@ import type {
   ContractStatus,
   DealStage,
   EndorsementStatus,
+  Invoice,
   ISODate,
   ISODateTime,
   Money,
@@ -189,3 +190,6 @@ export function signingSummary(s: Signing): { side: Side; state: 'signed' | 'sca
     state: s[side] ? 'signed' : s.pendingScans?.some((p) => p.side === side) ? 'scan_pending' : side === 'client' && s.edoPending ? 'edo_pending' : 'waiting',
   }));
 }
+
+export const INVOICE_STATUS_LABEL: Record<Invoice['status'], string> = { unpaid: 'Ожидает оплаты', paid: 'Оплачен', overdue: 'Просрочен' };
+export const INVOICE_STATUS_CHIP: Record<Invoice['status'], string> = { unpaid: 'warning', paid: 'success', overdue: 'danger' };

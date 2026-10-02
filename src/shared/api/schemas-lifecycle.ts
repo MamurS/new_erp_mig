@@ -98,6 +98,7 @@ export const quoteView: z.ZodType<D.QuoteView> = quoteBase.extend({
   dealNumber: z.string(),
   clientName: z.string(),
   census: census.nullable(),
+  startDate: isoDate,
   authorityProblem: z.string().nullable(),
   canApprove: z.boolean(),
   canEdit: z.boolean(),

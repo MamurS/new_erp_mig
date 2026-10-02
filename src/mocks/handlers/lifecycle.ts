@@ -74,6 +74,7 @@ function quoteView(d: Db, q: Quote, user: SessionUser): QuoteView {
     dealNumber: deal.number,
     clientName: toDealView(d, deal).clientName,
     census: census(d, deal.id),
+    startDate: deal.expectedStart ?? todayIso(),
     authorityProblem: quoteAuthorityProblem(q, author?.authority),
     canApprove: q.status === 'pending_approval' && !!approver && canApproveQuote(approver, q),
     canEdit: can(user, 'quotes.calculate') && (q.status === 'draft' || q.status === 'rejected'),

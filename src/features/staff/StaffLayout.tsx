@@ -33,6 +33,8 @@ export default function StaffLayout() {
 
   if (!user) return null;
   const sections = STAFF_SECTIONS.filter((s) => s.inNav && (s.roles as string[]).includes(user.role));
+  // The longest matching section wins: «Резервы» lives under «Отчёты».
+  const current = sections.filter((s) => (s.path === '/staff' ? loc.pathname === '/staff' : loc.pathname.startsWith(s.path))).sort((a, b) => b.path.length - a.path.length)[0]?.path;
   const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
 
   return (
@@ -45,7 +47,7 @@ export default function StaffLayout() {
           <ShieldCheck className="h-5 w-5" aria-hidden />
         </NavLink>
         {sections.map((s) => {
-          const active = s.path === '/staff' ? loc.pathname === '/staff' : loc.pathname.startsWith(s.path);
+          const active = s.path === current;
           return (
             <Tooltip key={s.path} content={s.label} side="right">
               <NavLink

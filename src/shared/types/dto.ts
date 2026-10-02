@@ -614,6 +614,8 @@ export interface QuoteView extends Quote {
   dealNumber: string;
   clientName: string;
   census: Census | null;
+  /** Ages are counted on this date: the desired start of the deal, or today. */
+  startDate: ISODate;
   /** Why the author cannot approve alone; null — within authority. */
   authorityProblem: string | null;
   canApprove: boolean;

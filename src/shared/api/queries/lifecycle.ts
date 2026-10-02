@@ -151,3 +151,5 @@ export function useAppeal() {
   });
 }
 export const useReserveReport = (date: string) => useQuery({ queryKey: lk.reserves(date), queryFn: () => request('/reports/reserves', { query: { date }, schema: L.reserveReport }) });
+/** Claims register CSV (no PINFL and phones; cells escaped by the server). */
+export const fetchClaimsRegister = async (from?: string): Promise<string> => (await request('/reports/claims-register', { query: from ? { from } : {}, as: 'text' })) as string;
