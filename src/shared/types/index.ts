@@ -1047,6 +1047,8 @@ export interface Payment {
   matchedBy?: 'number' | 'inn_amount' | 'manual';
   /** The statement line it came from (manual allocation). */
   bankPaymentId?: UUID;
+  /** Number of the payment document in the bank statement. */
+  docNumber?: string;
   /** Required when the payer's INN differs from the invoiced client. */
   comment?: string;
 }
@@ -1059,6 +1061,8 @@ export type PaymentCandidateWhy = 'number' | 'inn_amount' | 'inn' | 'amount';
 /** A statement payment waiting for manual allocation («Ручная разноска»). */
 export interface BankPayment {
   id: UUID;
+  /** Number of the payment document in the bank statement. */
+  docNumber?: string;
   date: ISODate;
   amount: Money;
   payerInn: string;

@@ -305,6 +305,8 @@ export interface Db {
   payments: Payment[];
   /** Statement payments waiting for manual allocation («Ручная разноска»). */
   bankPayments: BankPayment[];
+  /** Keys of imported statement lines (`statementLineKey`): a repeated upload is skipped. */
+  statementKeys: string[];
   changeRequests: ChangeRequestRow[];
   endorsements: Endorsement[];
   /** SMS invitations of the insured (imitation). */

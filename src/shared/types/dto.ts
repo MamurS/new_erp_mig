@@ -728,6 +728,8 @@ export interface ImportPaymentsResult {
   matched: number;
   /** Sent to «Ручная разноска». */
   queued: number;
+  /** Lines already imported earlier (or repeated in the file): payment document number, date, amount and INN. */
+  skipped: number;
   unmatched: { line: number; reason: string }[];
   activated: number;
 }

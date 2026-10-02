@@ -11,6 +11,7 @@ import { buildPaymentSchedule, certificateNumber, contractNumber, dealNumber, de
 import { defaultEndDate, tariffOf } from '@/shared/domain/policies';
 import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
 import { detectFlags } from '@/shared/domain/settlement';
+import { statementLineKey } from '@/shared/domain/payments';
 import { DOC_TEMPLATES } from '@/features/documents/templates';
 import type { ChangeRequestRow, ClaimRow, ClientRow, Db } from './db';
 import { DEMO_INSURED_PHONE } from './credentials';
@@ -343,6 +344,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   if (upcoming) {
     d.bankPayments.push({
       id: id(),
+      docNumber: '4817',
       date: isoDay(now - DAY),
       amount: upcoming.amount,
       payerInn: '302998877',
@@ -358,6 +360,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   }
   d.bankPayments.push({
     id: id(),
+    docNumber: '4790',
     date: isoDay(now - 2 * DAY),
     amount: 12_500_000,
     payerInn: '301556677',
@@ -370,6 +373,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     status: 'pending',
     allocations: [],
   });
+  // These lines were imported: uploading the same statement again skips them.
+  for (const b of d.bankPayments) d.statementKeys.push(statementLineKey({ docNumber: b.docNumber ?? '', date: b.date, amount: b.amount, payerInn: b.payerInn }));
   event(demoDeal.id, 1, 'Система', `Договор ${demoContract.number} действует: полис ${demoPolicy.number}`);
 
   const request = (type: ChangeRequest['type'], insuredId: string, effective: string, status: ChangeRequest['status'], description: string): ChangeRequestRow => {

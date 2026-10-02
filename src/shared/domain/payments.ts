@@ -162,3 +162,12 @@ export function checkAllocation(
     return 'Плательщик — другой ИНН: укажите комментарий (минимум 5 символов)';
   return null;
 }
+
+/**
+ * Key of a statement line for repeated imports: the payment document number, date, amount and payer INN.
+ * The same line in a second upload (or twice in one file) is skipped.
+ */
+export function statementLineKey(line: { docNumber: string; date: string; amount: Money; payerInn: string }): string {
+  const doc = line.docNumber.trim().toUpperCase().replace(/\s+/g, '');
+  return [doc, line.date.trim(), String(line.amount), line.payerInn.replace(/\D/g, '')].join('|');
+}

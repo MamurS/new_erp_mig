@@ -143,6 +143,7 @@ const payment: z.ZodType<T.Payment> = z.object({
   recordedByName: z.string(),
   matchedBy: z.enum(['number', 'inn_amount', 'manual']).optional(),
   bankPaymentId: uuid.optional(),
+  docNumber: z.string().optional(),
   comment: z.string().optional(),
 });
 
@@ -263,7 +264,7 @@ export const invoiceViews: z.ZodType<D.InvoiceView[]> = z.array(
   }),
 );
 export const paymentResult = payment;
-export const importResult: z.ZodType<D.ImportPaymentsResult> = z.object({ matched: z.number(), queued: z.number(), unmatched: z.array(z.object({ line: z.number(), reason: z.string() })), activated: z.number() });
+export const importResult: z.ZodType<D.ImportPaymentsResult> = z.object({ matched: z.number(), queued: z.number(), skipped: z.number(), unmatched: z.array(z.object({ line: z.number(), reason: z.string() })), activated: z.number() });
 
 const certificate = z.object({
   insuredId: uuid,
@@ -310,6 +311,7 @@ export const claimLetter: z.ZodType<D.ClaimLetter> = z.object({
 
 export const bankPaymentView: z.ZodType<D.BankPaymentView> = z.object({
   id: uuid,
+  docNumber: z.string().optional(),
   date: isoDate,
   amount: money,
   payerInn: z.string(),

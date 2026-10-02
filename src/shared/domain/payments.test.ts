@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkAllocation, invoicesNamedIn, matchPayment, type OpenInvoice } from './payments';
+import { checkAllocation, invoicesNamedIn, matchPayment, statementLineKey, type OpenInvoice } from './payments';
 
 const inv = (
   id: string,
@@ -117,5 +117,18 @@ describe('checkAllocation', () => {
     const third = { ...payment, payerInn: '399' };
     expect(checkAllocation(third, [{ invoice: a, amount: 8_000 }], '  ')).toMatch(/комментарий/);
     expect(checkAllocation(third, [{ invoice: a, amount: 8_000 }], 'Оплата за дочернюю компанию')).toBeNull();
+  });
+});
+
+describe('statementLineKey', () => {
+  const line = { docNumber: '1245', date: '2026-10-01', amount: 1_000_000, payerInn: '301234567' };
+  it('is the payment document number, date, amount and payer INN, normalized', () => {
+    expect(statementLineKey(line)).toBe('1245|2026-10-01|1000000|301234567');
+    expect(statementLineKey({ ...line, docNumber: ' 12 45 ', payerInn: '301 234 567' })).toBe(statementLineKey(line));
+    expect(statementLineKey({ ...line, docNumber: 'pp-7' })).toBe(statementLineKey({ ...line, docNumber: 'PP-7' }));
+  });
+  it('any field changes the key', () => {
+    const keys = new Set([line, { ...line, docNumber: '1246' }, { ...line, date: '2026-10-02' }, { ...line, amount: 1_000_001 }, { ...line, payerInn: '301234568' }].map(statementLineKey));
+    expect(keys.size).toBe(5);
   });
 });

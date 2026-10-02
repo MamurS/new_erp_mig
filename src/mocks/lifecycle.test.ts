@@ -170,7 +170,7 @@ describe('full path of a new client (§17 e2e 1 on the API)', () => {
     expect((await call('/payments', { method: 'POST', sid: sales, json: { invoiceId: first.id, amount: 1000, paidAt: today() } })).status).toBe(403);
     expect((await call('/payments', { method: 'POST', sid: acc, json: { invoiceId: first.id, amount: 1000, paidAt: today() } })).status).toBe(201);
     expect((await call<ContractView>(`/contracts/${contract.id}`, { sid: sales })).data.status).toBe('signed'); // partial
-    const csv = `date,amount,inn,purpose\n${today()},${first.amount - 1000},${lead.inn},Оплата по договору\n${today()},5000,999999999,Чужой платёж`;
+    const csv = `doc_number,date,amount,inn,purpose\n101,${today()},${first.amount - 1000},${lead.inn},Оплата по договору\n102,${today()},5000,999999999,Чужой платёж`;
     const imported = await call<{ matched: number; queued: number; unmatched: unknown[]; activated: number }>('/payments/import-1c', { method: 'POST', sid: acc, text: csv });
     // The remainder of the first installment matches by INN and exact amount; the stranger goes to manual allocation.
     expect(imported.data).toMatchObject({ matched: 1, queued: 1, activated: 1 });

@@ -830,6 +830,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     contractInsured: [],
     payments: [],
     bankPayments: [],
+    statementKeys: [],
     changeRequests: [],
     endorsements: [],
     smsOutbox: [],

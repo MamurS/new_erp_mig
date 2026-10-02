@@ -8,7 +8,7 @@ import { http, HttpResponse } from 'msw';
 import Papa from 'papaparse';
 import type { BankPayment, ClauseOverride, Contract, Endorsement, Payment, SessionUser, Signing } from '@/shared/types';
 import type { BankPaymentView, CertificateView, ChangeRequestView, ContractView, EndorsementView, ImportPaymentsResult, InvoiceView } from '@/shared/types/dto';
-import { checkAllocation, matchPayment, remainingOf, type OpenInvoice } from '@/shared/domain/payments';
+import { checkAllocation, matchPayment, remainingOf, statementLineKey, type OpenInvoice } from '@/shared/domain/payments';
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
 import { addDays, addPendingScan, addSignature, buildPaymentSchedule, contractNumber, originalReminderDue, verifyScan, type Side } from '@/shared/domain/contracts';
@@ -424,7 +424,7 @@ async function recordPayment(
   payerInn: string,
   purpose: string,
   source: Payment['source'],
-  extra: Pick<Payment, 'matchedBy' | 'bankPaymentId' | 'comment'> = {},
+  extra: Pick<Payment, 'matchedBy' | 'bankPaymentId' | 'docNumber' | 'comment'> = {},
 ): Promise<Payment> {
   const inv = d.invoices.find((i) => i.id === invoiceId);
   if (!inv) throw notFound();
@@ -746,11 +746,12 @@ export const contractHandlers = [
       if (text.length > 1024 * 1024) throw new HttpError(413, 'validation', 'Файл больше 1 МБ');
       const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true });
       const fields = parsed.meta.fields ?? [];
-      const missing = ['date', 'amount', 'inn', 'purpose'].filter((f) => !fields.includes(f));
+      const missing = ['doc_number', 'date', 'amount', 'inn', 'purpose'].filter((f) => !fields.includes(f));
       if (missing.length) throw new HttpError(422, 'validation', `Нет столбцов: ${missing.join(', ')}`);
       if (parsed.data.length > 5000) throw new HttpError(422, 'validation', 'Не больше 5000 строк в выписке');
       const d = db();
-      const out: ImportPaymentsResult = { matched: 0, queued: 0, unmatched: [], activated: 0 };
+      const out: ImportPaymentsResult = { matched: 0, queued: 0, skipped: 0, unmatched: [], activated: 0 };
+      const seen = new Set(d.statementKeys);
       const activeBefore = d.contracts.filter((c) => c.status === 'active').length;
       for (const [k, row] of parsed.data.entries()) {
         const line = k + 2;
@@ -761,20 +762,33 @@ export const contractHandlers = [
           out.unmatched.push({ line, reason: 'Дата ГГГГ-ММ-ДД и сумма — целое число' });
           continue;
         }
+        const docNumber = (row.doc_number ?? '').trim().slice(0, 40);
+        if (!docNumber) {
+          out.unmatched.push({ line, reason: 'Нет номера платёжного документа' });
+          continue;
+        }
+        // A repeated upload (or the same line twice in one file) changes nothing.
+        const key = statementLineKey({ docNumber, date, amount, payerInn: inn });
+        if (seen.has(key)) {
+          out.skipped += 1;
+          continue;
+        }
+        seen.add(key);
+        d.statementKeys.push(key);
         const purpose = (row.purpose ?? '').trim().slice(0, 300);
         // Matching runs line by line on the current state: an earlier line of the same statement may pay an invoice off.
         const m = matchPayment({ amount, payerInn: inn, purpose }, openInvoices(d));
         if (m.kind === 'matched') {
-          await recordPayment(d, user, m.invoiceId, amount, date, inn, purpose, '1c', { matchedBy: m.by });
+          await recordPayment(d, user, m.invoiceId, amount, date, inn, purpose, '1c', { matchedBy: m.by, docNumber });
           out.matched += 1;
           continue;
         }
         const payerName = (row.payer ?? '').trim().slice(0, 200) || undefined;
-        d.bankPayments.unshift({ id: randomId(), date, amount, payerInn: inn, payerName, purpose, reason: m.reason, importedAt: tzIso(Date.now()), importedByName: user.displayName, allocated: 0, status: 'pending', allocations: [] });
+        d.bankPayments.unshift({ id: randomId(), docNumber, date, amount, payerInn: inn, payerName, purpose, reason: m.reason, importedAt: tzIso(Date.now()), importedByName: user.displayName, allocated: 0, status: 'pending', allocations: [] });
         out.queued += 1;
       }
       out.activated = d.contracts.filter((c) => c.status === 'active').length - activeBefore;
-      audit(user, 'payments_imported', { targetType: 'invoice', targetLabel: `Выписка 1С: сопоставлено ${out.matched}, в ручную разноску ${out.queued}, ошибок ${out.unmatched.length}` });
+      audit(user, 'payments_imported', { targetType: 'invoice', targetLabel: `Выписка 1С: сопоставлено ${out.matched}, в ручную разноску ${out.queued}, пропущено как повтор ${out.skipped}, ошибок ${out.unmatched.length}` });
       return out;
     }),
   ),
@@ -809,7 +823,7 @@ export const contractHandlers = [
       if (error) throw new HttpError(422, 'validation', error, /комментарий/.test(error) ? { comment: error } : undefined);
       const comment = input.comment || undefined;
       for (const l of lines) {
-        await recordPayment(d, user, l.invoice.id, l.amount, b.date, b.payerInn, b.purpose, '1c', { matchedBy: 'manual', bankPaymentId: b.id, comment });
+        await recordPayment(d, user, l.invoice.id, l.amount, b.date, b.payerInn, b.purpose, '1c', { matchedBy: 'manual', bankPaymentId: b.id, docNumber: b.docNumber, comment });
         b.allocations.push({ invoiceId: l.invoice.id, invoiceNumber: l.invoice.number, amount: l.amount, at: tzIso(Date.now()), byName: user.displayName, comment });
         b.allocated += l.amount;
         const foreign = l.invoice.clientInn !== b.payerInn;

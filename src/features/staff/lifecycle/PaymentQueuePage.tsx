@@ -251,7 +251,16 @@ export default function PaymentQueuePage() {
   const [active, setActive] = useState<BankPaymentView | null>(null);
 
   const columns: Column<BankPaymentView>[] = [
-    { key: 'date', header: 'Дата', cell: (b) => <span className="num">{formatDate(b.date)}</span> },
+    {
+      key: 'date',
+      header: 'Дата',
+      cell: (b) => (
+        <span>
+          <span className="num">{formatDate(b.date)}</span>
+          {b.docNumber && <span className="num block text-[12px] text-muted">п/п № {b.docNumber}</span>}
+        </span>
+      ),
+    },
     {
       key: 'payer',
       header: 'Плательщик',

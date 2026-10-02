@@ -38,14 +38,27 @@ test('2. The statement: the invoice number matches automatically, a partial paym
   expect(inv, 'an unpaid contract invoice').toBeTruthy();
   const rest = inv.amount - (inv.paid ?? 0);
   const csv = [
-    'date,amount,inn,purpose,payer',
-    `${today()},1000,${inv.clientInn},"Частичная оплата по счёту ${inv.number}",`,
-    `${today()},${rest - 1000 - 1},${inv.clientInn},"Оплата ДМС",`,
+    'doc_number,date,amount,inn,purpose,payer',
+    `5101,${today()},1000,${inv.clientInn},"Частичная оплата по счёту ${inv.number}",`,
+    `5102,${today()},${rest - 1000 - 1},${inv.clientInn},"Оплата ДМС",`,
   ].join('\n');
+  const file = { name: 'statement.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') };
   await page.goto('/staff/invoices');
-  await page.getByLabel('Файл выписки из 1С').setInputFiles({ name: 'statement.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') });
+  await page.getByLabel('Файл выписки из 1С').setInputFiles(file);
+  await expect(page.getByTestId('import-result')).toContainText('Загружено: 2, пропущено как повтор: 0');
   await expect(page.getByTestId('import-result')).toContainText('Сопоставлено: 1 · в ручную разноску: 1');
-  await page.getByRole('link', { name: 'Перейти к ручной разноске' }).click();
+  const paidAfterFirst = ((await api(page, 'GET', '/invoices')).data as { id: string; paid?: number }[]).find((i) => i.id === inv.id)?.paid;
+  expect(paidAfterFirst).toBe((inv.paid ?? 0) + 1000);
+
+  // The same file again: every line is skipped, paid amounts and the queue stay as they were.
+  const queueBefore = ((await api(page, 'GET', '/payments/queue')).data as unknown[]).length;
+  await page.getByLabel('Файл выписки из 1С').setInputFiles(file);
+  await expect(page.getByTestId('import-result')).toContainText('Загружено: 0, пропущено как повтор: 2');
+  const paidAfterRepeat = ((await api(page, 'GET', '/invoices')).data as { id: string; paid?: number }[]).find((i) => i.id === inv.id)?.paid;
+  expect(paidAfterRepeat).toBe(paidAfterFirst);
+  expect(((await api(page, 'GET', '/payments/queue')).data as unknown[]).length).toBe(queueBefore);
+  await page.getByRole('link', { name: 'Ручная разноска' }).first().click();
+  await expect(page).toHaveURL(/\/staff\/invoices\/queue$/);
 
   const row = page.getByRole('row').filter({ hasText: 'Оплата ДМС' });
   await expect(row).toContainText('Сумма не совпадает ни с одним счётом плательщика');

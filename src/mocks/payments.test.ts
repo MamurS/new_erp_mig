@@ -73,11 +73,9 @@ function freshClient(skip: string[] = []) {
   expect(c).toBeTruthy();
   return c!;
 }
+let doc = 1000;
 const statement = (rows: [number, string, string, string?][]) =>
-  [
-    'date,amount,inn,purpose,payer',
-    ...rows.map(([amount, inn, purpose, payer]) => `${today()},${amount},${inn},"${purpose}",${payer ?? ''}`),
-  ].join('\n');
+  ['doc_number,date,amount,inn,purpose,payer', ...rows.map(([amount, inn, purpose, payer]) => `${(doc += 1)},${today()},${amount},${inn},"${purpose}",${payer ?? ''}`)].join('\n');
 const paidOf = (id: string) => db().invoices.find((i) => i.id === id)!;
 
 describe('payment matching (1C statement)', () => {
@@ -259,6 +257,43 @@ describe('payment matching (1C statement)', () => {
     });
     expect(rest.data).toMatchObject({ status: 'allocated', remaining: 0 });
     expect(paidOf(d2.id)).toMatchObject({ paid: 1_000_000, status: 'unpaid' });
+  });
+
+  it('a repeated upload of the same statement is skipped line by line and changes no paid amounts', async () => {
+    const acc = await login('accountant@demo.mig.uz');
+    const c = freshClient();
+    const a = invoice(c.id, crypto.randomUUID(), 6_000_000, 5);
+    const b = invoice(c.id, crypto.randomUUID(), 3_000_000, 10);
+    const csv = statement([
+      [2_000_000, c.inn, `Частично по счёту ${a.number}`],
+      [3_000_000, c.inn, 'Оплата ДМС'],
+      [1_500_000, '399000111', 'Неизвестный платёж'],
+    ]);
+    const first = await call<ImportPaymentsResult>('/payments/import-1c', { method: 'POST', sid: acc, text: csv });
+    expect(first.data).toMatchObject({ matched: 2, queued: 1, skipped: 0 });
+    const paid = () => [paidOf(a.id).paid, paidOf(b.id).paid];
+    expect(paid()).toEqual([2_000_000, 3_000_000]);
+    const payments = db().payments.length;
+    const queued = db().bankPayments.length;
+
+    const again = await call<ImportPaymentsResult>('/payments/import-1c', { method: 'POST', sid: acc, text: csv });
+    expect(again.data).toMatchObject({ matched: 0, queued: 0, skipped: 3, unmatched: [] });
+    expect(paid()).toEqual([2_000_000, 3_000_000]);
+    expect(db().payments).toHaveLength(payments);
+    expect(db().bankPayments).toHaveLength(queued);
+    expect(db().audit.some((x) => x.action === 'payments_imported' && /пропущено как повтор 3/.test(x.targetLabel ?? ''))).toBe(true);
+
+    // The same document number with another amount, or the same line inside one file, are told apart by the key.
+    const line = csv.split('\n')[1]!;
+    const [docNo] = line.split(',');
+    const mixed = ['doc_number,date,amount,inn,purpose,payer', `${docNo},${today()},2000001,${c.inn},"Другая сумма",`, line, `9999,${today()},1000,${c.inn},"Дважды",`, `9999,${today()},1000,${c.inn},"Дважды",`].join('\n');
+    const third = await call<ImportPaymentsResult>('/payments/import-1c', { method: 'POST', sid: acc, text: mixed });
+    expect(third.data).toMatchObject({ skipped: 2 });
+    expect(third.data.matched + third.data.queued).toBe(2);
+    // A line without the payment document number is an error, not a payment.
+    const noDoc = await call<ImportPaymentsResult>('/payments/import-1c', { method: 'POST', sid: acc, text: `doc_number,date,amount,inn,purpose\n,${today()},1000,${c.inn},x` });
+    expect(noDoc.data.unmatched).toEqual([{ line: 2, reason: 'Нет номера платёжного документа' }]);
+    expect((await call('/payments/import-1c', { method: 'POST', sid: acc, text: `date,amount,inn,purpose\n${today()},1000,${c.inn},x` })).status).toBe(422);
   });
 
   it('rights: only the accountant sees and allocates the queue', async () => {

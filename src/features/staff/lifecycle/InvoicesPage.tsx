@@ -85,7 +85,7 @@ export default function InvoicesPage() {
     try {
       const r = await import1c.mutateAsync(csv);
       setResult(r);
-      toast.success(`Сопоставлено платежей: ${r.matched}`);
+      toast.success(`Загружено ${r.matched + r.queued}, пропущено как повтор ${r.skipped}`);
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -137,7 +137,7 @@ export default function InvoicesPage() {
         actions={
           canPay && (
             <>
-              <Button variant="secondary" size="sm" onClick={() => downloadText(toCsv(['date', 'amount', 'inn', 'purpose', 'payer'], [['2026-10-01', '1000000', '301234567', 'Оплата по счёту СЧ-2026-002001', 'ООО «Плательщик»']]), 'statement-1c-template.csv')}>
+              <Button variant="secondary" size="sm" onClick={() => downloadText(toCsv(['doc_number', 'date', 'amount', 'inn', 'purpose', 'payer'], [['1245', '2026-10-01', '1000000', '301234567', 'Оплата по счёту СЧ-2026-002001', 'ООО «Плательщик»']]), 'statement-1c-template.csv')}>
                 <Download className="h-3.5 w-3.5" aria-hidden /> Шаблон выписки
               </Button>
               <Button asChild variant="secondary" size="sm">
@@ -150,7 +150,7 @@ export default function InvoicesPage() {
       />
       {result && (
         <div className="mb-3 rounded-card border border-border bg-surface px-3 py-2 text-[13px]" data-testid="import-result" role="status">
-          Сопоставлено: {result.matched} · в ручную разноску: {result.queued} · ошибок в строках: {result.unmatched.length} · договоров вступило в силу: {result.activated}
+          Загружено: {result.matched + result.queued}, пропущено как повтор: {result.skipped}. Сопоставлено: {result.matched} · в ручную разноску: {result.queued} · ошибок в строках: {result.unmatched.length} · договоров вступило в силу: {result.activated}
           {result.queued > 0 && (
             <>
               {' '}
