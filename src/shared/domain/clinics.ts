@@ -1,4 +1,5 @@
 /* Clinic business rules (CLINIC_SPEC) shared by the UI and the mock server. */
+import { defineLabels, msg } from '@/i18n';
 import type {
   CoverageStatus,
   GuaranteeLetter,
@@ -34,27 +35,10 @@ export const GUARANTEE_FILE_MAX_BYTES = 10 * 1024 * 1024;
 export const CARD_QR_PREFIX = 'MIG-DMS:';
 
 // ---- labels ----
-export const SERVICE_CATEGORY_LABEL: Record<ServiceCategory, string> = {
-  outpatient: 'Амбулаторно',
-  dental: 'Стоматология',
-  medicines: 'Лекарства',
-  inpatient: 'Стационар',
-  diagnostics_advanced: 'Сложная диагностика (МРТ, КТ)',
-};
-export const COVERAGE_LABEL: Record<CoverageStatus, string> = {
-  covered: 'Покрывается',
-  needs_guarantee: 'Нужно гарантийное письмо',
-  not_covered: 'Не покрывается',
-};
-export const LIMIT_STATE_LABEL: Record<LimitState, string> = { available: 'Доступен', low: 'На исходе', exhausted: 'Исчерпан' };
-export const GUARANTEE_STATUS_LABEL: Record<GuaranteeStatus, string> = {
-  requested: 'Запрошено',
-  info_requested: 'Нужны документы',
-  approved: 'Одобрено',
-  rejected: 'Отклонено',
-  used: 'Использовано',
-  expired: 'Истекло',
-};
+export const SERVICE_CATEGORY_LABEL = defineLabels<ServiceCategory>('labels.serviceCategory', ['outpatient', 'dental', 'medicines', 'inpatient', 'diagnostics_advanced']);
+export const COVERAGE_LABEL = defineLabels<CoverageStatus>('labels.coverage', ['covered', 'needs_guarantee', 'not_covered']);
+export const LIMIT_STATE_LABEL = defineLabels<LimitState>('labels.limitState', ['available', 'low', 'exhausted']);
+export const GUARANTEE_STATUS_LABEL = defineLabels<GuaranteeStatus>('labels.guaranteeStatus', ['requested', 'info_requested', 'approved', 'rejected', 'used', 'expired']);
 export const GUARANTEE_STATUS_CHIP: Record<GuaranteeStatus, string> = {
   requested: 'sky',
   info_requested: 'warning',
@@ -63,14 +47,7 @@ export const GUARANTEE_STATUS_CHIP: Record<GuaranteeStatus, string> = {
   used: 'neutral',
   expired: 'neutral',
 };
-export const REGISTRY_STATUS_LABEL: Record<RegistryStatus, string> = {
-  draft: 'Черновик',
-  submitted: 'Отправлен',
-  in_review: 'На проверке',
-  partially_accepted: 'Принят частично',
-  accepted: 'Принят',
-  paid: 'Оплачен',
-};
+export const REGISTRY_STATUS_LABEL = defineLabels<RegistryStatus>('labels.registryStatus', ['draft', 'submitted', 'in_review', 'partially_accepted', 'accepted', 'paid']);
 export const REGISTRY_STATUS_CHIP: Record<RegistryStatus, string> = {
   draft: 'neutral',
   submitted: 'sky',
@@ -79,47 +56,10 @@ export const REGISTRY_STATUS_CHIP: Record<RegistryStatus, string> = {
   accepted: 'success',
   paid: 'success',
 };
-export const REGISTRY_LINE_STATUS_LABEL: Record<RegistryLineStatus, string> = {
-  pending: 'Ожидает проверки',
-  accepted: 'Принята',
-  rejected: 'Отклонена',
-  disputed: 'Оспорена',
-};
-export const INTEGRATION_MODE_LABEL: Record<IntegrationMode, string> = { portal: 'Только кабинет', api: 'API', hybrid: 'API и кабинет' };
-export const SCOPE_LABEL: Record<IntegrationScope, string> = {
-  'coverage:check': 'Проверка покрытия',
-  'appointments:read': 'Записи: чтение',
-  'appointments:write': 'Записи: ответы',
-  'slots:write': 'Расписание',
-  'guarantees:read': 'ГП: чтение',
-  'guarantees:write': 'ГП: запросы',
-  'registries:read': 'Реестры: чтение',
-  'registries:write': 'Реестры: отправка',
-  'payments:read': 'Оплаты',
-  'roster:read': 'Список застрахованных',
-  'cases:write': 'Обращения',
-  'guarantees:decide': 'ГП: решения',
-  'registries:review': 'Реестры: проверка',
-  'payments:write': 'Оплаты клиникам',
-  'rebills:write': 'Счета МИГ',
-};
-export const WEBHOOK_EVENT_LABEL: Record<WebhookEvent, string> = {
-  'appointment.requested': 'Новая заявка на запись',
-  'appointment.cancelled': 'Запись отменена',
-  'guarantee.decided': 'Решение по ГП',
-  'guarantee.documents_requested': 'По ГП нужны документы',
-  'registry.reviewed': 'Реестр проверен',
-  'registry.paid': 'Реестр оплачен',
-  'insured.added': 'Застрахованный добавлен',
-  'insured.excluded': 'Застрахованный исключён',
-  'policy.assigned': 'Полис закреплён',
-  'policy.unassigned': 'Полис откреплён',
-  'guarantee.requested': 'Запрос ГП',
-  'registry.received': 'Получен реестр клиники',
-  'rebill.reviewed': 'Счёт МИГ проверен',
-  'rebill.paid': 'Счёт МИГ оплачен',
-  'qa.disagreement': 'Расхождение контроля качества',
-};
+export const REGISTRY_LINE_STATUS_LABEL = defineLabels<RegistryLineStatus>('labels.registryLineStatus', ['pending', 'accepted', 'rejected', 'disputed']);
+export const INTEGRATION_MODE_LABEL = defineLabels<IntegrationMode>('labels.integrationMode', ['portal', 'api', 'hybrid']);
+export const SCOPE_LABEL = defineLabels<IntegrationScope>('labels.scope', ['coverage:check', 'appointments:read', 'appointments:write', 'slots:write', 'guarantees:read', 'guarantees:write', 'registries:read', 'registries:write', 'payments:read', 'roster:read', 'cases:write', 'guarantees:decide', 'registries:review', 'payments:write', 'rebills:write']);
+export const WEBHOOK_EVENT_LABEL = defineLabels<WebhookEvent>('labels.webhookEvent', ['appointment.requested', 'appointment.cancelled', 'guarantee.decided', 'guarantee.documents_requested', 'registry.reviewed', 'registry.paid', 'insured.added', 'insured.excluded', 'policy.assigned', 'policy.unassigned', 'guarantee.requested', 'registry.received', 'rebill.reviewed', 'rebill.paid', 'qa.disagreement']);
 
 // ---- coverage ----
 export const SERVICE_CATEGORIES: ServiceCategory[] = ['outpatient', 'diagnostics_advanced', 'dental', 'medicines', 'inpatient'];
@@ -188,22 +128,22 @@ export interface LineCheckContext {
   visitTo?: string; // ISO date of the visit expiry
 }
 
-/** Pre-submit checks of a registry line (CLINIC_SPEC §4.5). Returns human-readable problems. */
+/** Pre-submit checks of a registry line (CLINIC_SPEC §4.5). Returns problems as packed message keys (tm() shows them). */
 export function registryLineProblems(
   line: Pick<RegistryLine, 'serviceDate' | 'price' | 'guaranteeNumber' | 'visitId' | 'quantity'>,
   ctx: LineCheckContext,
 ): string[] {
   const out: string[] = [];
-  if (!ctx.priceItem) out.push('Услуги нет в прайсе договора');
-  else if (line.price > ctx.priceItem.price) out.push(`Цена выше прайса договора (${ctx.priceItem.price})`);
+  if (!ctx.priceItem) out.push(msg('dom.clinics.notInPrice'));
+  else if (line.price > ctx.priceItem.price) out.push(msg('dom.clinics.priceAbove', { price: ctx.priceItem.price }));
   if (ctx.priceItem?.requiresGuarantee) {
-    if (!line.guaranteeNumber) out.push('Для услуги нужен номер гарантийного письма');
-    else if (!ctx.guarantee || (ctx.guarantee.status !== 'approved' && ctx.guarantee.status !== 'used')) out.push('Гарантийное письмо не найдено или не одобрено');
-    else if (ctx.guarantee.visitId !== line.visitId) out.push('Гарантийное письмо выдано по другому визиту');
+    if (!line.guaranteeNumber) out.push(msg('dom.clinics.guaranteeNumberRequired'));
+    else if (!ctx.guarantee || (ctx.guarantee.status !== 'approved' && ctx.guarantee.status !== 'used')) out.push(msg('dom.clinics.guaranteeNotApproved'));
+    else if (ctx.guarantee.visitId !== line.visitId) out.push(msg('dom.clinics.guaranteeOtherVisit'));
   }
-  if (!line.visitId) out.push('Не указан визит');
-  if (ctx.policyFrom && ctx.policyTo && (line.serviceDate < ctx.policyFrom || line.serviceDate > ctx.policyTo)) out.push('Дата услуги вне срока действия полиса');
-  if (ctx.visitFrom && ctx.visitTo && (line.serviceDate < ctx.visitFrom || line.serviceDate > ctx.visitTo)) out.push('Дата услуги вне срока визита');
+  if (!line.visitId) out.push(msg('dom.clinics.noVisit'));
+  if (ctx.policyFrom && ctx.policyTo && (line.serviceDate < ctx.policyFrom || line.serviceDate > ctx.policyTo)) out.push(msg('dom.clinics.outsidePolicy'));
+  if (ctx.visitFrom && ctx.visitTo && (line.serviceDate < ctx.visitFrom || line.serviceDate > ctx.visitTo)) out.push(msg('dom.clinics.outsideVisit'));
   return out;
 }
 
@@ -223,5 +163,6 @@ export function registryStatusAfterReview(lines: RegistryLine[]): RegistryStatus
 
 /** Guarantee-letter number: 'ГП-2026-000321'. */
 export function guaranteeNumber(year: number, seq: number): string {
+  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
   return `ГП-${year}-${String(seq).padStart(6, '0')}`;
 }

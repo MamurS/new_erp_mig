@@ -10,7 +10,7 @@ import { mockConfig } from './config';
 import { saveSessions, scheduleSaveDb } from './persist';
 import { randomId } from './rng';
 import { tzIso } from './time';
-import type { I18nKey, Params } from '@/i18n/core';
+import { hasKey, unpack, type I18nKey, type Params } from '@/i18n/core';
 
 export const API = '*/api';
 
@@ -37,6 +37,21 @@ export const unauthorized = () => new HttpError(401, 'unauthorized', 'errors.una
 export const forbidden = () => new HttpError(403, 'forbidden', 'errors.forbidden');
 export const notFound = () => new HttpError(404, 'not_found', 'errors.notFound');
 export const conflict = (key: I18nKey, params?: Params) => new HttpError(409, 'conflict', key, { params });
+
+/**
+ * A message produced by shared code (src/shared/domain): a packed key from msg(), or plain text while
+ * that code still returns text (sent as `srv.text` with the text as a param).
+ */
+export function messageKey(message: string): { key: I18nKey; params?: Params } {
+  const { key, params } = unpack(message);
+  return hasKey(key) ? { key: key as I18nKey, params } : { key: 'srv.text', params: { text: message } };
+}
+
+/** HttpError from a shared-code message (see messageKey). */
+export function httpErrorOf(status: number, code: ApiError['code'], message: string, fields?: Record<string, string>): HttpError {
+  const { key, params } = messageKey(message);
+  return new HttpError(status, code, key, { params, fields });
+}
 
 export function errorResponse(e: HttpError): Response {
   const body: ApiError = { code: e.code, key: e.key };

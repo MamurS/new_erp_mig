@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { InsuredListItem } from '@/shared/types/dto';
@@ -28,8 +29,8 @@ export default function PolicyCardPage() {
   const { policyId = '' } = useParams();
   const q = usePolicy(policyId);
   const p = q.data;
-  useDocumentTitle('Карточка полиса');
-  useTopbar([{ label: 'Полисы', to: '/staff/policies' }, { label: p?.number ?? 'Полис' }]);
+  useDocumentTitle(t('staff.policyCard.docTitle'));
+  useTopbar([{ label: t('staff.policies.title'), to: '/staff/policies' }, { label: p?.number ?? t('common.policy') }]);
   const canOffer = useCan('kp.create');
   const navigate = useNavigate();
   const canLimit = useCan('limits.request_change');
@@ -54,27 +55,27 @@ export default function PolicyCardPage() {
         <div className="flex flex-wrap gap-2">
           {canLimit && p.status === 'active' && (
             <Button variant="secondary" onClick={() => setLimit(true)}>
-              Запросить изменение лимита
+              {t('staff.limitDialog.title')}
             </Button>
           )}
-          {canOffer && p.status !== 'cancelled' && <Button onClick={() => navigate(kpNewPath(p.clientId, p.id))}>Подготовить КП</Button>}
+          {canOffer && p.status !== 'cancelled' && <Button onClick={() => navigate(kpNewPath(p.clientId, p.id))}>{t('staff.dashboard.prepareOffer')}</Button>}
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Условия">
+        <Card title={t('staff.policyCard.terms')}>
           <dl className="divide-y divide-border-soft">
-            <Kv label="Программа">{PROGRAM_LABEL[p.program]}</Kv>
-            <Kv label="Начало">{formatDate(p.startDate)}</Kv>
-            <Kv label="Окончание">
+            <Kv label={t('common.program')}>{PROGRAM_LABEL[p.program]}</Kv>
+            <Kv label={t('common.start')}>{formatDate(p.startDate)}</Kv>
+            <Kv label={t('common.end')}>
               {formatDate(p.endDate)} {p.status === 'active' && <>(<RenewalCell date={p.endDate} />)</>}
             </Kv>
-            <Kv label="Премия">
+            <Kv label={t('common.premium')}>
               <span className="num">{formatMoney(p.premium)}</span>
             </Kv>
-            <Kv label="Застрахованных">{formatNumber(p.insuredCount)}</Kv>
-            {p.familyCount ? <Kv label="Членов семьи">{formatNumber(p.familyCount)}</Kv> : null}
+            <Kv label={t('staff.clients.col.insured')}>{formatNumber(p.insuredCount)}</Kv>
+            {p.familyCount ? <Kv label={t('staff.insuredCard.familyCount')}>{formatNumber(p.familyCount)}</Kv> : null}
             {p.tariff && (
-              <Kv label="Тарифы в год">
+              <Kv label={t('staff.policyCard.ratesPerYear')}>
                 <span className="num">
                   {formatMoney(p.tariff.employee)} / {formatMoney(p.tariff.family)}
                 </span>
@@ -82,7 +83,7 @@ export default function PolicyCardPage() {
             )}
           </dl>
         </Card>
-        <Card title={`Лимиты программы «${p.programInfo.name}»`}>
+        <Card title={t('staff.policyCard.programLimits', { name: p.programInfo.name })}>
           <dl className="divide-y divide-border-soft">
             {(Object.keys(p.programInfo.limits) as LimitCategory[]).map((c) => (
               <Kv key={c} label={LIMIT_CATEGORY_LABEL[c]}>
@@ -90,13 +91,13 @@ export default function PolicyCardPage() {
               </Kv>
             ))}
           </dl>
-          <p className="mt-2 text-[12px] text-muted">Лимиты указаны на одного застрахованного на период полиса.</p>
+          <p className="mt-2 text-[12px] text-muted">{t('staff.policyCard.limitsNote')}</p>
         </Card>
       </div>
       <AssistanceBlock policyId={p.id} />
       {canChanges && <PolicyChangesBlock policyId={p.id} clientId={p.clientId} />}
       {canInsured && <PolicyInsured clientId={p.clientId} />}
-      <Card title="Документы" bodyClassName="p-0">
+      <Card title={t('common.documents')} bodyClassName="p-0">
         <DocumentsList docs={p.documents} />
       </Card>
       <LimitRequestDialog open={limit} onOpenChange={setLimit} policyId={p.id} currentLimits={p.programInfo.limits} />
@@ -109,23 +110,23 @@ function PolicyChangesBlock({ policyId, clientId }: { policyId: string; clientId
   const rows = (q.data ?? []).slice(0, 5);
   const pending = (q.data ?? []).filter((c) => c.status === 'pending').length;
   const cols: Column<PolicyChange>[] = [
-    { key: 'kind', header: 'Тип', cell: (c) => POLICY_CHANGE_KIND_LABEL[c.kind] },
-    { key: 'who', header: 'Сотрудник', cell: (c) => <span className="font-medium">{c.fullName}</span> },
-    { key: 'date', header: 'С даты', cell: (c) => <span className="num">{formatDate(c.effectiveDate)}</span> },
-    { key: 'delta', header: 'Доплата / возврат', align: 'right', cell: (c) => <span className="num">{c.premiumDelta ? `${c.premiumDelta > 0 ? '+' : '−'}${formatMoney(Math.abs(c.premiumDelta))}` : '—'}</span> },
-    { key: 'status', header: 'Статус', cell: (c) => <StatusDot tone={c.status === 'approved' ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'}>{POLICY_CHANGE_STATUS_LABEL[c.status]}</StatusDot> },
+    { key: 'kind', header: t('common.type'), cell: (c) => POLICY_CHANGE_KIND_LABEL[c.kind] },
+    { key: 'who', header: t('common.employee'), cell: (c) => <span className="font-medium">{c.fullName}</span> },
+    { key: 'date', header: t('common.from'), cell: (c) => <span className="num">{formatDate(c.effectiveDate)}</span> },
+    { key: 'delta', header: t('staff.policyCard.delta'), align: 'right', cell: (c) => <span className="num">{c.premiumDelta ? `${c.premiumDelta > 0 ? '+' : '−'}${formatMoney(Math.abs(c.premiumDelta))}` : '—'}</span> },
+    { key: 'status', header: t('common.status'), cell: (c) => <StatusDot tone={c.status === 'approved' ? 'success' : c.status === 'rejected' ? 'danger' : 'warning'}>{POLICY_CHANGE_STATUS_LABEL[c.status]}</StatusDot> },
   ];
   return (
     <Card
-      title={`Изменения состава${pending ? ` · ждут решения: ${pending}` : ''}`}
+      title={pending ? t('staff.policyCard.changesPending', { n: pending }) : t('staff.policyCard.changes')}
       actions={
         <Link to={`/staff/policy-changes?clientId=${clientId}`} className="text-[13px] text-accent-text hover:underline">
-          Все заявки клиента
+          {t('staff.policyCard.allClientRequests')}
         </Link>
       }
       bodyClassName="p-0"
     >
-      <DataTable caption="Изменения состава по полису" columns={cols} rows={rows} rowKey={(c) => c.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty={<p className="p-4 text-muted">Изменений состава ещё не было</p>} />
+      <DataTable caption={t('staff.policyCard.changesCaption')} columns={cols} rows={rows} rowKey={(c) => c.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty={<p className="p-4 text-muted">{t('staff.policyCard.noChanges')}</p>} />
     </Card>
   );
 }
@@ -137,14 +138,14 @@ function PolicyInsured({ clientId }: { clientId: string }) {
   const navigate = useNavigate();
   const canOpen = !!user && (INSURED_CARD_ROLES as string[]).includes(user.role);
   const cols: Column<InsuredListItem>[] = [
-    { key: 'name', header: 'ФИО', cell: (i) => <span className="font-medium">{i.fullName}</span> },
-    { key: 'position', header: 'Должность', cell: (i) => <span className="text-muted">{i.position}</span> },
-    { key: 'status', header: 'Статус', cell: (i) => <StatusDot tone={i.status === 'active' ? 'success' : 'muted'}>{i.status === 'active' ? 'Активен' : 'Исключён'}</StatusDot> },
+    { key: 'name', header: t('common.fullName'), cell: (i) => <span className="font-medium">{i.fullName}</span> },
+    { key: 'position', header: t('common.position'), cell: (i) => <span className="text-muted">{i.position}</span> },
+    { key: 'status', header: t('common.status'), cell: (i) => <StatusDot tone={i.status === 'active' ? 'success' : 'muted'}>{i.status === 'active' ? t('staff.clientCard.insuredActive') : t('staff.clientCard.insuredExcluded')}</StatusDot> },
   ];
   return (
-    <Card title="Застрахованные" bodyClassName="p-0">
+    <Card title={t('staff.clientCard.tab.insured')} bodyClassName="p-0">
       <DataTable
-        caption="Застрахованные по полису"
+        caption={t('staff.policyCard.insuredCaption')}
         columns={cols}
         rows={list.data?.items}
         rowKey={(i) => i.id}

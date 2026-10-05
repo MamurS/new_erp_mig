@@ -1,4 +1,5 @@
 /* Policy issuance and changes of the insured list (POLICY_SPEC §3): tariffs, premium, pro-rata. */
+import { defineLabels, msg } from '@/i18n';
 import type { ISODate, Money, Policy, PolicyChangeKind, PolicyChangeStatus, PolicyTariff, ProgramCode } from '@/shared/types';
 import { DMS_DEFAULTS, TARIFF_BASE_KEY } from '@/shared/config/dmsParameters';
 
@@ -17,8 +18,8 @@ export const POLICY_CSV_HEADER = ['fullName', 'birthDate', 'pinfl', 'phone', 'po
 export const DRAFT_IF_STARTS_IN_DAYS = 30;
 export const MAX_POLICY_MONTHS = 12;
 
-export const POLICY_CHANGE_KIND_LABEL: Record<PolicyChangeKind, string> = { add: 'Прикрепление', exclude: 'Исключение' };
-export const POLICY_CHANGE_STATUS_LABEL: Record<PolicyChangeStatus, string> = { pending: 'Ждёт решения', approved: 'Подтверждено', rejected: 'Отклонено' };
+export const POLICY_CHANGE_KIND_LABEL = defineLabels<PolicyChangeKind>('labels.policyChangeKind', ['add', 'exclude']);
+export const POLICY_CHANGE_STATUS_LABEL = defineLabels<PolicyChangeStatus>('labels.policyChangeStatus', ['pending', 'approved', 'rejected']);
 
 const DAY = 86_400_000;
 const round1000 = (v: number) => Math.round(v / 1000) * 1000;
@@ -81,17 +82,17 @@ export function changeDateProblem(
   effective: ISODate,
   insuredFrom?: ISODate,
 ): string | null {
-  if (effective < policy.startDate || effective > policy.endDate) return 'Дата должна быть в пределах срока полиса';
-  if (kind === 'exclude' && insuredFrom && effective < insuredFrom) return 'Дата исключения раньше даты прикрепления';
+  if (effective < policy.startDate || effective > policy.endDate) return msg('dom.policies.dateOutside');
+  if (kind === 'exclude' && insuredFrom && effective < insuredFrom) return msg('dom.policies.excludeBeforeAdd');
   return null;
 }
 
 /** Validity of the policy period from the issuance form. */
 export function policyPeriodProblem(start: ISODate, end: ISODate): string | null {
-  if (end < start) return 'Окончание раньше начала';
+  if (end < start) return msg('v.endBeforeStart');
   const [y, m, d] = start.split('-').map(Number) as [number, number, number];
   const maxEnd = new Date(Date.UTC(y, m - 1 + MAX_POLICY_MONTHS, d) - DAY).toISOString().slice(0, 10);
-  if (end > maxEnd) return `Срок полиса — не больше ${MAX_POLICY_MONTHS} месяцев`;
-  if (daysInclusive(start, end) < 28) return 'Срок полиса — не меньше месяца';
+  if (end > maxEnd) return msg('dom.policies.maxMonths', { n: MAX_POLICY_MONTHS });
+  if (daysInclusive(start, end) < 28) return msg('dom.policies.minMonth');
   return null;
 }

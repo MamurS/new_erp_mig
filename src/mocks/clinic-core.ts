@@ -3,8 +3,8 @@
  * (/api/integration/v1/...) and the staff portal. Both clinic channels go through the same functions,
  * so the rules (visit-only access, limits, checks) are identical (CLINIC_SPEC §1, §3).
  */
+import { msg, tm } from '@/i18n/core';
 import type {
-import { msg } from '@/i18n/core';
   Appointment,
   ClaimCategory,
   CoverageCheckResult,
@@ -80,7 +80,7 @@ export function priceListOf(d: Db, clinicId: UUID, payer: Payer = 'mig'): PriceL
 // ---------------------------------------------------------------- visits & coverage
 
 const tooManyChecks = () => new HttpError(429, 'rate_limited', 'srv.clinic.tooManyChecks');
-const lockedChecks = () => new HttpError(429, 'rate_limited', `Слишком много неудачных проверок. Проверки заблокированы на ${dmsParam('pinflLockMinutes')} мин`);
+const lockedChecks = () => new HttpError(429, 'rate_limited', 'srv.clinic.checksLocked', { params: { minutes: dmsParam('pinflLockMinutes') } });
 const staleCode = () => new HttpError(410, 'conflict', 'srv.clinic.codeStale');
 const noPolicy = () => new HttpError(404, 'not_found', 'srv.clinic.noPolicy');
 
@@ -385,8 +385,8 @@ export function submitRegistry(d: Db, r: Registry, actor: { id: UUID; displayNam
   const bad = Object.keys(problems);
   if (bad.length) {
     const fields: Record<string, string> = {};
-    for (const id of bad) fields[`lines.${r.lines.findIndex((l) => l.id === id)}`] = problems[id]!.join('; ');
-    throw new HttpError(422, 'validation', `Исправьте строки реестра: ${bad.length}`, fields);
+    for (const id of bad) fields[`lines.${r.lines.findIndex((l) => l.id === id)}`] = problems[id]!.map((p) => tm(p)).join('; ');
+    throw new HttpError(422, 'validation', 'srv.registry.fixLines', { params: { count: bad.length }, fields });
   }
   // One registry a month; the system splits it into sub-registries of payers (ASSISTANCE_SPEC §5.3).
   for (const l of r.lines) l.payer = payerOfLine(d, l);

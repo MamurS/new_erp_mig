@@ -2,6 +2,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Download } from 'lucide-react';
+import { t } from '@/i18n';
 import { useKpRespond } from '@/shared/api/queries/lifecycle';
 import { KP_STATUS_LABEL } from '@/shared/domain/kp';
 import { kpDeclineSchema } from '@/shared/schemas/forms';
@@ -15,13 +16,13 @@ import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { HR_BTN, HrHeader } from '@/features/hr/ui';
 import { printDocFrame } from '@/features/documents/DocFrame';
-import { PRINT_HINT } from './KpDownloadButton';
+import { printHint } from './KpDownloadButton';
 import { KpPreview } from './KpPreview';
 import { kpDocumentHtml } from './render';
 
 export default function KpViewPage() {
   const { kpId = '' } = useParams();
-  useDocumentTitle('Коммерческое предложение');
+  useDocumentTitle(t('kp.editor.docTitle'));
   const q = useKp(kpId);
   const kp = q.data;
   const doc = useMemo(() => (kp ? kpDocumentHtml(kp) : null), [kp]);
@@ -45,37 +46,37 @@ export default function KpViewPage() {
   return (
     <>
       <Link to="/hr/documents" className="mb-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-accent-text hover:underline">
-        <ArrowLeft className="h-4 w-4" aria-hidden /> Счета и документы
+        <ArrowLeft className="h-4 w-4" aria-hidden /> {t('kp.view.back')}
       </Link>
       <HrHeader
-        title={`Коммерческое предложение ${kp.number}`}
-        subtitle={`Программа GOLD · от ${formatDate(kp.sentAt ?? kp.createdAt)} · общая премия ${formatMoney(kp.totalPremium)} · действительно до ${formatDate(kp.params.validUntil)}`}
+        title={t('kp.view.title', { number: kp.number })}
+        subtitle={t('kp.view.subtitle', { date: formatDate(kp.sentAt ?? kp.createdAt), total: formatMoney(kp.totalPremium), validUntil: formatDate(kp.params.validUntil) })}
         actions={
           <div className="flex flex-col items-end gap-1">
             <Button className={HR_BTN} onClick={() => void download()}>
-              <Download className="h-4 w-4" aria-hidden /> Скачать PDF
+              <Download className="h-4 w-4" aria-hidden /> {t('kp.download')}
             </Button>
-            <span className="text-[13px] text-muted">{PRINT_HINT}</span>
+            <span className="text-[13px] text-muted">{printHint()}</span>
           </div>
         }
       />
       {kp.status === 'sent' && kp.dealId && (
         <div className="mb-5 flex flex-wrap items-center gap-3 rounded-card bg-accent-soft p-4 text-accent-text" data-testid="kp-respond">
-          <span className="mr-auto font-semibold">Подходят условия? Ответьте на предложение — менеджер МИГ подготовит договор.</span>
+          <span className="mr-auto font-semibold">{t('kp.view.respond')}</span>
           <Button
             className={HR_BTN}
             loading={respond.isPending}
             onClick={() =>
               void respond
                 .mutateAsync({ kpId: kp.id, decision: 'accept' })
-                .then(() => toast.success('КП принято. Менеджер МИГ подготовит договор'))
+                .then(() => toast.success(t('kp.view.accepted')))
                 .catch((e: unknown) => toast.error(errorMessage(e)))
             }
           >
-            <Check className="h-4 w-4" aria-hidden /> Принять
+            <Check className="h-4 w-4" aria-hidden /> {t('kp.view.accept')}
           </Button>
           <Button variant="secondary" className={HR_BTN} onClick={() => setDecline(true)}>
-            Отклонить
+            {t('kp.view.decline')}
           </Button>
         </div>
       )}
@@ -89,12 +90,12 @@ export default function KpViewPage() {
       <ReasonDialog
         open={decline}
         onClose={() => setDecline(false)}
-        title="Отклонить предложение"
-        description="Менеджер МИГ увидит причину и свяжется с вами."
-        label="Причина"
+        title={t('kp.view.declineTitle')}
+        description={t('kp.view.declineText')}
+        label={t('common.reason')}
         field="reason"
         schema={kpDeclineSchema}
-        confirmLabel="Отклонить"
+        confirmLabel={t('kp.view.decline')}
         danger
         onSubmit={(reason) => respond.mutateAsync({ kpId: kp.id, decision: 'decline', reason })}
       />

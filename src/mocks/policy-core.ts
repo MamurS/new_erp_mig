@@ -1,4 +1,5 @@
 /* Server-side rules of policy issuance and insured-list changes (POLICY_SPEC). */
+import { msg } from '@/i18n/core';
 import Papa from 'papaparse';
 import type { ClientDocument, Policy, PolicyChange, PolicyChangeKind, UUID } from '@/shared/types';
 import type { HrImportError } from '@/shared/types/dto';
@@ -6,10 +7,9 @@ import { changeDateProblem, POLICY_CSV_MAX_BYTES, POLICY_CSV_MAX_ROWS, proRataDe
 import { policyListRowSchema } from '@/shared/schemas/forms';
 import { formatMoney } from '@/shared/lib/format';
 import type { ClientRow, Db, InsuredRow, PolicyChangeRow } from './db';
-import { HttpError } from './http';
+import { HttpError, httpErrorOf } from './http';
 import { randomId } from './rng';
 import { tzIso } from './time';
-import { msg } from '@/i18n/core';
 
 export type PolicyListRow = ReturnType<typeof policyListRowSchema.parse>;
 
@@ -17,10 +17,10 @@ export type PolicyListRow = ReturnType<typeof policyListRowSchema.parse>;
 export function parsePolicyList(text: string): { total: number; rows: PolicyListRow[]; errors: HrImportError[] } {
   if (text.length > POLICY_CSV_MAX_BYTES) throw new HttpError(413, 'validation', 'srv.file.tooLarge5mb');
   const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim() });
-  if (parsed.data.length > POLICY_CSV_MAX_ROWS) throw new HttpError(422, 'validation', `В файле больше ${POLICY_CSV_MAX_ROWS} строк`);
+  if (parsed.data.length > POLICY_CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'srv.policy.overMaxRows', { params: { max: POLICY_CSV_MAX_ROWS } });
   const header = parsed.meta.fields ?? [];
   const missing = ['fullName', 'birthDate', 'pinfl', 'phone', 'position'].filter((h) => !header.includes(h));
-  if (missing.length) throw new HttpError(422, 'validation', `В файле нет колонок: ${missing.join(', ')}. Скачайте шаблон`);
+  if (missing.length) throw new HttpError(422, 'validation', 'srv.hr.missingColumns', { params: { columns: missing.join(', ') } });
   const rows: PolicyListRow[] = [];
   const errors: HrImportError[] = [];
   const seen = new Set<string>();
@@ -108,7 +108,7 @@ export function requestChange(
   const policy = activePolicyOf(d, client);
   if (!policy) throw new HttpError(409, 'conflict', 'srv.policyChanges.noPolicy');
   const dateProblem = changeDateProblem(policy, kind, input.effectiveDate, input.insured?.insuredFrom);
-  if (dateProblem) throw new HttpError(422, 'validation', dateProblem, { [kind === 'add' ? 'startDate' : 'excludeFrom']: dateProblem });
+  if (dateProblem) throw httpErrorOf(422, 'validation', dateProblem, { [kind === 'add' ? 'startDate' : 'excludeFrom']: dateProblem });
   const pending = d.policyChanges.filter((c) => c.clientId === client.id && c.status === 'pending');
   if (kind === 'exclude' && pending.some((c) => c.insuredId === input.insured?.id)) throw new HttpError(409, 'conflict', 'srv.policyChanges.alreadyRequested');
   if (kind === 'add' && pending.some((c) => c.newPerson?.pinfl === input.newPerson?.pinfl)) {

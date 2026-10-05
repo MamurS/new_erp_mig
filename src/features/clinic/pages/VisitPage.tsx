@@ -8,9 +8,10 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { CoverageCard, GuaranteeChip, GuaranteeRequestDialog, PageTitle, Panel } from '../components';
+import { t } from '@/i18n';
 
 export default function VisitPage() {
-  useDocumentTitle('Визит');
+  useDocumentTitle(t('clinic.visit.title'));
   const { visitId = '' } = useParams();
   const coverage = useVisitCoverage(visitId);
   const guarantees = useClinicGuarantees();
@@ -21,11 +22,11 @@ export default function VisitPage() {
   if (coverage.isError || !coverage.data)
     return (
       <EmptyState
-        title="Визит закрыт или не найден"
-        description="Визит действует 24 часа после проверки. Проверьте пациента заново"
+        title={t('clinic.visit.notFound')}
+        description={t('clinic.visit.notFoundHint')}
         action={
           <Button asChild>
-            <Link to="/clinic/check">Проверить пациента</Link>
+            <Link to="/clinic/check">{t('clinic.home.checkPatient')}</Link>
           </Button>
         }
       />
@@ -33,20 +34,20 @@ export default function VisitPage() {
   const mine = (guarantees.data ?? []).filter((g) => g.visitId === visitId);
   return (
     <>
-      <PageTitle title="Визит" subtitle={<Link to="/clinic/check" className="text-accent-text hover:underline">← Проверка пациента</Link>} />
-      <CoverageCard result={coverage.data} actions={canRequestGp ? <Button onClick={() => setGpOpen(true)}>Запросить гарантийное письмо</Button> : undefined} />
-      <Panel title="Гарантийные письма по визиту" className="mt-4">
+      <PageTitle title={t('clinic.visit.title')} subtitle={<Link to="/clinic/check" className="text-accent-text hover:underline">{t('clinic.visit.back')}</Link>} />
+      <CoverageCard result={coverage.data} actions={canRequestGp ? <Button onClick={() => setGpOpen(true)}>{t('clinic.gpRequest.title')}</Button> : undefined} />
+      <Panel title={t('clinic.visit.guarantees')} className="mt-4">
         {guarantees.isError ? (
           <ErrorState error={guarantees.error} onRetry={() => void guarantees.refetch()} />
         ) : mine.length === 0 ? (
-          <p className="p-4 text-muted">По этому визиту писем ещё нет</p>
+          <p className="p-4 text-muted">{t('clinic.visit.noGuarantees')}</p>
         ) : (
           <ul className="divide-y divide-border-soft">
             {mine.map((g) => (
               <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
                 <span>
                   <span className="font-semibold num">{g.number}</span> · {g.serviceName} · {formatMoney(g.approvedAmount ?? g.estimatedCost)}
-                  {g.validUntil && <span className="text-muted"> · до {formatDate(g.validUntil)}</span>}
+                  {g.validUntil && <span className="text-muted">{t('clinic.visit.until', { date: formatDate(g.validUntil) })}</span>}
                 </span>
                 <GuaranteeChip status={g.status} />
               </li>

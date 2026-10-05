@@ -1,3 +1,4 @@
+import { t, tm } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AlertTriangle, FileImage, ZoomIn, ZoomOut } from 'lucide-react';
@@ -24,6 +25,7 @@ import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { Tooltip } from '@/shared/ui/tooltip';
 import { SlaCell } from '../components/cells';
+import { Rich } from '../components/rich';
 import { CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
@@ -31,14 +33,27 @@ import { isNearLimit } from '@/shared/domain/limits';
 import { SettlementPanel } from '../claims/SettlementPanel';
 import { AiHint } from '@/features/ai/AiHint';
 
-const SOURCE_LABEL = { app: 'Приложение', clinic_invoice: 'Счёт клиники', operator: 'Куратор МИГ', assistance: 'Счёт ассистанса' } as const;
+const SOURCE_LABEL = {
+  get app() {
+    return t('staff.claimCard.source.app');
+  },
+  get clinic_invoice() {
+    return t('staff.claimCard.source.clinicInvoice');
+  },
+  get operator() {
+    return t('staff.claimCard.source.operator');
+  },
+  get assistance() {
+    return t('staff.claimCard.source.assistance');
+  },
+};
 
 export default function ClaimCardPage() {
   const { claimId = '' } = useParams();
   const q = useClaim(claimId);
   const c = q.data;
-  useDocumentTitle('Карточка убытка');
-  useTopbar([{ label: 'Убытки', to: '/staff/claims' }, { label: c?.number ?? 'Убыток' }]);
+  useDocumentTitle(t('staff.claimCard.docTitle'));
+  useTopbar([{ label: t('staff.nav.claims'), to: '/staff/claims' }, { label: c?.number ?? t('staff.insuredCard.claim') }]);
   const [pending, setPending] = useState<ClaimStatus | null>(null);
   const user = useUser();
 
@@ -52,16 +67,18 @@ export default function ClaimCardPage() {
         <div>
           <h1 className="text-[22px] font-bold num">{c.number}</h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-muted">
-            <StatusDot tone={CLAIM_TONE[c.status]}>{CLAIM_STATUS_LABEL[c.status]}</StatusDot>· {CLAIM_CATEGORY_LABEL[c.category]} · SLA: <SlaCell claim={c} />
+            <StatusDot tone={CLAIM_TONE[c.status]}>{CLAIM_STATUS_LABEL[c.status]}</StatusDot>· {CLAIM_CATEGORY_LABEL[c.category]}
+            {t('staff.claimCard.sla')}
+            <SlaCell claim={c} />
           </p>
         </div>
         <TransitionButtons claim={c} onPick={setPending} />
       </div>
       <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
         <div className="flex flex-col gap-4">
-          <Card title="Данные">
+          <Card title={t('staff.insuredCard.data')}>
             <dl className="divide-y divide-border-soft">
-              <Kv label="Застрахованный">
+              <Kv label={t('common.insured')}>
                 {canOpenInsured ? (
                   <Link to={`/staff/insured/${c.insuredId}`} className="text-accent-text hover:underline">
                     {c.insuredName}
@@ -70,43 +87,43 @@ export default function ClaimCardPage() {
                   c.insuredName
                 )}
               </Kv>
-              <Kv label="Клиент">{c.clientName}</Kv>
-              <Kv label="Источник">{SOURCE_LABEL[c.source]}</Kv>
-              <Kv label="Где">{c.providerName}</Kv>
-              <Kv label="Дата услуги">{formatDate(c.serviceDate)}</Kv>
-              <Kv label="Заявлено">
+              <Kv label={t('common.client')}>{c.clientName}</Kv>
+              <Kv label={t('common.source')}>{SOURCE_LABEL[c.source]}</Kv>
+              <Kv label={t('staff.claimCard.where')}>{c.providerName}</Kv>
+              <Kv label={t('staff.insuredCard.serviceDate')}>{formatDate(c.serviceDate)}</Kv>
+              <Kv label={t('staff.claimCard.claimed')}>
                 <span className="num">{formatMoney(c.amountClaimed)}</span>
               </Kv>
               {c.amountApproved !== undefined && (
-                <Kv label="Одобрено">
+                <Kv label={t('staff.claimCard.approved')}>
                   <span className="num font-semibold">{formatMoney(c.amountApproved)}</span>
                 </Kv>
               )}
-              <Kv label="Создан">{formatDateTime(c.createdAt)}</Kv>
+              <Kv label={t('staff.claimCard.created')}>{formatDateTime(c.createdAt)}</Kv>
             </dl>
           </Card>
           {c.receiptFiscal && (
-            <Card title="Фискальные данные чека">
+            <Card title={t('staff.claimCard.fiscalTitle')}>
               <dl className="divide-y divide-border-soft" data-testid="receipt-fiscal">
-                <Kv label="Фискальный номер">{c.receiptFiscal.fiscalNumber ? <span className="num">{c.receiptFiscal.fiscalNumber}</span> : <span className="text-muted">не распознан</span>}</Kv>
-                <Kv label="Дата и время">
+                <Kv label={t('staff.claimCard.fiscalNumber')}>{c.receiptFiscal.fiscalNumber ? <span className="num">{c.receiptFiscal.fiscalNumber}</span> : <span className="text-muted">{t('staff.claimCard.notRecognized')}</span>}</Kv>
+                <Kv label={t('staff.claimCard.dateTime')}>
                   <span className="num">
                     {formatDate(c.receiptFiscal.issuedAt.slice(0, 10))} {c.receiptFiscal.issuedAt.slice(11, 16)}
                   </span>
                 </Kv>
-                <Kv label="Сумма чека">
+                <Kv label={t('staff.claimCard.receiptAmount')}>
                   <span className="num">{formatMoney(c.receiptFiscal.amount)}</span>
                 </Kv>
-                <Kv label="ИНН точки продажи">
+                <Kv label={t('staff.claimCard.sellerInn')}>
                   <span className="num">{c.receiptFiscal.sellerInn}</span>
                 </Kv>
               </dl>
-              <p className="mt-2 text-[12px] text-muted">Распознано сервером по фото чека. Подлинность по QR налоговой проверяется на бэкенде.</p>
+              <p className="mt-2 text-[12px] text-muted">{t('staff.claimCard.fiscalHint')}</p>
             </Card>
           )}
-          <Card title="Вложения" bodyClassName="p-2">
+          <Card title={t('staff.claimCard.attachments')} bodyClassName="p-2">
             {c.attachments.length === 0 ? (
-              <p className="p-2 text-muted">Вложений нет</p>
+              <p className="p-2 text-muted">{t('staff.claimCard.noAttachments')}</p>
             ) : (
               <ul className="grid grid-cols-2 gap-2">
                 {c.attachments.map((a) => (
@@ -121,7 +138,7 @@ export default function ClaimCardPage() {
           <AiHint subject={{ type: 'claim', id: c.id }} />
           <SettlementPanel claim={c} />
         </div>
-        <Card title="История" bodyClassName="p-3">
+        <Card title={t('staff.clientCard.tab.history')} bodyClassName="p-3">
           <ol className="flex flex-col gap-3 border-l border-border pl-3">
             {[...c.history].reverse().map((h, i) => (
               <li key={i} className="relative">
@@ -147,7 +164,7 @@ export default function ClaimCardPage() {
 function TransitionButtons({ claim, onPick }: { claim: ClaimDetail; onPick: (to: ClaimStatus) => void }) {
   const items: { to: ClaimStatus; reason?: string }[] = [
     ...claim.allowedTransitions.map((to) => ({ to })),
-    ...claim.blockedTransitions.map((b) => ({ to: b.to, reason: b.reason })),
+    ...claim.blockedTransitions.map((b) => ({ to: b.to, reason: tm(b.reason) })),
   ];
   if (items.length === 0) return null;
   return (
@@ -168,7 +185,7 @@ function TransitionButtons({ claim, onPick }: { claim: ClaimDetail; onPick: (to:
         // Disabled buttons do not emit pointer events: wrap to show the rule as a tooltip.
         return reason ? (
           <Tooltip key={to} content={reason}>
-            <span tabIndex={0} aria-label={`${TRANSITION_LABEL[to]} недоступно: ${reason}`}>
+            <span tabIndex={0} aria-label={t('staff.claimCard.unavailable', { action: TRANSITION_LABEL[to], reason })}>
               {btn}
             </span>
           </Tooltip>
@@ -187,29 +204,37 @@ function LimitCheckCard({ claim }: { claim: ClaimDetail }) {
   const exceeds = payout > l.remaining;
   const label = LIMIT_CATEGORY_LABEL[l.category];
   return (
-    <Card title="Проверка лимита">
+    <Card title={t('staff.claimCard.limitCheck')}>
       <p className="text-[15px]">
-        Лимит «{label}»: использовано <span className="num font-semibold">{formatMoney(l.used)}</span> из{' '}
-        <span className="num font-semibold">{formatMoney(l.limit)}</span>, после выплаты останется{' '}
-        <span className={cn('num font-semibold', l.remainingAfter < 0 && 'text-danger-text')}>{formatMoney(Math.max(0, l.remainingAfter))}</span>
+        <Rich
+          k="staff.claimCard.limitText"
+          values={{
+            label,
+            used: <span className="num font-semibold">{formatMoney(l.used)}</span>,
+            limit: <span className="num font-semibold">{formatMoney(l.limit)}</span>,
+            after: <span className={cn('num font-semibold', l.remainingAfter < 0 && 'text-danger-text')}>{formatMoney(Math.max(0, l.remainingAfter))}</span>,
+          }}
+        />
       </p>
-      <ProgressBar className="mt-3 h-3" value={l.used + Math.min(payout, l.remaining)} max={l.limit} warn={isNearLimit(l.used + payout, l.limit, lowShare)} label={`Лимит «${label}»`} />
+      <ProgressBar className="mt-3 h-3" value={l.used + Math.min(payout, l.remaining)} max={l.limit} warn={isNearLimit(l.used + payout, l.limit, lowShare)} label={t('staff.limits.barLabel', { category: label })} />
       <div className="mt-2 flex justify-between text-[12px] text-muted">
-        <span>Использовано + эта выплата</span>
+        <span>{t('staff.claimCard.usedPlusPayout')}</span>
         <span className="num">{formatMoney(l.used + payout, false)} / {formatMoney(l.limit)}</span>
       </div>
       {exceeds && (
         <div role="alert" className="mt-4 flex items-start gap-2 rounded-btn bg-warning-soft px-3 py-2 text-warning-text">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            Сумма превышает остаток лимита на {formatMoney(payout - l.remaining)}. Предлагаем одобрить частично — на{' '}
-            <span className="num font-semibold">{formatMoney(l.remaining)}</span>.
+            <Rich
+              k="staff.claimCard.exceeds"
+              values={{ over: formatMoney(payout - l.remaining), amount: <span className="num font-semibold">{formatMoney(l.remaining)}</span> }}
+            />
           </span>
         </div>
       )}
       {claim.medicalReviewRequired && (
         <p className="mt-4 rounded-btn bg-rail px-3 py-2 text-muted">
-          Для этого убытка обязательна медэкспертиза: стоматология, стационар или сумма больше 5 000 000 UZS.
+          {t('staff.claimCard.medicalRequired')}
         </p>
       )}
     </Card>
@@ -225,7 +250,7 @@ function AttachmentThumb({ a }: { a: Attachment }) {
   }, [open]);
   return (
     <li>
-      <button type="button" onClick={() => setOpen(true)} className="flex w-full flex-col gap-1 rounded-btn border border-border p-1.5 text-left hover:bg-rail" aria-label={`Открыть вложение ${a.fileName}`}>
+      <button type="button" onClick={() => setOpen(true)} className="flex w-full flex-col gap-1 rounded-btn border border-border p-1.5 text-left hover:bg-rail" aria-label={t('staff.claimCard.openAttachment', { name: a.fileName })}>
         <span className="flex h-24 items-center justify-center overflow-hidden rounded-sm bg-rail">
           {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <FileImage className={cn('h-6 w-6', error ? 'text-danger' : 'text-muted')} aria-hidden />}
         </span>
@@ -234,19 +259,19 @@ function AttachmentThumb({ a }: { a: Attachment }) {
       </button>
       <Modal open={open} onOpenChange={setOpen} title={a.fileName} wide>
         <div className="mb-2 flex items-center gap-2">
-          <Button size="icon" variant="secondary" aria-label="Уменьшить" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}>
+          <Button size="icon" variant="secondary" aria-label={t('staff.claimCard.zoomOut')} onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}>
             <ZoomOut className="h-4 w-4" />
           </Button>
           <span className="w-12 text-center num">{Math.round(zoom * 100)}%</span>
-          <Button size="icon" variant="secondary" aria-label="Увеличить" onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>
+          <Button size="icon" variant="secondary" aria-label={t('staff.claimCard.zoomIn')} onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>
             <ZoomIn className="h-4 w-4" />
           </Button>
         </div>
         <div className="max-h-[70vh] overflow-auto rounded-btn bg-rail p-2">
           {src ? (
-            <img src={src} alt={`Вложение ${a.fileName}`} style={{ width: `${zoom * 100}%`, maxWidth: 'none' }} className="mx-auto block" />
+            <img src={src} alt={t('staff.claimCard.attachmentAlt', { name: a.fileName })} style={{ width: `${zoom * 100}%`, maxWidth: 'none' }} className="mx-auto block" />
           ) : (
-            <p className="p-6 text-center text-muted">{error ? 'Не удалось загрузить файл' : 'Загрузка…'}</p>
+            <p className="p-6 text-center text-muted">{error ? t('staff.claimCard.loadFailed') : t('common.loading')}</p>
           )}
         </div>
       </Modal>
@@ -264,8 +289,8 @@ function TransitionDialog({ claim, to, onClose }: { claim: ClaimDetail; to: Clai
   const isReject = to === 'rejected';
   const isApprove = to === 'approved';
   const amountNum = parseMoney(amount);
-  const commentError = isReject && !comment.trim() ? 'Для отказа укажите причину' : undefined;
-  const amountError = isApprove && (amountNum <= 0 || amountNum > claim.amountClaimed) ? 'Сумма от 1 до заявленной' : undefined;
+  const commentError = isReject && !comment.trim() ? t('staff.claimCard.rejectReasonRequired') : undefined;
+  const amountError = isApprove && (amountNum <= 0 || amountNum > claim.amountClaimed) ? t('staff.claimCard.amountRange') : undefined;
 
   const submit = async () => {
     setTouched(true);
@@ -275,7 +300,7 @@ function TransitionDialog({ claim, to, onClose }: { claim: ClaimDetail; to: Clai
         claimId: claim.id,
         to,
         amountApproved: isApprove ? amountNum : undefined,
-        comment: comment.trim() || (isApprove && amountNum < claim.amountClaimed ? 'Одобрено частично' : undefined),
+        comment: comment.trim() || (isApprove && amountNum < claim.amountClaimed ? t('staff.claimCard.partialComment') : undefined),
       });
       toast.success(TRANSITION_TOAST[to]);
       onClose();
@@ -288,18 +313,18 @@ function TransitionDialog({ claim, to, onClose }: { claim: ClaimDetail; to: Clai
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title={`${TRANSITION_LABEL[to]}: ${claim.number}`}
+      title={t('staff.claimCard.transitionTitle', { action: TRANSITION_LABEL[to], number: claim.number })}
       description={
         isReject
-          ? 'Застрахованный увидит причину отказа в приложении. Отменить отказ нельзя — только через новое обращение.'
+          ? t('staff.claimCard.rejectText')
           : isApprove
-            ? 'После одобрения убыток уходит бухгалтерии на выплату.'
-            : `Статус изменится на «${CLAIM_STATUS_LABEL[to]}». Действие записывается в журнал.`
+            ? t('staff.claimCard.approveText')
+            : t('staff.claimCard.statusText', { status: CLAIM_STATUS_LABEL[to] })
       }
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button variant={isReject ? 'danger' : 'primary'} loading={transition.isPending} onClick={() => void submit()}>
             {TRANSITION_LABEL[to]}
@@ -310,23 +335,27 @@ function TransitionDialog({ claim, to, onClose }: { claim: ClaimDetail; to: Clai
       <div className="flex flex-col gap-3">
         {isApprove && (
           <>
-            <Field label="Сумма к выплате, UZS" error={touched ? amountError : undefined} hint={`Заявлено ${formatMoney(claim.amountClaimed)}, остаток лимита ${formatMoney(l.remaining)}`}>
+            <Field
+              label={t('staff.claimCard.payoutUzs')}
+              error={touched ? amountError : undefined}
+              hint={t('staff.claimCard.payoutHint', { claimed: formatMoney(claim.amountClaimed), remaining: formatMoney(l.remaining) })}
+            >
               {(a) => <MaskedInput {...a} mask="money" value={maskMoney(amount)} onChange={setAmount} />}
             </Field>
             {amountNum > l.remaining && (
               <div role="alert" className="flex items-start gap-2 rounded-btn bg-warning-soft px-3 py-2 text-warning-text">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <span>
-                  Больше остатка лимита.{' '}
+                  {t('staff.claimCard.overRemaining')}{' '}
                   <button type="button" className="font-semibold underline" onClick={() => setAmount(String(l.remaining))}>
-                    Одобрить частично на {formatMoney(l.remaining)}
+                    {t('staff.claimCard.approvePartial', { amount: formatMoney(l.remaining) })}
                   </button>
                 </span>
               </div>
             )}
           </>
         )}
-        <Field label={isReject ? 'Причина отказа' : 'Комментарий'} error={touched ? commentError : undefined} hint={isReject ? 'Понятным языком — её увидит застрахованный' : 'Необязательно'}>
+        <Field label={isReject ? t('staff.claimCard.rejectReason') : t('common.comment')} error={touched ? commentError : undefined} hint={isReject ? t('staff.claimCard.rejectHint') : t('staff.claimCard.optional')}>
           {(a) => <Textarea {...a} value={comment} maxLength={1000} onChange={(e) => setComment(e.target.value)} onBlur={() => setTouched(true)} />}
         </Field>
       </div>

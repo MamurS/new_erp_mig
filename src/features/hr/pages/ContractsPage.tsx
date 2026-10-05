@@ -14,8 +14,9 @@ import { DocPrintButton } from '@/features/documents/DocPreview';
 import { Chip } from '@/shared/ui/chips';
 import { SkeletonRows } from '@/shared/ui/states';
 import { HrCard, HrHeader, HrSectionTitle } from '../ui';
+import { t, defineLabels } from '@/i18n';
 
-const REQUEST_STATUS = { pending: 'Ждёт доп. соглашения', included: 'В доп. соглашении', cancelled: 'Отменена' } as const;
+const REQUEST_STATUS = defineLabels('hr.contracts.request', ['pending', 'included', 'cancelled'] as const);
 
 function Certificates({ policyId }: { policyId: string }) {
   const q = useCertificates(policyId);
@@ -23,8 +24,8 @@ function Certificates({ policyId }: { policyId: string }) {
   return (
     <HrCard>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <HrSectionTitle>Сертификаты застрахованных</HrSectionTitle>
-        {list.length > 0 && <DocPrintButton input={() => list.map(certificateDocument)} title="Сертификаты застрахованных" label={`Скачать все (${list.length})`} />}
+        <HrSectionTitle>{t('hr.contracts.certificates')}</HrSectionTitle>
+        {list.length > 0 && <DocPrintButton input={() => list.map(certificateDocument)} title={t('hr.contracts.certificates')} label={t('hr.contracts.downloadAll', { n: list.length })} />}
       </div>
       {q.isLoading ? (
         <SkeletonRows rows={3} />
@@ -36,35 +37,35 @@ function Certificates({ policyId }: { policyId: string }) {
                 <span className="font-medium">{c.fullName}</span>
                 <span className="num ml-2 text-[13px] text-muted">{c.certificateNumber}</span>
               </span>
-              <DocPrintButton input={() => certificateDocument(c)} label="Скачать" aria-label={`Скачать сертификат ${c.certificateNumber}`} />
+              <DocPrintButton input={() => certificateDocument(c)} label={t('common.download')} aria-label={t('hr.contracts.downloadCert', { number: c.certificateNumber })} />
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-muted">Сертификаты появятся, когда договор вступит в силу.</p>
+        <p className="text-muted">{t('hr.contracts.certsLater')}</p>
       )}
     </HrCard>
   );
 }
 
 export default function ContractsPage() {
-  useDocumentTitle('Договор и изменения');
+  useDocumentTitle(t('hr.nav.contracts'));
   const contracts = useContracts();
   const endorsements = useEndorsements();
   const requests = useChangeRequests();
   const toSign = [
-    ...(contracts.data ?? []).filter((c) => (c.status === 'sent' || c.status === 'signing') && !c.signing.client).map((c) => ({ id: c.id, to: `/hr/contracts/${c.id}`, label: `Договор ${c.number}` })),
-    ...(endorsements.data ?? []).filter((e) => (e.status === 'sent' || e.status === 'signing') && !e.signing.client).map((e) => ({ id: e.id, to: `/hr/endorsements/${e.id}`, label: `${e.kind === 'termination' ? 'Соглашение о расторжении' : 'Доп. соглашение'} ${e.number}` })),
+    ...(contracts.data ?? []).filter((c) => (c.status === 'sent' || c.status === 'signing') && !c.signing.client).map((c) => ({ id: c.id, to: `/hr/contracts/${c.id}`, label: t('hr.contracts.contractN', { number: c.number }) })),
+    ...(endorsements.data ?? []).filter((e) => (e.status === 'sent' || e.status === 'signing') && !e.signing.client).map((e) => ({ id: e.id, to: `/hr/endorsements/${e.id}`, label: e.kind === 'termination' ? t('hr.contracts.terminationN', { number: e.number }) : t('hr.contracts.endorsementN', { number: e.number }) })),
   ];
   const active = (contracts.data ?? []).find((c) => c.status === 'active' && c.policyId);
 
   return (
     <>
-      <HrHeader title="Договор и изменения" subtitle="Договор ДМС, документы на подпись, изменения состава и сертификаты" />
+      <HrHeader title={t('hr.nav.contracts')} subtitle={t('hr.contracts.subtitle')} />
       <div className="flex flex-col gap-5">
         {toSign.length > 0 && (
           <HrCard tone="accent">
-            <HrSectionTitle className="mb-2">Ждут вашей подписи</HrSectionTitle>
+            <HrSectionTitle className="mb-2">{t('hr.contracts.toSign')}</HrSectionTitle>
             <ul className="flex flex-col gap-2" data-testid="hr-to-sign">
               {toSign.map((d) => (
                 <li key={d.id}>
@@ -77,7 +78,7 @@ export default function ContractsPage() {
           </HrCard>
         )}
         <HrCard>
-          <HrSectionTitle className="mb-3">Договоры</HrSectionTitle>
+          <HrSectionTitle className="mb-3">{t('hr.contracts.contracts')}</HrSectionTitle>
           {contracts.isLoading ? (
             <SkeletonRows rows={2} />
           ) : (contracts.data ?? []).length ? (
@@ -85,7 +86,7 @@ export default function ContractsPage() {
               {(contracts.data ?? []).map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                   <Link to={`/hr/contracts/${c.id}`} className="font-semibold text-accent-text hover:underline">
-                    Договор {c.number}
+                    {t('hr.contracts.contractN', { number: c.number })}
                   </Link>
                   <span className="flex items-center gap-3 text-[14px]">
                     <span className="num text-muted">
@@ -98,29 +99,29 @@ export default function ContractsPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-muted">Договоров пока нет.</p>
+            <p className="text-muted">{t('hr.contracts.noContracts')}</p>
           )}
         </HrCard>
         <HrCard>
-          <HrSectionTitle className="mb-1">Изменения и доп. соглашения</HrSectionTitle>
-          <p className="mb-3 text-[14px] text-muted">Включения и исключения сотрудников копятся как заявки и оформляются доп. соглашением с расчётом доплаты или возврата.</p>
+          <HrSectionTitle className="mb-1">{t('hr.contracts.changes')}</HrSectionTitle>
+          <p className="mb-3 text-[14px] text-muted">{t('hr.contracts.changesText')}</p>
           <div className="grid gap-5 lg:grid-cols-2">
             <div>
-              <p className="mb-2 font-semibold">Заявки</p>
+              <p className="mb-2 font-semibold">{t('hr.contracts.requests')}</p>
               <ul className="divide-y divide-border text-[14px]" data-testid="hr-change-requests">
                 {(requests.data ?? []).slice(0, 30).map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                     <span>
-                      {r.description ?? CHANGE_TYPE_LABEL[r.type]} <span className="num text-muted">с {formatDate(r.effectiveDate)}</span>
+                      {r.description ?? CHANGE_TYPE_LABEL[r.type]} <span className="num text-muted">{t('hr.contracts.fromDate', { date: formatDate(r.effectiveDate) })}</span>
                     </span>
                     <Chip kind={r.status === 'pending' ? 'sun' : r.status === 'included' ? 'success' : 'neutral'}>{r.endorsementNumber ?? REQUEST_STATUS[r.status]}</Chip>
                   </li>
                 ))}
-                {!requests.isLoading && !(requests.data ?? []).length && <li className="py-2 text-muted">Заявок нет</li>}
+                {!requests.isLoading && !(requests.data ?? []).length && <li className="py-2 text-muted">{t('hr.contracts.noRequests')}</li>}
               </ul>
             </div>
             <div>
-              <p className="mb-2 font-semibold">Доп. соглашения</p>
+              <p className="mb-2 font-semibold">{t('hr.contracts.endorsements')}</p>
               <ul className="divide-y divide-border text-[14px]" data-testid="hr-endorsements">
                 {(endorsements.data ?? []).map((e) => (
                   <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
@@ -128,12 +129,12 @@ export default function ContractsPage() {
                       {e.number}
                     </Link>
                     <span className="flex items-center gap-2">
-                      <span className="num">{e.total < 0 ? `возврат ${formatMoney(-e.total)}` : `доплата ${formatMoney(e.total)}`}</span>
+                      <span className="num">{e.total < 0 ? t('hr.contracts.refund', { amount: formatMoney(-e.total) }) : t('hr.contracts.surcharge', { amount: formatMoney(e.total) })}</span>
                       <Chip kind={e.status === 'signed' ? 'success' : 'sun'}>{ENDORSEMENT_STATUS_LABEL[e.status]}</Chip>
                     </span>
                   </li>
                 ))}
-                {!endorsements.isLoading && !(endorsements.data ?? []).length && <li className="py-2 text-muted">Доп. соглашений нет</li>}
+                {!endorsements.isLoading && !(endorsements.data ?? []).length && <li className="py-2 text-muted">{t('hr.contracts.noEndorsements')}</li>}
               </ul>
             </div>
           </div>
@@ -141,7 +142,7 @@ export default function ContractsPage() {
         {active?.policyId && <Certificates policyId={active.policyId} />}
         {!active && (
           <p className="flex items-center gap-2 text-[14px] text-muted">
-            <Download className="h-4 w-4" aria-hidden /> Сертификаты застрахованных можно будет скачать после вступления договора в силу.
+            <Download className="h-4 w-4" aria-hidden /> {t('hr.contracts.certsAfter')}
           </p>
         )}
       </div>

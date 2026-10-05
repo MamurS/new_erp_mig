@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useState } from 'react';
 import type { StaffRole, StaffUser } from '@/shared/types';
 import { useAdminUsers, usePatchUser } from '@/shared/api/queries/staff';
@@ -22,8 +23,8 @@ type Pending = { kind: 'role'; user: StaffUser; role: StaffRole } | { kind: 'act
 const AUTHORITY_ROLES: StaffRole[] = ['underwriter', 'claims_officer', 'sales_manager'];
 
 export default function UsersPage() {
-  useDocumentTitle('Пользователи и роли');
-  useTopbar([{ label: 'Пользователи и роли' }]);
+  useDocumentTitle(t('staff.users.title'));
+  useTopbar([{ label: t('staff.users.title') }]);
   const me = useUser()!;
   const list = useAdminUsers();
   const patch = usePatchUser();
@@ -33,13 +34,13 @@ export default function UsersPage() {
   const cols: Column<StaffUser>[] = [
     {
       key: 'name',
-      header: 'Сотрудник',
+      header: t('common.employee'),
       cell: (u) => (
         <span className="flex items-center gap-2">
           <Avatar name={u.fullName} />
           <span>
             <span className="block font-medium">
-              {u.fullName} {u.id === me.id && <span className="text-muted">(вы)</span>}
+              {u.fullName} {u.id === me.id && <span className="text-muted">{t('staff.users.you')}</span>}
             </span>
             <span className="block text-[12px] text-muted">{u.email}</span>
           </span>
@@ -48,12 +49,12 @@ export default function UsersPage() {
     },
     {
       key: 'role',
-      header: 'Роль',
+      header: t('common.role'),
       cell: (u) => {
         const self = u.id === me.id;
         const select = (
           <Select
-            aria-label={`Роль: ${u.fullName}`}
+            aria-label={t('staff.users.roleAria', { name: u.fullName })}
             className="h-7 w-48"
             value={u.role}
             disabled={self || !u.active}
@@ -67,7 +68,7 @@ export default function UsersPage() {
           </Select>
         );
         return self ? (
-          <Tooltip content="Нельзя снять роль администратора с самого себя">
+          <Tooltip content={t('staff.users.cannotSelf')}>
             <span tabIndex={0}>{select}</span>
           </Tooltip>
         ) : (
@@ -77,21 +78,21 @@ export default function UsersPage() {
     },
     {
       key: 'authority',
-      header: 'Полномочия',
+      header: t('staff.users.authority'),
       cell: (u) =>
         AUTHORITY_ROLES.includes(u.role) ? (
           <span className="flex items-center gap-2">
             <span className="text-[12px] text-muted">{authoritySummary(u.authority, u.signatory)}</span>
             {u.id !== me.id && u.active && (
-              <Button size="sm" variant="ghost" onClick={() => setAuthorityOf(u)} aria-label={`Полномочия: ${u.fullName}`}>
-                Изменить
+              <Button size="sm" variant="ghost" onClick={() => setAuthorityOf(u)} aria-label={t('staff.users.authorityAria', { name: u.fullName })}>
+                {t('common.edit')}
               </Button>
             )}
           </span>
         ) : null,
     },
-    { key: 'status', header: 'Статус', cell: (u) => <StatusDot tone={u.active ? 'success' : 'muted'}>{u.active ? 'Активен' : 'Деактивирован'}</StatusDot> },
-    { key: 'last', header: 'Последний вход', cell: (u) => <span className="text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
+    { key: 'status', header: t('common.status'), cell: (u) => <StatusDot tone={u.active ? 'success' : 'muted'}>{u.active ? t('staff.clientCard.insuredActive') : t('staff.users.deactivated')}</StatusDot> },
+    { key: 'last', header: t('staff.users.lastLogin'), cell: (u) => <span className="text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
     {
       key: 'actions',
       header: '',
@@ -99,11 +100,11 @@ export default function UsersPage() {
       cell: (u) =>
         u.id === me.id ? null : u.active ? (
           <Button size="sm" variant="secondary" className="text-danger-text" onClick={() => setPending({ kind: 'active', user: u, active: false })}>
-            Деактивировать
+            {t('staff.users.deactivate')}
           </Button>
         ) : (
           <Button size="sm" variant="secondary" onClick={() => setPending({ kind: 'active', user: u, active: true })}>
-            Активировать
+            {t('staff.users.activate')}
           </Button>
         ),
     },
@@ -112,29 +113,34 @@ export default function UsersPage() {
   const confirmText =
     pending?.kind === 'role'
       ? {
-          title: 'Сменить роль?',
-          description: `${pending.user.fullName}: «${ROLE_LABEL[pending.user.role]}» → «${ROLE_LABEL[pending.role]}». Права изменятся сразу, активные сессии сотрудника будут завершены. Действие записывается в журнал аудита.`,
-          label: 'Сменить роль',
-          toast: 'Роль изменена',
+          title: t('staff.users.roleTitle'),
+          description: t('staff.users.roleText', { name: pending.user.fullName, from: ROLE_LABEL[pending.user.role], to: ROLE_LABEL[pending.role] }),
+          label: t('staff.users.roleConfirm'),
+          toast: t('staff.users.roleChanged'),
         }
       : pending?.active === false
         ? {
-            title: 'Деактивировать сотрудника?',
-            description: `${pending.user.fullName} больше не сможет войти, активные сессии будут завершены. Данные и журнал сохранятся.`,
-            label: 'Деактивировать',
-            toast: 'Сотрудник деактивирован',
+            title: t('staff.users.deactivateTitle'),
+            description: t('staff.users.deactivateText', { name: pending.user.fullName }),
+            label: t('staff.users.deactivate'),
+            toast: t('staff.users.deactivatedToast'),
           }
-        : { title: 'Активировать сотрудника?', description: 'Сотрудник снова сможет входить в портал.', label: 'Активировать', toast: 'Сотрудник активирован' };
+        : {
+            title: t('staff.users.activateTitle'),
+            description: t('staff.users.activateText'),
+            label: t('staff.users.activate'),
+            toast: t('staff.users.activatedToast'),
+          };
 
   return (
     <div>
       <div className="mb-3">
-        <h1 className="text-[22px] font-bold">Пользователи и роли</h1>
-        <p className="text-muted">Сотрудники MIG с доступом к порталу. У администратора нет доступа к медданным и убыткам.</p>
+        <h1 className="text-[22px] font-bold">{t('staff.users.title')}</h1>
+        <p className="text-muted">{t('staff.users.intro')}</p>
       </div>
       <AuthorityChangesCard />
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption="Сотрудники" columns={cols} rows={list.data} rowKey={(u) => u.id} loading={list.isLoading} error={list.error} onRetry={() => void list.refetch()} rowHeight={52} />
+        <DataTable caption={t('staff.users.caption')} columns={cols} rows={list.data} rowKey={(u) => u.id} loading={list.isLoading} error={list.error} onRetry={() => void list.refetch()} rowHeight={52} />
       </div>
       {authorityOf && <AuthorityDialog user={authorityOf} onClose={() => setAuthorityOf(null)} />}
       <ConfirmDialog

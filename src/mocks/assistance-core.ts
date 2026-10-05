@@ -277,13 +277,13 @@ export function recomputeRebill(d: Db, b: Rebill): void {
 export function upsertDraftRebill(d: Db, assistanceId: UUID, period: string, lineIds?: UUID[]): Rebill {
   const a = assistanceOf(d, assistanceId);
   const existing = d.rebills.find((b) => b.assistanceId === assistanceId && b.period === period);
-  if (existing && existing.status !== 'draft') throw conflict(`Счёт за ${period} уже отправлен в МИГ`);
+  if (existing && existing.status !== 'draft') throw conflict('srv.rebill.periodSent', { period });
   let picked: { r: Registry; l: RegistryLine }[];
   if (lineIds) {
     picked = lineIds.map((id) => {
       const f = findRegistryLine(d, id);
       // Lines of other payers do not exist for this assistance (anti-enumeration).
-      if (!f || f.l.payer !== assistanceId) throw new HttpError(422, 'validation', 'Строка реестра не найдена среди строк ассистанса', { lineIds: id });
+      if (!f || f.l.payer !== assistanceId) throw new HttpError(422, 'validation', 'srv.rebill.lineNotFound', { fields: { lineIds: id } });
       return f;
     });
   } else {

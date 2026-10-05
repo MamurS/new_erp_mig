@@ -4,13 +4,14 @@
  * turns them into docs/integration/openapi.yaml, and the clinic cabinet forms reuse the input ones.
  */
 import { z } from 'zod';
+import { msg } from '@/i18n';
 import { limitCategory, specialty } from '@/shared/api/schemas';
 
 const uuid = z.string().uuid();
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Дата в формате ГГГГ-ММ-ДД');
-const isoDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/, 'Дата и время ISO 8601');
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, msg('v.isoDate'));
+const isoDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/, msg('v.isoDateTime'));
 const money = z.number().int().min(1).max(10_000_000_000);
-const text = (min: number, max: number) => z.string().trim().min(min, `Минимум ${min} символов`).max(max, `Не больше ${max} символов`);
+const text = (min: number, max: number) => z.string().trim().min(min, msg('v.tooShort', { min })).max(max, msg('v.tooLong', { max }));
 
 export const INTEGRATION_BASE = '/api/integration/v1';
 
@@ -59,9 +60,9 @@ export const icd10 = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z]\d{2}(\.\d{1,2})?$/, 'Код МКБ-10, например J06.9');
-export const serviceCode = z.string().trim().regex(/^[A-Z]{1,4}-\d{2,5}$/, 'Код услуги из прайса, например TH-101');
-export const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Период ГГГГ-ММ');
+  .regex(/^[A-Z]\d{2}(\.\d{1,2})?$/, msg('v.icd10Format'));
+export const serviceCode = z.string().trim().regex(/^[A-Z]{1,4}-\d{2,5}$/, msg('v.serviceCodeFormat'));
+export const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, msg('v.periodFormat'));
 export const serviceCategory = z.union([limitCategory, z.literal('diagnostics_advanced')]);
 
 // ---------- errors (RFC 9457) ----------
@@ -94,8 +95,8 @@ export const coverageCheckRequest = z.union([
   z.object({ qrToken: z.string().trim().min(8).max(200) }).strict(),
   z
     .object({
-      policyNumber: z.string().trim().toUpperCase().regex(/^ДМС-\d{4}-\d{6}$/, 'Номер полиса: ДМС-2026-000123'),
-      pinfl: z.string().trim().regex(/^\d{14}$/, 'ПИНФЛ — 14 цифр'),
+      policyNumber: z.string().trim().toUpperCase().regex(/^ДМС-\d{4}-\d{6}$/, msg('v.policyNumberFormat')),
+      pinfl: z.string().trim().regex(/^\d{14}$/, msg('v.pinflFormat')),
     })
     .strict(),
 ]);
@@ -214,7 +215,7 @@ export const registryLineInput = z
     guaranteeNumber: z
       .string()
       .trim()
-      .regex(/^ГП-\d{4}-\d{6}$/, 'Номер ГП: ГП-2026-000123')
+      .regex(/^ГП-\d{4}-\d{6}$/, msg('v.guaranteeNumberFormat'))
       .optional(),
   })
   .strict();
@@ -299,7 +300,7 @@ export const caseCreateRequest = z.object({ insuredId: uuid, type: caseType, des
 export const caseUpdateRequest = z
   .object({ status: caseStatus, resolution: text(3, 1000).optional() })
   .strict()
-  .refine((v) => v.status !== 'resolved' || !!v.resolution, { message: 'Для решённого обращения нужно описание решения', path: ['resolution'] });
+  .refine((v) => v.status !== 'resolved' || !!v.resolution, { message: msg('v.caseResolutionRequired'), path: ['resolution'] });
 export const assistAppointmentQuery = z.object({ status: integrationAppointment.shape.status.optional(), ...cursorQuery });
 export const guaranteeQuery = z.object({ status: guaranteeLetter.shape.status.optional(), ...cursorQuery });
 export const guaranteeList = z.object({ items: z.array(guaranteeLetter), nextCursor });
@@ -312,8 +313,8 @@ export const guaranteeDecideRequest = z
   })
   .strict()
   .superRefine((v, ctx) => {
-    if (v.decision === 'approve' && (!v.amount || !v.validUntil)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['amount'], message: 'Для одобрения нужны amount и validUntil' });
-    if (v.decision !== 'approve' && !v.reason) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: 'Укажите причину или заключение' });
+    if (v.decision === 'approve' && (!v.amount || !v.validUntil)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['amount'], message: msg('v.approveNeedsAmount') });
+    if (v.decision !== 'approve' && !v.reason) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: msg('v.reasonOrOpinion') });
   });
 export const registryQuery = z.object({ status: registry.shape.status.optional(), ...cursorQuery });
 /** A clinic registry as the assistance sees it: only its own lines (sub-registry). */
@@ -321,7 +322,7 @@ export const registryList = z.object({ items: z.array(registry), nextCursor });
 export const lineDecideRequest = z
   .object({ decision: z.enum(['accept', 'reject']), reason: text(3, 300).optional() })
   .strict()
-  .refine((v) => v.decision === 'accept' || !!v.reason, { message: 'Укажите причину отклонения', path: ['reason'] });
+  .refine((v) => v.decision === 'accept' || !!v.reason, { message: msg('v.rejectReasonGiven'), path: ['reason'] });
 export const clinicPaymentRequest = z
   .object({ lineIds: z.array(uuid).min(1).max(500), paidAt: isoDate, amount: money, paymentOrderNumber: text(1, 40) })
   .strict();
@@ -413,20 +414,20 @@ export function webhookUrlProblem(raw: string): string | null {
   try {
     url = new URL(raw);
   } catch {
-    return 'Укажите полный адрес, например https://clinic.uz/hook';
+    return msg('v.url.full');
   }
-  if (url.protocol !== 'https:') return 'Адрес должен начинаться с https://';
-  if (url.username || url.password) return 'Адрес не должен содержать логин или пароль';
+  if (url.protocol !== 'https:') return msg('v.url.https');
+  if (url.username || url.password) return msg('v.url.noCredentials');
   const host = url.hostname.toLowerCase().replace(/\.$/, '');
-  if (!host) return 'Укажите адрес сервера';
-  if (host === 'localhost' || host.endsWith('.localhost')) return 'Адреса localhost запрещены';
-  if (host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.lan')) return 'Адреса локальной сети запрещены';
+  if (!host) return msg('v.url.hostRequired');
+  if (host === 'localhost' || host.endsWith('.localhost')) return msg('v.url.noLocalhost');
+  if (host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.lan')) return msg('v.url.noLocalNetwork');
   if (host.startsWith('[')) {
-    if (isBlockedIpv6(host.slice(1, -1))) return 'Адреса внутренних сетей запрещены';
+    if (isBlockedIpv6(host.slice(1, -1))) return msg('v.url.noInternal');
   } else if (isPrivateIpv4(host)) {
-    return 'Адреса внутренних сетей запрещены';
+    return msg('v.url.noInternal');
   } else if (/^\d+$/.test(host) || /^0x/i.test(host)) {
-    return 'Укажите доменное имя или публичный IP-адрес';
+    return msg('v.url.domainOrIp');
   }
   return null;
 }
@@ -434,26 +435,26 @@ export function webhookUrlProblem(raw: string): string | null {
 export const webhookUrl = z
   .string()
   .trim()
-  .max(2048, 'Не больше 2048 символов')
+  .max(2048, msg('v.tooLong', { max: 2048 }))
   .superRefine((v, ctx) => {
     const problem = webhookUrlProblem(v);
     if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
   });
 
-const ipEntry = z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^[0-9a-fA-F:]+(\/\d{1,3})?$/, 'IP-адрес или подсеть');
+const ipEntry = z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$|^[0-9a-fA-F:]+(\/\d{1,3})?$/, msg('v.ipEntry'));
 export const keyCreateRequest = z.object({
   name: text(2, 60),
-  scopes: z.array(anyScope).min(1, 'Выберите хотя бы одну область доступа'),
+  scopes: z.array(anyScope).min(1, msg('v.scopesRequired')),
   ipAllowlist: z
     .string()
     .max(1000)
     .default('')
     .transform((v) => v.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean))
-    .pipe(z.array(ipEntry).max(20, 'Не больше 20 адресов')),
+    .pipe(z.array(ipEntry).max(20, msg('v.maxAddresses'))),
 });
 export const webhookCreateRequest = z.object({
   url: webhookUrl,
-  events: z.array(webhookEvent).min(1, 'Выберите хотя бы одно событие'),
+  events: z.array(webhookEvent).min(1, msg('v.eventsRequired')),
 });
 export const keyCreated = z.object({ id: uuid, clientId: z.string(), clientSecret: z.string() });
 export const webhookCreated = z.object({ id: uuid, signingSecret: z.string() });

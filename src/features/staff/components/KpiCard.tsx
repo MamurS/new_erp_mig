@@ -1,3 +1,4 @@
+import { tm } from '@/i18n';
 import { Link } from 'react-router-dom';
 import type { Kpi } from '@/shared/types/dto';
 import { formatMoneyShort, formatNumber } from '@/shared/lib/format';
@@ -6,13 +7,13 @@ import { cn } from '@/shared/lib/cn';
 export function KpiCard({ kpi }: { kpi: Kpi }) {
   const body = (
     <>
-      <div className="text-[12px] text-muted">{kpi.label}</div>
+      <div className="text-[12px] text-muted">{tm(kpi.label)}</div>
       <div className="mt-1 text-[22px] font-bold num leading-tight">
         {kpi.format === 'money' ? formatMoneyShort(kpi.value) : formatNumber(kpi.value)}
       </div>
       {kpi.hint && (
         <div className={cn('mt-0.5 text-[12px]', kpi.tone === 'warning' ? 'text-warning-text' : kpi.tone === 'danger' ? 'text-danger-text' : 'text-muted')}>
-          {kpi.hint}
+          {tm(kpi.hint)}
         </div>
       )}
     </>

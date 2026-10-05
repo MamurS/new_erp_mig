@@ -4,6 +4,7 @@ import { useAiStatus, useClinicCoverage } from '@/shared/api/queries/ai';
 import { useDebounced } from '@/shared/lib/hooks';
 import { Chip } from '@/shared/ui/chips';
 import { LIMIT_STATUS_LABEL, VERDICT_CHIP, VERDICT_SHORT } from './labels';
+import { t } from '@/i18n';
 
 export function ClinicCoverage({ visitId, serviceCode, icd10 }: { visitId: string; serviceCode: string; icd10: string }) {
   const status = useAiStatus();
@@ -15,20 +16,20 @@ export function ClinicCoverage({ visitId, serviceCode, icd10 }: { visitId: strin
   if (q.data && !q.data.available) return null;
   const decision = item ? (item.needsSpecialist ? 'unknown' : item.verdict.decision) : null;
   return (
-    <section className="rounded-btn border border-border-soft bg-rail/50 p-3 text-[13px] md:col-span-2" aria-label="Проверка покрытия" data-testid="clinic-coverage">
+    <section className="rounded-btn border border-border-soft bg-rail/50 p-3 text-[13px] md:col-span-2" aria-label={t('ai.clinic.title')} data-testid="clinic-coverage">
       <p className="mb-1 flex items-center gap-1.5 font-semibold">
-        <Sparkles className="h-4 w-4 text-accent" aria-hidden /> Проверка покрытия
+        <Sparkles className="h-4 w-4 text-accent" aria-hidden /> {t('ai.clinic.title')}
       </p>
       {q.isLoading || !item || !decision ? (
-        <p className="text-muted">{q.isError ? 'Проверка недоступна' : 'Проверяем…'}</p>
+        <p className="text-muted">{q.isError ? t('ai.clinic.unavailable') : t('ai.clinic.checking')}</p>
       ) : (
         <>
           <p className="flex flex-wrap items-center gap-2">
             <Chip kind={VERDICT_CHIP[decision]}>{VERDICT_SHORT[decision]}</Chip>
             {item.limitStatus && <Chip kind={item.limitStatus === 'available' ? 'success' : item.limitStatus === 'low' ? 'warning' : 'danger'}>{LIMIT_STATUS_LABEL[item.limitStatus]}</Chip>}
           </p>
-          {item.clauses.length > 0 && <p className="mt-1 text-muted">Пункты: {item.clauses.map((c) => c.label).join('; ')}</p>}
-          <p className="mt-1 text-[12px] text-muted">Предварительная оценка: решение по письму принимает врач.</p>
+          {item.clauses.length > 0 && <p className="mt-1 text-muted">{t('ai.hint.clauses', { list: item.clauses.map((c) => c.label).join('; ') })}</p>}
+          <p className="mt-1 text-[12px] text-muted">{t('ai.clinic.note')}</p>
         </>
       )}
     </section>

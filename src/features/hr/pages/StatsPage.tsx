@@ -12,14 +12,13 @@ import { cn } from '@/shared/lib/cn';
 import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
 import { useDmsParam } from '@/shared/api/queries/params';
 import { limitWarnRatio } from '@/shared/config/dmsParameters';
-
-const TOO_FEW = 'Слишком мало данных для показа';
+import { t } from '@/i18n';
 
 function TooFew() {
   return (
     <p className="inline-flex items-center gap-1.5 text-[14px] text-muted">
       <Lock className="h-4 w-4 shrink-0" aria-hidden />
-      {TOO_FEW}
+      {t('hr.stats.tooFew')}
     </p>
   );
 }
@@ -59,11 +58,11 @@ function StatsView({ s }: { s: HrStats }) {
     return (
       <HrCard>
         <EmptyState
-          title="Пока нечего показать"
-          description="Статистика появится, когда в полис будут добавлены сотрудники"
+          title={t('hr.stats.emptyTitle')}
+          description={t('hr.stats.emptyText')}
           action={
             <Link to="/hr/employees/new" className={cn(buttonVariants({ variant: 'primary' }), HR_BTN)}>
-              Добавить сотрудника
+              {t('hr.add.title')}
             </Link>
           }
         />
@@ -73,52 +72,49 @@ function StatsView({ s }: { s: HrStats }) {
   return (
     <>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Застраховано сотрудников" value={s.insuredCount} />
-        <Kpi label="Пользуются приложением" value={s.appUsers}>
+        <Kpi label={t('hr.stats.insured')} value={s.insuredCount} />
+        <Kpi label={t('hr.stats.appUsers')} value={s.appUsers}>
           {s.appUsers !== null && s.insuredCount > 0 && (
-            <p className="text-muted">{Math.round((s.appUsers / s.insuredCount) * 100)}% от застрахованных</p>
+            <p className="text-muted">{t('hr.stats.appShare', { pct: Math.round((s.appUsers / s.insuredCount) * 100) })}</p>
           )}
         </Kpi>
-        <Kpi label="Обращений за квартал" value={s.claimsThisQuarter}>
-          <p className="text-muted">Общее число по компании</p>
+        <Kpi label={t('hr.stats.claims')} value={s.claimsThisQuarter}>
+          <p className="text-muted">{t('hr.stats.claimsHint')}</p>
         </Kpi>
         <HrCard className="flex flex-col gap-2">
-          <p className="text-muted">Использование бюджета программы</p>
+          <p className="text-muted">{t('hr.stats.budget')}</p>
           {s.budgetUsedPct === null ? (
             <TooFew />
           ) : (
             <>
               <p className="font-heading text-[32px] font-semibold leading-none num">{s.budgetUsedPct}%</p>
-              <ProgressBar value={s.budgetUsedPct} max={100} warn={s.budgetUsedPct >= limitWarnRatio({ limitLowShare: lowShare }) * 100} label="Использование бюджета" className="mt-1 h-2.5" />
+              <ProgressBar value={s.budgetUsedPct} max={100} warn={s.budgetUsedPct >= limitWarnRatio({ limitLowShare: lowShare }) * 100} label={t('hr.stats.budgetShort')} className="mt-1 h-2.5" />
             </>
           )}
         </HrCard>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Slices title="По возрасту" slices={s.byAgeGroup} total={s.insuredCount} />
-        <Slices title="По приложению" slices={s.byAppStatus} total={s.insuredCount} />
+        <Slices title={t('hr.stats.byAge')} slices={s.byAgeGroup} total={s.insuredCount} />
+        <Slices title={t('hr.stats.byApp')} slices={s.byAppStatus} total={s.insuredCount} />
       </div>
     </>
   );
 }
 
 export default function StatsPage() {
-  useDocumentTitle('Статистика');
+  useDocumentTitle(t('hr.nav.stats'));
   const stats = useHrStats();
   return (
     <>
-      <HrHeader title="Статистика" subtitle="Только обезличенные итоги по компании" />
+      <HrHeader title={t('hr.nav.stats')} subtitle={t('hr.stats.subtitle')} />
       <div className="mb-6 flex items-start gap-3 rounded-card bg-sky p-4 text-sky-text">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-        <p>
-          Мы показываем только общие цифры. Группы, в которых меньше {stats.data?.k ?? 10} человек, скрыты, чтобы нельзя было узнать данные
-          конкретного сотрудника. Медицинской информации по отдельным людям здесь нет.
-        </p>
+        <p>{t('hr.stats.privacy', { k: stats.data?.k ?? 10 })}</p>
       </div>
       <QueryState
         query={stats}
         skeleton={
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" role="status" aria-label="Загрузка">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" role="status" aria-label={t('hr.stats.loading')}>
             {[0, 1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-[132px] rounded-card" />
             ))}

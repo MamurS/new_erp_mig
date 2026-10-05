@@ -1,3 +1,4 @@
+import { msg } from '@/i18n/core';
 import { delay, http } from 'msw';
 import { chatSchema, consentSchema, myAppointmentSchema, myClaimSchema } from '@/shared/schemas/forms';
 import type { SessionUser } from '@/shared/types';
@@ -18,7 +19,6 @@ import { nextClaimNumber } from './claims';
 import { mockConfig } from '../config';
 import { recognizeReceipt } from '../receipts';
 import { handlerOf, refreshFlags, sha256Hex } from '../settlement-core';
-import { msg } from '@/i18n/core';
 
 function requireInsured(request: Request): { user: SessionUser; me: InsuredRow } {
   const { user } = requireSession(request);

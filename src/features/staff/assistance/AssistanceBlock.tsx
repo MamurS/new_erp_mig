@@ -8,6 +8,7 @@ import { useAssign, useAssignments, useAssistances } from '@/shared/api/queries/
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { assignmentSchema } from '@/shared/schemas/forms';
+import { t, tm } from '@/i18n';
 import { formatDate, todayISO } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/button';
 import { Modal } from '@/shared/ui/dialog';
@@ -30,7 +31,7 @@ function ChangeDialog({ policyId, current, onClose }: { policyId: string; curren
     }
     try {
       await assign.mutateAsync({ policyId, ...parsed.data });
-      toast.success('Ассистанс изменён');
+      toast.success(t('staffOps.assistBlock.changed'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -40,24 +41,24 @@ function ChangeDialog({ policyId, current, onClose }: { policyId: string; curren
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Сменить ассистанс"
-      description="С этой даты новые обращения пойдут новому ассистансу. Прежний 12 месяцев видит свои дела только на чтение"
+      title={t('staffOps.assistBlock.changeTitle')}
+      description={t('staffOps.assistBlock.changeText')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={assign.isPending} onClick={() => void submit()}>
-            Сохранить
+            {t('common.save')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Ассистанс" error={errors.assistanceId}>
+        <Field label={t('staffOps.rebills.col.assistance')} error={tm(errors.assistanceId) || undefined}>
           {(a) => (
             <Select {...a} value={assistanceId} onChange={(e) => setAssistanceId(e.target.value)}>
-              <option value="">Без ассистанса (обслуживает МИГ)</option>
+              <option value="">{t('staffOps.assistBlock.none')}</option>
               {(list.data ?? []).map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.name}
@@ -66,7 +67,7 @@ function ChangeDialog({ policyId, current, onClose }: { policyId: string; curren
             </Select>
           )}
         </Field>
-        <Field label="С даты" error={errors.from}>
+        <Field label={t('common.from')} error={tm(errors.from) || undefined}>
           {(a) => <Input {...a} type="date" min={todayISO()} value={from} onChange={(e) => setFrom(e.target.value)} />}
         </Field>
       </div>
@@ -82,11 +83,11 @@ export function AssistanceBlock({ policyId }: { policyId: string }) {
   const current = q.data?.find((a) => a.from <= today && (!a.to || a.to >= today));
   return (
     <Card
-      title="Ассистанс"
+      title={t('staffOps.rebills.col.assistance')}
       actions={
         canAssign ? (
           <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-            Сменить с даты
+            {t('staffOps.assistBlock.changeFrom')}
           </Button>
         ) : undefined
       }
@@ -96,24 +97,24 @@ export function AssistanceBlock({ policyId }: { policyId: string }) {
       ) : (
         <div className="flex flex-col gap-2" data-testid="assistance-block">
           <p>
-            Сейчас:{' '}
+            {t('staffOps.assistBlock.now')}{' '}
             {current?.assistanceId ? (
               <Link className="font-semibold text-accent-text hover:underline" to={`/staff/assistance/${current.assistanceId}`}>
                 {current.assistanceName}
               </Link>
             ) : (
-              <span className="font-semibold">без ассистанса, обслуживает МИГ</span>
+              <span className="font-semibold">{t('staffOps.assistBlock.noneNow')}</span>
             )}
           </p>
           {(q.data?.length ?? 0) > 0 && (
-            <ul className="flex flex-col gap-1 text-[13px]" aria-label="История закреплений">
+            <ul className="flex flex-col gap-1 text-[13px]" aria-label={t('staffOps.assistBlock.history')}>
               {q.data!.map((a) => (
                 <li key={`${a.from}-${a.assistanceId ?? 'mig'}`} className="flex flex-wrap gap-x-2 text-muted">
                   <span className="num">
-                    {formatDate(a.from)} — {a.to ? formatDate(a.to) : 'сейчас'}
+                    {formatDate(a.from)} — {a.to ? formatDate(a.to) : t('staffOps.assistBlock.present')}
                   </span>
-                  <span className="text-text">{a.assistanceName ?? 'МИГ'}</span>
-                  <span>· назначил {a.setByName}</span>
+                  <span className="text-text">{a.assistanceName ?? t('common.mig')}</span>
+                  <span>{t('staffOps.assistBlock.setBy', { name: a.setByName })}</span>
                 </li>
               ))}
             </ul>

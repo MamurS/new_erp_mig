@@ -4,6 +4,7 @@
  * through the session, clinics through an open visit or their own registry, assistances through the
  * assignment of the policy, MIG through the claim, letter or line. Settings change by four eyes.
  */
+import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { AiCallLog, AiScenario, AiSettings, SessionUser } from '@/shared/types';
 import type { AiAdminView, AiCheckItem, AiCheckResult, AiStatus } from '@/shared/types/dto';
@@ -28,7 +29,6 @@ import { randomId } from '../rng';
 import { sha256Hex } from '../settlement-core';
 import { isoDay, tzIso } from '../time';
 import { limitsFor } from '../views';
-import { msg } from '@/i18n/core';
 
 const provider = () => createMockProvider({ latency: mockConfig.latency[1] > 0 });
 

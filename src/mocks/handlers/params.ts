@@ -3,6 +3,7 @@
  * another admin or an underwriter confirms it, and only then it applies. Every step is audited
  * with the old and the new value.
  */
+import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { DmsParamChange, DmsParameter, DmsParamKey } from '@/shared/types';
 import type { DmsParamsView } from '@/shared/types/dto';
@@ -15,7 +16,6 @@ import { API, audit, body, conflict, HttpError, notFound, param, requirePermissi
 import { dmsParam } from '../params';
 import { randomId } from '../rng';
 import { tzIso } from '../time';
-import { msg } from '@/i18n/core';
 
 function toParameter(key: DmsParamKey): DmsParameter {
   const stored = db().dmsParams.values[key];

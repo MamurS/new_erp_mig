@@ -18,8 +18,9 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { Stat } from '../components';
+import { defineLabels, t, tm } from '@/i18n';
 
-const SOURCE_LABEL = { portal: 'кабинет клиники', csv: 'CSV', api: 'API МИС' } as const;
+const SOURCE_LABEL = defineLabels('assist.registry.source', ['portal', 'csv', 'api'] as const);
 const LINE_CHIP = { pending: 'sky', accepted: 'success', rejected: 'danger', disputed: 'warning' } as const;
 
 function PaymentDialog({ registryId, lines, onClose }: { registryId: string; lines: RegistryLine[]; onClose: () => void }) {
@@ -31,12 +32,12 @@ function PaymentDialog({ registryId, lines, onClose }: { registryId: string; lin
   const submit = async () => {
     const parsed = clinicPaymentSchema.safeParse({ lineIds: lines.map((l) => l.id), paidAt, amount: total, orderNumber });
     if (!parsed.success) {
-      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])));
+      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), tm(i.message)])));
       return;
     }
     try {
       await pay.mutateAsync({ id: registryId, lineIds: parsed.data.lineIds, paidAt: parsed.data.paidAt, amount: total, orderNumber: parsed.data.orderNumber });
-      toast.success(`Оплата ${formatMoney(total)} отмечена`);
+      toast.success(t('assist.registry.paymentMarked', { amount: formatMoney(total) }));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -46,25 +47,25 @@ function PaymentDialog({ registryId, lines, onClose }: { registryId: string; lin
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Отметить оплату клинике"
-      description={`Строк: ${lines.length} · ${formatMoney(total)}`}
+      title={t('assist.registry.payTitle')}
+      description={t('assist.registry.payDescription', { n: lines.length, amount: formatMoney(total) })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={pay.isPending} onClick={() => void submit()}>
-            Отметить оплату
+            {t('assist.registry.markPaid')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Дата оплаты" error={errors.paidAt}>
+        <Field label={t('assist.registry.paidAt')} error={errors.paidAt}>
           {(a) => <Input {...a} type="date" value={paidAt} max={todayISO()} onChange={(e) => setPaidAt(e.target.value)} />}
         </Field>
-        <Field label="Номер платёжного поручения" error={errors.orderNumber}>
-          {(a) => <Input {...a} maxLength={40} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="ПП-10452" />}
+        <Field label={t('assist.registry.orderNumber')} error={errors.orderNumber}>
+          {(a) => <Input {...a} maxLength={40} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder={t('assist.registry.orderPlaceholder')} />}
         </Field>
       </div>
     </Modal>
@@ -74,8 +75,8 @@ function PaymentDialog({ registryId, lines, onClose }: { registryId: string; lin
 export default function RegistryPage() {
   const { registryId = '' } = useParams();
   const q = useAssistRegistry(registryId);
-  useDocumentTitle('Реестр клиники');
-  useTopbar([{ label: 'Реестры клиник', to: '/assist/registries' }, { label: q.data ? `${q.data.clinicName} · ${q.data.period}` : 'Реестр' }]);
+  useDocumentTitle(t('assist.registry.docTitle'));
+  useTopbar([{ label: t('assist.nav.registries'), to: '/assist/registries' }, { label: q.data ? `${q.data.clinicName} · ${q.data.period}` : t('assist.registry.crumb') }]);
   const canReview = useCan('assist.registries.review');
   const canPay = useCan('assist.clinic_payments.record');
   const decide = useAssistDecideLine();
@@ -89,7 +90,7 @@ export default function RegistryPage() {
   const accept = async (l: RegistryLine) => {
     try {
       await decide.mutateAsync({ id: registryId, lineId: l.id, body: { decision: 'accept' } });
-      toast.success('Строка принята: лимит списан');
+      toast.success(t('assist.registry.lineAccepted'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -98,12 +99,12 @@ export default function RegistryPage() {
     if (!rejecting) return;
     const parsed = registryLineDecisionSchema.safeParse({ decision: 'reject', reason });
     if (!parsed.success) {
-      setReasonError(parsed.error.issues[0]?.message);
+      setReasonError(tm(parsed.error.issues[0]?.message));
       return;
     }
     try {
       await decide.mutateAsync({ id: registryId, lineId: rejecting.id, body: parsed.data });
-      toast.success('Строка отклонена');
+      toast.success(t('assist.registry.lineRejected'));
       setRejecting(null);
       setReason('');
     } catch (e) {
@@ -119,12 +120,12 @@ export default function RegistryPage() {
             ? [
                 {
                   key: 'pick',
-                  header: 'Выбор',
+                  header: t('assist.registry.pick'),
                   cell: (l: RegistryLine) =>
                     l.status === 'accepted' && !l.payment ? (
                       <input
                         type="checkbox"
-                        aria-label={`Выбрать строку ${l.serviceName}`}
+                        aria-label={t('assist.registry.pickAria', { name: l.serviceName })}
                         checked={selected.has(l.id)}
                         onChange={(e) => {
                           const next = new Set(selected);
@@ -137,36 +138,36 @@ export default function RegistryPage() {
                 },
               ]
             : []),
-          { key: 'date', header: 'Дата', cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
-          { key: 'who', header: 'Пациент', cell: (l) => l.insuredName },
-          { key: 'svc', header: 'Услуга', cell: (l) => `${l.serviceCode} · ${l.serviceName}` },
-          { key: 'icd', header: 'МКБ-10', cell: (l) => <span className="num">{l.icd10}</span> },
-          { key: 'amount', header: 'Сумма', align: 'right', cell: (l) => <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span> },
+          { key: 'date', header: t('common.date'), cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
+          { key: 'who', header: t('common.patient'), cell: (l) => l.insuredName },
+          { key: 'svc', header: t('common.service'), cell: (l) => `${l.serviceCode} · ${l.serviceName}` },
+          { key: 'icd', header: t('assist.guarantee.icd10'), cell: (l) => <span className="num">{l.icd10}</span> },
+          { key: 'amount', header: t('common.amount'), align: 'right', cell: (l) => <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span> },
           {
             key: 'gp',
-            header: 'ГП',
+            header: t('assist.case.guarantee'),
             cell: (l) => {
               if (!l.guaranteeNumber) return <span className="text-muted">—</span>;
               const check = r.guaranteeChecks[l.id];
               return (
                 <span className="flex flex-col">
                   <span className="num">{l.guaranteeNumber}</span>
-                  {check && <span className={check.ok ? 'text-[12px] text-success-text' : 'text-[12px] text-danger-text'}>{check.approvedAmount === null ? 'ГП не одобрено' : check.ok ? 'в пределах ГП' : `больше ГП ${formatMoney(check.approvedAmount)}`}</span>}
+                  {check && <span className={check.ok ? 'text-[12px] text-success-text' : 'text-[12px] text-danger-text'}>{check.approvedAmount === null ? t('assist.registry.gpNotApproved') : check.ok ? t('assist.registry.withinGp') : t('assist.registry.overGp', { amount: formatMoney(check.approvedAmount) })}</span>}
                 </span>
               );
             },
           },
           {
             key: 'status',
-            header: 'Проверка и оплата',
+            header: t('assist.registry.checkAndPay'),
             cell: (l) => (
               <span className="flex flex-col gap-0.5">
                 <Chip kind={LINE_CHIP[l.status]}>{REGISTRY_LINE_STATUS_LABEL[l.status]}</Chip>
                 {l.rejectionReason && <span className="text-[12px] text-muted">{l.rejectionReason}</span>}
-                {l.disputeComment && <span className="text-[12px] text-warning-text">Клиника: {l.disputeComment}</span>}
+                {l.disputeComment && <span className="text-[12px] text-warning-text">{t('assist.registry.clinicDispute', { text: l.disputeComment })}</span>}
                 {l.payment && (
                   <span className="text-[12px] text-success-text" data-testid="line-paid">
-                    Оплачено {formatDate(l.payment.paidAt)} · {l.payment.orderNumber}
+                    {t('assist.registry.linePaid', { date: formatDate(l.payment.paidAt), order: l.payment.orderNumber })}
                   </span>
                 )}
               </span>
@@ -179,11 +180,11 @@ export default function RegistryPage() {
             cell: (l) =>
               canReview && r.status !== 'paid' && (l.status === 'pending' || l.status === 'disputed') ? (
                 <span className="flex justify-end gap-1">
-                  <Button size="sm" variant="secondary" onClick={() => void accept(l)} aria-label={`Принять строку ${l.serviceName}`}>
-                    Принять
+                  <Button size="sm" variant="secondary" onClick={() => void accept(l)} aria-label={t('assist.registry.acceptAria', { name: l.serviceName })}>
+                    {t('assist.registry.accept')}
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setRejecting(l)} aria-label={`Отклонить строку ${l.serviceName}`}>
-                    {l.status === 'disputed' ? 'Оставить отказ' : 'Отклонить'}
+                  <Button size="sm" variant="ghost" onClick={() => setRejecting(l)} aria-label={t('assist.registry.rejectAria', { name: l.serviceName })}>
+                    {l.status === 'disputed' ? t('assist.registry.keepRejection') : t('common.reject')}
                   </Button>
                 </span>
               ) : null,
@@ -201,46 +202,46 @@ export default function RegistryPage() {
                   <span data-testid="registry-status">
                     <Chip kind={REGISTRY_STATUS_CHIP[r.status]}>{REGISTRY_STATUS_LABEL[r.status]}</Chip>
                   </span>
-                  <span>источник: {SOURCE_LABEL[r.source]}</span>
-                  <span>Подреестр вашего ассистанса: {r.lineCount} строк</span>
+                  <span>{t('assist.registry.source', { source: SOURCE_LABEL[r.source] })}</span>
+                  <span>{t('assist.registry.subRegistry', { n: r.lineCount })}</span>
                 </p>
               </div>
               {canPay && unpaid.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" disabled={!picked.length} onClick={() => setPaying(picked)}>
-                    Оплатить выбранные ({picked.length})
+                    {t('assist.registry.paySelected', { n: picked.length })}
                   </Button>
-                  <Button onClick={() => setPaying(unpaid)}>Оплатить все принятые · {formatMoney(unpaid.reduce((s, l) => s + l.amount, 0))}</Button>
+                  <Button onClick={() => setPaying(unpaid)}>{t('assist.registry.payAll', { amount: formatMoney(unpaid.reduce((s, l) => s + l.amount, 0)) })}</Button>
                 </div>
               )}
             </div>
             <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <Stat label="Заявлено" value={formatMoney(r.totals.claimed)} />
-              <Stat label="Принято" value={formatMoney(r.totals.accepted)} />
-              <Stat label="Отклонено" value={formatMoney(r.totals.rejected)} />
-              <Stat label="Оплачено клинике" value={formatMoney(r.totals.paid)} />
+              <Stat label={t('assist.registry.claimed')} value={formatMoney(r.totals.claimed)} />
+              <Stat label={t('assist.registry.accepted')} value={formatMoney(r.totals.accepted)} />
+              <Stat label={t('assist.registry.rejected')} value={formatMoney(r.totals.rejected)} />
+              <Stat label={t('assist.registry.paidToClinic')} value={formatMoney(r.totals.paid)} />
             </div>
             <div className="rounded-card border border-border bg-surface">
-              <DataTable caption="Строки подреестра" columns={columns} rows={r.lines} rowKey={(l) => l.id} />
+              <DataTable caption={t('assist.registry.caption')} columns={columns} rows={r.lines} rowKey={(l) => l.id} />
             </div>
             {rejecting && (
               <Modal
                 open
                 onOpenChange={(o) => !o && setRejecting(null)}
-                title="Отклонить строку"
+                title={t('assist.registry.rejectTitle')}
                 description={`${rejecting.serviceName} · ${formatMoney(rejecting.amount)}`}
                 footer={
                   <>
                     <Button variant="secondary" onClick={() => setRejecting(null)}>
-                      Отмена
+                      {t('common.cancel')}
                     </Button>
                     <Button variant="danger" loading={decide.isPending} onClick={() => void reject()}>
-                      Отклонить
+                      {t('common.reject')}
                     </Button>
                   </>
                 }
               >
-                <Field label="Причина" error={reasonError}>
+                <Field label={t('common.reason')} error={reasonError}>
                   {(a) => <Textarea {...a} rows={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />}
                 </Field>
               </Modal>

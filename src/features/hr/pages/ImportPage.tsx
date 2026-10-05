@@ -25,6 +25,7 @@ import {
   type CsvColumn,
 } from '../importCsv';
 import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
+import { t, tm } from '@/i18n';
 
 type Stage =
   | { kind: 'select' }
@@ -43,7 +44,7 @@ function previewCell(col: CsvColumn, value: string | undefined): string {
 }
 
 export default function ImportPage() {
-  useDocumentTitle('Загрузка сотрудников');
+  useDocumentTitle(t('hr.import.docTitle'));
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const importer = useImportEmployees();
@@ -92,7 +93,7 @@ export default function ImportPage() {
       {
         onSuccess: (r) => {
           const sent = r.requested ?? r.added;
-          toast.success(`Отправлено заявок: ${sent}`);
+          toast.success(t('hr.import.sent', { n: sent }));
           setStage({ kind: 'done', total: stage.rows.length, added: sent });
         },
         onError: (err) => toast.error(errorMessage(err)),
@@ -102,10 +103,10 @@ export default function ImportPage() {
 
   return (
     <div className="mx-auto max-w-[1100px]">
-      <Breadcrumbs items={[{ label: 'Сотрудники', to: '/hr' }, { label: 'Загрузка из CSV' }]} />
+      <Breadcrumbs items={[{ label: t('hr.nav.employees'), to: '/hr' }, { label: t('hr.import.title') }]} />
       <HrHeader
-        title="Загрузка из CSV"
-        subtitle={`Файл .csv в кодировке UTF-8, до 2 МБ и до ${CSV_MAX_ROWS} строк`}
+        title={t('hr.import.title')}
+        subtitle={t('hr.import.subtitle', { max: CSV_MAX_ROWS })}
         className="mt-3"
         actions={
           <Button
@@ -113,11 +114,11 @@ export default function ImportPage() {
             className={HR_BTN}
             onClick={() => {
               downloadText(templateCsv(), 'employees-template.csv');
-              toast.success('Шаблон CSV скачан');
+              toast.success(t('hr.import.templateDownloaded'));
             }}
           >
             <Download className="h-4 w-4" aria-hidden />
-            Скачать шаблон CSV
+            {t('hr.import.downloadTemplate')}
           </Button>
         }
       />
@@ -128,9 +129,9 @@ export default function ImportPage() {
             <FileUp className="h-7 w-7" />
           </span>
           <div>
-            <HrSectionTitle>Выберите файл со списком сотрудников</HrSectionTitle>
+            <HrSectionTitle>{t('hr.import.selectTitle')}</HrSectionTitle>
             <p className="mt-1 text-muted">
-              Колонки: {CSV_COLUMNS.map((c) => `${c} (${CSV_COLUMN_LABEL[c]})`).join(', ')}. Даты в формате ДД.ММ.ГГГГ.
+              {t('hr.import.columns', { columns: CSV_COLUMNS.map((c) => `${c} (${CSV_COLUMN_LABEL[c]})`).join(', ') })}
             </p>
           </div>
           <input
@@ -143,10 +144,10 @@ export default function ImportPage() {
             onChange={(e) => void onFile(e)}
           />
           <Button className={HR_BTN} loading={reading} onClick={() => inputRef.current?.click()}>
-            Выбрать файл .csv
+            {t('hr.import.pickFile')}
           </Button>
           <label htmlFor={inputId} className="sr-only">
-            Файл CSV со списком сотрудников
+            {t('hr.import.fileLabel')}
           </label>
           {fileError && (
             <p id={`${inputId}-err`} role="alert" className="flex max-w-xl items-start gap-2 rounded-btn bg-danger-soft p-3 text-left text-danger-text">
@@ -163,15 +164,15 @@ export default function ImportPage() {
         <HrCard className="flex flex-col items-center gap-4 py-10 text-center">
           <CheckCircle2 className="h-12 w-12 text-success" aria-hidden />
           <HrSectionTitle className="text-[22px]">
-            Отправлено заявок: {stage.added}, пропущено {rowsNom(stage.total - stage.added)}
+            {t('hr.import.doneTitle', { n: stage.added, skipped: rowsNom(stage.total - stage.added) })}
           </HrSectionTitle>
-          <p className="text-muted">МИГ подтвердит изменения состава и оформит допсоглашение. После этого сотрудники получат приглашение в приложение по SMS.</p>
+          <p className="text-muted">{t('hr.import.doneText')}</p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link to="/hr" className={cn(buttonVariants({ variant: 'primary' }), HR_BTN)}>
-              К списку сотрудников
+              {t('hr.import.toList')}
             </Link>
             <Button variant="secondary" className={HR_BTN} onClick={reset}>
-              Загрузить ещё файл
+              {t('hr.import.another')}
             </Button>
           </div>
         </HrCard>
@@ -199,27 +200,27 @@ function Preview({
     <HrCard className="p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-soft p-5">
         <div>
-          <HrSectionTitle>Проверка файла</HrSectionTitle>
+          <HrSectionTitle>{t('hr.import.checkTitle')}</HrSectionTitle>
           <p className="mt-1 text-muted">
-            Корректных строк: {valid}. С ошибками: {invalid} — они будут пропущены.
+            {t('hr.import.checkSummary', { valid, invalid })}
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" className={HR_BTN} onClick={onReset} disabled={pending}>
-            Выбрать другой файл
+            {t('hr.import.otherFile')}
           </Button>
           <Button className={HR_BTN} disabled={valid === 0} loading={pending} onClick={onCommit}>
-            Добавить {employeesAcc(valid)}
+            {t('hr.import.add', { employees: employeesAcc(valid) })}
           </Button>
         </div>
       </div>
       <div className="max-h-[60vh] overflow-auto">
         <table className="w-full border-collapse text-left text-[14px]">
-          <caption className="sr-only">Строки файла</caption>
+          <caption className="sr-only">{t('hr.import.caption')}</caption>
           <thead className="sticky top-0 bg-surface">
             <tr className="border-b border-border">
               <th scope="col" className="h-10 px-3 font-normal text-muted">
-                Строка
+                {t('hr.import.row')}
               </th>
               {CSV_COLUMNS.map((c) => (
                 <th key={c} scope="col" className="h-10 whitespace-nowrap px-3 font-normal text-muted">
@@ -227,7 +228,7 @@ function Preview({
                 </th>
               ))}
               <th scope="col" className="h-10 px-3 font-normal text-muted">
-                Результат
+                {t('hr.import.result')}
               </th>
             </tr>
           </thead>
@@ -251,7 +252,7 @@ function Preview({
                           <li key={i} className="flex items-start gap-1.5">
                             <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                             <span>
-                              {fieldLabel(e.field)}: {e.message}
+                              {t('hr.import.fieldError', { field: fieldLabel(e.field), message: tm(e.message) })}
                             </span>
                           </li>
                         ))}
@@ -259,7 +260,7 @@ function Preview({
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-success-text">
                         <CheckCircle2 className="h-4 w-4" aria-hidden />
-                        Будет добавлен
+                        {t('hr.import.willAdd')}
                       </span>
                     )}
                   </td>

@@ -1,4 +1,5 @@
 /* Queue of insured-list changes (POLICY_SPEC §5.2): underwriters approve or reject HR requests. */
+import { defineLabels, t, tm } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, MoreHorizontal, X } from 'lucide-react';
@@ -22,11 +23,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
-const TABS = [
-  ['pending', 'Ждут решения'],
-  ['approved', 'Подтверждённые'],
-  ['rejected', 'Отклонённые'],
-] as const;
+const TABS = ['pending', 'approved', 'rejected'] as const;
+const TAB_LABEL = defineLabels('staffLc.changes.tab', TABS);
 const STATUS_CHIP = { pending: 'sun', approved: 'success', rejected: 'danger' } as const;
 
 function Delta({ value }: { value: number }) {
@@ -41,12 +39,12 @@ function RejectDialog({ ids, onClose, onDone }: { ids: string[]; onClose: () => 
   const send = async () => {
     const parsed = policyChangeDecisionSchema.safeParse({ ids, decision: 'reject', reason });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message);
+      setError(tm(parsed.error.issues[0]?.message) || undefined);
       return;
     }
     try {
       await decide.mutateAsync(parsed.data);
-      toast.success(`Отклонено заявок: ${ids.length}`);
+      toast.success(t('staffLc.changes.rejectedToast', { n: ids.length }));
       onDone();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -56,20 +54,20 @@ function RejectDialog({ ids, onClose, onDone }: { ids: string[]; onClose: () => 
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title={ids.length === 1 ? 'Отклонить заявку' : `Отклонить заявки: ${ids.length}`}
-      description="HR клиента увидит причину в списке сотрудников"
+      title={ids.length === 1 ? t('staffLc.changes.rejectOne') : t('staffLc.changes.rejectMany', { n: ids.length })}
+      description={t('staffLc.changes.rejectDesc')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button variant="danger" loading={decide.isPending} onClick={() => void send()}>
-            Отклонить
+            {t('common.reject')}
           </Button>
         </>
       }
     >
-      <Field label="Причина" error={error}>
+      <Field label={t('common.reason')} error={error}>
         {(a) => <Textarea {...a} rows={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />}
       </Field>
     </Modal>
@@ -77,11 +75,11 @@ function RejectDialog({ ids, onClose, onDone }: { ids: string[]; onClose: () => 
 }
 
 export default function PolicyChangesPage() {
-  useDocumentTitle('Изменения состава');
-  useTopbar([{ label: 'Изменения состава' }]);
+  useDocumentTitle(t('staffLc.changes.title'));
+  useTopbar([{ label: t('staffLc.changes.title') }]);
   const canDecide = useCan('policy_changes.decide');
   const [f, setF] = useUrlFilters(['status', 'clientId'] as const);
-  const status = TABS.some(([k]) => k === f.status) ? f.status : 'pending';
+  const status = TABS.some((k) => k === f.status) ? f.status : 'pending';
   const list = usePolicyChanges({ status, ...(f.clientId ? { clientId: f.clientId } : {}) });
   const decide = useDecidePolicyChanges();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -103,7 +101,7 @@ export default function PolicyChangesPage() {
   const approve = async (ids: string[]) => {
     try {
       const r = await decide.mutateAsync({ ids, decision: 'approve' });
-      toast.success(`Подтверждено заявок: ${r.approved}. Допсоглашений: ${r.endorsements}`);
+      toast.success(t('staffLc.changes.approvedToast', { n: r.approved, endorsements: r.endorsements }));
       setSelected(new Set());
     } catch (e) {
       toast.error(errorMessage(e));
@@ -117,13 +115,13 @@ export default function PolicyChangesPage() {
             key: 'select',
             header: '',
             className: 'w-10',
-            cell: (r: PolicyChange) => <Checkbox aria-label={`Выбрать: ${r.fullName}`} checked={selected.has(r.id)} onCheckedChange={(v) => toggle(r.id, v)} />,
+            cell: (r: PolicyChange) => <Checkbox aria-label={t('staffLc.changes.selectAria', { name: r.fullName })} checked={selected.has(r.id)} onCheckedChange={(v) => toggle(r.id, v)} />,
           } satisfies Column<PolicyChange>,
         ]
       : []),
     {
       key: 'client',
-      header: 'Клиент и полис',
+      header: t('staffLc.changes.clientPolicy'),
       cell: (r) => (
         <span className="flex flex-col">
           <Link to={`/staff/clients/${r.clientId}`} className="font-medium hover:underline">
@@ -135,25 +133,25 @@ export default function PolicyChangesPage() {
         </span>
       ),
     },
-    { key: 'kind', header: 'Тип', cell: (r) => <Chip kind={r.kind === 'add' ? 'sky' : 'peach'}>{POLICY_CHANGE_KIND_LABEL[r.kind]}</Chip> },
+    { key: 'kind', header: t('common.type'), cell: (r) => <Chip kind={r.kind === 'add' ? 'sky' : 'peach'}>{POLICY_CHANGE_KIND_LABEL[r.kind]}</Chip> },
     {
       key: 'who',
-      header: 'Сотрудник',
+      header: t('common.employee'),
       cell: (r) => (
         <span className="flex flex-col">
           <span className="font-medium">{r.fullName}</span>
           <span className="text-[12px] text-muted">
             {r.position}
-            {r.familyMembers ? ` · семья: ${r.familyMembers}` : ''}
+            {r.familyMembers ? t('staffLc.changes.family', { n: r.familyMembers }) : ''}
           </span>
         </span>
       ),
     },
-    { key: 'date', header: 'С даты', cell: (r) => <span className="num">{formatDate(r.effectiveDate)}</span> },
-    { key: 'delta', header: 'Доплата / возврат', align: 'right', cell: (r) => <Delta value={r.premiumDelta} /> },
+    { key: 'date', header: t('common.from'), cell: (r) => <span className="num">{formatDate(r.effectiveDate)}</span> },
+    { key: 'delta', header: t('staffLc.changes.delta'), align: 'right', cell: (r) => <Delta value={r.premiumDelta} /> },
     {
       key: 'requested',
-      header: 'Запрос',
+      header: t('staffLc.changes.request'),
       cell: (r) => (
         <span className="flex flex-col text-[12px]">
           <span>{r.requestedByName}</span>
@@ -163,7 +161,7 @@ export default function PolicyChangesPage() {
     },
     {
       key: 'status',
-      header: 'Статус',
+      header: t('common.status'),
       cell: (r) => (
         <span className="flex flex-col gap-0.5">
           <Chip kind={STATUS_CHIP[r.status]}>{POLICY_CHANGE_STATUS_LABEL[r.status]}</Chip>
@@ -181,16 +179,16 @@ export default function PolicyChangesPage() {
             cell: (r: PolicyChange) => (
               <Menu>
                 <MenuTrigger asChild>
-                  <Button size="icon" variant="ghost" aria-label={`Действия: ${r.fullName}`}>
+                  <Button size="icon" variant="ghost" aria-label={t('staffLc.changes.actionsAria', { name: r.fullName })}>
                     <MoreHorizontal className="h-4 w-4" aria-hidden />
                   </Button>
                 </MenuTrigger>
                 <MenuContent>
                   <MenuItem onSelect={() => void approve([r.id])}>
-                    <Check className="h-4 w-4" aria-hidden /> Подтвердить
+                    <Check className="h-4 w-4" aria-hidden /> {t('common.confirm')}
                   </MenuItem>
                   <MenuItem danger onSelect={() => setRejecting([r.id])}>
-                    <X className="h-4 w-4" aria-hidden /> Отклонить…
+                    <X className="h-4 w-4" aria-hidden /> {t('staffLc.changes.rejectEllipsis')}
                   </MenuItem>
                 </MenuContent>
               </Menu>
@@ -204,14 +202,14 @@ export default function PolicyChangesPage() {
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[22px] font-bold">Изменения состава</h1>
+          <h1 className="text-[22px] font-bold">{t('staffLc.changes.title')}</h1>
           <p className="text-[12px] text-muted">
-            Заявки HR клиентов на прикрепление и исключение сотрудников. Подтверждение меняет полис, пересчитывает премию пропорционально сроку и создаёт допсоглашение.
+            {t('staffLc.changes.subtitle')}
           </p>
         </div>
         {f.clientId && (
           <Button variant="secondary" size="sm" onClick={() => setF({ clientId: null })}>
-            {clientName ? `Клиент: ${clientName}` : 'Один клиент'} · показать всех
+            {clientName ? t('staffLc.changes.showAllNamed', { name: clientName }) : t('staffLc.changes.showAll')}
           </Button>
         )}
       </div>
@@ -223,9 +221,9 @@ export default function PolicyChangesPage() {
         }}
       >
         <TabsList>
-          {TABS.map(([k, label]) => (
+          {TABS.map((k) => (
             <TabsTrigger key={k} value={k}>
-              {label}
+              {TAB_LABEL[k]}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -233,20 +231,20 @@ export default function PolicyChangesPage() {
       {canDecide && status === 'pending' && pendingIds.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-border bg-surface px-4 py-2" data-testid="bulk-bar">
           <label className="flex items-center gap-2">
-            <Checkbox aria-label="Выбрать все заявки" checked={chosen.length === pendingIds.length} onCheckedChange={(v) => setSelected(v ? new Set(pendingIds) : new Set())} />
-            Выбрать все
+            <Checkbox aria-label={t('staffLc.changes.selectAllAria')} checked={chosen.length === pendingIds.length} onCheckedChange={(v) => setSelected(v ? new Set(pendingIds) : new Set())} />
+            {t('staffLc.changes.selectAll')}
           </label>
           {chosen.length > 0 && (
             <>
-              <span className="font-medium">Выбрано: {chosen.length}</span>
-              <span className="text-muted">итого</span>
+              <span className="font-medium">{t('staffLc.changes.selected', { n: chosen.length })}</span>
+              <span className="text-muted">{t('staffLc.changes.totalLower')}</span>
               <Delta value={total} />
               <span className="flex-1" />
               <Button size="sm" loading={decide.isPending} onClick={() => void approve(chosen)}>
-                Подтвердить выбранные
+                {t('staffLc.changes.approveSelected')}
               </Button>
               <Button size="sm" variant="secondary" onClick={() => setRejecting(chosen)}>
-                Отклонить…
+                {t('staffLc.changes.rejectEllipsis')}
               </Button>
             </>
           )}
@@ -254,14 +252,14 @@ export default function PolicyChangesPage() {
       )}
       <div className="mt-3 rounded-card border border-border bg-surface">
         <DataTable
-          caption="Заявки на изменение состава"
+          caption={t('staffLc.changes.caption')}
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
           loading={list.isLoading}
           error={list.error}
           onRetry={() => void list.refetch()}
-          empty={<EmptyState title={status === 'pending' ? 'Заявок, ждущих решения, нет' : 'Заявок нет'} />}
+          empty={<EmptyState title={status === 'pending' ? t('staffLc.changes.emptyPending') : t('staffLc.endorsements.requestsEmpty')} />}
         />
       </div>
       {rejecting && (

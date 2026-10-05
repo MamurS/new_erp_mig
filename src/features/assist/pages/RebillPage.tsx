@@ -15,12 +15,13 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { RebillLinesTable, RebillStatus, RebillSummaryBlock } from '../components';
+import { t, tm } from '@/i18n';
 
 export default function RebillPage() {
   const { rebillId = '' } = useParams();
   const q = useAssistRebill(rebillId);
-  useDocumentTitle('Счёт МИГ');
-  useTopbar([{ label: 'Счета МИГ', to: '/assist/rebills' }, { label: q.data?.number ?? 'Счёт' }]);
+  useDocumentTitle(t('assist.rebill.docTitle'));
+  useTopbar([{ label: t('assist.nav.rebills'), to: '/assist/rebills' }, { label: q.data?.number ?? t('assist.rebill.crumb') }]);
   const submit = useSubmitRebill();
   const rebuild = useBuildRebill();
   const dispute = useDisputeRebillLine();
@@ -35,9 +36,7 @@ export default function RebillPage() {
         <div>
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-[22px] font-bold">
-                Счёт <span className="num">{r.number}</span> за {r.period}
-              </h1>
+              <h1 className="text-[22px] font-bold">{t('assist.rebill.heading', { number: r.number, period: r.period })}</h1>
               <span data-testid="rebill-status">
                 <RebillStatus status={r.status} />
               </span>
@@ -45,10 +44,10 @@ export default function RebillPage() {
             {r.status === 'draft' && (
               <div className="flex gap-2">
                 <Button variant="secondary" loading={rebuild.isPending} onClick={() => void rebuild.mutateAsync(r.period).catch((e: unknown) => toast.error(errorMessage(e)))}>
-                  Пересобрать из оплат
+                  {t('assist.rebill.rebuild')}
                 </Button>
                 <Button disabled={!r.lines.length} onClick={() => setConfirm(true)}>
-                  Отправить в МИГ
+                  {t('assist.rebill.sendToMig')}
                 </Button>
               </div>
             )}
@@ -58,8 +57,8 @@ export default function RebillPage() {
             lines={r.lines}
             actions={(l) =>
               l.status === 'rejected' && r.status !== 'paid' ? (
-                <Button size="sm" variant="secondary" onClick={() => setDisputing(l)} aria-label={`Оспорить строку ${l.serviceName}`}>
-                  Оспорить
+                <Button size="sm" variant="secondary" onClick={() => setDisputing(l)} aria-label={t('assist.rebill.disputeAria', { name: l.serviceName })}>
+                  {t('assist.rebill.dispute')}
                 </Button>
               ) : null
             }
@@ -67,14 +66,14 @@ export default function RebillPage() {
           <ConfirmDialog
             open={confirm}
             onOpenChange={setConfirm}
-            title="Отправить счёт в МИГ?"
-            description={`${r.lines.length} строк на ${formatMoney(r.totals.claims)} и вознаграждение ${formatMoney(r.totals.fee)}. После отправки строки изменить нельзя.`}
-            confirmLabel="Отправить"
+            title={t('assist.rebill.confirmTitle')}
+            description={t('assist.rebill.confirmDescription', { n: r.lines.length, claims: formatMoney(r.totals.claims), fee: formatMoney(r.totals.fee) })}
+            confirmLabel={t('common.send')}
             loading={submit.isPending}
             onConfirm={async () => {
               try {
                 await submit.mutateAsync(r.id);
-                toast.success('Счёт отправлен в МИГ');
+                toast.success(t('assist.rebill.sent'));
                 setConfirm(false);
               } catch (e) {
                 toast.error(errorMessage(e));
@@ -85,24 +84,24 @@ export default function RebillPage() {
             <Modal
               open
               onOpenChange={(o) => !o && setDisputing(null)}
-              title="Оспорить отклонение"
-              description={`${disputing.serviceName} · ${formatMoney(disputing.amount)} · МИГ: ${disputing.rejectionReason ?? ''}`}
+              title={t('assist.rebill.disputeTitle')}
+              description={t('assist.rebill.disputeDescription', { service: disputing.serviceName, amount: formatMoney(disputing.amount), reason: disputing.rejectionReason ?? '' })}
               footer={
                 <>
                   <Button variant="secondary" onClick={() => setDisputing(null)}>
-                    Отмена
+                    {t('common.cancel')}
                   </Button>
                   <Button
                     loading={dispute.isPending}
                     onClick={async () => {
                       const parsed = rebillDisputeSchema.safeParse({ comment });
                       if (!parsed.success) {
-                        setError(parsed.error.issues[0]?.message);
+                        setError(tm(parsed.error.issues[0]?.message));
                         return;
                       }
                       try {
                         await dispute.mutateAsync({ id: r.id, lineId: disputing.id, comment: parsed.data.comment });
-                        toast.success('Возражение отправлено в МИГ');
+                        toast.success(t('assist.rebill.disputeSent'));
                         setDisputing(null);
                         setComment('');
                       } catch (e) {
@@ -110,12 +109,12 @@ export default function RebillPage() {
                       }
                     }}
                   >
-                    Оспорить
+                    {t('assist.rebill.dispute')}
                   </Button>
                 </>
               }
             >
-              <Field label="Возражение" error={error}>
+              <Field label={t('assist.rebill.objection')} error={error}>
                 {(a) => <Textarea {...a} rows={3} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />}
               </Field>
             </Modal>

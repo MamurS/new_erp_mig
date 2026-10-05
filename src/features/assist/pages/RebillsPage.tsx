@@ -11,29 +11,30 @@ import { PageHeader } from '@/shared/ui/page';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { RebillStatus } from '../components';
+import { t } from '@/i18n';
 
 export default function RebillsPage() {
-  useDocumentTitle('Счета МИГ');
-  useTopbar([{ label: 'Счета МИГ' }]);
+  useDocumentTitle(t('assist.nav.rebills'));
+  useTopbar([{ label: t('assist.nav.rebills') }]);
   const navigate = useNavigate();
   const q = useAssistRebills();
   const build = useBuildRebill();
   const period = todayISO().slice(0, 7);
   const current = q.data?.find((b) => b.period === period);
   const columns: Column<RebillSummary>[] = [
-    { key: 'num', header: 'Номер', cell: (b) => <span className="num font-medium">{b.number}</span> },
-    { key: 'period', header: 'Период', cell: (b) => <span className="num">{b.period}</span> },
-    { key: 'lines', header: 'Строк', align: 'right', cell: (b) => <span className="num">{b.lineCount}</span> },
-    { key: 'flags', header: 'С флагами', align: 'right', cell: (b) => <span className={b.flaggedCount ? 'num font-semibold text-danger-text' : 'num text-muted'}>{b.flaggedCount}</span> },
-    { key: 'total', header: 'Итого', align: 'right', cell: (b) => <span className="num whitespace-nowrap">{formatMoney(b.totals.total)}</span> },
-    { key: 'sent', header: 'Отправлен', cell: (b) => (b.submittedAt ? <span className="num">{formatDate(b.submittedAt)}</span> : '—') },
-    { key: 'status', header: 'Статус', cell: (b) => <RebillStatus status={b.status} /> },
+    { key: 'num', header: t('common.number'), cell: (b) => <span className="num font-medium">{b.number}</span> },
+    { key: 'period', header: t('common.period'), cell: (b) => <span className="num">{b.period}</span> },
+    { key: 'lines', header: t('assist.registries.lines'), align: 'right', cell: (b) => <span className="num">{b.lineCount}</span> },
+    { key: 'flags', header: t('assist.rebills.flagged'), align: 'right', cell: (b) => <span className={b.flaggedCount ? 'num font-semibold text-danger-text' : 'num text-muted'}>{b.flaggedCount}</span> },
+    { key: 'total', header: t('common.total'), align: 'right', cell: (b) => <span className="num whitespace-nowrap">{formatMoney(b.totals.total)}</span> },
+    { key: 'sent', header: t('assist.rebills.sentCol'), cell: (b) => (b.submittedAt ? <span className="num">{formatDate(b.submittedAt)}</span> : '—') },
+    { key: 'status', header: t('common.status'), cell: (b) => <RebillStatus status={b.status} /> },
   ];
   return (
     <>
       <PageHeader
-        title="Счета на возмещение МИГ"
-        subtitle="Строки, оплаченные клиникам в месяце, плюс вознаграждение по договору. МИГ проверяет счёт 10 рабочих дней"
+        title={t('assist.rebills.title')}
+        subtitle={t('assist.rebills.subtitle')}
         actions={
           (!current || current.status === 'draft') && (
             <Button
@@ -47,14 +48,14 @@ export default function RebillsPage() {
                 }
               }}
             >
-              {current ? 'Обновить черновик' : 'Сформировать'} счёт за {period}
+              {current ? t('assist.rebills.updateDraft', { period }) : t('assist.rebills.build', { period })}
             </Button>
           )
         }
       />
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Счета МИГ"
+          caption={t('assist.nav.rebills')}
           columns={columns}
           rows={q.data}
           loading={q.isLoading}
@@ -63,7 +64,7 @@ export default function RebillsPage() {
           rowKey={(b) => b.id}
           onRowClick={(b) => navigate(`/assist/rebills/${b.id}`)}
           onRowOpen={(b) => navigate(`/assist/rebills/${b.id}`)}
-          empty="Счетов пока нет"
+          empty={t('assist.rebills.empty')}
         />
       </div>
     </>

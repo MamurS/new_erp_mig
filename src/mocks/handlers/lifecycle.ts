@@ -2,6 +2,7 @@
  * Sales part of the lifecycle (LIFECYCLE_SPEC §2–6): staff authority changes (four-eyes), leads, deals,
  * the anonymous census, quotes with authority routing, the offer from an approved quote, the client's answer.
  */
+import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { AuthorityChange, Deal, KpDocument, KpParams, Quote, SessionUser, StaffAuthority } from '@/shared/types';
 import type { DealCard, QuoteView, StaffDirectoryItem } from '@/shared/types/dto';
@@ -13,7 +14,6 @@ import { dealNumber, defaultStartDate, originalReminderDue } from '@/shared/doma
 import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
 import { defaultEndDate } from '@/shared/domain/policies';
 import {
-import { msg } from '@/i18n/core';
   authorityChangeSchema,
   authorityRejectSchema,
   dealLostSchema,
@@ -26,7 +26,7 @@ import { msg } from '@/i18n/core';
   quoteRejectSchema,
 } from '@/shared/schemas/forms';
 import { db, type Db, type StaffRow } from '../db';
-import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
+import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { randomId } from '../rng';
 import { DAY, isoDay, tzIso } from '../time';
 import { toClient } from '../views';
@@ -377,7 +377,7 @@ export const lifecycleHandlers = [
       const text = await ctx.request.text();
       if (text.length > CENSUS_MAX_BYTES) throw new HttpError(413, 'validation', 'srv.file.tooLarge1mb');
       const parsed = parseCensusCsv(text, todayIso());
-      if (!parsed.rows.length) throw new HttpError(422, 'validation', parsed.errors[0]?.message ?? 'В файле нет строк');
+      if (!parsed.rows.length) throw parsed.errors[0] ? httpErrorOf(422, 'validation', parsed.errors[0].message) : new HttpError(422, 'validation', 'srv.census.noRows');
       // Names, PINFL and phones are not accepted at this stage: such columns were dropped by the parser.
       const c = { id: randomId(), dealId: deal.id, rows: parsed.rows, uploadedAt: tzIso(Date.now()) };
       d.censuses.push(c);

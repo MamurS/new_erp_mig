@@ -4,6 +4,7 @@ import type { QaSampleView } from '@/shared/types/dto';
 import { useQaQueue, useReviewQa } from '@/shared/api/queries/assist';
 import { errorMessage } from '@/shared/api/client';
 import { qaReviewSchema } from '@/shared/schemas/forms';
+import { t, tm } from '@/i18n';
 import { formatDate } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -17,18 +18,18 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
 export function QaVerdict({ s }: { s: QaSampleView }) {
-  if (!s.verdict) return <Chip kind="sky">Ждёт оценки</Chip>;
+  if (!s.verdict) return <Chip kind="sky">{t('staffOps.qa.awaiting')}</Chip>;
   return (
     <span className="flex flex-col gap-0.5">
-      <Chip kind={s.verdict === 'agree' ? 'success' : 'danger'}>{s.verdict === 'agree' ? 'Согласен' : 'Не согласен'}</Chip>
+      <Chip kind={s.verdict === 'agree' ? 'success' : 'danger'}>{s.verdict === 'agree' ? t('staffOps.qa.agree') : t('staffOps.qa.disagree')}</Chip>
       {s.comment && <span className="text-[12px] text-muted">{s.comment}</span>}
     </span>
   );
 }
 
 export default function QaPage() {
-  useDocumentTitle('Контроль качества');
-  useTopbar([{ label: 'Контроль качества' }]);
+  useDocumentTitle(t('staffOps.qa.title'));
+  useTopbar([{ label: t('staffOps.qa.title') }]);
   const [f, setF] = useUrlFilters(['status'] as const);
   const status = f.status === 'reviewed' || f.status === 'all' ? f.status : 'pending';
   const q = useQaQueue({ status });
@@ -38,11 +39,11 @@ export default function QaPage() {
   const [comment, setComment] = useState('');
   const [error, setError] = useState<string>();
   const columns: Column<QaSampleView>[] = [
-    { key: 'date', header: 'В выборке с', cell: (s) => <span className="num">{formatDate(s.createdAt)}</span> },
-    { key: 'who', header: 'Ассистанс', cell: (s) => s.assistanceName },
-    { key: 'type', header: 'Решение', cell: (s) => (s.subject.type === 'guarantee' ? 'Гарантийное письмо' : 'Строка реестра') },
-    { key: 'label', header: 'Что проверяем', cell: (s) => s.subject.label },
-    { key: 'verdict', header: 'Оценка МИГ', cell: (s) => <QaVerdict s={s} /> },
+    { key: 'date', header: t('staffOps.qa.col.since'), cell: (s) => <span className="num">{formatDate(s.createdAt)}</span> },
+    { key: 'who', header: t('staffOps.rebills.col.assistance'), cell: (s) => s.assistanceName },
+    { key: 'type', header: t('common.decision'), cell: (s) => (s.subject.type === 'guarantee' ? t('staffOps.qa.subject.guarantee') : t('staffOps.qa.subject.registryLine')) },
+    { key: 'label', header: t('staffOps.qa.col.subject'), cell: (s) => s.subject.label },
+    { key: 'verdict', header: t('staffOps.qa.col.verdict'), cell: (s) => <QaVerdict s={s} /> },
     {
       key: 'actions',
       header: '',
@@ -59,34 +60,34 @@ export default function QaPage() {
               setError(undefined);
             }}
           >
-            Оценить
+            {t('staffOps.qa.review')}
           </Button>
         ),
     },
   ];
   return (
     <>
-      <PageHeader title="Контроль качества ассистансов" subtitle="Каждый месяц система случайно отбирает 5% решений ассистансов. Оценка попадает в KPI, но не меняет решение по оплаченному делу" />
+      <PageHeader title={t('staffOps.qa.pageTitle')} subtitle={t('staffOps.qa.subtitle')} />
       <Tabs value={status} onValueChange={(v) => setF({ status: v === 'pending' ? null : v })}>
         <TabsList>
-          <TabsTrigger value="pending">Ждут оценки</TabsTrigger>
-          <TabsTrigger value="reviewed">Оценены</TabsTrigger>
-          <TabsTrigger value="all">Все</TabsTrigger>
+          <TabsTrigger value="pending">{t('staffOps.qa.tab.pending')}</TabsTrigger>
+          <TabsTrigger value="reviewed">{t('staffOps.qa.tab.reviewed')}</TabsTrigger>
+          <TabsTrigger value="all">{t('common.all')}</TabsTrigger>
         </TabsList>
       </Tabs>
       <div className="mt-3 rounded-card border border-border bg-surface">
-        <DataTable caption="Контрольная выборка" columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(s) => s.id} empty="Выборка пуста" />
+        <DataTable caption={t('staffOps.qa.sample')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(s) => s.id} empty={t('staffOps.qa.empty')} />
       </div>
       {open && (
         <Modal
           open
           onOpenChange={(o) => !o && setOpen(null)}
-          title="Оценка решения ассистанса"
+          title={t('staffOps.qa.dialogTitle')}
           description={`${open.assistanceName} · ${open.subject.label}`}
           footer={
             <>
               <Button variant="secondary" onClick={() => setOpen(null)}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button
                 loading={review.isPending}
@@ -98,27 +99,27 @@ export default function QaPage() {
                   }
                   try {
                     await review.mutateAsync({ id: open.id, ...parsed.data });
-                    toast.success('Оценка сохранена');
+                    toast.success(t('staffOps.qa.saved'));
                     setOpen(null);
                   } catch (e) {
                     toast.error(errorMessage(e));
                   }
                 }}
               >
-                Сохранить
+                {t('common.save')}
               </Button>
             </>
           }
         >
-          <div className="mb-3 flex gap-4" role="radiogroup" aria-label="Оценка">
+          <div className="mb-3 flex gap-4" role="radiogroup" aria-label={t('staffOps.qa.verdict')}>
             <label className="flex items-center gap-1.5">
-              <input type="radio" name="verdict" checked={verdict === 'agree'} onChange={() => setVerdict('agree')} /> Согласен
+              <input type="radio" name="verdict" checked={verdict === 'agree'} onChange={() => setVerdict('agree')} /> {t('staffOps.qa.agree')}
             </label>
             <label className="flex items-center gap-1.5">
-              <input type="radio" name="verdict" checked={verdict === 'disagree'} onChange={() => setVerdict('disagree')} /> Не согласен
+              <input type="radio" name="verdict" checked={verdict === 'disagree'} onChange={() => setVerdict('disagree')} /> {t('staffOps.qa.disagree')}
             </label>
           </div>
-          <Field label="Комментарий" error={error} hint={verdict === 'disagree' ? 'Обязательно при несогласии' : undefined}>
+          <Field label={t('common.comment')} error={tm(error) || undefined} hint={verdict === 'disagree' ? t('staffOps.qa.requiredOnDisagree') : undefined}>
             {(a) => <Textarea {...a} rows={3} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />}
           </Field>
         </Modal>

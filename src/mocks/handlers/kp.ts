@@ -2,6 +2,7 @@
  * Commercial offers (KP_SPEC §8). The server stores parameters and the template version, not a PDF:
  * the document is reproduced exactly from them.
  */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import { kpParamsSchema } from '@/shared/schemas/forms';
 import { currentAssistance } from '../assistance-core';
@@ -16,7 +17,6 @@ import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
 import { dmsParam } from '../params';
 import { ensureRenewalDeal } from './lifecycle';
-import { msg } from '@/i18n/core';
 
 const DEFAULT_SUM = 200_000_000;
 const DEFAULT_PREMIUM = 5_000_000;

@@ -1,4 +1,5 @@
 /* Калькулятор андеррайтера (LIFECYCLE_SPEC §5): tariff by age bands, manual adjustments, approval by authority. */
+import { defineLabels, t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
@@ -23,7 +24,7 @@ import { useTopbar } from '../topbar';
 import { ReasonDialog } from './common';
 
 const PROGRAMS: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
-const STATUS_LABEL = { draft: 'Черновик', pending_approval: 'На согласовании', approved: 'Утверждена', rejected: 'Отклонена' } as const;
+const STATUS_LABEL = defineLabels('staffLc.quoteStatus', ['draft', 'pending_approval', 'approved', 'rejected'] as const);
 const STATUS_CHIP = { draft: 'neutral', pending_approval: 'warning', approved: 'success', rejected: 'danger' } as const;
 
 interface AdjRow {
@@ -78,62 +79,62 @@ function Calculator({ quote }: { quote: QuoteView }) {
       await save.mutateAsync({ id: quote.id, ...data });
       if (thenSubmit) {
         const r = await action.mutateAsync({ id: quote.id, action: 'submit' });
-        toast.success(r.status === 'approved' ? 'Котировка утверждена в пределах ваших полномочий' : 'Котировка отправлена на согласование');
-      } else toast.success('Котировка сохранена');
+        toast.success(r.status === 'approved' ? t('staffLc.quote.approvedWithin') : t('staffLc.quote.sentForApproval'));
+      } else toast.success(t('staffLc.quote.saved'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
 
-  const err = (k: string) => errors[k];
+  const err = (k: string) => (errors[k] ? tm(errors[k]) : undefined);
   return (
     <>
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-2">
-            Котировка
+            {t('staffLc.deal.quote')}
             <Chip kind={STATUS_CHIP[quote.status]}>{STATUS_LABEL[quote.status]}</Chip>
           </span>
         }
-        subtitle={`${quote.clientName} · сделка ${quote.dealNumber}`}
+        subtitle={t('staffLc.census.subtitle', { client: quote.clientName, number: quote.dealNumber })}
         actions={
           <>
             <Button variant="secondary" onClick={() => navigate(`/staff/deals/${quote.dealId}`)}>
-              К сделке
+              {t('staffLc.census.toDeal')}
             </Button>
             {editable && (
               <>
                 <Button variant="secondary" loading={save.isPending && !action.isPending} onClick={() => void doSave(false)}>
-                  Сохранить
+                  {t('common.save')}
                 </Button>
                 <Button loading={action.isPending} onClick={() => void doSave(true)}>
-                  {problem ? 'Отправить на согласование' : 'Утвердить'}
+                  {problem ? t('staffLc.quote.submitForApproval') : t('staffLc.quote.approve')}
                 </Button>
               </>
             )}
             {quote.canApprove && (
               <>
                 <Button variant="secondary" onClick={() => setDialog('reject')}>
-                  Отклонить
+                  {t('common.reject')}
                 </Button>
-                <Button onClick={() => setDialog('approve')}>Согласовать</Button>
+                <Button onClick={() => setDialog('approve')}>{t('staffLc.quote.agree')}</Button>
               </>
             )}
           </>
         }
       />
-      {quote.status === 'rejected' && quote.rejectReason && <p className="mb-3 rounded-card bg-danger-soft px-3 py-2 text-[13px] text-danger-text">Отклонена: {quote.rejectReason}</p>}
+      {quote.status === 'rejected' && quote.rejectReason && <p className="mb-3 rounded-card bg-danger-soft px-3 py-2 text-[13px] text-danger-text">{t('staffLc.quote.rejectedReason', { reason: quote.rejectReason })}</p>}
       {problem && (quote.status === 'draft' || quote.status === 'rejected' || quote.status === 'pending_approval') && (
         <p role="status" className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="quote-authority">
-          {problem}. Котировку утвердит андеррайтер с бо́льшими полномочиями.
+          {t('staffLc.quote.authorityProblem', { problem: tm(problem) })}
         </p>
       )}
-      {!quote.census && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">Сначала загрузите данные для оценки.</p>}
+      {!quote.census && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">{t('staffLc.quote.censusFirst')}</p>}
       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <div className="flex min-w-0 flex-col gap-4">
-          <Card title="Тариф">
+          <Card title={t('common.rate')}>
             <div className="mb-3 max-w-xs">
-              <Field label="Программа">
+              <Field label={t('common.program')}>
                 {(a) => (
                   <Select {...a} disabled={!editable} value={program} onChange={(e) => setProgram(e.target.value as ProgramCode)}>
                     {PROGRAMS.map((p) => (
@@ -147,14 +148,14 @@ function Calculator({ quote }: { quote: QuoteView }) {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]" data-testid="quote-rates">
-                <caption className="sr-only">Возрастные группы</caption>
+                <caption className="sr-only">{t('staffLc.quote.ageBands')}</caption>
                 <thead>
                   <tr className="border-b border-border text-left text-[12px] text-muted">
-                    <th className="py-2 pr-3 font-medium">Группа</th>
-                    <th className="py-2 pr-3 text-right font-medium">Человек</th>
-                    <th className="py-2 pr-3 text-right font-medium">Базовая ставка</th>
-                    <th className="py-2 pr-3 text-right font-medium">Коэффициент</th>
-                    <th className="py-2 text-right font-medium">Премия</th>
+                    <th className="py-2 pr-3 font-medium">{t('staffLc.reserves.colGroup')}</th>
+                    <th className="py-2 pr-3 text-right font-medium">{t('staffLc.quote.people')}</th>
+                    <th className="py-2 pr-3 text-right font-medium">{t('staffLc.quote.baseRate')}</th>
+                    <th className="py-2 pr-3 text-right font-medium">{t('staffLc.quote.coefficient')}</th>
+                    <th className="py-2 text-right font-medium">{t('common.premium')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -171,34 +172,34 @@ function Calculator({ quote }: { quote: QuoteView }) {
               </table>
             </div>
             <p className="mt-2 text-[12px] text-muted">
-              Ставки и коэффициенты — из «Параметров ДМС». Скидка за размер группы: {shown.groupDiscountPct ? formatPercent(shown.groupDiscountPct) : 'нет'} (от {params.groupDiscountFrom} человек).
+              {t('staffLc.quote.ratesNote', { discount: shown.groupDiscountPct ? formatPercent(shown.groupDiscountPct) : t('staffLc.quote.noDiscount'), from: params.groupDiscountFrom })}
             </p>
           </Card>
           <Card
-            title="Надбавки и скидки"
+            title={t('staffLc.quote.adjustments')}
             actions={
               editable && (
                 <Button size="sm" variant="secondary" disabled={rows.length >= 10} onClick={() => setRows((r) => [...r, { label: '', pct: '', comment: '' }])}>
-                  <Plus className="h-3.5 w-3.5" aria-hidden /> Добавить
+                  <Plus className="h-3.5 w-3.5" aria-hidden /> {t('common.add')}
                 </Button>
               )
             }
           >
-            {rows.length === 0 && <p className="text-[13px] text-muted">Нет. Скидка — отрицательный процент, надбавка — положительный; комментарий обязателен.</p>}
+            {rows.length === 0 && <p className="text-[13px] text-muted">{t('staffLc.quote.noAdjustments')}</p>}
             <div className="flex flex-col gap-3">
               {rows.map((r, i) => (
                 <div key={i} className="grid gap-2 rounded-btn border border-border-soft p-2 sm:grid-cols-[1fr_110px_2fr_auto]" data-testid="quote-adjustment">
-                  <Field label="Название" error={err(`adjustments.${i}.label`)}>
+                  <Field label={t('common.name')} error={err(`adjustments.${i}.label`)}>
                     {(a) => <Input {...a} disabled={!editable} maxLength={80} value={r.label} onChange={(e) => setRows((x) => x.map((y, j) => (j === i ? { ...y, label: e.target.value } : y)))} />}
                   </Field>
                   <Field label="%" error={err(`adjustments.${i}.pct`)}>
                     {(a) => <Input {...a} disabled={!editable} inputMode="decimal" maxLength={7} value={r.pct} placeholder="-10" onChange={(e) => setRows((x) => x.map((y, j) => (j === i ? { ...y, pct: e.target.value } : y)))} />}
                   </Field>
-                  <Field label="Комментарий" error={err(`adjustments.${i}.comment`)}>
+                  <Field label={t('common.comment')} error={err(`adjustments.${i}.comment`)}>
                     {(a) => <Input {...a} disabled={!editable} maxLength={300} value={r.comment} onChange={(e) => setRows((x) => x.map((y, j) => (j === i ? { ...y, comment: e.target.value } : y)))} />}
                   </Field>
                   {editable && (
-                    <Button size="sm" variant="ghost" className="self-end" aria-label="Удалить строку" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
+                    <Button size="sm" variant="ghost" className="self-end" aria-label={t('staffLc.quote.deleteRow')} onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
                       <Trash2 className="h-4 w-4" aria-hidden />
                     </Button>
                   )}
@@ -208,31 +209,32 @@ function Calculator({ quote }: { quote: QuoteView }) {
           </Card>
         </div>
         <div className="flex flex-col gap-4">
-          <Card title="Итог">
+          <Card title={t('staffLc.quote.result')}>
             <dl className="text-[13px]" data-testid="quote-total">
-              <Kv label="За сотрудника">
+              <Kv label={t('staffLc.quote.perEmployee')}>
                 <span className="num">{formatMoney(shown.premiumEmployee)}</span>
               </Kv>
-              <Kv label="За члена семьи">
+              <Kv label={t('staffLc.quote.perFamily')}>
                 <span className="num">{formatMoney(shown.premiumFamily)}</span>
               </Kv>
-              <Kv label="Скидка от тарифа">
+              <Kv label={t('staffLc.quote.discountFromTariff')}>
                 <span className="num">{formatPercent(shown.discountFromTariffPct, 1)}</span>
               </Kv>
               <div className="mt-1 flex justify-between border-t border-border-soft pt-2 text-[15px] font-bold">
-                <dt>Премия в год</dt>
+                <dt>{t('staffLc.quote.premiumPerYear')}</dt>
                 <dd className="num">{formatMoney(shown.total)}</dd>
               </div>
             </dl>
             {authority && (
               <p className="mt-3 text-[12px] text-muted">
-                Ваши полномочия: скидка до {formatPercent(authority.quoteDiscountMaxPct ?? 0)}
-                {authority.quotePremiumMax !== undefined && `, премия до ${formatMoney(authority.quotePremiumMax)}`}.
+                {authority.quotePremiumMax !== undefined
+                  ? t('staffLc.quote.authorityBoth', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0), premium: formatMoney(authority.quotePremiumMax) })
+                  : t('staffLc.quote.authorityDiscount', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0) })}
               </p>
             )}
           </Card>
           {quote.approvals.length > 0 && (
-            <Card title="Согласования">
+            <Card title={t('staffLc.quote.approvals')}>
               <ul className="text-[13px]">
                 {quote.approvals.map((a) => (
                   <li key={a.at} className="py-1">
@@ -248,24 +250,24 @@ function Calculator({ quote }: { quote: QuoteView }) {
       <ReasonDialog
         open={dialog === 'approve'}
         onClose={() => setDialog(null)}
-        title="Согласовать котировку"
-        description="После согласования менеджер сможет отправить КП с этими условиями."
-        label="Комментарий (необязательно)"
+        title={t('staffLc.quote.approveTitle')}
+        description={t('staffLc.quote.approveDesc')}
+        label={t('staffLc.quote.commentOptional')}
         field="comment"
         optional
         schema={quoteApproveSchema}
-        confirmLabel="Согласовать"
+        confirmLabel={t('staffLc.quote.agree')}
         onSubmit={(comment) => action.mutateAsync({ id: quote.id, action: 'approve', comment: comment || undefined })}
       />
       <ReasonDialog
         open={dialog === 'reject'}
         onClose={() => setDialog(null)}
-        title="Отклонить котировку"
-        description="Котировка вернётся автору на доработку."
-        label="Причина"
+        title={t('staffLc.quote.rejectTitle')}
+        description={t('staffLc.quote.rejectDesc')}
+        label={t('common.reason')}
         field="reason"
         schema={quoteRejectSchema}
-        confirmLabel="Отклонить"
+        confirmLabel={t('common.reject')}
         danger
         onSubmit={(reason) => action.mutateAsync({ id: quote.id, action: 'reject', reason })}
       />
@@ -276,7 +278,7 @@ function Calculator({ quote }: { quote: QuoteView }) {
 export default function QuotePage() {
   const { quoteId = '' } = useParams();
   const q = useQuote(quoteId);
-  useDocumentTitle('Котировка');
-  useTopbar([{ label: 'Сделки', to: '/staff/deals' }, ...(q.data ? [{ label: q.data.dealNumber, to: `/staff/deals/${q.data.dealId}` }] : []), { label: 'Котировка' }]);
+  useDocumentTitle(t('staffLc.deal.quote'));
+  useTopbar([{ label: t('staffLc.deals.title'), to: '/staff/deals' }, ...(q.data ? [{ label: q.data.dealNumber, to: `/staff/deals/${q.data.dealId}` }] : []), { label: t('staffLc.deal.quote') }]);
   return <QueryState query={q}>{(quote) => <Calculator quote={quote} />}</QueryState>;
 }

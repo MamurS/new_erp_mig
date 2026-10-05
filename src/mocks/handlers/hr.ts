@@ -1,3 +1,4 @@
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import Papa from 'papaparse';
 import { hrEmployeeSchema, hrExcludeSchema, hrInviteSchema } from '@/shared/schemas/forms';
@@ -7,7 +8,6 @@ import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { db, type InsuredRow, type PolicyChangeRow } from '../db';
 import { requestChange } from '../policy-core';
 import {
-import { msg } from '@/i18n/core';
   API,
   audit,
   body,
@@ -209,7 +209,7 @@ export const hrHandlers = [
       const header = parsed.meta.fields ?? [];
       const required = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'startDate'];
       const missing = required.filter((h) => !header.includes(h));
-      if (missing.length) throw new HttpError(422, 'validation', `В файле нет колонок: ${missing.join(', ')}. Скачайте шаблон`);
+      if (missing.length) throw new HttpError(422, 'validation', 'srv.hr.missingColumns', { params: { columns: missing.join(', ') } });
       const errors: HrImportError[] = [];
       const valid: ReturnType<typeof hrEmployeeSchema.parse>[] = [];
       const seen = new Set<string>();

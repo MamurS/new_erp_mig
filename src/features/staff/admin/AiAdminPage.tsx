@@ -13,6 +13,7 @@ import { useUser } from '@/shared/auth/session';
 import { aiRejectSchema, aiSettingsChangeSchema } from '@/shared/schemas/forms';
 import { AI_PROVIDER_LABEL, AI_SCENARIO_LABEL, AI_SCENARIOS } from '@/features/ai/settings';
 import { VERDICT_SHORT } from '@/features/ai/labels';
+import { t, tm } from '@/i18n';
 import { formatDateTime } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -46,17 +47,17 @@ function SettingsForm({ current, pending }: { current: AiSettings; pending: bool
     setErrors({});
     try {
       await propose.mutateAsync(parsed.data);
-      toast.success('Изменение отправлено на подтверждение второму администратору');
+      toast.success(t('staffOps.ai.sent'));
       setReason('');
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
   const doKill = async () => {
-    if (killReason.trim().length < 5) return toast.error('Опишите причину: минимум 5 символов');
+    if (killReason.trim().length < 5) return toast.error(t('staffOps.ai.reasonMin'));
     try {
       await propose.mutateAsync({ to: { ...current, killSwitch: true }, reason: killReason.trim() });
-      toast.success('ИИ отключён везде');
+      toast.success(t('staffOps.ai.killed'));
       setKill(false);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -64,24 +65,24 @@ function SettingsForm({ current, pending }: { current: AiSettings; pending: bool
   };
   return (
     <Card
-      title="Настройки"
+      title={t('staffOps.ai.settings')}
       actions={
         current.killSwitch ? (
-          <Chip kind="danger">ИИ отключён везде</Chip>
+          <Chip kind="danger">{t('staffOps.ai.killed')}</Chip>
         ) : (
           <Button size="sm" variant="danger" onClick={() => setKill(true)}>
-            <Power className="h-3.5 w-3.5" aria-hidden /> Отключить ИИ везде
+            <Power className="h-3.5 w-3.5" aria-hidden /> {t('staffOps.ai.killSwitch')}
           </Button>
         )
       }
     >
       <table className="w-full text-[13px]">
-        <caption className="sr-only">Сценарии</caption>
+        <caption className="sr-only">{t('staffOps.ai.scenarios')}</caption>
         <thead>
           <tr className="border-b border-border text-left text-[12px] text-muted">
-            <th className="py-2 pr-3 font-medium">Сценарий</th>
-            <th className="py-2 pr-3 font-medium">Включён</th>
-            <th className="py-2 font-medium">Провайдер</th>
+            <th className="py-2 pr-3 font-medium">{t('staffOps.ai.scenario')}</th>
+            <th className="py-2 pr-3 font-medium">{t('staffOps.ai.enabled')}</th>
+            <th className="py-2 font-medium">{t('staffOps.ai.provider')}</th>
           </tr>
         </thead>
         <tbody>
@@ -89,14 +90,14 @@ function SettingsForm({ current, pending }: { current: AiSettings; pending: bool
             <tr key={s} className="border-b border-border-soft">
               <td className="py-2 pr-3">{AI_SCENARIO_LABEL[s]}</td>
               <td className="py-2 pr-3">
-                <input type="checkbox" aria-label={`Включить: ${AI_SCENARIO_LABEL[s]}`} checked={draft.scenarios[s].enabled} onChange={(e) => setScenario(s, { enabled: e.target.checked })} />
+                <input type="checkbox" aria-label={t('staffOps.ai.enableAria', { name: AI_SCENARIO_LABEL[s] })} checked={draft.scenarios[s].enabled} onChange={(e) => setScenario(s, { enabled: e.target.checked })} />
               </td>
               <td className="py-2">
-                <Select aria-label={`Провайдер: ${AI_SCENARIO_LABEL[s]}`} className="h-8" value={draft.scenarios[s].provider} onChange={(e) => setScenario(s, { provider: e.target.value as AiProviderId })}>
+                <Select aria-label={t('staffOps.ai.providerAria', { name: AI_SCENARIO_LABEL[s] })} className="h-8" value={draft.scenarios[s].provider} onChange={(e) => setScenario(s, { provider: e.target.value as AiProviderId })}>
                   {(Object.keys(AI_PROVIDER_LABEL) as AiProviderId[]).map((p) => (
                     <option key={p} value={p} disabled={p !== 'mock'}>
                       {AI_PROVIDER_LABEL[p]}
-                      {p !== 'mock' ? ' — появится с бэкендом' : ''}
+                      {p !== 'mock' ? t('staffOps.ai.withBackend') : ''}
                     </option>
                   ))}
                 </Select>
@@ -106,37 +107,37 @@ function SettingsForm({ current, pending }: { current: AiSettings; pending: bool
         </tbody>
       </table>
       <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr]">
-        <Field label="Порог уверенности, %" error={errors['to.confidenceThreshold']} hint="Ниже — «Нужна проверка специалиста»">
+        <Field label={t('staffOps.ai.threshold')} error={tm(errors['to.confidenceThreshold']) || undefined} hint={t('staffOps.ai.thresholdHint')}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={3} value={threshold} onChange={(e) => setThreshold(e.target.value)} />}
         </Field>
-        <Field label="Основание изменения" error={errors.reason}>
+        <Field label={t('staffOps.authority.reason')} error={tm(errors.reason) || undefined}>
           {(a) => <Input {...a} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
         </Field>
       </div>
       <div className="mt-3 flex items-center gap-3">
         <Button disabled={pending} loading={propose.isPending} onClick={() => void submit()}>
-          Предложить изменение
+          {t('staffOps.ai.propose')}
         </Button>
-        {pending && <span className="text-[12px] text-muted">Есть изменение на подтверждении</span>}
-        {current.killSwitch && <span className="text-[12px] text-muted">Чтобы включить ИИ, снимите флажок через «Предложить изменение» — нужен второй администратор.</span>}
+        {pending && <span className="text-[12px] text-muted">{t('staffOps.ai.hasPending')}</span>}
+        {current.killSwitch && <span className="text-[12px] text-muted">{t('staffOps.ai.reenableHint')}</span>}
       </div>
       {current.killSwitch && (
         <label className="mt-2 flex items-center gap-2 text-[13px]">
           <input type="checkbox" checked={!draft.killSwitch} onChange={(e) => setDraft((d) => ({ ...d, killSwitch: !e.target.checked }))} />
-          Включить ИИ снова
+          {t('staffOps.ai.reenable')}
         </label>
       )}
       <ConfirmDialog
         open={kill}
         onOpenChange={setKill}
-        title="Отключить ИИ везде?"
-        description="Все блоки ИИ сразу исчезнут во всех порталах, приложение покажет «Проверка временно недоступна». Включить снова можно только с подтверждением второго администратора."
-        confirmLabel="Отключить"
+        title={t('staffOps.ai.killTitle')}
+        description={t('staffOps.ai.killText')}
+        confirmLabel={t('staffOps.ai.kill')}
         danger
         loading={propose.isPending}
         onConfirm={() => void doKill()}
       >
-        <Field label="Причина">{(a) => <Textarea {...a} rows={2} maxLength={500} value={killReason} onChange={(e) => setKillReason(e.target.value)} />}</Field>
+        <Field label={t('common.reason')}>{(a) => <Textarea {...a} rows={2} maxLength={500} value={killReason} onChange={(e) => setKillReason(e.target.value)} />}</Field>
       </ConfirmDialog>
     </Card>
   );
@@ -147,24 +148,33 @@ function Golden() {
   const [r, setR] = useState<AiGoldenResult | null>(null);
   return (
     <Card
-      title="Эталонные случаи"
+      title={t('staffOps.ai.golden')}
       actions={
         <Button size="sm" variant="secondary" loading={run.isPending} onClick={() => void run.mutateAsync().then(setR).catch((e: unknown) => toast.error(errorMessage(e)))}>
-          <Play className="h-3.5 w-3.5" aria-hidden /> Прогнать
+          <Play className="h-3.5 w-3.5" aria-hidden /> {t('staffOps.ai.run')}
         </Button>
       }
     >
-      <p className="text-[13px] text-muted">Случаи из <code>src/features/ai/eval/golden.json</code>: текст, ожидаемые коды и вердикт для демо-программы «Стандарт». В CI точность мока не ниже 90%.</p>
+      <p className="text-[13px] text-muted">
+        {t('staffOps.ai.goldenFrom')} <code>src/features/ai/eval/golden.json</code>
+        {t('staffOps.ai.goldenText')}
+      </p>
       {r && (
         <div className="mt-3 text-[13px]" data-testid="golden-result">
           <p className="font-semibold">
-            Точность {pct(r.accuracy)} · верно {r.correct} из {r.total}
+            {t('staffOps.ai.goldenResult', { accuracy: pct(r.accuracy), correct: r.correct, total: r.total })}
           </p>
           {r.errors.length > 0 && (
             <ul className="mt-1 list-disc pl-5 text-muted">
               {r.errors.slice(0, 20).map((e) => (
                 <li key={e.text}>
-                  «{e.text}»: ожидали {e.expectedCodes.join(', ') || '—'} / {VERDICT_SHORT[e.expectedDecision]}, получили {e.gotCodes.join(', ') || '—'} / {VERDICT_SHORT[e.gotDecision]}
+                  {t('staffOps.ai.goldenError', {
+                    text: e.text,
+                    expCodes: e.expectedCodes.join(', ') || '—',
+                    expVerdict: VERDICT_SHORT[e.expectedDecision],
+                    gotCodes: e.gotCodes.join(', ') || '—',
+                    gotVerdict: VERDICT_SHORT[e.gotDecision],
+                  })}
                 </li>
               ))}
             </ul>
@@ -176,8 +186,8 @@ function Golden() {
 }
 
 export default function AiAdminPage() {
-  useDocumentTitle('ИИ-проверка покрытия');
-  useTopbar([{ label: 'ИИ-проверка покрытия' }]);
+  useDocumentTitle(t('staffOps.ai.title'));
+  useTopbar([{ label: t('staffOps.ai.title') }]);
   const me = useUser();
   const q = useAiAdmin();
   const decide = useDecideAiSettings();
@@ -185,8 +195,8 @@ export default function AiAdminPage() {
   return (
     <>
       <PageHeader
-        title="ИИ-проверка покрытия"
-        subtitle="Решают правила таблицы покрытия; ИИ сопоставляет текст с каталогом услуг и объясняет. Пункты программы условные, пока шаблоны документов — заглушки."
+        title={t('staffOps.ai.title')}
+        subtitle={t('staffOps.ai.subtitle')}
       />
       <QueryState query={q}>
         {(v) => {
@@ -196,23 +206,27 @@ export default function AiAdminPage() {
               <div className="flex flex-col gap-4">
                 <SettingsForm current={v.settings} pending={!!pending} />
                 {pending && (
-                  <Card title="Ждёт подтверждения">
+                  <Card title={t('staffOps.ai.pendingTitle')}>
                     <p className="text-[13px]">
                       {pending.proposedByName}, {formatDateTime(pending.proposedAt)}: {pending.reason}
                     </p>
                     <p className="mt-1 text-[12px] text-muted">
-                      Порог {Math.round(pending.from.confidenceThreshold * 100)}% → {Math.round(pending.to.confidenceThreshold * 100)}% · сценарии: {AI_SCENARIOS.map((s) => `${AI_SCENARIO_LABEL[s]} — ${pending.to.scenarios[s].enabled ? 'вкл' : 'выкл'}`).join('; ')}
-                      {pending.from.killSwitch && !pending.to.killSwitch ? ' · ИИ включается снова' : ''}
+                      {t('staffOps.ai.pendingSummary', {
+                        from: Math.round(pending.from.confidenceThreshold * 100),
+                        to: Math.round(pending.to.confidenceThreshold * 100),
+                        list: AI_SCENARIOS.map((s) => t(pending.to.scenarios[s].enabled ? 'staffOps.ai.scenarioOn' : 'staffOps.ai.scenarioOff', { name: AI_SCENARIO_LABEL[s] })).join('; '),
+                      })}
+                      {pending.from.killSwitch && !pending.to.killSwitch ? t('staffOps.ai.reenabling') : ''}
                     </p>
                     {pending.proposedById === me?.id ? (
-                      <p className="mt-2 text-[12px] text-muted">Подтверждает другой администратор</p>
+                      <p className="mt-2 text-[12px] text-muted">{t('staffOps.ai.otherAdmin')}</p>
                     ) : (
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" loading={decide.isPending} onClick={() => void decide.mutateAsync({ id: pending.id, decision: 'approve' }).then(() => toast.success('Настройки применены')).catch((e: unknown) => toast.error(errorMessage(e)))}>
-                          Подтвердить
+                        <Button size="sm" loading={decide.isPending} onClick={() => void decide.mutateAsync({ id: pending.id, decision: 'approve' }).then(() => toast.success(t('staffOps.ai.applied'))).catch((e: unknown) => toast.error(errorMessage(e)))}>
+                          {t('common.confirm')}
                         </Button>
                         <Button size="sm" variant="secondary" onClick={() => setReject(pending.id)}>
-                          Отклонить
+                          {t('common.reject')}
                         </Button>
                       </div>
                     )}
@@ -221,17 +235,17 @@ export default function AiAdminPage() {
                 <Golden />
               </div>
               <div className="flex flex-col gap-4">
-                <Card title="Метрики" bodyClassName="p-0">
+                <Card title={t('staffOps.ai.metrics')} bodyClassName="p-0">
                   <table className="w-full text-[13px]" data-testid="ai-metrics">
-                    <caption className="sr-only">Метрики по сценариям</caption>
+                    <caption className="sr-only">{t('staffOps.ai.metricsCaption')}</caption>
                     <thead>
                       <tr className="border-b border-border text-left text-[12px] text-muted">
-                        <th className="px-4 py-2 font-medium">Сценарий</th>
-                        <th className="px-2 py-2 text-right font-medium">Ответов</th>
-                        <th className="px-2 py-2 text-right font-medium">Оценено</th>
-                        <th className="px-2 py-2 text-right font-medium">Согласие</th>
-                        <th className="px-2 py-2 text-right font-medium">«Нужен специалист»</th>
-                        <th className="px-4 py-2 text-right font-medium">Задержка</th>
+                        <th className="px-4 py-2 font-medium">{t('staffOps.ai.scenario')}</th>
+                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.calls')}</th>
+                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.rated')}</th>
+                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.agree')}</th>
+                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.specialist')}</th>
+                        <th className="px-4 py-2 text-right font-medium">{t('staffOps.ai.col.latency')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -242,13 +256,13 @@ export default function AiAdminPage() {
                           <td className="num px-2 py-1.5 text-right">{m.rated}</td>
                           <td className="num px-2 py-1.5 text-right">{pct(m.agreeShare)}</td>
                           <td className="num px-2 py-1.5 text-right">{pct(m.specialistShare)}</td>
-                          <td className="num px-4 py-1.5 text-right">{m.avgLatencyMs === null ? '—' : `${m.avgLatencyMs} мс`}</td>
+                          <td className="num px-4 py-1.5 text-right">{m.avgLatencyMs === null ? '—' : t('staffOps.ai.ms', { n: m.avgLatencyMs })}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </Card>
-                <Card title="Топ расхождений" bodyClassName="p-0">
+                <Card title={t('staffOps.ai.disagreements')} bodyClassName="p-0">
                   {v.disagreements.length ? (
                     <ul className="divide-y divide-border-soft text-[13px]" data-testid="ai-disagreements">
                       {v.disagreements.map((x) => (
@@ -263,10 +277,10 @@ export default function AiAdminPage() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="px-4 py-3 text-[13px] text-muted">Расхождений пока нет</p>
+                    <p className="px-4 py-3 text-[13px] text-muted">{t('staffOps.ai.noDisagreements')}</p>
                   )}
                 </Card>
-                <p className="text-[12px] text-muted">Версия шаблона промпта: {v.promptVersion}. Доступные провайдеры: {v.providersAvailable.map((p) => AI_PROVIDER_LABEL[p]).join(', ')}.</p>
+                <p className="text-[12px] text-muted">{t('staffOps.ai.footer', { version: v.promptVersion, providers: v.providersAvailable.map((p) => AI_PROVIDER_LABEL[p]).join(', ') })}</p>
               </div>
             </div>
           );
@@ -275,12 +289,12 @@ export default function AiAdminPage() {
       <ReasonDialog
         open={!!reject}
         onClose={() => setReject(null)}
-        title="Отклонить изменение"
-        description="Настройки останутся прежними."
-        label="Причина"
+        title={t('staffOps.ai.rejectTitle')}
+        description={t('staffOps.ai.rejectText')}
+        label={t('common.reason')}
         field="reason"
         schema={aiRejectSchema}
-        confirmLabel="Отклонить"
+        confirmLabel={t('common.reject')}
         danger
         onSubmit={(reason) => decide.mutateAsync({ id: reject!, decision: 'reject', reason })}
       />

@@ -1,4 +1,5 @@
 /* «Счета и оплаты» (LIFECYCLE_SPEC §9): invoices from payment schedules, manual payments and the 1C statement. */
+import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download } from 'lucide-react';
@@ -36,7 +37,7 @@ function PaymentDialog({ invoice, onClose }: { invoice: InvoiceView; onClose: ()
     }
     try {
       await record.mutateAsync(parsed.data);
-      toast.success('Оплата отмечена');
+      toast.success(t('staffLc.invoices.paymentRecorded'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -46,24 +47,24 @@ function PaymentDialog({ invoice, onClose }: { invoice: InvoiceView; onClose: ()
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title={`Оплата по счёту ${invoice.number}`}
-      description={`${invoice.clientName}. Остаток ${formatMoney(rest)}. Частичная оплата допустима.`}
+      title={t('staffLc.invoices.paymentTitle', { number: invoice.number })}
+      description={t('staffLc.invoices.paymentDesc', { client: invoice.clientName, rest: formatMoney(rest) })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={record.isPending} onClick={() => void submit()}>
-            Отметить оплату
+            {t('staffLc.invoices.recordPayment')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Сумма" error={errors.amount}>
+        <Field label={t('common.amount')} error={tm(errors.amount) || undefined}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={amount} onChange={(e) => setAmount(e.target.value)} />}
         </Field>
-        <Field label="Дата оплаты" error={errors.paidAt}>
+        <Field label={t('staffLc.invoices.paidAt')} error={tm(errors.paidAt) || undefined}>
           {(a) => <Input {...a} type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} />}
         </Field>
       </div>
@@ -72,8 +73,8 @@ function PaymentDialog({ invoice, onClose }: { invoice: InvoiceView; onClose: ()
 }
 
 export default function InvoicesPage() {
-  useDocumentTitle('Счета и оплаты');
-  useTopbar([{ label: 'Счета и оплаты' }]);
+  useDocumentTitle(t('staffLc.invoices.title'));
+  useTopbar([{ label: t('staffLc.invoices.title') }]);
   const [f, setF] = useUrlFilters(['status'] as const);
   const q = useInvoices(f.status ? { status: f.status } : {});
   const canPay = useCan('payments.record');
@@ -85,18 +86,18 @@ export default function InvoicesPage() {
     try {
       const r = await import1c.mutateAsync(csv);
       setResult(r);
-      toast.success(`Загружено ${r.matched + r.queued}, пропущено как повтор ${r.skipped}`);
+      toast.success(t('staffLc.invoices.importToast', { loaded: r.matched + r.queued, skipped: r.skipped }));
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
 
   const columns: Column<InvoiceView>[] = [
-    { key: 'num', header: 'Счёт', cell: (i) => <span className="num font-medium">{i.number}</span> },
-    { key: 'client', header: 'Клиент', cell: (i) => i.clientName },
+    { key: 'num', header: t('staffLc.contract.invoice'), cell: (i) => <span className="num font-medium">{i.number}</span> },
+    { key: 'client', header: t('common.client'), cell: (i) => i.clientName },
     {
       key: 'doc',
-      header: 'Основание',
+      header: t('staffLc.invoices.basis'),
       cell: (i) =>
         i.contractId ? (
           <Link className="num text-accent-text hover:underline" to={i.endorsementId ? `/staff/endorsements/${i.endorsementId}` : `/staff/contracts/${i.contractId}`} onClick={(e) => e.stopPropagation()}>
@@ -106,10 +107,10 @@ export default function InvoicesPage() {
           '—'
         ),
     },
-    { key: 'due', header: 'Срок', cell: (i) => <span className="num">{formatDate(i.dueDate)}</span> },
-    { key: 'amount', header: 'Сумма', align: 'right', cell: (i) => <span className="num whitespace-nowrap">{formatMoney(i.amount)}</span> },
-    { key: 'paid', header: 'Оплачено', align: 'right', cell: (i) => <span className="num whitespace-nowrap">{i.paid ? formatMoney(i.paid) : '—'}</span> },
-    { key: 'status', header: 'Статус', cell: (i) => <Chip kind={INVOICE_STATUS_CHIP[i.status]}>{INVOICE_STATUS_LABEL[i.status]}</Chip> },
+    { key: 'due', header: t('staffLc.contract.due'), cell: (i) => <span className="num">{formatDate(i.dueDate)}</span> },
+    { key: 'amount', header: t('common.amount'), align: 'right', cell: (i) => <span className="num whitespace-nowrap">{formatMoney(i.amount)}</span> },
+    { key: 'paid', header: t('staffLc.invoices.paid'), align: 'right', cell: (i) => <span className="num whitespace-nowrap">{i.paid ? formatMoney(i.paid) : '—'}</span> },
+    { key: 'status', header: t('common.status'), cell: (i) => <Chip kind={INVOICE_STATUS_CHIP[i.status]}>{INVOICE_STATUS_LABEL[i.status]}</Chip> },
     {
       key: 'act',
       header: '',
@@ -123,7 +124,7 @@ export default function InvoicesPage() {
               setPay(i);
             }}
           >
-            Оплата
+            {t('staffLc.invoices.payment')}
           </Button>
         ) : null,
     },
@@ -132,30 +133,31 @@ export default function InvoicesPage() {
   return (
     <>
       <PageHeader
-        title="Счета и оплаты"
-        subtitle="Счета формируются после подписания по графику платежей. Выписка 1С сопоставляется по номеру счёта в назначении, затем по ИНН и точной сумме; остальное — в ручную разноску"
+        title={t('staffLc.invoices.title')}
+        subtitle={t('staffLc.invoices.subtitle')}
         actions={
           canPay && (
             <>
+              {/* eslint-disable-next-line mig/no-cyrillic-ui -- sample row of a 1C bank statement file (data, not UI) */}
               <Button variant="secondary" size="sm" onClick={() => downloadText(toCsv(['doc_number', 'date', 'amount', 'inn', 'purpose', 'payer'], [['1245', '2026-10-01', '1000000', '301234567', 'Оплата по счёту СЧ-2026-002001', 'ООО «Плательщик»']]), 'statement-1c-template.csv')}>
-                <Download className="h-3.5 w-3.5" aria-hidden /> Шаблон выписки
+                <Download className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.invoices.statementTemplate')}
               </Button>
               <Button asChild variant="secondary" size="sm">
-                <Link to="/staff/invoices/queue">Ручная разноска</Link>
+                <Link to="/staff/invoices/queue">{t('staffLc.invoices.manualMatching')}</Link>
               </Button>
-              <CsvFileButton label="Загрузить выписку из 1С" ariaLabel="Файл выписки из 1С" busy={import1c.isPending} maxBytes={1024 * 1024} onText={(t) => void onStatement(t)} />
+              <CsvFileButton label={t('staffLc.invoices.uploadStatement')} ariaLabel={t('staffLc.invoices.statementFile')} busy={import1c.isPending} maxBytes={1024 * 1024} onText={(text) => void onStatement(text)} />
             </>
           )
         }
       />
       {result && (
         <div className="mb-3 rounded-card border border-border bg-surface px-3 py-2 text-[13px]" data-testid="import-result" role="status">
-          Загружено: {result.matched + result.queued}, пропущено как повтор: {result.skipped}. Сопоставлено: {result.matched} · в ручную разноску: {result.queued} · ошибок в строках: {result.unmatched.length} · договоров вступило в силу: {result.activated}
+          {t('staffLc.invoices.importResult', { loaded: result.matched + result.queued, skipped: result.skipped, matched: result.matched, queued: result.queued, errors: result.unmatched.length, activated: result.activated })}
           {result.queued > 0 && (
             <>
               {' '}
               <Link className="text-accent-text hover:underline" to="/staff/invoices/queue">
-                Перейти к ручной разноске
+                {t('staffLc.invoices.goToMatching')}
               </Link>
             </>
           )}
@@ -163,7 +165,7 @@ export default function InvoicesPage() {
             <ul className="mt-1 list-disc pl-5 text-muted">
               {result.unmatched.slice(0, 10).map((u) => (
                 <li key={u.line}>
-                  Строка {u.line}: {u.reason}
+                  {t('staffLc.census.rowError', { row: u.line, message: tm(u.reason) })}
                 </li>
               ))}
             </ul>
@@ -171,15 +173,15 @@ export default function InvoicesPage() {
         </div>
       )}
       <div className="mb-3">
-        <Select aria-label="Статус" className="h-8 w-56" value={f.status ?? ''} onChange={(e) => setF({ status: e.target.value || null })}>
-          <option value="">Все счета</option>
-          <option value="unpaid,overdue">Неоплаченные</option>
-          <option value="overdue">Просроченные</option>
-          <option value="paid">Оплаченные</option>
+        <Select aria-label={t('common.status')} className="h-8 w-56" value={f.status ?? ''} onChange={(e) => setF({ status: e.target.value || null })}>
+          <option value="">{t('staffLc.invoices.all')}</option>
+          <option value="unpaid,overdue">{t('staffLc.invoices.unpaid')}</option>
+          <option value="overdue">{t('staffLc.invoices.overdue')}</option>
+          <option value="paid">{t('staffLc.invoices.paidFilter')}</option>
         </Select>
       </div>
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption="Счета" columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(i) => i.id} empty="Счетов нет" />
+        <DataTable caption={t('staffLc.contract.invoices')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(i) => i.id} empty={t('staffLc.invoices.empty')} />
       </div>
       {pay && <PaymentDialog invoice={pay} onClose={() => setPay(null)} />}
     </>

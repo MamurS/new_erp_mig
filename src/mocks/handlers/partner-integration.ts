@@ -3,6 +3,7 @@
  * deliveries and the call log. The same handlers serve clinics (/api/clinic/integration) and
  * assistance companies (/api/assist/integration); keys, webhooks and logs belong to the partner.
  */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import type { IntegrationClient, IntegrationMode, PartnerType, Role, WebhookEndpoint } from '@/shared/types';
 import type { IntegrationOverview } from '@/shared/types/dto';
@@ -14,7 +15,6 @@ import { attemptDelivery, emitWebhook } from '../clinic-core';
 import { randomId, randomToken } from '../rng';
 import { DAY, parseIso, tzIso } from '../time';
 import { revokeKey } from './clinic';
-import { msg } from '@/i18n/core';
 
 export interface PartnerCtx {
   actor: { id: string; displayName: string; role: Role; assistanceId?: string };

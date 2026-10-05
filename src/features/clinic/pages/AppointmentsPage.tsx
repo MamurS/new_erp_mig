@@ -16,6 +16,7 @@ import { Field, Input, Textarea } from '@/shared/ui/input';
 import { EmptyState, QueryState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { PageTitle, Panel } from '../components';
+import { t } from '@/i18n';
 
 const KEYS = ['view', 'range'] as const;
 
@@ -28,7 +29,7 @@ function RescheduleDialog({ appt, onClose }: { appt: Appointment; onClose: () =>
     if (!picked) return;
     try {
       await respond.mutateAsync({ id: appt.id, kind: 'reschedule', startsAt: picked });
-      toast.success('Пациенту предложено другое время');
+      toast.success(t('clinic.appts.rescheduled'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -38,27 +39,27 @@ function RescheduleDialog({ appt, onClose }: { appt: Appointment; onClose: () =>
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Предложить другое время"
-      description={`${appt.insuredName} · ${SPECIALTY_LABEL[appt.specialty]} · сейчас ${formatDateTime(appt.startsAt)}`}
+      title={t('clinic.appts.rescheduleTitle')}
+      description={t('clinic.appts.rescheduleDescription', { name: appt.insuredName, specialty: SPECIALTY_LABEL[appt.specialty], at: formatDateTime(appt.startsAt) })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button disabled={!picked} loading={respond.isPending} onClick={() => void submit()}>
-            Предложить
+            {t('clinic.appts.propose')}
           </Button>
         </>
       }
     >
-      <Field label="День">
+      <Field label={t('clinic.appts.day')}>
         {(a) => <Input {...a} type="date" min={todayISO()} value={date} onChange={(e) => { setDate(e.target.value); setPicked(null); }} />}
       </Field>
-      <div className="mt-3 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Свободное время">
+      <div className="mt-3 flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('clinic.appts.freeTime')}>
         {slots.isLoading ? (
           <SkeletonRows rows={2} />
         ) : (slots.data ?? []).filter((s) => Date.parse(s.startsAt) > Date.now()).length === 0 ? (
-          <p className="text-muted">На этот день свободного времени нет</p>
+          <p className="text-muted">{t('clinic.appts.noSlots')}</p>
         ) : (
           (slots.data ?? [])
             .filter((s) => Date.parse(s.startsAt) > Date.now())
@@ -90,7 +91,7 @@ function DeclineDialog({ appt, onClose }: { appt: Appointment; onClose: () => vo
     if (invalid) return;
     try {
       await respond.mutateAsync({ id: appt.id, kind: 'decline', reason: reason.trim() });
-      toast.success('Заявка отклонена');
+      toast.success(t('clinic.appts.declined'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -100,20 +101,20 @@ function DeclineDialog({ appt, onClose }: { appt: Appointment; onClose: () => vo
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Отклонить заявку"
-      description="Причину увидит пациент и оператор МИГ"
+      title={t('clinic.appts.declineTitle')}
+      description={t('clinic.appts.declineDescription')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button variant="danger" loading={respond.isPending} onClick={() => void submit()}>
-            Отклонить
+            {t('common.reject')}
           </Button>
         </>
       }
     >
-      <Field label="Причина" error={touched && invalid ? 'Укажите причину: минимум 3 символа' : undefined}>
+      <Field label={t('common.reason')} error={touched && invalid ? t('clinic.appts.reasonError') : undefined}>
         {(a) => <Textarea {...a} rows={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />}
       </Field>
     </Modal>
@@ -121,7 +122,7 @@ function DeclineDialog({ appt, onClose }: { appt: Appointment; onClose: () => vo
 }
 
 export default function AppointmentsPage() {
-  useDocumentTitle('Записи');
+  useDocumentTitle(t('clinic.nav.appointments'));
   const [f, setF] = useUrlFilters(KEYS);
   const view = f.view === 'schedule' ? 'schedule' : 'requests';
   const days = f.range === 'week' ? 7 : 1;
@@ -134,24 +135,24 @@ export default function AppointmentsPage() {
   const confirm = async (a: Appointment) => {
     try {
       await respond.mutateAsync({ id: a.id, kind: 'confirm' });
-      toast.success('Запись подтверждена');
+      toast.success(t('clinic.appts.confirmed'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
 
   const columns: Column<ClinicAppointment>[] = [
-    { key: 'who', header: 'Пациент', cell: (a) => <span className="font-medium">{a.insuredName}</span> },
-    { key: 'spec', header: 'Специальность', cell: (a) => SPECIALTY_LABEL[a.specialty] },
-    { key: 'when', header: 'Время', cell: (a) => <span className="num whitespace-nowrap">{formatDateTime(a.startsAt)}</span> },
+    { key: 'who', header: t('common.patient'), cell: (a) => <span className="font-medium">{a.insuredName}</span> },
+    { key: 'spec', header: t('clinic.appts.specialty'), cell: (a) => SPECIALTY_LABEL[a.specialty] },
+    { key: 'when', header: t('common.time'), cell: (a) => <span className="num whitespace-nowrap">{formatDateTime(a.startsAt)}</span> },
     {
       key: 'created',
-      header: 'Заявка',
+      header: t('clinic.appts.request'),
       cell: (a) => (
         <span className="flex flex-wrap items-center gap-1.5 whitespace-nowrap">
           <span className="num text-muted">{formatDateTime(a.createdAt)}</span>
-          {a.overdue && <Chip kind="danger">Ответ просрочен</Chip>}
-          {a.proposedStartsAt && <Chip kind="sky">Предложено {formatDateTime(a.proposedStartsAt)}</Chip>}
+          {a.overdue && <Chip kind="danger">{t('clinic.appts.overdue')}</Chip>}
+          {a.proposedStartsAt && <Chip kind="sky">{t('clinic.appts.proposed', { at: formatDateTime(a.proposedStartsAt) })}</Chip>}
         </span>
       ),
     },
@@ -161,17 +162,17 @@ export default function AppointmentsPage() {
       align: 'right',
       cell: (a) =>
         a.proposedStartsAt ? (
-          <span className="text-[12px] text-muted">Ждём ответа пациента</span>
+          <span className="text-[12px] text-muted">{t('clinic.appts.waitingPatient')}</span>
         ) : (
           <span className="inline-flex flex-wrap justify-end gap-1.5">
-            <Button size="sm" loading={respond.isPending && respond.variables?.id === a.id} onClick={() => void confirm(a)} aria-label={`Подтвердить: ${a.insuredName}`}>
-              Подтвердить
+            <Button size="sm" loading={respond.isPending && respond.variables?.id === a.id} onClick={() => void confirm(a)} aria-label={t('clinic.appts.confirmAria', { name: a.insuredName })}>
+              {t('common.confirm')}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => setReschedule(a)}>
-              Другое время
+              {t('clinic.appts.otherTime')}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => setDecline(a)}>
-              Отклонить
+              {t('common.reject')}
             </Button>
           </span>
         ),
@@ -187,8 +188,8 @@ export default function AppointmentsPage() {
 
   return (
     <>
-      <PageTitle title="Записи" subtitle="Ответ сразу видит пациент в приложении и оператор МИГ. Заявки без ответа дольше 2 часов уходят оператору" />
-      <div role="tablist" aria-label="Вид" className="mb-4 flex gap-1.5">
+      <PageTitle title={t('clinic.nav.appointments')} subtitle={t('clinic.appts.subtitle')} />
+      <div role="tablist" aria-label={t('clinic.appts.view')} className="mb-4 flex gap-1.5">
         {(['requests', 'schedule'] as const).map((v) => (
           <button
             key={v}
@@ -198,42 +199,42 @@ export default function AppointmentsPage() {
             onClick={() => setF({ view: v === 'requests' ? null : v })}
             className={cn('rounded-full px-4 py-2 font-semibold', view === v ? 'bg-accent text-white' : 'hover:bg-rail')}
           >
-            {v === 'requests' ? 'Заявки' : 'Расписание'}
+            {v === 'requests' ? t('clinic.appts.requests') : t('clinic.appts.schedule')}
           </button>
         ))}
       </div>
       {view === 'requests' ? (
         <Panel>
           <DataTable
-            caption="Заявки на запись"
+            caption={t('clinic.appts.caption')}
             columns={columns}
             rows={q.data}
             rowKey={(a) => a.id}
             loading={q.isLoading}
             error={q.error}
             onRetry={() => void q.refetch()}
-            empty={<EmptyState title="Все заявки обработаны" description="Новые заявки появятся здесь сразу после записи пациента" />}
+            empty={<EmptyState title={t('clinic.appts.allDone')} description={t('clinic.appts.allDoneHint')} />}
           />
         </Panel>
       ) : (
         <>
           <div className="mb-3 flex flex-wrap items-end gap-3">
-            <Field label="С даты">
+            <Field label={t('common.from')}>
               {(a) => <Input {...a} type="date" value={from} onChange={(e) => setFrom(e.target.value || todayISO())} className="w-44" />}
             </Field>
             <div className="flex gap-1.5">
               <Button variant={days === 1 ? 'primary' : 'secondary'} size="sm" onClick={() => setF({ range: null })}>
-                День
+                {t('clinic.appts.dayView')}
               </Button>
               <Button variant={days === 7 ? 'primary' : 'secondary'} size="sm" onClick={() => setF({ range: 'week' })}>
-                Неделя
+                {t('clinic.appts.weekView')}
               </Button>
             </div>
           </div>
           <QueryState query={q} skeleton={<SkeletonRows rows={6} />}>
             {() =>
               bySpecialty.size === 0 ? (
-                <EmptyState title="Записей нет" description={`${formatDate(from)}${days > 1 ? ` — ${formatDate(addDaysISO(from, days - 1))}` : ''}`} />
+                <EmptyState title={t('common.empty')} description={`${formatDate(from)}${days > 1 ? ` — ${formatDate(addDaysISO(from, days - 1))}` : ''}`} />
               ) : (
                 <div className="grid gap-3 lg:grid-cols-2">
                   {[...bySpecialty.entries()].map(([spec, list]) => (
@@ -245,7 +246,7 @@ export default function AppointmentsPage() {
                               <span className="num font-semibold">{days > 1 ? formatDateTime(a.startsAt) : formatTime(a.startsAt)}</span> · {a.insuredName}
                             </span>
                             <Chip kind={a.status === 'confirmed' ? 'success' : a.status === 'completed' ? 'neutral' : 'warning'}>
-                              {a.status === 'confirmed' ? 'Подтверждена' : a.status === 'completed' ? 'Состоялась' : 'Ждёт ответа'}
+                              {a.status === 'confirmed' ? t('clinic.appts.statusConfirmed') : a.status === 'completed' ? t('clinic.appts.statusCompleted') : t('clinic.appts.statusWaiting')}
                             </Chip>
                           </li>
                         ))}

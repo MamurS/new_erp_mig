@@ -2,6 +2,7 @@
  * MIG staff side of clinics (CLINIC_SPEC §5): clinic card, clinic management by the admin,
  * guarantee-letter queue for doctor experts, registry review (operator) and payment (accountant).
  */
+import { msg, t } from '@/i18n/core';
 import { http } from 'msw';
 import type { Clinic, Registry, SessionUser } from '@/shared/types';
 import type { ClinicCard, ClinicUserView } from '@/shared/types/dto';
@@ -18,7 +19,6 @@ import { DEMO_PASSWORD } from '../credentials';
 import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, refreshGuarantee, toGuaranteeView, toRegistrySummary, toRegistryView } from '../clinic-core';
 import { revokeKey } from './clinic';
 import { linesOf, settleRegistry, subStatus, subTotals } from '../assistance-core';
-import { msg } from '@/i18n/core';
 
 /** The MIG part of a clinic registry: only lines paid by MIG, with their own status and totals. */
 function migSubRegistry(_d: Db, r: Registry): Registry {
@@ -179,7 +179,7 @@ export const staffClinicHandlers = [
       const g = d.guarantees.find((x) => x.id === param(ctx, 'id'));
       if (!g) throw notFound();
       if (!can(user, 'assist.guarantees.decide', { assistanceId: g.assistanceId ?? null, escalated: g.escalated === true })) {
-        throw new HttpError(403, 'forbidden', `Решение принимает ${g.assistanceName ?? 'ассистанс'}: МИГ решает только эскалации`);
+        throw new HttpError(403, 'forbidden', 'srv.guarantee.assistanceDecides', { params: { name: g.assistanceName ?? t('srv.guarantee.assistanceDefault') } });
       }
       if (g.status !== 'requested') throw conflict(g.status === 'info_requested' ? 'srv.guarantee.awaitingDocs' : 'srv.decision.alreadyMade');
       const input = await body(ctx.request, guaranteeDecisionSchema);

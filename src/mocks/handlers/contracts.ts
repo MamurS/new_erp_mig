@@ -4,6 +4,7 @@
  * original, invoices and payments (1C statement), coming into force, certificates, change requests,
  * endorsements and termination.
  */
+import { msg, t, tm } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import Papa from 'papaparse';
 import type { BankPayment, ClauseOverride, Contract, Endorsement, Payment, SessionUser, Signing } from '@/shared/types';
@@ -15,7 +16,6 @@ import { addDays, addPendingScan, addSignature, buildPaymentSchedule, contractNu
 import { PERIODICITIES } from '@/shared/domain/endorsements';
 import { clausesOf, DOC_TEMPLATES } from '@/features/documents/templates';
 import {
-import { msg } from '@/i18n/core';
   changeRequestCreateSchema,
   contractCreateSchema,
   contractPatchSchema,
@@ -33,7 +33,7 @@ import { msg } from '@/i18n/core';
 } from '@/shared/schemas/forms';
 import { detectMime } from '@/shared/lib/image';
 import { db, type ChangeRequestRow, type Db } from '../db';
-import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
+import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { randomId } from '../rng';
 import { tzIso } from '../time';
 import { toClient } from '../views';
@@ -179,7 +179,7 @@ function overridesFrom(kind: Kind, input: { clauseId: string; text: string }[], 
   const clauses = clausesOf(kind === 'contract' ? 'contract' : 'endorsement');
   return input.flatMap((o) => {
     const clause = clauses.find((c) => c.id === o.clauseId);
-    if (!clause) throw new HttpError(422, 'validation', `Пункт ${o.clauseId} не найден в шаблоне`);
+    if (!clause) throw new HttpError(422, 'validation', 'srv.contract.clauseNotFound', { params: { clause: o.clauseId } });
     if (o.text === clause.text) return [];
     const prev = previous.find((p) => p.clauseId === o.clauseId && p.text === o.text);
     return [prev ?? { clauseId: o.clauseId, original: clause.text, text: o.text, byId: user.id, byName: user.displayName, at: tzIso(Date.now()) }];
@@ -609,7 +609,7 @@ export const contractHandlers = [
         p.total = p.premiumEmployee * p.employees + p.premiumFamily * p.familyMembers;
         if (input.params.paymentSchedule) {
           const sum = input.params.paymentSchedule.reduce((s, x) => s + x.amount, 0);
-          if (sum !== p.total) throw new HttpError(422, 'validation', 'Сумма графика должна равняться премии', { 'params.paymentSchedule': `Сумма ${sum}, премия ${p.total}` });
+          if (sum !== p.total) throw new HttpError(422, 'validation', 'srv.contract.scheduleSum', { fields: { 'params.paymentSchedule': msg('srv.contract.scheduleSumHint', { sum, total: p.total }) } });
         } else p.paymentSchedule = buildPaymentSchedule(p.total, p.startDate, p.paymentFrequency);
         for (const k of Object.keys(input.params) as (keyof typeof input.params)[]) if (JSON.stringify(c.params[k]) !== JSON.stringify(p[k])) changes.push(k);
         c.params = p;
@@ -678,7 +678,9 @@ export const contractHandlers = [
       if (c.status === 'active' || c.status === 'signed' || c.status === 'terminated' || c.status === 'expired') throw conflict('srv.contract.listViaEndorsement');
       const parsed = parsePolicyList(await ctx.request.text());
       if (parsed.errors.length)
-        throw new HttpError(422, 'validation', `В файле есть ошибки (${parsed.errors.length}): ${parsed.errors.slice(0, 3).map((e) => `строка ${e.row} — ${e.message}`).join('; ')}`);
+        throw new HttpError(422, 'validation', 'srv.census.fileErrors', {
+          params: { count: parsed.errors.length, details: parsed.errors.slice(0, 3).map((e) => t('srv.census.rowError', { row: e.row, message: tm(e.message) })).join('; ') },
+        });
       const rows = parsed.rows.map((r) => ({ fullName: r.fullName, birthDate: r.birthDate, pinfl: r.pinfl, phone: r.phone, position: r.position, familyMembers: r.familyMembers ?? 0 }));
       d.contractInsured = [...d.contractInsured.filter((x) => x.contractId !== c.id), { contractId: c.id, rows }];
       c.insuredListId = c.id;
@@ -731,7 +733,7 @@ export const contractHandlers = [
       const d = db();
       const inv = d.invoices.find((i) => i.id === input.invoiceId);
       if (!inv) throw notFound();
-      if (input.amount > inv.amount - (inv.paid ?? 0)) throw new HttpError(422, 'validation', 'Сумма больше остатка по счёту', { amount: `Остаток ${inv.amount - (inv.paid ?? 0)}` });
+      if (input.amount > inv.amount - (inv.paid ?? 0)) throw new HttpError(422, 'validation', 'srv.invoice.overRemaining', { fields: { amount: msg('srv.invoice.remaining', { amount: inv.amount - (inv.paid ?? 0) }) } });
       const client = d.clients.find((c) => c.id === inv.clientId);
       const p = await recordPayment(d, user, inv.id, input.amount, input.paidAt, client?.inn ?? '', input.purpose ?? `Оплата по счёту ${inv.number}`, 'manual');
       audit(user, 'payment_recorded', { targetType: 'invoice', targetId: inv.id, targetLabel: `${inv.number}: ${input.amount}` });
@@ -748,7 +750,7 @@ export const contractHandlers = [
       const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true });
       const fields = parsed.meta.fields ?? [];
       const missing = ['doc_number', 'date', 'amount', 'inn', 'purpose'].filter((f) => !fields.includes(f));
-      if (missing.length) throw new HttpError(422, 'validation', `Нет столбцов: ${missing.join(', ')}`);
+      if (missing.length) throw new HttpError(422, 'validation', 'srv.statement.missingColumns', { params: { columns: missing.join(', ') } });
       if (parsed.data.length > 5000) throw new HttpError(422, 'validation', 'srv.statement.over5000Rows');
       const d = db();
       const out: ImportPaymentsResult = { matched: 0, queued: 0, skipped: 0, unmatched: [], activated: 0 };
@@ -821,7 +823,11 @@ export const contractHandlers = [
         return { invoice, amount: l.amount };
       });
       const error = checkAllocation(b, lines, input.comment);
-      if (error) throw new HttpError(422, 'validation', error, /комментарий/.test(error) ? { comment: error } : undefined);
+      if (error) {
+        // The comment is the last check: with a long enough comment the allocation passes.
+        const aboutComment = checkAllocation(b, lines, 'comment') === null;
+        throw httpErrorOf(422, 'validation', error, aboutComment ? { comment: error } : undefined);
+      }
       const comment = input.comment || undefined;
       for (const l of lines) {
         await recordPayment(d, user, l.invoice.id, l.amount, b.date, b.payerInn, b.purpose, '1c', { matchedBy: 'manual', bankPaymentId: b.id, docNumber: b.docNumber, comment });

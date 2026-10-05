@@ -21,7 +21,7 @@ function checkLock(key: string): void {
   const now = Date.now();
   d.lockouts = d.lockouts.filter((l) => l.until > now);
   if (d.lockouts.some((l) => l.key === key)) {
-    throw new HttpError(429, 'rate_limited', `Слишком много попыток. Вход заблокирован на ${dmsParam('loginLockMinutes')} мин`);
+    throw new HttpError(429, 'rate_limited', 'srv.auth.locked', { params: { minutes: dmsParam('loginLockMinutes') } });
   }
 }
 

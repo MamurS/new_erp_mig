@@ -3,12 +3,12 @@
  * assistance from the session and checks the scope of the record on the date of the event
  * (requireAssistanceScope): foreign records are 404, records of a former client are read-only.
  */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import type { Action } from '@/shared/auth/permissions';
 import { can } from '@/shared/auth/permissions';
 import type { Appointment, Registry, SessionUser, UUID } from '@/shared/types';
 import type {
-import { msg } from '@/i18n/core';
   AssistAppointment,
   AssistCaseView,
   AssistChatMessage,
@@ -754,7 +754,7 @@ type GuaranteeDecision = z.infer<typeof assistGuaranteeDecisionSchema>;
 export async function decideAsAssistance(d: Db, g: GuaranteeRow, actor: Pick<SessionUser, 'id' | 'displayName' | 'role'> & { assistanceId?: string }, input: GuaranteeDecision, authorityLimit: number, at: string): Promise<void> {
   if (input.action === 'approve') {
     // Above the authority limit the assistance gives an opinion and escalates to MIG (§5.2).
-    if (input.amount > authorityLimit) throw new HttpError(409, 'conflict', `Сумма выше полномочий ассистанса (${formatMoney(authorityLimit)}): эскалируйте в МИГ`);
+    if (input.amount > authorityLimit) throw new HttpError(409, 'conflict', 'srv.assist.overAuthority', { params: { limit: formatMoney(authorityLimit) } });
     g.approvals = [{ byId: actor.id, byName: actor.displayName, at }];
     g.approvedAmount = input.amount;
     g.validUntil = input.validUntil;
@@ -833,7 +833,7 @@ export async function recordPayment(
   if (lines.some((l) => l!.payment)) throw conflict('srv.registry.somePaid');
   if (input.paidAt > todayIso()) throw new HttpError(422, 'validation', 'srv.payment.dateFuture', { fields: { paidAt: msg('srv.payment.dateFuture') } });
   const total = lines.reduce((s, l) => s + l!.amount, 0);
-  if (input.amount !== undefined && input.amount !== total) throw new HttpError(422, 'validation', `Сумма не совпадает со строками: ${formatMoney(total)}`, { amount: `Ожидается ${formatMoney(total)}` });
+  if (input.amount !== undefined && input.amount !== total) throw new HttpError(422, 'validation', 'srv.payment.amountMismatch', { params: { total: formatMoney(total) }, fields: { amount: msg('srv.payment.expected', { total: formatMoney(total) }) } });
   for (const l of lines) l!.payment = { paidAt: input.paidAt, amount: l!.amount, orderNumber: input.orderNumber };
   const wasPaid = r.status === 'paid';
   settleRegistry(r);

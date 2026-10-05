@@ -7,22 +7,7 @@ import { isStaffRole } from '@/shared/domain/labels';
 import type { Appointment, SessionUser } from '@/shared/types';
 import { currentAssistance } from '../assistance-core';
 import { db, type ClaimRow } from '../db';
-import {
-  API,
-  HttpError,
-  audit,
-  body,
-  conflict,
-  forbidden,
-  notFound,
-  paginate,
-  param,
-  q,
-  requirePermission,
-  requireSession,
-  route,
-  sortBy,
-} from '../http';
+import { API, audit, body, conflict, forbidden, HttpError, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { toClaimDetail, toClaimListItem } from '../views';
@@ -113,7 +98,7 @@ export const claimHandlers = [
       if (!can(user, 'claims.transition')) throw forbidden();
       const t = claimTransitions(user, claim);
       const blocked = t.blocked.find((b) => b.to === input.to);
-      if (blocked) throw conflict(blocked.reason);
+      if (blocked) throw httpErrorOf(409, 'conflict', blocked.reason);
       if (!t.allowed.includes(input.to)) throw conflict('srv.claim.transitionUnavailable');
       if (input.to === 'approved') {
         const amount = input.amountApproved ?? claim.amountClaimed;

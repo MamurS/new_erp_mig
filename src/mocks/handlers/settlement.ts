@@ -22,7 +22,7 @@ import {
 } from '@/shared/schemas/forms';
 import { toCsv } from '@/shared/lib/csv';
 import { db, type ClaimRow, type Db } from '../db';
-import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
+import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { toClaimDetail } from '../views';
 import { assistanceName } from '../assistance-core';
 import { assistanceOn } from '@/shared/domain/assistance';
@@ -103,7 +103,11 @@ export const settlementHandlers = [
       if (c.pendingDecision) throw conflict('srv.claim.decisionPending');
       const input = await body(ctx.request, claimDecideSchema);
       const problem = decisionProblem(input.kind, input.amount, c.amountClaimed, input.clauseRef, input.reason, isClause);
-      if (problem) throw new HttpError(422, 'validation', problem, { [problem.startsWith('Укажите пункт') ? 'clauseRef' : problem.startsWith('Опишите') ? 'reason' : 'amount']: problem });
+      if (problem) {
+        // Same order of checks as decisionProblem: clause, then reason, then the amount.
+        const field = input.kind !== 'approve' && (!input.clauseRef || !isClause(input.clauseRef)) ? 'clauseRef' : input.kind !== 'approve' && input.reason.trim().length < 5 ? 'reason' : 'amount';
+        throw httpErrorOf(422, 'validation', problem, { [field]: problem });
+      }
       const staff = d.staff.find((s) => s.id === user.id)!;
       const decision: ClaimDecision = {
         kind: input.kind,

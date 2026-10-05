@@ -2,13 +2,13 @@
  * Clinic cabinet API (/api/clinic/...). Every handler resolves the clinic from the session, never
  * from the request; objects of other clinics answer 404 (CLINIC_SPEC §9.9).
  */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import Papa from 'papaparse';
 import { z } from 'zod';
 import type { Action } from '@/shared/auth/permissions';
 import type { SessionUser } from '@/shared/types';
 import type {
-import { msg } from '@/i18n/core';
   ClinicDocuments,
   ClinicOverview,
   ClinicUserView,
@@ -348,10 +348,10 @@ export const clinicHandlers = [
       if (!(file instanceof File)) throw new HttpError(422, 'validation', 'srv.file.chooseCsv', { fields: { file: msg('srv.file.chooseCsv') } });
       if (file.size > REGISTRY_CSV_MAX_BYTES) throw new HttpError(422, 'validation', 'srv.file.tooLarge5mb', { fields: { file: msg('srv.file.tooLarge5mb') } });
       const parsed = Papa.parse<Record<string, string>>(await file.text(), { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim().toLowerCase() });
-      if (parsed.data.length > REGISTRY_CSV_MAX_ROWS) throw new HttpError(422, 'validation', `Не больше ${REGISTRY_CSV_MAX_ROWS} строк`, { file: 'Слишком много строк' });
+      if (parsed.data.length > REGISTRY_CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'srv.registry.maxRows', { params: { max: REGISTRY_CSV_MAX_ROWS }, fields: { file: msg('srv.registry.tooManyRows') } });
       const required = ['visit_id', 'service_date', 'service_code', 'icd10', 'quantity', 'price'];
       const missing = required.filter((c) => !(parsed.meta.fields ?? []).includes(c));
-      if (missing.length) throw new HttpError(422, 'validation', `В файле нет колонок: ${missing.join(', ')}`, { file: 'Скачайте шаблон и заполните его' });
+      if (missing.length) throw new HttpError(422, 'validation', 'srv.registry.missingColumns', { params: { columns: missing.join(', ') }, fields: { file: msg('srv.registry.useTemplate') } });
       const errors: RegistryImportResult['errors'] = [];
       const lines = [];
       for (const [k, row] of parsed.data.entries()) {

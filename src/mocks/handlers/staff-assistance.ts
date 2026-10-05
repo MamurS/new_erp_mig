@@ -3,6 +3,7 @@
  * assignment of an assistance to a policy from a date, review (curator) and payment (accountant) of
  * rebills with four-eyes, the quality-control queue of doctor experts and the report by assistance.
  */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import type { AssistanceCompany, SessionUser } from '@/shared/types';
 import type { AssignmentView, AssistanceCardView, AssistanceListItem, AssistanceReportRow, QaSampleView } from '@/shared/types/dto';
@@ -13,7 +14,6 @@ import { assignmentSchema, assistanceContractSchema, assistanceCreateSchema, com
 import { db, type Db } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
 import {
-import { msg } from '@/i18n/core';
   assistanceName,
   assistanceOf,
   claimsFromRebill,

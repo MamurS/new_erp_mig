@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Flag } from 'lucide-react';
@@ -21,20 +22,45 @@ import { CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
 import { SlaCell } from '../components/cells';
 
-const SOURCE_LABEL = { app: 'Приложение', clinic_invoice: 'Счёт клиники', operator: 'Куратор МИГ', assistance: 'Ассистанс' } as const;
+const SOURCE_LABEL = {
+  get app() {
+    return t('staff.claimCard.source.app');
+  },
+  get clinic_invoice() {
+    return t('staff.claimCard.source.clinicInvoice');
+  },
+  get operator() {
+    return t('staff.claimCard.source.operator');
+  },
+  get assistance() {
+    return t('staff.claims.source.assistance');
+  },
+};
 
 const CLAIM_TABS = [
-  { key: '', label: 'Все' },
-  { key: 'new', label: 'Новые' },
-  { key: 'review', label: 'На рассмотрении' },
-  { key: 'opinion', label: 'Ждут заключения врача' },
-  { key: 'above', label: 'Выше моих полномочий' },
-  { key: 'appeals', label: 'Апелляции' },
+  { key: '', get label() {
+      return t('common.all');
+    } },
+  { key: 'new', get label() {
+      return t('staff.claims.tab.new');
+    } },
+  { key: 'review', get label() {
+      return t('staff.claims.tab.review');
+    } },
+  { key: 'opinion', get label() {
+      return t('staff.claims.tab.opinion');
+    } },
+  { key: 'above', get label() {
+      return t('staff.claims.tab.above');
+    } },
+  { key: 'appeals', get label() {
+      return t('staff.claims.tab.appeals');
+    } },
 ] as const;
 
 export default function ClaimsPage() {
-  useDocumentTitle('Убытки');
-  useTopbar([{ label: 'Убытки' }]);
+  useDocumentTitle(t('staff.claims.title'));
+  useTopbar([{ label: t('staff.claims.title') }]);
   const navigate = useNavigate();
   const [f, setF] = useUrlFilters(['status', 'category', 'overdue', 'sort', 'page', 'tab', 'flagged'] as const);
   const settles = useCan('claims.decide');
@@ -47,24 +73,24 @@ export default function ClaimsPage() {
   const statusSel = f.status === 'active' ? ['new', 'review', 'medical_review'] : f.status ? f.status.split(',') : [];
 
   const cols: Column<Claim>[] = [
-    { key: 'number', header: 'Номер', sortKey: 'number', cell: (c) => <span className="num font-medium">{c.number}</span> },
-    { key: 'insured', header: 'Застрахованный', sortKey: 'insuredName', cell: (c) => c.insuredName },
-    { key: 'client', header: 'Клиент', sortKey: 'clientName', cell: (c) => <span className="text-muted">{c.clientName}</span> },
-    { key: 'category', header: 'Категория', sortKey: 'category', cell: (c) => CLAIM_CATEGORY_LABEL[c.category] },
-    ...(settles ? [{ key: 'source', header: 'Источник', cell: (c: Claim) => <span className="text-muted">{SOURCE_LABEL[c.source]}</span> }] : []),
-    { key: 'amount', header: 'Сумма', sortKey: 'amountClaimed', align: 'right', cell: (c) => <span className="num">{formatMoney(c.amountApproved ?? c.amountClaimed)}</span> },
-    ...(reserves ? [{ key: 'reserve', header: 'Резерв', sortKey: 'reserve', align: 'right' as const, cell: (c: Claim) => <span className="num">{c.reserve ? formatMoney(c.reserve) : '—'}</span> }] : []),
-    { key: 'status', header: 'Статус', sortKey: 'status', cell: (c) => <StatusDot tone={CLAIM_TONE[c.status]}>{CLAIM_STATUS_LABEL[c.status]}</StatusDot> },
+    { key: 'number', header: t('common.number'), sortKey: 'number', cell: (c) => <span className="num font-medium">{c.number}</span> },
+    { key: 'insured', header: t('common.insured'), sortKey: 'insuredName', cell: (c) => c.insuredName },
+    { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (c) => <span className="text-muted">{c.clientName}</span> },
+    { key: 'category', header: t('common.category'), sortKey: 'category', cell: (c) => CLAIM_CATEGORY_LABEL[c.category] },
+    ...(settles ? [{ key: 'source', header: t('common.source'), cell: (c: Claim) => <span className="text-muted">{SOURCE_LABEL[c.source]}</span> }] : []),
+    { key: 'amount', header: t('common.amount'), sortKey: 'amountClaimed', align: 'right', cell: (c) => <span className="num">{formatMoney(c.amountApproved ?? c.amountClaimed)}</span> },
+    ...(reserves ? [{ key: 'reserve', header: t('staff.claims.colReserve'), sortKey: 'reserve', align: 'right' as const, cell: (c: Claim) => <span className="num">{c.reserve ? formatMoney(c.reserve) : '—'}</span> }] : []),
+    { key: 'status', header: t('common.status'), sortKey: 'status', cell: (c) => <StatusDot tone={CLAIM_TONE[c.status]}>{CLAIM_STATUS_LABEL[c.status]}</StatusDot> },
     {
       key: 'flags',
-      header: 'Флаги',
+      header: t('staff.claims.colFlags'),
       cell: (c) => {
         const open = (c.flags ?? []).filter((x) => !x.dismissed);
         return open.length ? (
           <Tooltip content={open.map((x) => FLAG_LABEL[x.code]).join(', ')}>
             <span className="inline-flex items-center gap-1 text-warning-text" data-testid="claim-flag">
               <Flag className="h-3.5 w-3.5" aria-hidden />
-              <span className="sr-only">Флаги проверки:</span> {open.length}
+              <span className="sr-only">{t('staff.claims.flagsSr')}</span> {open.length}
             </span>
           </Tooltip>
         ) : null;
@@ -76,56 +102,56 @@ export default function ClaimsPage() {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-[22px] font-bold">Убытки</h1>
-        <SearchInput value={search} onChange={setSearch} placeholder="Номер убытка, ФИО или клиент" slashFocus className="w-80" />
+        <h1 className="text-[22px] font-bold">{t('staff.claims.title')}</h1>
+        <SearchInput value={search} onChange={setSearch} placeholder={t('staff.claims.searchPlaceholder')} slashFocus className="w-80" />
       </div>
       {settles && (
-        <div className="mb-3 flex flex-wrap gap-1 border-b border-border" role="tablist" aria-label="Очереди урегулирования">
-          {CLAIM_TABS.map((t) => (
+        <div className="mb-3 flex flex-wrap gap-1 border-b border-border" role="tablist" aria-label={t('staff.claims.queues')}>
+          {CLAIM_TABS.map((ct) => (
             <button
-              key={t.key}
+              key={ct.key}
               type="button"
               role="tab"
-              aria-selected={(f.tab ?? '') === t.key}
-              className={cn('-mb-px border-b-2 px-3 py-1.5 text-[13px]', (f.tab ?? '') === t.key ? 'border-accent font-semibold text-accent-text' : 'border-transparent text-muted hover:text-text')}
-              onClick={() => setF({ tab: t.key || null, page: null })}
+              aria-selected={(f.tab ?? '') === ct.key}
+              className={cn('-mb-px border-b-2 px-3 py-1.5 text-[13px]', (f.tab ?? '') === ct.key ? 'border-accent font-semibold text-accent-text' : 'border-transparent text-muted hover:text-text')}
+              onClick={() => setF({ tab: ct.key || null, page: null })}
             >
-              {t.label}
+              {ct.label}
             </button>
           ))}
           <Link to="/staff/rebills" className="px-3 py-1.5 text-[13px] text-muted hover:text-text">
-            Строки счетов ассистансов →
+            {t('staff.claims.rebillLines')}
           </Link>
         </div>
       )}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <FilterChip
-          label="Статус"
+          label={t('common.status')}
           options={(Object.keys(CLAIM_STATUS_LABEL) as ClaimStatus[]).map((s) => ({ value: s, label: CLAIM_STATUS_LABEL[s] }))}
           selected={statusSel}
           onChange={(v) => setF({ status: v.join(',') })}
         />
         <FilterChip
-          label="Категория"
+          label={t('common.category')}
           options={(Object.keys(CLAIM_CATEGORY_LABEL) as ClaimCategory[]).map((s) => ({ value: s, label: CLAIM_CATEGORY_LABEL[s] }))}
           selected={f.category ? f.category.split(',') : []}
           onChange={(v) => setF({ category: v.join(',') })}
         />
         <label className={cn('inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-btn border px-2 text-[12px]', f.overdue ? 'border-danger/40 bg-danger-soft text-danger-text' : 'border-dashed border-border text-muted')}>
           <input type="checkbox" checked={f.overdue === '1'} onChange={(e) => setF({ overdue: e.target.checked ? '1' : null })} />
-          Просрочен SLA
+          {t('staff.claims.slaOverdue')}
         </label>
         <label className={cn('inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-btn border px-2 text-[12px]', f.flagged ? 'border-warning/40 bg-warning-soft text-warning-text' : 'border-dashed border-border text-muted')}>
           <input type="checkbox" checked={f.flagged === '1'} onChange={(e) => setF({ flagged: e.target.checked ? '1' : null })} />
-          С флагами проверки
+          {t('staff.claims.withFlags')}
         </label>
         <div className="ml-auto">
-          <ExportButton type="claims_financial" label="Экспорт финансов в CSV" />
+          <ExportButton type="claims_financial" label={t('staff.claims.exportFinance')} />
         </div>
       </div>
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Убытки"
+          caption={t('staff.claims.title')}
           columns={cols}
           rows={list.data?.items}
           rowKey={(c) => c.id}
@@ -141,9 +167,9 @@ export default function ClaimsPage() {
           onPageChange={(p) => setF({ page: p }, false)}
           empty={
             <EmptyState
-              title="Убытки не найдены"
-              description="Измените фильтры или строку поиска"
-              action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ status: '', category: '', overdue: null }); }}>Сбросить фильтры</Button>}
+              title={t('staff.claims.notFound')}
+              description={t('staff.clients.notFoundHint')}
+              action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ status: '', category: '', overdue: null }); }}>{t('staff.clients.resetFilters')}</Button>}
             />
           }
         />

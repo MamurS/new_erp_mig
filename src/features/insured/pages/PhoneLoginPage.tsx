@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { useI18n } from '@/i18n';
+import { tm, useI18n } from '@/i18n';
 import { usePhoneLogin } from '@/shared/api/queries/auth';
 import { errorMessage } from '@/shared/api/client';
 import { takeLogoutNotice, useSession } from '@/shared/auth/session';
@@ -62,7 +62,7 @@ export default function PhoneLoginPage() {
 
   return (
     <AuthShell title={t('app.login.title')} subtitle={t('app.login.subtitle')}>
-      {notice && <AuthNotice>{notice}</AuthNotice>}
+      {notice && <AuthNotice>{tm(notice)}</AuthNotice>}
       {serverError && <AuthNotice tone="danger">{serverError}</AuthNotice>}
       <form
         noValidate

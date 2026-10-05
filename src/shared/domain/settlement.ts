@@ -2,17 +2,12 @@
  * Claims settlement by claims_officer (LIFECYCLE_SPEC §13): authority routing, decision rules,
  * reserves and fraud flags. Flags are hints for a person, never an automatic refusal.
  */
+import { defineLabels, msg, type I18nKey } from '@/i18n';
 import type { Claim, ClaimDecisionKind, FraudFlagCode, ISODate, Money, ReceiptFiscal, ReserveChange, StaffAuthority } from '@/shared/types';
 
-export const DECISION_KIND_LABEL: Record<ClaimDecisionKind, string> = { approve: 'Одобрено полностью', partial: 'Одобрено частично', reject: 'Отказано' };
+export const DECISION_KIND_LABEL = defineLabels<ClaimDecisionKind>('labels.decisionKind', ['approve', 'partial', 'reject']);
 
-export const FLAG_LABEL: Record<FraudFlagCode, string> = {
-  duplicate_receipt: 'Повтор чека',
-  frequent_claims: 'Частые обращения',
-  outside_coverage: 'Вне периода покрытия',
-  before_exclusion: 'Перед исключением',
-  above_price: 'Сумма выше прайса',
-};
+export const FLAG_LABEL = defineLabels<FraudFlagCode>('labels.fraudFlag', ['duplicate_receipt', 'frequent_claims', 'outside_coverage', 'before_exclusion', 'above_price']);
 
 /** Amount the decision commits the company to: what is paid, or for a refusal what is refused. */
 export function authorityAmount(kind: ClaimDecisionKind, amount: Money, claimed: Money): Money {
@@ -30,11 +25,11 @@ export function canApproveDecision(approver: { id: string; role: string; authori
 
 /** Problems of a decision before it is saved; refusal and partial approval need a clause and a reason. */
 export function decisionProblem(kind: ClaimDecisionKind, amount: Money, claimed: Money, clauseRef: string | undefined, reason: string, knownClause: (ref: string) => boolean): string | null {
-  if (kind !== 'approve' && (!clauseRef || !knownClause(clauseRef))) return 'Укажите пункт договора или правил, на основании которого принято решение';
-  if (kind !== 'approve' && reason.trim().length < 5) return 'Опишите причину простым языком';
-  if (kind === 'partial' && (amount <= 0 || amount >= claimed)) return 'Частичное одобрение: сумма больше нуля и меньше заявленной';
-  if (kind === 'approve' && amount !== claimed) return 'Полное одобрение — на заявленную сумму';
-  if (kind === 'reject' && amount !== 0) return 'При отказе сумма к выплате — 0';
+  if (kind !== 'approve' && (!clauseRef || !knownClause(clauseRef))) return msg('dom.decision.clauseRequired');
+  if (kind !== 'approve' && reason.trim().length < 5) return msg('dom.decision.reasonRequired');
+  if (kind === 'partial' && (amount <= 0 || amount >= claimed)) return msg('dom.decision.partialAmount');
+  if (kind === 'approve' && amount !== claimed) return msg('dom.decision.fullAmount');
+  if (kind === 'reject' && amount !== 0) return msg('dom.decision.rejectZero');
   return null;
 }
 
@@ -111,27 +106,24 @@ export function detectFlags(ctx: FlagContext): { code: FraudFlagCode; message: s
     .filter((x) => x.by || x.image);
   const first = twins.find((x) => x.by === 'fiscal') ?? twins.find((x) => x.by) ?? twins[0];
   if (first) {
-    const ref = `${first.o.number ? ` ${first.o.number}` : ''}${first.o.insuredId !== c.insuredId ? ' другого застрахованного' : ''}`;
-    const head =
-      first.by === 'fiscal'
-        ? `Фискальный номер чека совпадает с чеком обращения${ref}`
-        : first.by === 'details'
-          ? `Та же сумма, дата и точка продажи, что в чеке обращения${ref}`
-          : `Изображение чека совпадает с чеком обращения${ref}`;
-    const extra = [first.by && first.image ? 'изображение чека тоже совпадает' : '', twins.length > 1 ? `совпадений: ${twins.length}` : ''].filter(Boolean).join('; ');
-    out.push({ code: 'duplicate_receipt', message: extra ? `${head} (${extra})` : head });
+    // One whole sentence per case: dom.flags.dup.<fiscal|details|image>[Other][Image][Count].
+    const head = first.by === 'fiscal' ? 'fiscal' : first.by === 'details' ? 'details' : 'image';
+    const other = first.o.insuredId !== c.insuredId ? 'Other' : '';
+    const extra = `${first.by && first.image ? 'Image' : ''}${twins.length > 1 ? 'Count' : ''}`;
+    const params = { number: first.o.number ? ` ${first.o.number}` : '', count: twins.length };
+    out.push({ code: 'duplicate_receipt', message: msg(`dom.flags.dup.${head}${other}${extra}` as I18nKey, params) });
   }
   const month = c.serviceDate.slice(0, 7);
   const inMonth = ctx.others.filter((o) => o.insuredId === c.insuredId && o.serviceDate.slice(0, 7) === month).length + 1;
-  if (inMonth > ctx.params.maxPerMonth) out.push({ code: 'frequent_claims', message: `Обращений за месяц: ${inMonth}, порог — ${ctx.params.maxPerMonth}` });
+  if (inMonth > ctx.params.maxPerMonth) out.push({ code: 'frequent_claims', message: msg('dom.flags.frequent', { n: inMonth, max: ctx.params.maxPerMonth }) });
   if (c.serviceDate < ctx.coverageFrom || c.serviceDate > ctx.coverageTo || (ctx.excludedFrom && c.serviceDate >= ctx.excludedFrom)) {
-    out.push({ code: 'outside_coverage', message: c.serviceDate < ctx.coverageFrom ? 'Дата услуги до начала покрытия' : 'Дата услуги после окончания покрытия или исключения' });
+    out.push({ code: 'outside_coverage', message: c.serviceDate < ctx.coverageFrom ? msg('dom.flags.beforeCoverage') : msg('dom.flags.afterCoverage') });
   }
   if (ctx.excludedFrom && c.serviceDate < ctx.excludedFrom && day(ctx.excludedFrom) - day(c.serviceDate) <= ctx.params.daysBeforeExclusion) {
-    out.push({ code: 'before_exclusion', message: `Услуга за ${day(ctx.excludedFrom) - day(c.serviceDate)} дн. до исключения из списка` });
+    out.push({ code: 'before_exclusion', message: msg('dom.flags.beforeExclusion', { days: day(ctx.excludedFrom) - day(c.serviceDate) }) });
   }
   if (c.expectedPrice && c.amountClaimed > c.expectedPrice * (1 + ctx.params.priceExcessShare)) {
-    out.push({ code: 'above_price', message: `Сумма выше прайса на ${Math.round((c.amountClaimed / c.expectedPrice - 1) * 100)}%` });
+    out.push({ code: 'above_price', message: msg('dom.flags.abovePrice', { pct: Math.round((c.amountClaimed / c.expectedPrice - 1) * 100) }) });
   }
   return out;
 }

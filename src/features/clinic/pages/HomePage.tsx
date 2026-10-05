@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
 import { useCan } from '@/shared/auth/guards';
 import { PageTitle, Panel } from '../components';
+import { t } from '@/i18n';
 
 function Tile({ label, value, hint, to, tone }: { label: string; value: string; hint?: string; to: string; tone?: 'warning' }) {
   return (
@@ -22,46 +23,46 @@ function Tile({ label, value, hint, to, tone }: { label: string; value: string; 
 }
 
 export default function HomePage() {
-  useDocumentTitle('Кабинет клиники');
+  useDocumentTitle(t('shell.portal.clinic'));
   const q = useClinicOverview();
   const canRegistries = useCan('registries.submit');
   return (
     <>
-      <PageTitle title="Главная" />
+      <PageTitle title={t('clinic.nav.home')} />
       <Link
         to="/clinic/check"
         className="mb-5 flex items-center gap-4 rounded-card bg-accent p-5 text-white shadow-xs hover:opacity-95"
-        aria-label="Проверить пациента"
+        aria-label={t('clinic.home.checkPatient')}
       >
         <ScanLine className="h-10 w-10" aria-hidden />
         <span>
-          <span className="block font-heading text-[22px] font-semibold">Проверить пациента</span>
-          <span className="block text-[14px] opacity-90">QR из приложения, код из 8 символов или номер полиса и ПИНФЛ</span>
+          <span className="block font-heading text-[22px] font-semibold">{t('clinic.home.checkPatient')}</span>
+          <span className="block text-[14px] opacity-90">{t('clinic.home.checkHint')}</span>
         </span>
       </Link>
       <QueryState query={q} skeleton={<SkeletonRows rows={4} />}>
         {(o) => (
           <>
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Tile label="Записи на сегодня" value={String(o.appointmentsToday)} to="/clinic/appointments?view=schedule" />
+              <Tile label={t('clinic.home.today')} value={String(o.appointmentsToday)} to="/clinic/appointments?view=schedule" />
               <Tile
-                label="Заявки без ответа"
+                label={t('clinic.home.unanswered')}
                 value={String(o.unanswered)}
-                hint={o.unansweredOverdue ? `Просрочено: ${o.unansweredOverdue}` : 'Ответ в течение 2 часов'}
+                hint={o.unansweredOverdue ? t('clinic.home.overdue', { n: o.unansweredOverdue }) : t('clinic.home.answerWithin')}
                 tone={o.unansweredOverdue ? 'warning' : undefined}
                 to="/clinic/appointments"
               />
-              <Tile label="ГП на рассмотрении" value={String(o.guaranteesPending)} to="/clinic/guarantees" />
+              <Tile label={t('clinic.home.gpPending')} value={String(o.guaranteesPending)} to="/clinic/guarantees" />
               <Tile
-                label="Реестр текущего месяца"
+                label={t('clinic.home.currentRegistry')}
                 value={o.currentRegistry ? formatMoney(o.currentRegistry.claimed) : '—'}
-                hint={o.currentRegistry ? REGISTRY_STATUS_LABEL[o.currentRegistry.status] : 'Ещё не создан'}
+                hint={o.currentRegistry ? REGISTRY_STATUS_LABEL[o.currentRegistry.status] : t('clinic.home.notCreated')}
                 to={canRegistries ? (o.currentRegistry ? `/clinic/registries/${o.currentRegistry.id}` : '/clinic/registries') : '/clinic'}
               />
             </div>
-            <Panel title="Последние события">
+            <Panel title={t('clinic.home.events')}>
               {o.events.length === 0 ? (
-                <p className="p-4 text-muted">Событий пока нет</p>
+                <p className="p-4 text-muted">{t('clinic.home.noEvents')}</p>
               ) : (
                 <ul className="divide-y divide-border-soft">
                   {o.events.map((e) => (
@@ -78,7 +79,7 @@ export default function HomePage() {
       </QueryState>
       <div className="mt-4">
         <Button asChild variant="secondary">
-          <Link to="/clinic/guarantees">Гарантийные письма</Link>
+          <Link to="/clinic/guarantees">{t('clinic.nav.guarantees')}</Link>
         </Button>
       </div>
     </>

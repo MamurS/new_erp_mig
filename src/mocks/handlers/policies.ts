@@ -1,4 +1,5 @@
 /* Policy issuance and the queue of insured-list changes (POLICY_SPEC §4, §5.2, §7). */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import type { Policy } from '@/shared/types';
 import type { PolicyChangeDecisionResult, PolicyListCheck } from '@/shared/types/dto';
@@ -9,13 +10,12 @@ import { certificateNumber } from '@/shared/domain/contracts';
 import { COVERAGE_START_RULES, PERIODICITIES } from '@/shared/domain/endorsements';
 import { dmsParam } from '../params';
 import { createEndorsement } from '../lifecycle-core';
-import { API, audit, body, conflict, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
+import { API, audit, body, conflict, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { DEMO_PASSWORD } from '../credentials';
 import { activePolicyOf, createInsured, endorsementDoc, nextPolicyNumber, parsePolicyList, refreshPolicyTotals, toPolicyChange } from '../policy-core';
 import { currentAssistance, notifyAssistance } from '../assistance-core';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
-import { msg } from '@/i18n/core';
 
 function clientOf(id: string) {
   const c = db().clients.find((x) => x.id === id);
@@ -45,7 +45,7 @@ export const policyHandlers = [
       if (activePolicyOf(d, client)) throw conflict('srv.policy.alreadyActive');
       const input = await body(ctx.request, policyIssueSchema);
       const period = policyPeriodProblem(input.startDate, input.endDate);
-      if (period) throw new HttpError(422, 'validation', period, { endDate: period });
+      if (period) throw httpErrorOf(422, 'validation', period, { endDate: period });
       const { rows } = parsePolicyList(input.csv);
       if (!rows.length) throw new HttpError(422, 'validation', 'srv.policy.noValidRows', { fields: { csv: msg('srv.policy.noValidRowsShort') } });
       if (input.hr && d.hrUsers.some((h) => h.email === input.hr!.email && h.companyId !== client.id)) {
@@ -113,10 +113,10 @@ export const policyHandlers = [
       // Validate everything before changing anything (atomic batch).
       for (const r of rows) {
         const policy = d.policies.find((p) => p.id === r!.policyId);
-        if (!policy || (policy.status !== 'active' && policy.status !== 'draft')) throw conflict(`Полис ${r!.policyNumber} не действует`);
+        if (!policy || (policy.status !== 'active' && policy.status !== 'draft')) throw conflict('srv.policyChanges.policyInactive', { number: r!.policyNumber });
         if (input.decision === 'approve' && r!.kind === 'exclude') {
           const person = d.insured.find((i) => i.id === r!.insuredId);
-          if (!person || person.status !== 'active') throw conflict(`${r!.fullName}: сотрудник уже исключён`);
+          if (!person || person.status !== 'active') throw conflict('srv.policyChanges.personExcluded', { name: r!.fullName });
         }
       }
       const at = tzIso(Date.now());

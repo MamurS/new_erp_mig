@@ -1,3 +1,4 @@
+import { t, tm, tp } from '@/i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -25,9 +26,15 @@ import { EmptyState } from '@/shared/ui/states';
 import { useTopbar } from '../topbar';
 
 const API_STATUS = {
-  online: { tone: 'success', label: 'Онлайн' },
-  offline: { tone: 'danger', label: 'Нет связи' },
-  manual: { tone: 'default', label: 'Вручную' },
+  online: { tone: 'success', get label() {
+      return t('staff.clinics.api.online');
+    } },
+  offline: { tone: 'danger', get label() {
+      return t('staff.clinics.api.offline');
+    } },
+  manual: { tone: 'default', get label() {
+      return t('staff.clinics.api.manual');
+    } },
 } as const;
 
 type ClinicForm = z.input<typeof clinicCreateSchema>;
@@ -43,7 +50,7 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
   const submit = form.handleSubmit(async (v) => {
     try {
       const c = await create.mutateAsync(v);
-      toast.success('Клиника добавлена — пригласите её администратора');
+      toast.success(t('staff.clinics.added'));
       navigate(`/staff/clinics/${c.id}?tab=users`);
     } catch (err) {
       toast.error(errorMessage(err));
@@ -54,29 +61,29 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title="Новая клиника"
+      title={t('staff.clinics.newClinic')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={create.isPending} onClick={() => void submit()}>
-            Добавить
+            {t('common.add')}
           </Button>
         </>
       }
     >
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={(ev) => void submit(ev)} noValidate>
-        <Field label="Название" error={e.name?.message} className="sm:col-span-2">
+        <Field label={t('common.name')} error={tm(e.name?.message)} className="sm:col-span-2">
           {(a) => <Input {...a} maxLength={120} {...form.register('name')} />}
         </Field>
-        <Field label="Адрес" error={e.address?.message}>
+        <Field label={t('staff.clinics.address')} error={tm(e.address?.message)}>
           {(a) => <Input {...a} maxLength={200} {...form.register('address')} />}
         </Field>
-        <Field label="Район" error={e.district?.message}>
+        <Field label={t('staff.clinics.district')} error={tm(e.district?.message)}>
           {(a) => <Input {...a} maxLength={60} {...form.register('district')} />}
         </Field>
-        <Field label="Режим интеграции" error={e.integrationMode?.message}>
+        <Field label={t('staff.clinics.integrationMode')} error={tm(e.integrationMode?.message)}>
           {(a) => (
             <Select {...a} {...form.register('integrationMode')}>
               {(Object.keys(INTEGRATION_MODE_LABEL) as IntegrationMode[]).map((m) => (
@@ -88,7 +95,7 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
           )}
         </Field>
         <fieldset className="sm:col-span-2">
-          <legend className="mb-1 text-[12px] font-medium text-muted">Специальности</legend>
+          <legend className="mb-1 text-[12px] font-medium text-muted">{t('staff.clinics.specialties')}</legend>
           <div className="grid gap-1 sm:grid-cols-3">
             {(Object.keys(SPECIALTY_LABEL) as Specialty[]).map((sp) => (
               <label key={sp} className="flex items-center gap-2">
@@ -99,7 +106,7 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
           </div>
           {e.specialties?.message && (
             <p role="alert" className="mt-1 text-[12px] text-danger-text">
-              {e.specialties.message}
+              {tm(e.specialties.message)}
             </p>
           )}
         </fieldset>
@@ -109,8 +116,8 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
 }
 
 export default function ClinicsPage() {
-  useDocumentTitle('Клиники');
-  useTopbar([{ label: 'Клиники' }]);
+  useDocumentTitle(t('staff.clinics.title'));
+  useTopbar([{ label: t('staff.clinics.title') }]);
   const [f, setF] = useUrlFilters(['specialty'] as const);
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());
@@ -121,7 +128,7 @@ export default function ClinicsPage() {
   const cols: Column<Clinic>[] = [
     {
       key: 'name',
-      header: 'Название',
+      header: t('common.name'),
       cell: (c) => (
         <span>
           <span className="block font-medium">{c.name}</span>
@@ -129,10 +136,10 @@ export default function ClinicsPage() {
         </span>
       ),
     },
-    { key: 'district', header: 'Район', cell: (c) => c.district },
+    { key: 'district', header: t('staff.clinics.district'), cell: (c) => c.district },
     {
       key: 'spec',
-      header: 'Специальности',
+      header: t('staff.clinics.specialties'),
       cell: (c) => (
         <span className="flex flex-wrap gap-1 py-1">
           {c.specialties.map((s) => (
@@ -141,35 +148,35 @@ export default function ClinicsPage() {
         </span>
       ),
     },
-    { key: 'online', header: 'Онлайн-запись', cell: (c) => (c.onlineBooking ? <StatusDot tone="success">Да</StatusDot> : <StatusDot tone="muted">Нет</StatusDot>) },
-    { key: 'mode', header: 'Интеграция', cell: (c) => INTEGRATION_MODE_LABEL[c.integrationMode] },
-    { key: 'api', header: 'Статус API', cell: (c) => <StatusDot tone={API_STATUS[c.apiStatus].tone}>{API_STATUS[c.apiStatus].label}</StatusDot> },
+    { key: 'online', header: t('staff.clinics.colOnline'), cell: (c) => (c.onlineBooking ? <StatusDot tone="success">{t('common.yes')}</StatusDot> : <StatusDot tone="muted">{t('common.no')}</StatusDot>) },
+    { key: 'mode', header: t('staff.clinics.colIntegration'), cell: (c) => INTEGRATION_MODE_LABEL[c.integrationMode] },
+    { key: 'api', header: t('staff.clinics.colApi'), cell: (c) => <StatusDot tone={API_STATUS[c.apiStatus].tone}>{API_STATUS[c.apiStatus].label}</StatusDot> },
     {
       key: 'contract',
-      header: 'Договор до',
+      header: t('staff.clinics.colContract'),
       cell: (c) => <span className={daysUntil(c.contractUntil) <= 60 ? 'font-medium text-warning-text' : undefined}>{formatDate(c.contractUntil)}</span>,
     },
   ];
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-[22px] font-bold">Клиники</h1>
+        <h1 className="text-[22px] font-bold">{t('staff.clinics.title')}</h1>
         <div className="flex items-center gap-2">
-          <Select aria-label="Специальность" className="w-48" value={f.specialty} onChange={(e) => setF({ specialty: e.target.value })}>
-            <option value="">Все специальности</option>
+          <Select aria-label={t('staff.clinics.specialty')} className="w-48" value={f.specialty} onChange={(e) => setF({ specialty: e.target.value })}>
+            <option value="">{t('staff.clinics.allSpecialties')}</option>
             {(Object.keys(SPECIALTY_LABEL) as Specialty[]).map((s) => (
               <option key={s} value={s}>
                 {SPECIALTY_LABEL[s]}
               </option>
             ))}
           </Select>
-          <SearchInput value={search} onChange={setSearch} placeholder="Название или район" slashFocus className="w-64" />
-          {canCreate && <Button onClick={() => setCreating(true)}>Добавить клинику</Button>}
+          <SearchInput value={search} onChange={setSearch} placeholder={t('staff.clinics.searchPlaceholder')} slashFocus className="w-64" />
+          {canCreate && <Button onClick={() => setCreating(true)}>{t('staff.clinics.addClinic')}</Button>}
         </div>
       </div>
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Клиники"
+          caption={t('staff.clinics.title')}
           columns={cols}
           rows={list.data}
           rowKey={(c) => c.id}
@@ -177,8 +184,8 @@ export default function ClinicsPage() {
           loading={list.isLoading}
           error={list.error}
           onRetry={() => void list.refetch()}
-          footer={list.data && <span>{list.data.length} клиник в сети</span>}
-          empty={<EmptyState title="Клиники не найдены" action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ specialty: '' }); }}>Сбросить фильтры</Button>} />}
+          footer={list.data && <span>{tp('staff.clinics.footer', list.data.length)}</span>}
+          empty={<EmptyState title={t('staff.clinics.notFound')} action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ specialty: '' }); }}>{t('staff.clients.resetFilters')}</Button>} />}
         />
       </div>
       {creating && <CreateClinicDialog onClose={() => setCreating(false)} />}

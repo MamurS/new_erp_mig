@@ -6,11 +6,18 @@ import type { ContractView, EndorsementView, CertificateView, ClaimLetter } from
 import type { LimitCategory } from '@/shared/types';
 import { ACTIVATION_RULE_LABEL, PAYMENT_FREQUENCY_LABEL } from '@/shared/domain/contracts';
 import { DECISION_KIND_LABEL } from '@/shared/domain/settlement';
-import { LIMIT_CATEGORY_LABEL, PROGRAM_LABEL, ROLE_LABEL } from '@/shared/domain/labels';
-import { formatDate, formatMoney } from '@/shared/lib/format';
+import { translate, type I18nKey } from '@/i18n';
+import { formatDateDoc as formatDate, formatMoneyDoc as formatMoney } from '@/shared/lib/format';
 import { PROGRAMS } from '@/shared/domain/programs';
 import { MIG_REQUISITES, MIG_RULES_REF } from './mig';
 import type { StubRenderInput } from './render';
+
+/**
+ * Documents keep their own language (Russian) whatever the interface language is: labels are read
+ * from the Russian dictionary, dates and money use the fixed document formats.
+ */
+const docLabel = (prefix: 'labels.limitCategory' | 'labels.program' | 'labels.role', id: string): string =>
+  translate('ru', `${prefix}.${id}` as I18nKey);
 
 
 const clientName = (c: { legalForm: string; name: string }) => `${c.legalForm} «${c.name}»`;
@@ -40,7 +47,7 @@ export function contractDocument(c: ContractView, opts: { showChanges?: boolean 
     'client.signatory.name': c.params.clientSignatory.name,
     'client.signatory.position': c.params.clientSignatory.position.toLowerCase(),
     'client.signatory.basis': c.params.clientSignatory.basis,
-    'program.name': PROGRAM_LABEL[c.params.program],
+    'program.name': docLabel('labels.program', c.params.program),
     'premium.employee': formatMoney(c.params.premiumEmployee),
     'premium.family': formatMoney(c.params.premiumFamily),
     'premium.total': formatMoney(c.params.total),
@@ -56,7 +63,7 @@ export function contractDocument(c: ContractView, opts: { showChanges?: boolean 
   }
   if (c.migSignatory) {
     values['mig.signatory.name'] = c.migSignatory.fullName;
-    values['mig.signatory.position'] = ROLE_LABEL[c.migSignatory.role].toLowerCase();
+    values['mig.signatory.position'] = docLabel('labels.role', c.migSignatory.role).toLowerCase();
     values['mig.signatory.basis'] = c.migSignatory.basis;
   }
   return {
@@ -67,7 +74,7 @@ export function contractDocument(c: ContractView, opts: { showChanges?: boolean 
     showChanges: opts.showChanges,
     signatures: { mig: sideLine(c.signing.mig), client: sideLine(c.signing.client) },
     tables: {
-      program: (Object.keys(limits) as LimitCategory[]).map((k) => [LIMIT_CATEGORY_LABEL[k], formatMoney(limits[k])]),
+      program: (Object.keys(limits) as LimitCategory[]).map((k) => [docLabel('labels.limitCategory', k), formatMoney(limits[k])]),
       insured: c.insuredRows.map((x, i) => [String(i + 1), x.fullName, x.position, String(x.familyMembers)]),
       schedule: c.params.paymentSchedule.map((p, i) => [String(i + 1), formatDate(p.dueDate), formatMoney(p.amount)]),
     },
@@ -111,7 +118,7 @@ export function certificateDocument(c: CertificateView): StubRenderInput {
       'client.name': c.clientName,
       'policy.number': c.policyNumber,
       'policy.endDate': formatDate(c.policyEndDate),
-      'program.name': PROGRAM_LABEL[c.program],
+      'program.name': docLabel('labels.program', c.program),
       'assistance.name': c.assistanceName,
       'assistance.phone': c.assistancePhone,
       'mig.name': MIG_REQUISITES.name,

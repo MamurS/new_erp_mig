@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Policy, PolicyStatus, ProgramCode } from '@/shared/types';
@@ -17,8 +18,8 @@ import { POLICY_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
 
 export default function PoliciesPage() {
-  useDocumentTitle('Полисы');
-  useTopbar([{ label: 'Полисы' }]);
+  useDocumentTitle(t('staff.policies.title'));
+  useTopbar([{ label: t('staff.policies.title') }]);
   const navigate = useNavigate();
   const [f, setF] = useUrlFilters(['status', 'program', 'sort', 'page'] as const);
   const [search, setSearch] = useState('');
@@ -28,31 +29,31 @@ export default function PoliciesPage() {
   const list = usePolicies({ status: f.status, program: f.program, sort: formatSort(sort), page, pageSize: 25, q });
 
   const cols: Column<Policy>[] = [
-    { key: 'number', header: 'Номер', sortKey: 'number', cell: (p) => <span className="num font-medium">{p.number}</span> },
-    { key: 'client', header: 'Клиент', sortKey: 'clientName', cell: (p) => p.clientName },
-    { key: 'program', header: 'Программа', sortKey: 'program', cell: (p) => PROGRAM_LABEL[p.program] },
-    { key: 'start', header: 'Начало', sortKey: 'startDate', cell: (p) => formatDate(p.startDate) },
-    { key: 'end', header: 'Окончание', sortKey: 'endDate', cell: (p) => (p.status === 'active' ? <RenewalCell date={p.endDate} /> : formatDate(p.endDate)) },
-    { key: 'insured', header: 'Застрахованных', sortKey: 'insuredCount', align: 'right', cell: (p) => <span className="num">{formatNumber(p.insuredCount)}</span> },
-    { key: 'premium', header: 'Премия', sortKey: 'premium', align: 'right', cell: (p) => <span className="num">{formatMoney(p.premium)}</span> },
-    { key: 'status', header: 'Статус', sortKey: 'status', cell: (p) => <StatusDot tone={POLICY_TONE[p.status]}>{POLICY_STATUS_LABEL[p.status]}</StatusDot> },
+    { key: 'number', header: t('common.number'), sortKey: 'number', cell: (p) => <span className="num font-medium">{p.number}</span> },
+    { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (p) => p.clientName },
+    { key: 'program', header: t('common.program'), sortKey: 'program', cell: (p) => PROGRAM_LABEL[p.program] },
+    { key: 'start', header: t('common.start'), sortKey: 'startDate', cell: (p) => formatDate(p.startDate) },
+    { key: 'end', header: t('common.end'), sortKey: 'endDate', cell: (p) => (p.status === 'active' ? <RenewalCell date={p.endDate} /> : formatDate(p.endDate)) },
+    { key: 'insured', header: t('staff.clients.col.insured'), sortKey: 'insuredCount', align: 'right', cell: (p) => <span className="num">{formatNumber(p.insuredCount)}</span> },
+    { key: 'premium', header: t('common.premium'), sortKey: 'premium', align: 'right', cell: (p) => <span className="num">{formatMoney(p.premium)}</span> },
+    { key: 'status', header: t('common.status'), sortKey: 'status', cell: (p) => <StatusDot tone={POLICY_TONE[p.status]}>{POLICY_STATUS_LABEL[p.status]}</StatusDot> },
   ];
 
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-[22px] font-bold">Полисы</h1>
-        <SearchInput value={search} onChange={setSearch} placeholder="Номер полиса или клиент" slashFocus className="w-72" />
+        <h1 className="text-[22px] font-bold">{t('staff.policies.title')}</h1>
+        <SearchInput value={search} onChange={setSearch} placeholder={t('staff.policies.searchPlaceholder')} slashFocus className="w-72" />
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <FilterChip
-          label="Статус"
+          label={t('common.status')}
           options={(Object.keys(POLICY_STATUS_LABEL) as PolicyStatus[]).map((s) => ({ value: s, label: POLICY_STATUS_LABEL[s] }))}
           selected={f.status ? f.status.split(',') : []}
           onChange={(v) => setF({ status: v.join(',') })}
         />
         <FilterChip
-          label="Программа"
+          label={t('common.program')}
           options={(Object.keys(PROGRAM_LABEL) as ProgramCode[]).map((s) => ({ value: s, label: PROGRAM_LABEL[s] }))}
           selected={f.program ? f.program.split(',') : []}
           onChange={(v) => setF({ program: v.join(',') })}
@@ -63,7 +64,7 @@ export default function PoliciesPage() {
       </div>
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Полисы"
+          caption={t('staff.policies.title')}
           columns={cols}
           rows={list.data?.items}
           rowKey={(p) => p.id}
@@ -79,9 +80,9 @@ export default function PoliciesPage() {
           onPageChange={(p) => setF({ page: p }, false)}
           empty={
             <EmptyState
-              title="Полисы не найдены"
-              description="Измените фильтры или строку поиска"
-              action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ status: '', program: '' }); }}>Сбросить фильтры</Button>}
+              title={t('staff.policies.notFound')}
+              description={t('staff.clients.notFoundHint')}
+              action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ status: '', program: '' }); }}>{t('staff.clients.resetFilters')}</Button>}
             />
           }
         />

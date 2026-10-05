@@ -12,12 +12,7 @@ export const COVERAGE_START_RULES: readonly CoverageStartRule[] = ['from_hr_requ
 export type EndorsementPeriodicity = 'monthly' | 'per_change';
 export const PERIODICITIES: readonly EndorsementPeriodicity[] = ['monthly', 'per_change'];
 
-export const CHANGE_TYPE_LABEL: Record<ChangeRequestType, string> = {
-  add_insured: 'Включение',
-  exclude_insured: 'Исключение',
-  change_program: 'Смена программы',
-  other: 'Прочие условия',
-};
+export const CHANGE_TYPE_LABEL = defineLabels<ChangeRequestType>('labels.changeType', ['add_insured', 'exclude_insured', 'change_program', 'other']);
 
 export interface LineCalc {
   days: number;

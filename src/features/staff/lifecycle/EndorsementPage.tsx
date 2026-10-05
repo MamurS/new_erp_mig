@@ -1,4 +1,5 @@
 /* Доп. соглашение (LIFECYCLE_SPEC §11–12): calculation per line with its formula, preview, approval and signing. */
+import { t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Pencil, RotateCcw } from 'lucide-react';
@@ -45,7 +46,7 @@ function EndorsementClauses({ e, editable }: { e: EndorsementView; editable: boo
     attempt(() => patch.mutateAsync({ id: e.id, clauseOverrides: [...next].map(([clauseId, text]) => ({ clauseId, text })) }), ok);
   const current = () => new Map(e.clauseOverrides.map((o) => [o.clauseId, o.text]));
   return (
-    <Card title="Пункты соглашения" bodyClassName="p-0">
+    <Card title={t('staffLc.endorsement.clauses')} bodyClassName="p-0">
       <ul className="divide-y divide-border-soft text-[13px]">
         {clausesOf('endorsement').map((cl) => {
           const o = overrides.get(cl.id);
@@ -55,7 +56,7 @@ function EndorsementClauses({ e, editable }: { e: EndorsementView; editable: boo
                 <p>
                   <span className="num mr-1.5 text-muted">{cl.id}</span>
                   {cl.title}
-                  {o && <Chip kind="warning" className="ml-2">изменён</Chip>}
+                  {o && <Chip kind="warning" className="ml-2">{t('staffLc.contract.changedChip')}</Chip>}
                 </p>
                 {editable && (
                   <span className="flex shrink-0 gap-1">
@@ -63,25 +64,25 @@ function EndorsementClauses({ e, editable }: { e: EndorsementView; editable: boo
                       <Button
                         size="sm"
                         variant="ghost"
-                        aria-label={`Вернуть исходный текст пункта ${cl.id}`}
+                        aria-label={t('staffLc.contract.resetClauseAria', { id: cl.id })}
                         onClick={() => {
                           const next = current();
                           next.delete(cl.id);
-                          void save(next, `Пункт ${cl.id}: исходный текст`);
+                          void save(next, t('staffLc.contract.clauseReset', { id: cl.id }));
                         }}
                       >
                         <RotateCcw className="h-3.5 w-3.5" aria-hidden />
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" aria-label={`Изменить формулировку пункта ${cl.id}`} onClick={() => setEdit({ id: cl.id, title: cl.title, text: o?.text ?? cl.text })}>
-                      <Pencil className="h-3.5 w-3.5" aria-hidden /> Изменить формулировку
+                    <Button size="sm" variant="ghost" aria-label={t('staffLc.contract.editClauseAria', { id: cl.id })} onClick={() => setEdit({ id: cl.id, title: cl.title, text: o?.text ?? cl.text })}>
+                      <Pencil className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.contract.editClause')}
                     </Button>
                   </span>
                 )}
               </div>
               {o && (
                 <p className="mt-1 text-[12px] text-muted">
-                  Исходный текст: {o.original}
+                  {t('staffLc.contract.originalText')} {o.original}
                 </p>
               )}
             </li>
@@ -93,29 +94,29 @@ function EndorsementClauses({ e, editable }: { e: EndorsementView; editable: boo
           open
           wide
           onOpenChange={(o) => !o && setEdit(null)}
-          title={`Пункт ${edit.id}. ${edit.title}`}
-          description="Изменённый пункт требует согласования юриста."
+          title={t('staffLc.contract.clauseTitle', { id: edit.id, title: edit.title })}
+          description={t('staffLc.endorsement.clauseDesc')}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEdit(null)}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button
                 loading={patch.isPending}
                 onClick={() => {
                   const parsed = clauseOverrideSchema.safeParse({ clauseId: edit.id, text: edit.text });
-                  if (!parsed.success) return setError(parsed.error.issues[0]?.message);
+                  if (!parsed.success) return setError(tm(parsed.error.issues[0]?.message) || undefined);
                   const next = current();
                   next.set(parsed.data.clauseId, parsed.data.text);
-                  void save(next, `Пункт ${edit.id} изменён`).then((ok) => ok && setEdit(null));
+                  void save(next, t('staffLc.contract.clauseChanged', { id: edit.id })).then((ok) => ok && setEdit(null));
                 }}
               >
-                Сохранить формулировку
+                {t('staffLc.contract.saveWording')}
               </Button>
             </>
           }
         >
-          <Field label="Формулировка" error={error}>
+          <Field label={t('staffLc.contract.wording')} error={error}>
             {(a) => <Textarea {...a} rows={6} maxLength={4000} value={edit.text} onChange={(ev) => setEdit({ ...edit, text: ev.target.value })} />}
           </Field>
         </Modal>
@@ -141,13 +142,13 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
         title={
           <span className="flex flex-wrap items-center gap-2">
             <span className="num">{e.number}</span>
-            {e.kind === 'termination' && <Chip kind="danger">расторжение</Chip>}
+            {e.kind === 'termination' && <Chip kind="danger">{t('staffLc.endorsement.terminationChip')}</Chip>}
             <Chip kind={e.status === 'signed' ? 'success' : e.status === 'draft' ? 'neutral' : 'warning'}>{ENDORSEMENT_STATUS_LABEL[e.status]}</Chip>
           </span>
         }
         subtitle={
           <span>
-            {e.clientName} · договор{' '}
+            {t('staffLc.endorsement.clientContract', { client: e.clientName })}{' '}
             <Link className="num text-accent-text hover:underline" to={`/staff/contracts/${e.contractId}`}>
               {e.contractNumber}
             </Link>
@@ -157,30 +158,30 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
           <>
             <DocPrintButton input={() => endorsementDocument(e)} />
             {canApproveAmounts && e.needsAmountApproval && (
-              <Button variant="secondary" loading={approveAmounts.isPending} onClick={() => void attempt(() => approveAmounts.mutateAsync(e.id), 'Суммы утверждены')}>
-                Утвердить суммы
+              <Button variant="secondary" loading={approveAmounts.isPending} onClick={() => void attempt(() => approveAmounts.mutateAsync(e.id), t('staffLc.endorsement.amountsApproved'))}>
+                {t('staffLc.endorsement.approveAmounts')}
               </Button>
             )}
             {canManage && e.status === 'draft' && (
               <Button
                 disabled={e.needsAmountApproval}
                 loading={step.isPending}
-                onClick={() => void attempt(() => step.mutateAsync({ kind: 'endorsements', id: e.id, step: 'submit-legal' }), e.clauseOverrides.length ? 'Отправлено юристу' : 'Согласовано без юриста')}
+                onClick={() => void attempt(() => step.mutateAsync({ kind: 'endorsements', id: e.id, step: 'submit-legal' }), e.clauseOverrides.length ? t('staffLc.endorsement.sentToLawyer') : t('staffLc.endorsement.approvedWithoutLawyer'))}
               >
-                Отправить на согласование
+                {t('staffLc.quote.submitForApproval')}
               </Button>
             )}
             {canLegal && e.status === 'legal_review' && (
               <>
                 <Button variant="secondary" onClick={() => setDialog('return')}>
-                  Вернуть с комментарием
+                  {t('staffLc.contract.returnWithComment')}
                 </Button>
-                <Button onClick={() => setDialog('approve')}>Согласовать</Button>
+                <Button onClick={() => setDialog('approve')}>{t('staffLc.quote.agree')}</Button>
               </>
             )}
             {canManage && e.status === 'approved' && (
-              <Button loading={step.isPending} onClick={() => void attempt(() => step.mutateAsync({ kind: 'endorsements', id: e.id, step: 'send' }), 'Отправлено клиенту')}>
-                Отправить клиенту
+              <Button loading={step.isPending} onClick={() => void attempt(() => step.mutateAsync({ kind: 'endorsements', id: e.id, step: 'send' }), t('staffLc.endorsement.sentToClient'))}>
+                {t('staffLc.contract.sendToClient')}
               </Button>
             )}
           </>
@@ -188,31 +189,35 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
       />
       {e.needsAmountApproval && (
         <p role="status" className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
-          В соглашении есть суммы по прочим условиям: их утверждает андеррайтер.
+          {t('staffLc.endorsement.needsAmountApproval')}
         </p>
       )}
       {e.status === 'signed' && (
         <p className="mb-3 rounded-card bg-success-soft px-3 py-2 text-[13px] text-success-text" data-testid="endorsement-result">
-          {e.total > 0 ? `Подписано. Сформирован счёт на доплату ${formatMoney(e.total)}.` : e.total < 0 ? `Подписано. Документ на возврат ${e.refundDocument ?? ''}: ${formatMoney(-e.total)}.` : 'Подписано.'}
+          {e.total > 0
+            ? t('staffLc.endorsement.signedInvoice', { amount: formatMoney(e.total) })
+            : e.total < 0
+              ? t('staffLc.endorsement.signedRefund', { doc: e.refundDocument ?? '', amount: formatMoney(-e.total) })
+              : t('staffLc.endorsement.signed')}
         </p>
       )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <Card title="Расчёт" bodyClassName="p-0">
+          <Card title={t('staffLc.endorsement.calculation')} bodyClassName="p-0">
             <table className="w-full text-[13px]" data-testid="endorsement-lines">
-              <caption className="sr-only">Строки доп. соглашения</caption>
+              <caption className="sr-only">{t('staffLc.endorsement.linesCaption')}</caption>
               <thead>
                 <tr className="border-b border-border text-left text-[12px] text-muted">
-                  <th className="px-4 py-2 font-medium">Изменение</th>
-                  <th className="px-2 py-2 text-right font-medium">Дней</th>
-                  <th className="px-2 py-2 font-medium">Формула</th>
-                  <th className="px-4 py-2 text-right font-medium">Сумма</th>
+                  <th className="px-4 py-2 font-medium">{t('staffLc.endorsements.change')}</th>
+                  <th className="px-2 py-2 text-right font-medium">{t('staffLc.endorsement.days')}</th>
+                  <th className="px-2 py-2 font-medium">{t('staffLc.endorsement.formula')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('common.amount')}</th>
                 </tr>
               </thead>
               <tbody>
                 {e.lines.map((l) => (
                   <tr key={l.changeRequestId} className="border-b border-border-soft align-top">
-                    <td className="px-4 py-1.5">{l.description}</td>
+                    <td className="px-4 py-1.5">{tm(l.description)}</td>
                     <td className="num px-2 py-1.5 text-right">{l.days}</td>
                     <td className="num px-2 py-1.5 text-[12px] text-muted">{l.formula}</td>
                     <td className="num px-4 py-1.5 text-right">{formatMoney(l.amount)}</td>
@@ -222,17 +227,17 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
               <tfoot>
                 <tr>
                   <td colSpan={3} className="px-4 py-2 font-semibold">
-                    {e.total >= 0 ? 'Итого к доплате' : 'Итого к возврату'}
+                    {e.total >= 0 ? t('staffLc.endorsement.totalDue') : t('staffLc.endorsement.totalRefund')}
                   </td>
                   <td className="num px-4 py-2 text-right font-semibold">{formatMoney(Math.abs(e.total))}</td>
                 </tr>
               </tfoot>
             </table>
-            {e.kind === 'termination' && e.terminationDate && <p className="px-4 pb-3 text-[13px] text-muted">Дата расторжения: {formatDate(e.terminationDate)}</p>}
+            {e.kind === 'termination' && e.terminationDate && <p className="px-4 pb-3 text-[13px] text-muted">{t('staffLc.endorsement.terminationDate', { date: formatDate(e.terminationDate) })}</p>}
           </Card>
           <EndorsementClauses e={e} editable={canManage && e.status === 'draft'} />
         </div>
-        <div className="min-w-0">{doc && <DocPreview doc={doc} label="Предпросмотр доп. соглашения" className="sticky top-16" />}</div>
+        <div className="min-w-0">{doc && <DocPreview doc={doc} label={t('staffLc.endorsement.preview')} className="sticky top-16" />}</div>
       </div>
       {signingStage && (
         <div className="mt-4">
@@ -242,24 +247,24 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
       <ReasonDialog
         open={dialog === 'approve'}
         onClose={() => setDialog(null)}
-        title="Согласовать доп. соглашение"
-        description="Изменённые пункты проверены."
-        label="Комментарий (необязательно)"
+        title={t('staffLc.endorsement.approveTitle')}
+        description={t('staffLc.endorsement.approveDesc')}
+        label={t('staffLc.quote.commentOptional')}
         field="comment"
         optional
         schema={legalApproveSchema}
-        confirmLabel="Согласовать"
+        confirmLabel={t('staffLc.quote.agree')}
         onSubmit={(comment) => step.mutateAsync({ kind: 'endorsements', id: e.id, step: 'legal-approve', body: { comment: comment || undefined } })}
       />
       <ReasonDialog
         open={dialog === 'return'}
         onClose={() => setDialog(null)}
-        title="Вернуть доп. соглашение"
-        description="Соглашение вернётся в черновик."
-        label="Комментарий"
+        title={t('staffLc.endorsement.returnTitle')}
+        description={t('staffLc.endorsement.returnDesc')}
+        label={t('common.comment')}
         field="comment"
         schema={legalReturnSchema}
-        confirmLabel="Вернуть"
+        confirmLabel={t('staffLc.contract.return')}
         danger
         onSubmit={(comment) => step.mutateAsync({ kind: 'endorsements', id: e.id, step: 'legal-return', body: { comment } })}
       />
@@ -272,7 +277,7 @@ export default function EndorsementPage() {
   const [poll, setPoll] = useState(false);
   const q = useEndorsement(endorsementId, { poll });
   useEffect(() => setPoll(!!q.data?.signing.edoPending), [q.data?.signing.edoPending]);
-  useDocumentTitle(q.data ? q.data.number : 'Доп. соглашение');
-  useTopbar([{ label: 'Доп. соглашения', to: '/staff/endorsements' }, { label: q.data?.number ?? 'Доп. соглашение' }]);
+  useDocumentTitle(q.data ? q.data.number : t('staffLc.endorsements.endorsement'));
+  useTopbar([{ label: t('staffLc.contract.endorsements'), to: '/staff/endorsements' }, { label: q.data?.number ?? t('staffLc.endorsements.endorsement') }]);
   return <QueryState query={q}>{(e) => <EndorsementCard e={e} />}</QueryState>;
 }

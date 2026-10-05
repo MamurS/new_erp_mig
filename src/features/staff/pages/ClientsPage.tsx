@@ -1,3 +1,4 @@
+import { t, tm, tp } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDownUp, Columns3, Mail, Plus } from 'lucide-react';
@@ -10,7 +11,7 @@ import { useClient, useClients, useCreateClient } from '@/shared/api/queries/sta
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { CLIENT_STATUS_LABEL, PROGRAM_LABEL } from '@/shared/domain/labels';
-import { formatDateTime, formatMoney, formatMoneyShort, formatNumber, formatPercent, plural } from '@/shared/lib/format';
+import { formatDateTime, formatMoney, formatMoneyShort, formatNumber, formatPercent } from '@/shared/lib/format';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { maskPinfl } from '@/shared/lib/masks';
@@ -37,39 +38,71 @@ import { LossBar, RenewalCell } from '../components/cells';
 import { useDmsParam } from '@/shared/api/queries/params';
 
 const VIEWS = [
-  { key: '', label: 'Все' },
-  { key: 'mine', label: 'Мои' },
-  { key: 'q4', label: 'Продления Q4' },
-  { key: 'loss', label: 'Убыточность > 80%' },
+  { key: '', get label() {
+      return t('common.all');
+    } },
+  { key: 'mine', get label() {
+      return t('staff.clients.view.mine');
+    } },
+  { key: 'q4', get label() {
+      return t('staff.clients.view.q4');
+    } },
+  { key: 'loss', get label() {
+      return t('staff.clients.view.loss');
+    } },
 ] as const;
 
 const SORTS = [
-  { key: 'name:asc', label: 'По названию' },
-  { key: 'premium:desc', label: 'По премии' },
-  { key: 'renewalDate:asc', label: 'По дате продления' },
-  { key: 'lossRatio:desc', label: 'По убыточности' },
-  { key: 'insuredCount:desc', label: 'По числу застрахованных' },
+  { key: 'name:asc', get label() {
+      return t('staff.clients.sort.name');
+    } },
+  { key: 'premium:desc', get label() {
+      return t('staff.clients.sort.premium');
+    } },
+  { key: 'renewalDate:asc', get label() {
+      return t('staff.clients.sort.renewal');
+    } },
+  { key: 'lossRatio:desc', get label() {
+      return t('staff.clients.sort.loss');
+    } },
+  { key: 'insuredCount:desc', get label() {
+      return t('staff.clients.sort.insured');
+    } },
 ];
 
 const HIDEABLE = [
-  { key: 'program', label: 'Программа' },
-  { key: 'insured', label: 'Застрахованных' },
-  { key: 'premium', label: 'Премия' },
-  { key: 'renewal', label: 'Продление' },
-  { key: 'loss', label: 'Убыточность' },
-  { key: 'manager', label: 'Менеджер' },
-  { key: 'status', label: 'Статус' },
+  { key: 'program', get label() {
+      return t('common.program');
+    } },
+  { key: 'insured', get label() {
+      return t('staff.clients.col.insured');
+    } },
+  { key: 'premium', get label() {
+      return t('common.premium');
+    } },
+  { key: 'renewal', get label() {
+      return t('staff.clients.col.renewal');
+    } },
+  { key: 'loss', get label() {
+      return t('staff.clients.col.loss');
+    } },
+  { key: 'manager', get label() {
+      return t('common.manager');
+    } },
+  { key: 'status', get label() {
+      return t('common.status');
+    } },
 ];
 
 export default function ClientsPage() {
-  useDocumentTitle('Клиенты');
+  useDocumentTitle(t('staff.clients.title'));
   const canWrite = useCan('clients.write');
   const [createOpen, setCreateOpen] = useState(false);
   useTopbar(
-    [{ label: 'Клиенты' }],
+    [{ label: t('staff.clients.title') }],
     canWrite ? (
       <Button onClick={() => setCreateOpen(true)}>
-        <Plus className="h-3.5 w-3.5" aria-hidden /> Новый клиент
+        <Plus className="h-3.5 w-3.5" aria-hidden /> {t('staff.clients.newClient')}
       </Button>
     ) : null,
   );
@@ -93,7 +126,7 @@ export default function ClientsPage() {
   const columns: Column<Client>[] = [
     {
       key: 'name',
-      header: 'Клиент',
+      header: t('common.client'),
       sortKey: 'name',
       cell: (c) => (
         <span className="flex items-center gap-2">
@@ -105,14 +138,14 @@ export default function ClientsPage() {
         </span>
       ),
     },
-    { key: 'program', header: 'Программа', sortKey: 'program', cell: (c) => (c.program ? PROGRAM_LABEL[c.program] : <span className="text-muted">—</span>) },
-    { key: 'insured', header: 'Застрахованных', sortKey: 'insuredCount', align: 'right', cell: (c) => <span className="num">{formatNumber(c.insuredCount)}</span> },
-    { key: 'premium', header: 'Премия', sortKey: 'premium', align: 'right', cell: (c) => <span className="num whitespace-nowrap">{c.premium ? formatMoneyShort(c.premium) : '—'}</span> },
-    { key: 'renewal', header: 'Продление', sortKey: 'renewalDate', cell: (c) => <RenewalCell date={c.renewalDate} /> },
-    { key: 'loss', header: 'Убыточность', sortKey: 'lossRatio', cell: (c) => <LossBar ratio={c.lossRatio} /> },
+    { key: 'program', header: t('common.program'), sortKey: 'program', cell: (c) => (c.program ? PROGRAM_LABEL[c.program] : <span className="text-muted">—</span>) },
+    { key: 'insured', header: t('staff.clients.col.insured'), sortKey: 'insuredCount', align: 'right', cell: (c) => <span className="num">{formatNumber(c.insuredCount)}</span> },
+    { key: 'premium', header: t('common.premium'), sortKey: 'premium', align: 'right', cell: (c) => <span className="num whitespace-nowrap">{c.premium ? formatMoneyShort(c.premium) : '—'}</span> },
+    { key: 'renewal', header: t('staff.clients.col.renewal'), sortKey: 'renewalDate', cell: (c) => <RenewalCell date={c.renewalDate} /> },
+    { key: 'loss', header: t('staff.clients.col.loss'), sortKey: 'lossRatio', cell: (c) => <LossBar ratio={c.lossRatio} /> },
     {
       key: 'manager',
-      header: 'Менеджер',
+      header: t('common.manager'),
       sortKey: 'managerName',
       cell: (c) => (
         <span className="flex items-center gap-1.5" title={c.managerName}>
@@ -121,19 +154,19 @@ export default function ClientsPage() {
         </span>
       ),
     },
-    { key: 'status', header: 'Статус', sortKey: 'status', cell: (c) => <StatusDot tone={CLIENT_TONE[c.status]}>{CLIENT_STATUS_LABEL[c.status]}</StatusDot> },
+    { key: 'status', header: t('common.status'), sortKey: 'status', cell: (c) => <StatusDot tone={CLIENT_TONE[c.status]}>{CLIENT_STATUS_LABEL[c.status]}</StatusDot> },
   ];
 
   return (
     <div className="flex gap-0">
       <div className="min-w-0 flex-1">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-[22px] font-bold">Клиенты</h1>
+          <h1 className="text-[22px] font-bold">{t('staff.clients.title')}</h1>
           <div className="flex items-center gap-2">
-            <SearchInput value={search} onChange={setSearch} placeholder="Название или ИНН" slashFocus className="w-64" />
+            <SearchInput value={search} onChange={setSearch} placeholder={t('staff.clients.searchPlaceholder')} slashFocus className="w-64" />
           </div>
         </div>
-        <div role="tablist" aria-label="Сохранённые виды" className="mb-3 flex flex-wrap gap-1">
+        <div role="tablist" aria-label={t('staff.clients.savedViews')} className="mb-3 flex flex-wrap gap-1">
           {VIEWS.map((v) => (
             <button
               key={v.key}
@@ -148,29 +181,29 @@ export default function ClientsPage() {
           ))}
           {f.view === 'renewals' && (
             <button type="button" role="tab" aria-selected className="rounded-btn bg-text px-2.5 py-1 text-white">
-              Продления &lt; 30 дн без КП
+              {t('staff.clients.view.renewals')}
             </button>
           )}
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <FilterChip
-            label="Статус"
+            label={t('common.status')}
             options={(Object.keys(CLIENT_STATUS_LABEL) as ClientStatus[]).map((s) => ({ value: s, label: CLIENT_STATUS_LABEL[s] }))}
             selected={f.status ? f.status.split(',') : []}
             onChange={(v) => setF({ status: v.join(',') })}
           />
           <FilterChip
-            label="Программа"
+            label={t('common.program')}
             options={(Object.keys(PROGRAM_LABEL) as ProgramCode[]).map((s) => ({ value: s, label: PROGRAM_LABEL[s] }))}
             selected={f.program ? f.program.split(',') : []}
             onChange={(v) => setF({ program: v.join(',') })}
           />
-          <FilterChip label="Менеджер" options={managers} selected={f.managerId ? [f.managerId] : []} onChange={(v) => setF({ managerId: v[v.length - 1] ?? '' })} />
+          <FilterChip label={t('common.manager')} options={managers} selected={f.managerId ? [f.managerId] : []} onChange={(v) => setF({ managerId: v[v.length - 1] ?? '' })} />
           <div className="ml-auto flex items-center gap-2">
             <Menu>
               <MenuTrigger asChild>
                 <Button variant="secondary">
-                  <ArrowDownUp className="h-3.5 w-3.5" aria-hidden /> Сортировка
+                  <ArrowDownUp className="h-3.5 w-3.5" aria-hidden /> {t('staff.clients.sortButton')}
                 </Button>
               </MenuTrigger>
               <MenuContent>
@@ -184,11 +217,11 @@ export default function ClientsPage() {
             <Menu>
               <MenuTrigger asChild>
                 <Button variant="secondary">
-                  <Columns3 className="h-3.5 w-3.5" aria-hidden /> Колонки
+                  <Columns3 className="h-3.5 w-3.5" aria-hidden /> {t('staff.clients.columnsButton')}
                 </Button>
               </MenuTrigger>
               <MenuContent>
-                <MenuLabel>Показать колонки</MenuLabel>
+                <MenuLabel>{t('staff.clients.showColumns')}</MenuLabel>
                 {HIDEABLE.map((c) => (
                   <MenuCheckbox key={c.key} checked={!hidden.includes(c.key)} onCheckedChange={(v) => setHidden((h) => (v ? h.filter((x) => x !== c.key) : [...h, c.key]))}>
                     {c.label}
@@ -201,7 +234,7 @@ export default function ClientsPage() {
         </div>
         <div className="rounded-card border border-border bg-surface">
           <DataTable
-            caption="Клиенты"
+            caption={t('staff.clients.title')}
             columns={columns}
             hiddenColumns={hidden}
             rows={list.data?.items}
@@ -220,11 +253,11 @@ export default function ClientsPage() {
             onPageChange={(p) => setF({ page: p }, false)}
             empty={
               <EmptyState
-                title="Клиенты не найдены"
-                description="Измените фильтры или строку поиска"
+                title={t('staff.clients.notFound')}
+                description={t('staff.clients.notFoundHint')}
                 action={
                   <Button variant="secondary" onClick={() => { setSearch(''); setF({ view: '', status: '', program: '', managerId: '' }); }}>
-                    Сбросить фильтры
+                    {t('staff.clients.resetFilters')}
                   </Button>
                 }
               />
@@ -232,7 +265,7 @@ export default function ClientsPage() {
             footer={
               list.data && (
                 <span>
-                  {formatNumber(list.data.total)} {plural(list.data.total, ['клиент', 'клиента', 'клиентов'])} · премия всего {formatMoney(list.data.totalPremium)}
+                  {tp('staff.clients.footer', list.data.total, { premium: formatMoney(list.data.totalPremium) })}
                 </span>
               )
             }
@@ -253,7 +286,7 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
   const [letterOpen, setLetterOpen] = useState(false);
   const c = q.data;
   return (
-    <SidePanel open onClose={onClose} title={c?.name ?? 'Клиент'} className="lg:ml-4 lg:rounded-card lg:border">
+    <SidePanel open onClose={onClose} title={c?.name ?? t('common.client')} className="lg:ml-4 lg:rounded-card lg:border">
       {q.isLoading ? (
         <SkeletonRows rows={8} />
       ) : q.isError || !c ? (
@@ -262,54 +295,55 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <StatusDot tone={CLIENT_TONE[c.status]}>{CLIENT_STATUS_LABEL[c.status]}</StatusDot>
-            <span className="text-muted">· ИНН <span className="num">{c.inn}</span></span>
+            <span className="text-muted">{t('staff.clients.innLabel')}<span className="num">{c.inn}</span></span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <MiniKpi label="Застрахованных" value={formatNumber(c.insuredCount)} />
-            <MiniKpi label="Премия" value={c.premium ? formatMoneyShort(c.premium) : '—'} />
-            <MiniKpi label="Убыточность" value={c.lossRatio === null ? '—' : formatPercent(c.lossRatio)} tone={(c.lossRatio ?? 0) >= lossWarn ? 'warning' : 'default'} />
-            <MiniKpi label="Программа" value={c.program ? PROGRAM_LABEL[c.program] : '—'} />
+            <MiniKpi label={t('staff.clients.col.insured')} value={formatNumber(c.insuredCount)} />
+            <MiniKpi label={t('common.premium')} value={c.premium ? formatMoneyShort(c.premium) : '—'} />
+            <MiniKpi label={t('staff.clients.col.loss')} value={c.lossRatio === null ? '—' : formatPercent(c.lossRatio)} tone={(c.lossRatio ?? 0) >= lossWarn ? 'warning' : 'default'} />
+            <MiniKpi label={t('common.program')} value={c.program ? PROGRAM_LABEL[c.program] : '—'} />
           </div>
           <section>
-            <h3 className="mb-1 text-[14px] font-bold">Продление</h3>
+            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.col.renewal')}</h3>
             <p className="mb-2 text-muted">
               {c.renewalDate ? (
                 <>
-                  Продление <RenewalCell date={c.renewalDate} />
-                  {c.hasRenewalOffer ? ' · КП подготовлено' : ' · КП ещё нет'}
+                  {t('staff.clients.renewalPrefix')}
+                  <RenewalCell date={c.renewalDate} />
+                  {c.hasRenewalOffer ? t('staff.clients.offerReady') : t('staff.clients.offerMissing')}
                 </>
               ) : (
-                'Нет действующего полиса'
+                t('staff.clients.noActivePolicy')
               )}
             </p>
             <div className="flex flex-wrap gap-2">
-              {canOffer && <Button onClick={() => navigate(kpNewPath(c.id, c.activePolicyId))}>Подготовить КП</Button>}
+              {canOffer && <Button onClick={() => navigate(kpNewPath(c.id, c.activePolicyId))}>{t('staff.dashboard.prepareOffer')}</Button>}
               <Button variant="secondary" onClick={() => setLetterOpen(true)}>
-                <Mail className="h-3.5 w-3.5" aria-hidden /> Письмо HR
+                <Mail className="h-3.5 w-3.5" aria-hidden /> {t('staff.hrLetter.title')}
               </Button>
             </div>
           </section>
           <section>
-            <h3 className="mb-1 text-[14px] font-bold">Контакт HR</h3>
+            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.hrContact')}</h3>
             <dl>
-              <Kv label="Имя">{c.hrContact.name}</Kv>
-              <Kv label="Телефон"><span className="num">{c.hrContact.phoneMasked}</span></Kv>
-              <Kv label="Email">{c.hrContact.emailMasked}</Kv>
+              <Kv label={t('staff.clients.hrName')}>{c.hrContact.name}</Kv>
+              <Kv label={t('common.phone')}><span className="num">{c.hrContact.phoneMasked}</span></Kv>
+              <Kv label={t('common.email')}>{c.hrContact.emailMasked}</Kv>
             </dl>
           </section>
           <section>
-            <h3 className="mb-1 text-[14px] font-bold">Активность</h3>
+            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.activity')}</h3>
             <ol className="flex flex-col gap-2 border-l border-border pl-3">
               {c.activity.map((a, i) => (
                 <li key={i}>
-                  <div>{a.text}</div>
+                  <div>{tm(a.text)}</div>
                   <div className="text-[12px] text-muted">{formatDateTime(a.at)}</div>
                 </li>
               ))}
             </ol>
           </section>
           <Button variant="secondary" onClick={onOpen}>
-            Открыть карточку
+            {t('staff.clients.openCard')}
           </Button>
           <HrLetterDialog open={letterOpen} onOpenChange={setLetterOpen} clientId={c.id} clientName={c.name} />
         </div>
@@ -323,11 +357,16 @@ type NewClient = z.input<typeof clientCreateSchema>;
 function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const create = useCreateClient();
   const navigate = useNavigate();
-  const form = useForm<NewClient>({ resolver: zodResolver(clientCreateSchema), defaultValues: { legalForm: 'ООО', name: '', inn: '', status: 'draft' }, mode: 'onTouched' });
+  const form = useForm<NewClient>({
+    resolver: zodResolver(clientCreateSchema),
+    // eslint-disable-next-line mig/no-cyrillic-ui -- legal form is a data value sent to the server
+    defaultValues: { legalForm: 'ООО', name: '', inn: '', status: 'draft' },
+    mode: 'onTouched',
+  });
   const onSubmit = form.handleSubmit(async (v) => {
     try {
       const c = await create.mutateAsync({ ...v, status: v.status ?? 'draft' });
-      toast.success('Клиент добавлен');
+      toast.success(t('staff.clients.added'));
       onOpenChange(false);
       form.reset();
       navigate(`/staff/clients/${c.id}`);
@@ -339,47 +378,48 @@ function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Новый клиент"
+      title={t('staff.clients.newClient')}
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void onSubmit()} loading={create.isPending}>
-            Добавить клиента
+            {t('staff.clients.addClient')}
           </Button>
         </>
       }
     >
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
         <div className="grid grid-cols-[120px_1fr] gap-3">
-          <Field label="Форма">
+          <Field label={t('staff.clients.legalForm')}>
             {(a) => (
               <Select {...a} {...form.register('legalForm')}>
+                {/* eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values sent to the server */}
                 {['ООО', 'АО', 'СП ООО', 'ЧП'].map((x) => (
                   <option key={x}>{x}</option>
                 ))}
               </Select>
             )}
           </Field>
-          <Field label="Название" error={form.formState.errors.name?.message}>
+          <Field label={t('common.name')} error={tm(form.formState.errors.name?.message)}>
             {(a) => <Input {...a} maxLength={120} {...form.register('name')} />}
           </Field>
         </div>
-        <Field label="ИНН" error={form.formState.errors.inn?.message}>
+        <Field label={t('staff.clients.inn')} error={tm(form.formState.errors.inn?.message)}>
           {(a) => (
             <Controller
               control={form.control}
               name="inn"
-              render={({ field }) => <MaskedInput {...a} mask="pinfl" placeholder="9 цифр" value={field.value} onChange={(v) => field.onChange(maskPinfl(v).slice(0, 9))} onBlur={field.onBlur} />}
+              render={({ field }) => <MaskedInput {...a} mask="pinfl" placeholder={t('staff.clients.innPlaceholder')} value={field.value} onChange={(v) => field.onChange(maskPinfl(v).slice(0, 9))} onBlur={field.onBlur} />}
             />
           )}
         </Field>
-        <Field label="Статус">
+        <Field label={t('common.status')}>
           {(a) => (
             <Select {...a} {...form.register('status')}>
-              <option value="draft">Черновик</option>
-              <option value="negotiation">Переговоры</option>
+              <option value="draft">{t('staff.clients.status.draft')}</option>
+              <option value="negotiation">{t('staff.clients.status.negotiation')}</option>
             </Select>
           )}
         </Field>

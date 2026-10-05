@@ -56,6 +56,7 @@ export const program: z.ZodType<T.Program> = z.object({ code: programCode, name:
 
 export const client: z.ZodType<T.Client> = z.object({
   id: uuid,
+  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
   legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
   name: z.string(),
   inn: z.string(),
@@ -675,6 +676,7 @@ export const idResult = z.object({ id: uuid });
 export const inviteResult = z.object({ invited: z.number() });
 
 // ---- commercial offers ----
+// eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
 const legalForm = z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']);
 export const kpParams: z.ZodType<T.KpParams> = z.object({
   templateId: z.literal('gold'),
