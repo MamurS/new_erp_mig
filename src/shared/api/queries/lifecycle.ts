@@ -18,7 +18,7 @@ const lk = {
   endorsement: (id: string) => ['lifecycle', 'endorsement', id] as const,
   changeRequests: (p: Record<string, string>) => ['lifecycle', 'change-requests', p] as const,
   invoices: (p: Record<string, string>) => ['lifecycle', 'invoices', p] as const,
-  paymentQueue: (status: string) => ['lifecycle', 'payment-queue', status] as const,
+  paymentQueue: (status: string, p: Record<string, string> = {}) => ['lifecycle', 'payment-queue', status, p] as const,
   certificates: (policyId: string) => ['lifecycle', 'certificates', policyId] as const,
   myCertificate: ['lifecycle', 'me', 'certificate'] as const,
   directory: ['lifecycle', 'directory'] as const,
@@ -121,8 +121,8 @@ export const useCreateChangeRequest = () => useLifecycleMutation((v: z.input<typ
 export const useInvoices = (p: Record<string, string> = {}) => useQuery({ queryKey: lk.invoices(p), queryFn: () => request('/invoices', { query: p, schema: L.invoiceViews }) });
 export const useRecordPayment = () =>
   useLifecycleMutation((v: { invoiceId: string; amount: number; paidAt: string; purpose?: string }) => request('/payments', { method: 'POST', body: v, schema: L.paymentResult }));
-export const usePaymentQueue = (status: 'pending' | 'allocated' = 'pending') =>
-  useQuery({ queryKey: lk.paymentQueue(status), queryFn: () => request('/payments/queue', { query: { status }, schema: L.bankPaymentViews }) });
+export const usePaymentQueue = (status: 'pending' | 'allocated' = 'pending', p: Record<string, string> = {}) =>
+  useQuery({ queryKey: lk.paymentQueue(status, p), queryFn: () => request('/payments/queue', { query: { ...p, status }, schema: L.bankPaymentViews }) });
 export const useAllocatePayment = () =>
   useLifecycleMutation((v: { id: string; lines: { invoiceId: string; amount: number }[]; comment?: string }) =>
     request(`/payments/queue/${v.id}/allocate`, { method: 'POST', body: { lines: v.lines, comment: v.comment }, schema: L.bankPaymentView }),

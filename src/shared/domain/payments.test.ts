@@ -13,18 +13,18 @@ const inv = (
 
 describe('invoicesNamedIn', () => {
   const list = [
-    inv('a', 'СЧ-2026-002001', '1', 1),
-    inv('b', 'СЧ-2026-0020011', '1', 1),
-    inv('c', 'СЧ-2026-ДС1', '1', 1),
+    inv('a', 'SCh-2026-002001', '1', 1),
+    inv('b', 'SCh-2026-0020011', '1', 1),
+    inv('c', 'SCh-2026-DS1', '1', 1),
   ];
   it('finds a number regardless of case, spaces around dashes and «№»', () => {
-    expect(invoicesNamedIn('оплата по счету № сч - 2026 - 002001 от 01.10', list).map((i) => i.id)).toEqual([
+    expect(invoicesNamedIn('оплата по счету № sch - 2026 - 002001 от 01.10', list).map((i) => i.id)).toEqual([
       'a',
     ]);
-    expect(invoicesNamedIn('Оплата СЧ–2026–ДС1', list).map((i) => i.id)).toEqual(['c']);
+    expect(invoicesNamedIn('Оплата SCH–2026–DS1', list).map((i) => i.id)).toEqual(['c']);
   });
   it('does not take a prefix of a longer number', () => {
-    expect(invoicesNamedIn('Оплата СЧ-2026-0020011', list).map((i) => i.id)).toEqual(['b']);
+    expect(invoicesNamedIn('Оплата SCh-2026-0020011', list).map((i) => i.id)).toEqual(['b']);
     expect(invoicesNamedIn('Оплата по договору', list)).toEqual([]);
   });
 });
@@ -32,16 +32,16 @@ describe('invoicesNamedIn', () => {
 describe('matchPayment', () => {
   // One client with two contracts: equal installments of 10 000 000 and one of 7 000 000.
   const own = [
-    inv('a1', 'СЧ-2026-000101', '301', 10_000_000, 0, '2026-10-05'),
-    inv('b1', 'СЧ-2026-000201', '301', 10_000_000, 0, '2026-10-10'),
-    inv('b2', 'СЧ-2026-000202', '301', 7_000_000, 0, '2026-11-10'),
+    inv('a1', 'SCh-2026-000101', '301', 10_000_000, 0, '2026-10-05'),
+    inv('b1', 'SCh-2026-000201', '301', 10_000_000, 0, '2026-10-10'),
+    inv('b2', 'SCh-2026-000202', '301', 7_000_000, 0, '2026-11-10'),
   ];
-  const other = [inv('x1', 'СЧ-2026-000301', '302', 5_000_000)];
+  const other = [inv('x1', 'SCh-2026-000301', '302', 5_000_000)];
   const all = [...own, ...other];
 
   it('the invoice number in the purpose comes first, even when the amount is partial', () => {
     expect(
-      matchPayment({ amount: 3_000_000, payerInn: '301', purpose: 'по счёту СЧ-2026-000201' }, all),
+      matchPayment({ amount: 3_000_000, payerInn: '301', purpose: 'по счёту SCh-2026-000201' }, all),
     ).toEqual({ kind: 'matched', invoiceId: 'b1', by: 'number' });
   });
   it('then INN plus exact outstanding amount; equal amounts of two contracts are a tie', () => {
@@ -60,7 +60,7 @@ describe('matchPayment', () => {
     });
   });
   it('the outstanding amount counts, not the invoice amount', () => {
-    const partly = [inv('a1', 'СЧ-2026-000101', '301', 10_000_000, 4_000_000)];
+    const partly = [inv('a1', 'SCh-2026-000101', '301', 10_000_000, 4_000_000)];
     expect(matchPayment({ amount: 6_000_000, payerInn: '301', purpose: '' }, partly)).toMatchObject({
       kind: 'matched',
       invoiceId: 'a1',
@@ -72,7 +72,7 @@ describe('matchPayment', () => {
   });
   it('a third party: the number points to an invoice of another INN — manual, with that invoice as the candidate', () => {
     expect(
-      matchPayment({ amount: 5_000_000, payerInn: '399', purpose: 'за ООО по сч. СЧ-2026-000301' }, all),
+      matchPayment({ amount: 5_000_000, payerInn: '399', purpose: 'за ООО по сч. SCh-2026-000301' }, all),
     ).toEqual({ kind: 'manual', reason: 'third_party', candidates: [{ invoiceId: 'x1', why: 'number' }] });
   });
   it('an unknown payer without a number: invoices of anyone with this exact amount are hints', () => {
@@ -84,17 +84,17 @@ describe('matchPayment', () => {
   });
   it('more than the invoice named, several numbers, nothing left to pay', () => {
     expect(
-      matchPayment({ amount: 12_000_000, payerInn: '301', purpose: 'СЧ-2026-000101' }, all),
+      matchPayment({ amount: 12_000_000, payerInn: '301', purpose: 'SCh-2026-000101' }, all),
     ).toMatchObject({
       kind: 'manual',
       reason: 'over_remaining',
       candidates: [{ invoiceId: 'a1', why: 'number' }, { invoiceId: 'b1' }, { invoiceId: 'b2' }],
     });
     expect(
-      matchPayment({ amount: 17_000_000, payerInn: '301', purpose: 'СЧ-2026-000201, СЧ-2026-000202' }, all),
+      matchPayment({ amount: 17_000_000, payerInn: '301', purpose: 'SCh-2026-000201, SCh-2026-000202' }, all),
     ).toMatchObject({ kind: 'manual', reason: 'several_numbers' });
-    const paid = [inv('a1', 'СЧ-2026-000101', '301', 1_000, 1_000)];
-    expect(matchPayment({ amount: 1_000, payerInn: '301', purpose: 'СЧ-2026-000101' }, paid)).toMatchObject({
+    const paid = [inv('a1', 'SCh-2026-000101', '301', 1_000, 1_000)];
+    expect(matchPayment({ amount: 1_000, payerInn: '301', purpose: 'SCh-2026-000101' }, paid)).toMatchObject({
       kind: 'manual',
       reason: 'no_invoices',
     });
@@ -102,7 +102,7 @@ describe('matchPayment', () => {
 });
 
 describe('checkAllocation', () => {
-  const a = { amount: 10_000, paid: 0, clientInn: '301', number: 'СЧ-1' };
+  const a = { amount: 10_000, paid: 0, clientInn: '301', number: 'SCh-1' };
   const payment = { amount: 8_000, allocated: 0, payerInn: '301' };
   it('limits by the rest of the payment and of each invoice', () => {
     expect(checkAllocation(payment, [{ invoice: a, amount: 8_000 }], undefined)).toBeNull();

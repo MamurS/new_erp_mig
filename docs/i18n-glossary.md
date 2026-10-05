@@ -123,3 +123,18 @@
 | 110 | портал сотрудников МИГ | MIG xodimlari portali | MIG staff portal | | |
 | 111 | кабинет клиники | klinika kabineti | clinic portal | | |
 | 112 | кабинет HR | HR kabineti | HR portal | | |
+| 113 | ООО (общество с ограниченной ответственностью) | MChJ (masʼuliyati cheklangan jamiyat) | LLC (limited liability company) |  | Код llc |
+| 114 | АО (акционерное общество) | AJ (aksiyadorlik jamiyati) | JSC (joint-stock company) |  | Код jsc |
+| 115 | ЧП (частное предприятие) | XK (xususiy korxona) | PE (private enterprise) |  | Код private_enterprise |
+| 116 | СП ООО (совместное предприятие) | QK MChJ (qoʻshma korxona) | JV LLC (joint venture) |  | Код jv_llc |
+| 117 | ИП (индивидуальный предприниматель) | YaTT (yakka tartibdagi tadbirkor) | IE (individual entrepreneur) |  | Код sole_proprietor |
+| 118 | ГУП (государственное унитарное предприятие) | DUK (davlat unitar korxonasi) | SUE (state unitary enterprise) | ? | Код state_unitary |
+| 119 | СП (семейное предприятие) | OK (oilaviy korxona) | FE (family enterprise) | ? | Код family_enterprise; в ru аббревиатура совпадает с «СП» совместного предприятия |
+| 120 | ФХ (фермерское хозяйство) | FX (fermer xoʻjaligi) | Farm |  | Код farm |
+| 121 | филиал | filial | branch |  | Код branch |
+| 122 | представительство | vakolatxona | representative office |  | Код rep_office |
+| 123 | прочая форма | boshqa | other |  | Код other |
+| 124 | организационно-правовая форма («Форма») | tashkiliy-huquqiy shakl («Shakl») | legal form («Form») |  |  |
+| 125 | номер документа | hujjat raqami | document number |  | Номера только латиницей: DMS-D, DS, KP, U, GP, SD, SERT, OBR, SChA… |
+
+Названия юрлиц в интерфейсе и данных — латиницей, как в государственном реестре Узбекистана, без формы и кавычек; форма — отдельный код, подписи в `src/shared/config/legalForms.ts` (требует проверки МИГ). ИНН: «STIR» (uz-Latn), «TIN» (en).

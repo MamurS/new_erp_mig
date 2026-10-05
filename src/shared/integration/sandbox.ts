@@ -220,7 +220,7 @@ export const ASSIST_SANDBOX_METHODS: SandboxMethod[] = [
       { name: 'lineIds', in: 'body', kind: 'json', required: true, example: '["<lineId>"]' },
       { name: 'paidAt', in: 'body', kind: 'date', required: true },
       { name: 'amount', in: 'body', kind: 'number', required: true },
-      { name: 'paymentOrderNumber', in: 'body', kind: 'text', required: true, example: 'ПП-10452' },
+      { name: 'paymentOrderNumber', in: 'body', kind: 'text', required: true, example: 'PP-10452' },
     ],
   },
   { id: 'rebill-create', method: 'POST', path: '/assistance/rebills', label: 'Выставить счёт МИГ', params: [{ name: 'period', in: 'body', kind: 'text', required: true, example: '2026-09' }] },

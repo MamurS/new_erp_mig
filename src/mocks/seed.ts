@@ -24,7 +24,7 @@ import type {
   Specialty,
 } from '@/shared/types';
 import { chance, digits, hashString, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
-import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from './db';
+import { replaceDb, type ChatRow, type ClaimRow, type ClientRow, type Db, type FileRow, type HrUserRow, type InsuredDocRow, type InsuredRow, type StaffRow } from './db';
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './credentials';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
@@ -33,39 +33,51 @@ import { seedPolicyChanges } from './seed-policies';
 import { seedAssistance } from './seed-assistance';
 import { seedLifecycle } from './seed-lifecycle';
 import { defaultAiSettings } from '@/features/ai/settings';
+import type { LegalFormCode } from '@/shared/config/legalForms';
+import { docNumber } from '@/shared/domain/numbering';
 
 // ---------- dictionaries ----------
-const UZ_MALE = ['Азиз', 'Бахтиёр', 'Жасур', 'Отабек', 'Шерзод', 'Фаррух', 'Улугбек', 'Санжар', 'Дилшод', 'Рустам', 'Тимур', 'Мансур', 'Бобур', 'Анвар'];
-const UZ_FEMALE = ['Дилноза', 'Нигора', 'Малика', 'Шахноза', 'Гулноза', 'Мадина', 'Севара', 'Камола', 'Зарина', 'Феруза', 'Лола', 'Нодира'];
-const UZ_SURNAME = ['Каримов', 'Юсупов', 'Рахимов', 'Алиев', 'Турсунов', 'Хасанов', 'Назаров', 'Исмоилов', 'Абдуллаев', 'Мирзаев', 'Султанов', 'Эргашев', 'Холматов', 'Саидов'];
-const UZ_FATHER = ['Алишер', 'Бахром', 'Фарход', 'Равшан', 'Шухрат', 'Ильхом', 'Нодир', 'Акмал', 'Хуршид', 'Зафар'];
-const RU_MALE = ['Алексей', 'Дмитрий', 'Сергей', 'Андрей', 'Игорь', 'Павел', 'Максим', 'Роман'];
-const RU_FEMALE = ['Елена', 'Ольга', 'Наталья', 'Ирина', 'Анна', 'Мария', 'Татьяна', 'Юлия'];
-const RU_SURNAME = ['Иванов', 'Петров', 'Смирнов', 'Кузнецов', 'Соколов', 'Морозов', 'Волков', 'Лебедев', 'Козлов', 'Новиков'];
+// People are named as in the ID card / MyID: «Surname Given Patronymic» in Latin script.
+const UZ_MALE = ['Aziz', 'Baxtiyor', 'Jasur', 'Otabek', 'Sherzod', 'Farrux', 'Ulugʻbek', 'Sanjar', 'Dilshod', 'Rustam', 'Temur', 'Mansur', 'Bobur', 'Anvar'];
+const UZ_FEMALE = ['Dilnoza', 'Nigora', 'Malika', 'Shahnoza', 'Gulnoza', 'Madina', 'Sevara', 'Kamola', 'Zarina', 'Feruza', 'Lola', 'Nodira'];
+const UZ_SURNAME = ['Karimov', 'Yusupov', 'Rahimov', 'Aliyev', 'Tursunov', 'Hasanov', 'Nazarov', 'Ismoilov', 'Abdullayev', 'Mirzayev', 'Sultonov', 'Ergashev', 'Xolmatov', 'Saidov'];
+const UZ_FATHER = ['Alisher', 'Bahrom', 'Farhod', 'Ravshan', 'Shuhrat', 'Ilhom', 'Nodir', 'Akmal', 'Xurshid', 'Zafar'];
+const RU_MALE = ['Aleksey', 'Dmitriy', 'Sergey', 'Andrey', 'Igor', 'Pavel', 'Maksim', 'Roman'];
+const RU_FEMALE = ['Elena', 'Olga', 'Natalya', 'Irina', 'Anna', 'Mariya', 'Tatyana', 'Yuliya'];
+const RU_SURNAME = ['Ivanov', 'Petrov', 'Smirnov', 'Kuznetsov', 'Sokolov', 'Morozov', 'Volkov', 'Lebedev', 'Kozlov', 'Novikov'];
 const RU_FATHER: [string, string][] = [
-  ['Александрович', 'Александровна'],
-  ['Владимирович', 'Владимировна'],
-  ['Сергеевич', 'Сергеевна'],
-  ['Николаевич', 'Николаевна'],
-  ['Михайлович', 'Михайловна'],
-  ['Андреевич', 'Андреевна'],
-  ['Викторович', 'Викторовна'],
+  ['Aleksandrovich', 'Aleksandrovna'],
+  ['Vladimirovich', 'Vladimirovna'],
+  ['Sergeyevich', 'Sergeyevna'],
+  ['Nikolayevich', 'Nikolayevna'],
+  ['Mikhaylovich', 'Mikhaylovna'],
+  ['Andreyevich', 'Andreyevna'],
+  ['Viktorovich', 'Viktorovna'],
 ];
 
-const CITIES = ['Ташкент', 'Самарканд', 'Бухара', 'Фергана', 'Наманган', 'Андижан', 'Навои', 'Хорезм', 'Карши', 'Термез'];
+// Official Latin names of fictional companies, without the legal form (it is a separate code).
+const CITIES = ['Toshkent', 'Samarqand', 'Buxoro', 'Fargʻona', 'Namangan', 'Andijon', 'Navoiy', 'Xorazm', 'Qarshi', 'Termiz'];
 const INDUSTRIES = [
-  'Агрологистика',
-  'Текстиль Групп',
-  'Строй Инвест',
-  'Фарм Трейд',
-  'Энерго Сервис',
-  'Авто Комплект',
-  'Пищепром',
-  'Цифровые Системы',
-  'Медиа Холдинг',
-  'Транс Логистик',
-  'Металл Профиль',
-  'Хлопок Экспорт',
+  'Agrologistika',
+  'Tekstil Group',
+  'Qurilish Invest',
+  'Farm Savdo',
+  'Energo Servis',
+  'Avto Komplekt',
+  'Oziq-Ovqat Sanoat',
+  'Raqamli Tizimlar',
+  'Media Holding',
+  'Trans Logistik',
+  'Metall Profil',
+  'Paxta Eksport',
+];
+/** Legal forms of clients by weight: mostly LLCs, a few JSCs, joint ventures and private enterprises, single others. */
+const CLIENT_FORMS: LegalFormCode[] = [
+  ...Array<LegalFormCode>(14).fill('llc'),
+  'jsc', 'jsc', 'jsc',
+  'jv_llc', 'jv_llc',
+  'private_enterprise', 'private_enterprise',
+  'sole_proprietor', 'state_unitary', 'branch',
 ];
 const POSITIONS = [
   'Бухгалтер',
@@ -99,9 +111,13 @@ const DISTRICTS = [
   'Янгихаётский',
 ];
 const STREETS = ['ул. Навбахор', 'ул. Лолазор', 'ул. Богишамол', 'пр. Мустакиллик', 'ул. Кичик Халка', 'ул. Нурафшон', 'ул. Гулбахор', 'ул. Олмазор'];
-const CLINIC_PREFIX = ['Медцентр', 'Клиника', 'Семейная клиника', 'Диагностический центр', 'Стоматология'];
-const CLINIC_NAME = ['Шифо-Нур', 'Саломат Плюс', 'Мадад Мед', 'Барака Хаёт', 'Зиё Медикал', 'Мехр Клиник', 'Соглом Авлод', 'Нур Сихат', 'Оила Мед', 'Табиб Про'];
-const PHARMACIES = ['Аптека «Шифо Фарм»', 'Аптека «Нур Дори»', 'Аптека «Саломат 24»', 'Аптека «Дармон Плюс»', 'Аптека «Мадад»'];
+/** Kind of a clinic as the last word(s) of its Latin name; the last one is a dental clinic. */
+const CLINIC_KIND = ['Tibbiyot Markazi', 'Klinikasi', 'Oilaviy Klinikasi', 'Diagnostika Markazi', 'Stomatologiyasi'];
+const DENTAL_KIND = 'Stomatologiyasi';
+const CLINIC_NAME = ['Shifo-Nur', 'Salomat Plus', 'Madad Med', 'Baraka Hayot', 'Ziyo Medical', 'Mehr Klinik', 'Sogʻlom Avlod', 'Nur Sihat', 'Oila Med', 'Tabib Pro'];
+/** Legal forms of clinics by weight. */
+const CLINIC_FORMS: LegalFormCode[] = ['llc', 'llc', 'llc', 'llc', 'private_enterprise', 'jv_llc', 'jsc', 'state_unitary'];
+const PHARMACIES = ['Shifo Farm Dorixonasi', 'Nur Dori Dorixonasi', 'Salomat 24 Dorixonasi', 'Darmon Plus Dorixonasi', 'Madad Dorixonasi'];
 const SPECIALTIES: Specialty[] = ['therapist', 'pediatrician', 'dentist', 'cardiologist', 'gynecologist', 'ent', 'neurologist', 'ophthalmologist'];
 const REJECT_REASONS = [
   'Услуга не входит в вашу программу страхования',
@@ -122,13 +138,13 @@ function shuffle<T>(rng: Rng, arr: T[]): T[] {
 function person(rng: Rng): { fullName: string; female: boolean } {
   const female = chance(rng, 0.5);
   if (chance(rng, 0.7)) {
-    const surname = pick(rng, UZ_SURNAME) + (female ? 'а' : '');
+    const surname = pick(rng, UZ_SURNAME) + (female ? 'a' : '');
     const first = pick(rng, female ? UZ_FEMALE : UZ_MALE);
     const father = pick(rng, UZ_FATHER);
-    const patronymic = father + (female ? 'овна' : 'ович');
+    const patronymic = father + (female ? 'ovna' : 'ovich');
     return { fullName: `${surname} ${first} ${patronymic}`, female };
   }
-  const surname = pick(rng, RU_SURNAME) + (female ? 'а' : '');
+  const surname = pick(rng, RU_SURNAME) + (female ? 'a' : '');
   const first = pick(rng, female ? RU_FEMALE : RU_MALE);
   const pat = pick(rng, RU_FATHER)[female ? 1 : 0];
   return { fullName: `${surname} ${first} ${pat}`, female };
@@ -138,17 +154,9 @@ function phone(rng: Rng): string {
   return `+998${pick(rng, ['90', '91', '93', '94', '97', '98', '99', '33', '88'])}${digits(rng, 7).replace(/^./, String(int(rng, 1, 9)))}`;
 }
 
-function translit(s: string): string {
-  const map: Record<string, string> = {
-    а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'j', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm',
-    н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sh',
-    ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
-  };
-  return s
-    .toLowerCase()
-    .split('')
-    .map((c) => map[c] ?? (/[a-z0-9]/.test(c) ? c : ''))
-    .join('');
+/** Latin name → part of an e-mail address. */
+function emailPart(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function claimAmount(rng: Rng, cat: ClaimCategory): number {
@@ -203,8 +211,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
     const [surname = '', first = ''] = p.fullName.split(' ');
     staff.push({
       id: id(),
-      fullName: `${first} ${surname}`,
-      email: `${translit(first)}.${translit(surname)}${i}@mig.example`,
+      fullName: p.fullName,
+      email: `${emailPart(first)}.${emailPart(surname)}${i}@mig.example`,
       role,
       authority: {},
       active: i !== 6,
@@ -224,12 +232,13 @@ export function createSeed(opts: SeedOptions = {}): Db {
   for (let i = 0; i < 30; i++) {
     let name = '';
     do {
-      name = `${pick(rng, CLINIC_PREFIX)} «${pick(rng, CLINIC_NAME)}»`;
-      if (clinicNames.has(name)) name = `${name} №${int(rng, 2, 9)}`;
+      const kind = pick(rng, CLINIC_KIND);
+      name = `${pick(rng, CLINIC_NAME)} ${kind}`;
+      if (clinicNames.has(name)) name = `${name} ${int(rng, 2, 9)}`;
     } while (clinicNames.has(name));
     clinicNames.add(name);
     const district = DISTRICTS[i % DISTRICTS.length]!;
-    const isDental = name.startsWith('Стоматология');
+    const isDental = name.includes(DENTAL_KIND);
     const specs = isDental
       ? (['dentist'] as Specialty[])
       : shuffle(rng, SPECIALTIES.filter((s) => s !== 'dentist' || chance(rng, 0.4))).slice(0, int(rng, 3, 7));
@@ -237,6 +246,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
     clinics.push({
       id: id(),
       name,
+      // Derived from the index, not the RNG: the rest of the seed keeps its sequence.
+      legalForm: CLINIC_FORMS[(i * 5 + 3) % CLINIC_FORMS.length]!,
       address: `${district} р-н, ${pick(rng, STREETS)}, ${int(rng, 1, 120)}`,
       district,
       specialties: specs,
@@ -261,7 +272,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     rng,
     CITIES.flatMap((c) => INDUSTRIES.map((ind) => `${c} ${ind}`)),
   );
-  const demoCompanyName = 'Ташкент Агрологистика';
+  const demoCompanyName = 'Toshkent Agrologistika';
   const clients: ClientRow[] = [];
   const policies: Policy[] = [];
   const documents: ClientDocument[] = [];
@@ -295,7 +306,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     const policyId = hasPolicy ? id() : undefined;
     const client: ClientRow = {
       id: clientId,
-      legalForm: i === demoIdx ? 'ООО' : pick(rng, ['ООО', 'ООО', 'ООО', 'АО', 'СП ООО', 'ЧП'] as const),
+      legalForm: i === demoIdx ? 'llc' : pick(rng, CLIENT_FORMS),
       name,
       inn: `${int(rng, 2, 3)}${digits(rng, 8)}`,
       status,
@@ -316,7 +327,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     if (i === demoIdx) client.lossRatio = 0.62;
     clients.push(client);
     if (hasPolicy && policyId) {
-      const number = `ДМС-${new Date(start).getFullYear()}-${String(policySeq++).padStart(6, '0')}`;
+      const number = docNumber('policy', { year: new Date(start).getFullYear(), n: policySeq++ });
       policies.push({
         id: policyId,
         number,
@@ -348,14 +359,14 @@ export function createSeed(opts: SeedOptions = {}): Db {
   ];
   // one more HR in another company (used for isolation checks)
   const otherHrClient = clients.find((c, i) => i !== demoIdx && c.status === 'active')!;
-  hrUsers.push({ id: id(), email: 'hr@client-b.example.uz', password: DEMO_PASSWORD, fullName: 'Ольга Лебедева', companyId: otherHrClient.id });
+  hrUsers.push({ id: id(), email: 'hr@client-b.example.uz', password: DEMO_PASSWORD, fullName: 'Lebedeva Olga Mikhaylovna', companyId: otherHrClient.id });
   // HR of the earliest renewal that waits for an offer (the first «Подготовить КП» in the queue).
   // A fixed id keeps the RNG sequence, and with it the rest of the seed, unchanged.
   const renewalHrClient = clients
     .filter((c) => c.id !== demoClient.id && c.activePolicyId && c.renewalDate && parseIso(c.renewalDate) >= today && parseIso(c.renewalDate) - today <= 30 * DAY)
     .sort((x, y) => (x.renewalDate! < y.renewalDate! ? -1 : 1))[0];
   if (renewalHrClient) {
-    hrUsers.push({ id: 'b1e2c3d4-5f60-4a71-8b92-a3b4c5d6e7f8', email: 'hr@renewal.example.uz', password: DEMO_PASSWORD, fullName: 'Дилноза Каримова', companyId: renewalHrClient.id });
+    hrUsers.push({ id: 'b1e2c3d4-5f60-4a71-8b92-a3b4c5d6e7f8', email: 'hr@renewal.example.uz', password: DEMO_PASSWORD, fullName: 'Karimova Dilnoza Bahromovna', companyId: renewalHrClient.id });
   }
 
   // ---------- insured ----------
@@ -402,7 +413,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
         row.updatedAt = tzIso(parseIso(row.excludedFrom));
       }
       if (isDemo && k === 0) {
-        row.fullName = 'Каримов Азиз Бахромович';
+        row.fullName = 'Karimov Aziz Bahromovich';
         row.position = 'Руководитель отдела логистики';
         row.phone = DEMO_INSURED_PHONE;
         row.payoutCard = '8600123412344417';
@@ -439,7 +450,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
       invoices.push({
         id: id(),
         clientId: client.id,
-        number: `СЧ-${new Date(issued).getFullYear()}-${String(invoices.length + 2001).padStart(5, '0')}`,
+        number: docNumber('invoice', { year: new Date(issued).getFullYear(), n: invoices.length + 2001 }),
         amount: Math.round(policy.premium / 4 / 1000) * 1000,
         issuedAt: isoDay(issued),
         dueDate: isoDay(due),
@@ -453,7 +464,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     invoices.push({
       id: id(),
       clientId: demoClient.id,
-      number: `СЧ-${new Date(today).getFullYear()}-09001`,
+      number: docNumber('invoice', { year: new Date(today).getFullYear(), n: 9001 }),
       amount: Math.round(demoPolicy.premium / 4 / 1000) * 1000,
       issuedAt: isoDay(today - 2 * DAY),
       dueDate: isoDay(today + 16 * DAY),
@@ -557,7 +568,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     const slaDue = overdue ? now - int(rng, 1, 5) * DAY : createdMs + 5 * DAY;
     return {
       id: claimId,
-      number: `У-${new Date(createdMs).getFullYear()}-${String(claimSeq++).padStart(6, '0')}`,
+      number: docNumber('claim', { year: new Date(createdMs).getFullYear(), n: claimSeq++ }),
       insuredId: who.id,
       insuredName: who.fullName,
       clientId: who.clientId,
@@ -835,6 +846,9 @@ export function createSeed(opts: SeedOptions = {}): Db {
     endorsements: [],
     smsOutbox: [],
   };
+  // Core helpers used below read the DMS parameters (number templates) through db(): let them see the
+  // database being seeded instead of starting another seed.
+  replaceDb(out);
   seedAssistance(out, { now });
   seedLifecycle(out, { now });
   return out;

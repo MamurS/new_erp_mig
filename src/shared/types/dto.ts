@@ -1,4 +1,5 @@
 /* Screen-level DTOs. Part of the API contract, alongside ./index.ts. */
+import type { LegalFormCode } from '@/shared/config/legalForms';
 import type {
   AiProviderId,
   AiScenario,
@@ -24,6 +25,7 @@ import type {
   StaffRole,
   DmsParamChange,
   DmsParameter,
+  NumberingParameter,
   AppStatus,
   AuditEntry,
   Claim,
@@ -134,6 +136,8 @@ export interface QueueItem {
   policyId?: UUID;
   /** What `entityId` points to when the type alone does not say (payouts, scans). */
   subject?: 'claim' | 'registry' | 'contract' | 'endorsement';
+  /** Legal form of `who` when the row's subject is a legal entity (client, clinic, assistance, payer). */
+  legalForm?: LegalFormCode;
 }
 export interface AttentionItem {
   key: 'renewals_no_offer' | 'high_loss_ratio' | 'sla_overdue';
@@ -165,6 +169,7 @@ export interface ClientActivity {
 export interface ClientLossStats {
   clientId: UUID;
   clientName: string;
+  clientLegalForm: LegalFormCode;
   premium: Money;
   lossRatio: number | null;
   lossRatioWarn: number;
@@ -258,6 +263,7 @@ export interface ClaimDetail extends Claim {
 export interface LossRatioRow {
   clientId: UUID;
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   lossRatio: number;
 }
 export interface ClaimsByCategoryRow {
@@ -276,6 +282,7 @@ export type AuditPage = PageLike<AuditEntry>;
 // ---- hr ----
 export interface HrOverview {
   companyName: string;
+  companyLegalForm?: LegalFormCode;
   insuredCount: number;
   notInApp: number;
   nextInvoice: Invoice | null;
@@ -376,6 +383,7 @@ export interface ClinicEvent {
 }
 export interface ClinicOverview {
   clinicName: string;
+  clinicLegalForm?: LegalFormCode;
   integrationMode: IntegrationMode;
   appointmentsToday: number;
   unanswered: number;
@@ -401,12 +409,14 @@ export interface ClinicUserView {
 }
 export interface GuaranteeView extends GuaranteeLetter {
   clinicName: string;
+  clinicLegalForm?: LegalFormCode;
   /** Approvals still missing before the letter is approved (four-eyes above the threshold). */
   approvalsNeeded: number;
   infoComment?: string;
 }
 export interface RegistrySummary extends Omit<Registry, 'lines'> {
   clinicName: string;
+  clinicLegalForm?: LegalFormCode;
   lineCount: number;
   pendingCount: number;
   disputedCount: number;
@@ -466,7 +476,9 @@ export interface PolicyChangeDecisionResult {
 /** Short info about the assistance company, visible to its users and to the insured person. */
 export interface AssistanceBrief {
   id: UUID;
+  /** Official Latin name without the legal form. */
   name: string;
+  legalForm: LegalFormCode;
   phone24x7: string;
   integrationMode: AssistanceCompany['integrationMode'];
 }
@@ -532,6 +544,7 @@ export interface SubRegistrySummary {
   id: UUID;
   clinicId: UUID;
   clinicName: string;
+  clinicLegalForm?: LegalFormCode;
   period: string;
   status: RegistryStatus;
   source: Registry['source'];
@@ -550,6 +563,7 @@ export interface SubRegistryView extends SubRegistrySummary {
 }
 export interface RebillView extends Rebill {
   assistanceName: string;
+  assistanceLegalForm?: LegalFormCode;
   /** Deadline of the MIG review: 10 working days after submission. */
   reviewDueAt?: ISODate;
   acceptedByName?: string;
@@ -559,6 +573,7 @@ export type RebillSummary = Omit<RebillView, 'lines'> & { lineCount: number; fla
 export interface AssistClinic {
   clinicId: UUID;
   clinicName: string;
+  clinicLegalForm: LegalFormCode;
   city: string;
   specialties: Clinic['specialties'];
   ownPrices: boolean;
@@ -584,7 +599,7 @@ export interface AssistanceCardView {
   assistance: AssistanceCompany;
   kpi: AssistanceKpi;
   insuredCount: number;
-  clients: { id: UUID; name: string; insuredCount: number; policyNumber: string; from: ISODate }[];
+  clients: { id: UUID; name: string; legalForm: LegalFormCode; insuredCount: number; policyNumber: string; from: ISODate }[];
   users: AssistUserView[];
   keys: IntegrationClient[];
   webhooks: { endpoints: number; retrying: number; failed24h: number };
@@ -598,6 +613,7 @@ export interface AssistanceCardView {
 }
 export interface QaSampleView extends QaSample {
   assistanceName: string;
+  assistanceLegalForm?: LegalFormCode;
   reviewedByName?: string;
 }
 export interface AssignmentView extends AssistanceAssignment {
@@ -607,6 +623,7 @@ export interface AssignmentView extends AssistanceAssignment {
 export interface AssistanceReportRow {
   assistanceId: UUID | null;
   name: string;
+  legalForm?: LegalFormCode;
   insuredCount: number;
   premium: Money;
   paid: Money;
@@ -618,12 +635,15 @@ export interface AssistanceReportRow {
 /** GET /api/params: current values of the DMS parameters and the latest change requests. */
 export interface DmsParamsView {
   parameters: DmsParameter[];
+  /** Templates of document numbers («Нумерация документов»), one per kind. */
+  numbering: NumberingParameter[];
   changes: DmsParamChange[];
 }
 
 // ---------------- contract lifecycle (LIFECYCLE_SPEC) ----------------
 export interface DealView extends Deal {
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   ownerName: string;
   underwriterName?: string;
   /** Latest known annual premium: contract, approved quote or draft quote. */
@@ -659,6 +679,7 @@ export interface ContractSummary {
 export interface QuoteView extends Quote {
   dealNumber: string;
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   census: Census | null;
   /** Ages are counted on this date: the desired start of the deal, or today. */
   startDate: ISODate;
@@ -704,6 +725,7 @@ export interface EndorsementView extends Endorsement {
   contractNumber: string;
   clientId: UUID;
   clientName: string;
+  clientLegalForm: LegalFormCode;
   clientInn: string;
   migSignatory: SignatoryOption | null;
   clientSignatoryName: string;
@@ -713,6 +735,7 @@ export interface EndorsementView extends Endorsement {
 
 export interface InvoiceView extends Invoice {
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   /** INN of the company (not personal data): manual allocation warns about a third-party payer. */
   clientInn?: string;
   contractNumber?: string;
@@ -723,6 +746,7 @@ export interface PaymentCandidateView {
   invoiceId: UUID;
   number: string;
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   clientInn: string;
   contractNumber?: string;
   remaining: Money;
@@ -737,6 +761,7 @@ export interface BankPaymentView extends BankPayment {
 export interface ChangeRequestView extends ChangeRequest {
   contractNumber: string;
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   endorsementNumber?: string;
 }
 
@@ -748,9 +773,13 @@ export interface CertificateView {
   policyNumber: string;
   policyEndDate: ISODate;
   program: ProgramCode;
+  /** Official Latin name without the legal form; the document adds the form in its own language. */
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   contractNumber: string;
+  /** Name of the assistance company without the form, or «MIG» when MIG serves the policy itself. */
   assistanceName: string;
+  assistanceLegalForm?: LegalFormCode;
   assistancePhone: string;
 }
 

@@ -157,7 +157,7 @@ export const assist = {
   'assist.registry.markPaid': 'Отметить оплату',
   'assist.registry.paidAt': 'Дата оплаты',
   'assist.registry.orderNumber': 'Номер платёжного поручения',
-  'assist.registry.orderPlaceholder': 'ПП-10452',
+  'assist.registry.orderPlaceholder': 'PP-10452',
   'assist.registry.docTitle': 'Реестр клиники',
   'assist.registry.crumb': 'Реестр',
   'assist.registry.lineAccepted': 'Строка принята: лимит списан',

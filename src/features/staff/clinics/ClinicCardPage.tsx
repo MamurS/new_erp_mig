@@ -18,6 +18,7 @@ import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
@@ -169,7 +170,10 @@ export default function ClinicCardPage() {
   return (
     <div>
       <div className="mb-3">
-        <h1 className="text-[22px] font-bold">{c.name}</h1>
+        <h1 className="flex flex-wrap items-center gap-2 text-[22px] font-bold">
+          {c.name}
+          <LegalFormChip code={c.legalForm} />
+        </h1>
         <p className="text-muted">
           {c.address} · {c.district}
         </p>

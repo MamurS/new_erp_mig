@@ -288,7 +288,7 @@ export function buildOpenApi(): ReturnType<OpenApiGeneratorV31['generateDocument
     summary: 'Отметить оплату клинике',
     tags: tagA('реестры'),
     security: secured('payments:write'),
-    request: { headers: idem, params: z.object({ id: z.string().uuid() }), body: json(S.clinicPaymentRequest, { lineIds: [EXAMPLES.id], paidAt: '2026-09-25', amount: 171_000, paymentOrderNumber: 'ПП-10452' }) },
+    request: { headers: idem, params: z.object({ id: z.string().uuid() }), body: json(S.clinicPaymentRequest, { lineIds: [EXAMPLES.id], paidAt: '2026-09-25', amount: 171_000, paymentOrderNumber: 'PP-10452' }) },
     responses: { 200: { description: 'Подреестр', ...json(Registry) }, 401: errors[401], 404: errors[404], 409: conflict, 422: errors[422] },
   });
   r.registerPath({

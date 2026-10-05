@@ -5,12 +5,14 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AuditEntry, DmsParamChange, DmsParamValues } from '@/shared/types';
-import type { AssistOverview, DmsParamsView, SessionResponse } from '@/shared/types/dto';
+import type { AssistOverview, ContractView, DmsParamsView, SessionResponse } from '@/shared/types/dto';
+import { DEFAULT_NUMBERING, DOC_NUMBER_KINDS } from '@/shared/domain/numbering';
 import { DMS_DEFAULTS, DMS_PARAM_KEYS } from '@/shared/config/dmsParameters';
-import { translate, type I18nKey, type Params } from '@/i18n/core';
+import { tm, translate, type I18nKey, type Params } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
-import { dmsParam } from './params';
+import { dmsParam, maxDocSeq, nextDocNumber, numbering, numberingTemplate } from './params';
+import { dealKp } from './lifecycle-core';
 
 const BASE = 'http://localhost/api';
 const server = createMockServer();
@@ -85,23 +87,23 @@ describe('DMS parameters', () => {
     const uw = await login('underwriter@demo.mig.uz');
     const ok = await call<DmsParamChange>(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: uw });
     expect(ok.status).toBe(200);
-    expect(ok.data).toMatchObject({ status: 'applied', decidedByName: 'Дмитрий Соколов' });
+    expect(ok.data).toMatchObject({ status: 'applied', decidedByName: 'Sokolov Dmitriy Aleksandrovich' });
     expect((await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: uw })).status).toBe(409);
 
     expect(dmsParam('guaranteeDualApprovalThreshold')).toBe(25_000_000);
     const view = await call<DmsParamsView>('/params', { sid: uw });
     const row = view.data.parameters.find((x) => x.key === 'guaranteeDualApprovalThreshold')!;
     expect(row).toMatchObject({ value: 25_000_000, isDemo: false });
-    expect(row.changedByName).toContain('Тимур Алиев');
-    expect(row.changedByName).toContain('Дмитрий Соколов');
+    expect(row.changedByName).toContain('Aliyev Temur Farhodovich');
+    expect(row.changedByName).toContain('Sokolov Dmitriy Aleksandrovich');
 
     const audit = db().audit.filter((e: AuditEntry) => e.targetType === 'parameter');
     const changed = audit.find((e) => e.action === 'dms_param_changed')!;
-    expect(changed.actorName).toBe('Дмитрий Соколов');
+    expect(changed.actorName).toBe('Sokolov Dmitriy Aleksandrovich');
     expect(changed.targetLabel).toMatch(/Порог двух подписей на ГП: 20\s000\s000\s(?:сум|UZS) → 25\s000\s000\s(?:сум|UZS)/);
-    expect(changed.reason).toContain('Тимур Алиев');
+    expect(changed.reason).toContain('Aliyev Temur Farhodovich');
     expect(changed.at).toBeTruthy();
-    expect(audit.some((e) => e.action === 'dms_param_proposed' && e.actorName === 'Тимур Алиев')).toBe(true);
+    expect(audit.some((e) => e.action === 'dms_param_proposed' && e.actorName === 'Aliyev Temur Farhodovich')).toBe(true);
   });
 
   it('a rejected change does not apply and is audited with the reason', async () => {
@@ -144,5 +146,67 @@ describe('DMS parameters', () => {
     expect(locked.status).toBe(429);
     expect(locked.data).toMatchObject({ key: 'srv.auth.locked', params: { minutes: DMS_DEFAULTS.loginLockMinutes } });
     expect(translate('ru', locked.data.key, locked.data.params)).toContain(`на ${DMS_DEFAULTS.loginLockMinutes} мин`);
+  });
+});
+
+describe('numbering templates («Нумерация документов»)', () => {
+  const proposeTemplate = (sid: string, kind: string, value: unknown, reason = 'Приказ о нумерации № 3') =>
+    call<DmsParamChange & { fields?: Record<string, string> }>('/params/changes', { method: 'POST', sid, json: { key: `numbering.${kind}`, value, reason } });
+
+  it('every kind starts with its demo template', async () => {
+    const r = await call<DmsParamsView>('/params', { sid: await login('operator@demo.mig.uz') });
+    expect(r.data.numbering.map((n) => n.kind)).toEqual([...DOC_NUMBER_KINDS]);
+    expect(r.data.numbering.every((n) => n.isDemo && n.value === DEFAULT_NUMBERING[n.kind])).toBe(true);
+  });
+
+  it('an invalid template is rejected with the message key, on the server too', async () => {
+    const admin = await login('admin@demo.mig.uz');
+    const cyrillic = await proposeTemplate(admin, 'contract', 'ДМС-Д-{YYYY}-{N:6}');
+    expect(cyrillic.status).toBe(422);
+    expect(cyrillic.data.fields?.value).toBe('dom.numbering.chars');
+    const spaces = await proposeTemplate(admin, 'contract', 'DMS D {N}');
+    expect(spaces.data.fields?.value).toBe('dom.numbering.chars');
+    const missing = await proposeTemplate(admin, 'endorsement', 'DS-{N}');
+    expect(missing.status).toBe(422);
+    expect(missing.data.fields?.value).toMatch(/^dom\.numbering\.missing/);
+    expect(tm(missing.data.fields?.value)).toContain('{N}, {REF}');
+    expect((await proposeTemplate(admin, 'contract', 123)).status).toBe(422);
+    expect((await proposeTemplate(admin, 'unknown', 'X-{N}')).status).toBe(422);
+    expect((await proposeTemplate(admin, 'contract', DEFAULT_NUMBERING.contract)).status).toBe(422);
+    expect(db().dmsParams.changes.some((c) => c.key === 'numbering.contract')).toBe(false);
+  });
+
+  it('four-eyes: a valid template applies after a second person confirms; audited; a new contract gets the new format', async () => {
+    const admin = await login('admin@demo.mig.uz');
+    const p = await proposeTemplate(admin, 'contract', '  MIG-{YYYY}/{N:5}  ');
+    expect(p.status).toBe(201);
+    expect(p.data).toMatchObject({ key: 'numbering.contract', from: DEFAULT_NUMBERING.contract, to: 'MIG-{YYYY}/{N:5}', status: 'pending' });
+    expect(numberingTemplate('contract')).toBe(DEFAULT_NUMBERING.contract);
+    expect((await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: admin })).status).toBe(403);
+    const uw = await login('underwriter@demo.mig.uz');
+    expect((await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: uw })).status).toBe(200);
+    expect(numbering().contract).toBe('MIG-{YYYY}/{N:5}');
+
+    const view = await call<DmsParamsView>('/params', { sid: uw });
+    expect(view.data.numbering.find((n) => n.kind === 'contract')).toMatchObject({ value: 'MIG-{YYYY}/{N:5}', isDemo: false });
+    const changed = db().audit.find((e) => e.action === 'dms_param_changed')!;
+    expect(changed.targetLabel).toContain(`${DEFAULT_NUMBERING.contract} → MIG-{YYYY}/{N:5}`);
+
+    // A deal with an accepted KP and no contract yet: the new contract takes the template in force.
+    const d = db();
+    const deal = d.deals.find((x) => !d.contracts.some((c) => c.dealId === x.id) && dealKp(d, x.id))!;
+    expect(deal).toBeDefined();
+    dealKp(d, deal.id)!.status = 'accepted';
+    const c = await call<ContractView>('/contracts', { method: 'POST', sid: await login('sales@demo.mig.uz'), json: { dealId: deal.id } });
+    expect(c.status).toBe(201);
+    expect(c.data.number).toMatch(new RegExp(`^MIG-${new Date().getFullYear()}/\\d{5}$`));
+    // Numbers of the other kinds keep their own templates.
+    expect(nextDocNumber('claim', { year: 2026, n: 7 })).toBe('U-2026-000007');
+  });
+
+  it('the largest sequence is read with the template in force and the demo one', () => {
+    expect(maxDocSeq('claim', ['U-2026-000041', 'U-2025-000099', 'junk'])).toBe(99);
+    expect(maxDocSeq('policy', ['DMS-2026-000140', 'DMS-2025-000500'], { year: 2026, floor: 100 })).toBe(140);
+    expect(maxDocSeq('policy', [], { year: 2026, floor: 100 })).toBe(100);
   });
 });

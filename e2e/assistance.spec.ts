@@ -86,7 +86,7 @@ test('1. Call: the operator finds the insured, creates a case and an appointment
   await page.getByRole('dialog').getByLabel('Суть обращения').fill('Просит записать к терапевту');
   await page.getByRole('dialog').getByRole('button', { name: 'Создать обращение' }).click();
   await expect(page).toHaveURL(/\/assist\/cases\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole('heading', { name: /Обращение ОБР-\d{4}-\d{6}/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Обращение OBR-\d{4}-\d{6}/ })).toBeVisible();
 
   await page.getByRole('button', { name: 'Записать к врачу' }).click();
   const dialog = page.getByRole('dialog');
@@ -150,6 +150,8 @@ test('2. Guarantees: within authority the assistance doctor decides; above it es
 });
 
 test('3. Limit: an approved letter lowers what is left in the app; the accepted line makes it final and releases the reserve', async ({ page }) => {
+  // A multi-role scenario (several logins): ~40–55 s locally, over 60 s on a loaded CI runner.
+  test.setTimeout(120_000);
   failOnDialog(page);
   await loginStaff(page, 'clinic_admin');
   const visitId = await openVisit(page);
@@ -227,6 +229,8 @@ test('4. One registry of two payers is split: the assistance sees its lines, MIG
 });
 
 test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer rejects, the assistance disputes, the claims officer accepts, the accountant pays', async ({ page }) => {
+  // A multi-role scenario (several logins): ~40–55 s locally, over 60 s on a loaded CI runner.
+  test.setTimeout(120_000);
   failOnDialog(page);
   await loginStaff(page, 'asst_doctor');
   // A registry of another clinic waits for review: the doctor accepts the lines of the assistance.
@@ -238,7 +242,7 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer r
   await as(page, 'asstBilling');
   await page.goto(`/assist/registries/${reg.id}`);
   await page.getByRole('button', { name: /^Оплатить все принятые/ }).click();
-  await page.getByRole('dialog').getByLabel('Номер платёжного поручения').fill('ПП-20931');
+  await page.getByRole('dialog').getByLabel('Номер платёжного поручения').fill('PP-20931');
   await page.getByRole('dialog').getByRole('button', { name: 'Отметить оплату' }).click();
   await expect(page.getByTestId('line-paid').first()).toBeVisible();
 
@@ -247,7 +251,7 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer r
   await expect(page).toHaveURL(/\/assist\/rebills\/[0-9a-f-]{36}$/);
   await expect(page.getByTestId('fee-formula')).toContainText('застрахованных × 15 000 UZS');
   const rebillUrl = page.url();
-  const number = (await page.getByRole('heading', { level: 1 }).innerText()).match(/СЧА-[^\s]+/)![0];
+  const number = (await page.getByRole('heading', { level: 1 }).innerText()).match(/SChA-[^\s]+/)![0];
   await page.getByRole('button', { name: 'Отправить в МИГ' }).click();
   await page.getByRole('dialog', { name: 'Отправить счёт в МИГ?' }).getByRole('button', { name: 'Отправить' }).click();
   await expect(page.getByTestId('rebill-status')).toContainText('Отправлен');
@@ -275,13 +279,13 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer r
   await as(page, 'asstBilling');
   await page.goto(`/assist/rebills/${rebillId}`);
   await page.getByRole('button', { name: /^Оспорить строку/ }).click();
-  await page.getByRole('dialog').getByLabel('Возражение').fill('Платёжное поручение ПП-20931 приложено');
+  await page.getByRole('dialog').getByLabel('Возражение').fill('Платёжное поручение PP-20931 приложено');
   await page.getByRole('dialog').getByRole('button', { name: 'Оспорить' }).click();
   await expect(page.getByTestId('rebill-status')).toContainText('На проверке');
 
   await as(page, 'claims');
   await page.goto(`/staff/rebills/${rebillId}`);
-  await expect(page.getByText('Ассистанс: Платёжное поручение ПП-20931 приложено')).toBeVisible();
+  await expect(page.getByText('Ассистанс: Платёжное поручение PP-20931 приложено')).toBeVisible();
   await page.getByRole('button', { name: /^Принять строку/ }).click();
   await expect(page.getByTestId('rebill-status')).toHaveText('Принят');
 
@@ -303,7 +307,7 @@ test('6. Isolation: another assistance finds nobody; after a change the new one 
 
   // The operator of the second assistance.
   await loginByEmail(page, 'asst-operator@demo-assist2.uz');
-  await expect(page.getByTestId('assistance-name')).not.toHaveText(/Шифо/);
+  await expect(page.getByTestId('assistance-name')).not.toHaveText(/Shifo/);
   await page.goto('/assist/insured');
   await page.getByRole('searchbox', { name: 'Поиск застрахованного' }).fill(fullName.split(' ')[0]!);
   await expect(page.getByText('Никого не нашли среди ваших застрахованных').or(page.getByRole('row').nth(1))).toBeVisible();
@@ -354,7 +358,7 @@ test('7. App: «Ваш ассистанс 24/7» shows the right company and the
   await page.goto('/assist/chat');
   await page.getByRole('button', { name: new RegExp(fullName) }).first().click();
   await expect(page.getByTestId('assist-chat')).toContainText(text);
-  await page.getByLabel('Ответ').fill('Справку подготовим сегодня');
+  await page.getByLabel('Ответ', { exact: true }).fill('Справку подготовим сегодня');
   await page.getByRole('button', { name: 'Отправить' }).click();
   await expect(page.getByTestId('assist-chat')).toContainText('Справку подготовим сегодня');
 });
@@ -367,8 +371,8 @@ test('8. Simulator of an API assistance: roster sync and a rebill through the AP
   await sim.getByRole('button', { name: 'Синхронизировать список застрахованных' }).click();
   await expect(page.getByTestId('assist-sim-log')).toContainText('Список застрахованных синхронизирован');
   await sim.getByRole('button', { name: 'Выставить счёт МИГ за месяц' }).click();
-  await expect(page.getByTestId('assist-sim-log')).toContainText(/Счёт СЧА-\S+ выставлен МИГ/);
-  const number = (await page.getByTestId('assist-sim-log').innerText()).match(/СЧА-\S+/)![0];
+  await expect(page.getByTestId('assist-sim-log')).toContainText(/Счёт SChA-\S+ выставлен МИГ/);
+  const number = (await page.getByTestId('assist-sim-log').innerText()).match(/SChA-\S+/)![0];
   await page.getByRole('tab', { name: 'Журнал запросов' }).click();
   await expect(page.getByText('/assistance/rebills').first()).toBeVisible();
 
@@ -376,7 +380,7 @@ test('8. Simulator of an API assistance: roster sync and a rebill through the AP
   await page.goto('/staff/rebills');
   await expect(page.getByRole('row', { name: new RegExp(number) })).toBeVisible();
   await page.goto('/staff/assistance');
-  await page.getByRole('row', { name: /Шифо/ }).click();
+  await page.getByRole('row', { name: /Shifo/ }).click();
   await page.getByRole('tab', { name: 'Счета' }).click();
   await expect(page.getByRole('row', { name: new RegExp(number) })).toBeVisible();
 });
@@ -399,7 +403,7 @@ test('9. Operator requests a letter from a guarantee case; the curator closes a 
   await dlg.getByLabel('Код МКБ-10').fill('G43.9');
   await dlg.getByRole('button', { name: 'Запросить ГП' }).click();
   await expect(page).toHaveURL(/\/assist\/guarantees\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole('heading', { name: /Гарантийное письмо ГП-\d{4}-\d{6}/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Гарантийное письмо GP-\d{4}-\d{6}/ })).toBeVisible();
 
   await as(page, 'operator');
   const assistances = (await api(page, 'GET', '/assistance')).data as { id: string; name: string }[];

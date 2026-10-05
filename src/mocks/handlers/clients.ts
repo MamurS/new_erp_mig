@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { http } from 'msw';
 import { clientCreateSchema, clientPatchSchema } from '@/shared/schemas/forms';
 import type { ClientDetail, ClientListResponse, ClientLossStats, PolicyDetail } from '@/shared/types/dto';
@@ -6,10 +7,10 @@ import { can } from '@/shared/auth/permissions';
 import { CLAIM_CATEGORY_LABEL } from '@/shared/domain/claims';
 import { formatMoney } from '@/shared/lib/format';
 import { db, hasLiveKp, type ClientRow } from '../db';
-import { API, body, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
+import { API, body, byLegalForm, byLegalName, filterLegalForm, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { parseIso, tzIso } from '../time';
-import { toClient, toInsuredListItem } from '../views';
+import { clientLegalFormOf, toClient, toInsuredListItem } from '../views';
 import { PROGRAMS } from '../programs';
 import { renewalsWithoutOffer } from './dashboard';
 import { dmsParam } from '../params';
@@ -30,13 +31,14 @@ export const clientHandlers = [
       const now = Date.now();
       let list = d.clients;
       const term = q(url);
-      if (term) list = list.filter((c) => c.name.toLowerCase().includes(term) || c.inn.includes(term));
+      if (term) list = list.filter((c) => matchesSearch(term, c.name) || c.inn.includes(term.trim()));
       const status = url.searchParams.get('status');
       if (status) list = list.filter((c) => status.split(',').includes(c.status));
       const program = url.searchParams.get('program');
       if (program) list = list.filter((c) => c.program && program.split(',').includes(c.program));
       const managerId = url.searchParams.get('managerId');
       if (managerId) list = list.filter((c) => c.managerId === managerId);
+      list = filterLegalForm(list, url, (c) => c.legalForm);
       const view = url.searchParams.get('view');
       if (view === 'mine') list = list.filter((c) => c.managerId === user.id);
       if (view === 'q4') {
@@ -53,7 +55,8 @@ export const clientHandlers = [
         mapped,
         url,
         {
-          name: (c) => c.name,
+          name: byLegalName((c) => c.name),
+          legalForm: byLegalForm((c) => c.legalForm),
           program: (c) => c.program ?? '',
           insuredCount: (c) => c.insuredCount,
           premium: (c) => c.premium,
@@ -122,6 +125,7 @@ export const clientHandlers = [
       const out: ClientLossStats = {
         clientId: c.id,
         clientName: c.name,
+        clientLegalForm: c.legalForm,
         premium: c.premium,
         lossRatio: c.lossRatio,
         lossRatioWarn: dmsParam('lossRatioWarn'),
@@ -204,7 +208,7 @@ export const clientHandlers = [
       const c = findClient(param(ctx, 'id'));
       const term = q(ctx.url);
       let list = db().insured.filter((i) => i.clientId === c.id);
-      if (term) list = list.filter((i) => i.fullName.toLowerCase().includes(term));
+      if (term) list = list.filter((i) => matchesSearch(term, i.fullName));
       return paginate(sortBy(list, ctx.url, { fullName: (i) => i.fullName, position: (i) => i.position }, 'fullName:asc').map((i) => toInsuredListItem(i, user)), ctx.url);
     }),
   ),
@@ -260,20 +264,27 @@ export const clientHandlers = [
       if (user.role === 'hr' || user.role === 'insured') throw notFound();
       let list: Policy[] = db().policies;
       const term = q(url);
-      if (term) list = list.filter((p) => p.number.toLowerCase().includes(term) || p.clientName.toLowerCase().includes(term));
+      if (term) list = list.filter((p) => matchesSearch(term, p.number, p.clientName));
       const status = url.searchParams.get('status');
       if (status) list = list.filter((p) => status.split(',').includes(p.status));
       const program = url.searchParams.get('program');
       if (program) list = list.filter((p) => program.split(',').includes(p.program));
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((p) => p.clientId === clientId);
+      const d = db();
+      const withForm = filterLegalForm(
+        list.map((p) => ({ ...p, clientLegalForm: clientLegalFormOf(d, p.clientId) })),
+        url,
+        (p) => p.clientLegalForm,
+      );
       return paginate(
         sortBy(
-          list,
+          withForm,
           url,
           {
             number: (p) => p.number,
-            clientName: (p) => p.clientName,
+            clientName: byLegalName((p) => p.clientName),
+            legalForm: byLegalForm((p) => p.clientLegalForm),
             program: (p) => p.program,
             startDate: (p) => p.startDate,
             endDate: (p) => p.endDate,
@@ -298,6 +309,7 @@ export const clientHandlers = [
       if (!p) throw notFound();
       const detail: PolicyDetail = {
         ...p,
+        clientLegalForm: clientLegalFormOf(d, p.clientId),
         programInfo: PROGRAMS[p.program],
         documents: d.documents.filter((x) => x.clientId === p.clientId).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
       };

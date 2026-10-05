@@ -18,9 +18,9 @@ const mock = createMockProvider();
 describe('redactForAi', () => {
   it('removes names, PINFL, phones, policy, contract and certificate numbers and emails', () => {
     const src =
-      'Пациент Каримов Азиз Рустамович, ПИНФЛ 31503901234567, тел. +998 90 123 45 67, полис ДМС-2026-000123, договор ДМС-Д-2026-000045, сертификат СЕРТ-2026-000045-0001, почта a.karimov@mail.uz: МРТ колена';
+      'Пациент Каримов Азиз Рустамович, ПИНФЛ 31503901234567, тел. +998 90 123 45 67, полис DMS-2026-000123, договор DMS-D-2026-000045, сертификат SERT-2026-000045-0001, почта a.karimov@mail.uz: МРТ колена';
     const r = redactForAi(src);
-    for (const secret of ['Каримов', '31503901234567', '123 45 67', 'ДМС-2026-000123', 'ДМС-Д-2026-000045', 'СЕРТ-2026-000045-0001', 'a.karimov@mail.uz']) expect(r.text).not.toContain(secret);
+    for (const secret of ['Каримов', '31503901234567', '123 45 67', 'DMS-2026-000123', 'DMS-D-2026-000045', 'SERT-2026-000045-0001', 'a.karimov@mail.uz']) expect(r.text).not.toContain(secret);
     expect(r.text).toContain('МРТ колена');
     expect(r.text).toMatch(/\[ФИО-1\].*\[ПИНФЛ-1\].*\[ТЕЛЕФОН-1\].*\[ПОЛИС-1\].*\[ДОГОВОР-1\].*\[СЕРТИФИКАТ-1\].*\[EMAIL-1\]/s);
     expect(r.labels['[ПИНФЛ-1]']).toBe('31503901234567');
@@ -29,6 +29,14 @@ describe('redactForAi', () => {
     const r = redactForAi('Иванова жалуется; Иванова Мария просит МРТ', { names: ['Иванова Мария Петровна'] });
     expect(r.text).not.toContain('Иванова');
     expect(r.text.match(/\[ФИО-1\]/g)?.length).toBe(2);
+  });
+  it('removes Latin names as in the ID card / MyID (Uzbek letters with ʻ included)', () => {
+    const r = redactForAi('Patient Sobirov Akmal Ravshanovich va Yoʻldosheva Gulnora Bahromovna: tizza MRT');
+    expect(r.text).not.toContain('Sobirov');
+    expect(r.text).not.toContain('Yoʻldosheva');
+    expect(r.text).toContain('[ФИО-1]');
+    expect(r.text).toContain('[ФИО-2]');
+    expect(r.text).toContain('tizza MRT');
   });
   it('leaves medical text alone', () => {
     expect(redactForAi('Нурофен 200 мг, витамин С шип.').text).toBe('Нурофен 200 мг, витамин С шип.');

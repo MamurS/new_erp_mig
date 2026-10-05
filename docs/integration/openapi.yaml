@@ -1341,7 +1341,8 @@ paths:
                   properties:
                     policyNumber:
                       type: string
-                      pattern: "^ДМС-\\d{4}-\\d{6}$"
+                      maxLength: 60
+                      pattern: "^[A-Za-z0-9/-]+$"
                     pinfl:
                       type: string
                       pattern: "^\\d{14}$"
@@ -2002,7 +2003,8 @@ paths:
                         maximum: 10000000000
                       guaranteeNumber:
                         type: string
-                        pattern: "^ГП-\\d{4}-\\d{6}$"
+                        maxLength: 60
+                        pattern: "^[A-Za-z0-9/-]+$"
                     required:
                       - visitId
                       - serviceDate
@@ -3024,7 +3026,7 @@ paths:
                   - "0c6e2f91-3b7d-4a55-8e2c-7f14d9a6b302"
                 paidAt: "2026-09-25"
                 amount: 171000
-                paymentOrderNumber: "ПП-10452"
+                paymentOrderNumber: PP-10452
       responses:
         "200":
           description: "Подреестр"

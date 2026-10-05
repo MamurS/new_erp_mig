@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { msg } from '@/i18n';
+import { DOC_NUMBER_RE, docNumber } from '@/shared/domain/numbering';
 import { limitCategory, specialty } from '@/shared/api/schemas';
 
 const uuid = z.string().uuid();
@@ -95,8 +96,13 @@ export const coverageCheckRequest = z.union([
   z.object({ qrToken: z.string().trim().min(8).max(200) }).strict(),
   z
     .object({
-      // eslint-disable-next-line mig/no-cyrillic-ui -- example of a document number format, not an interface string
-      policyNumber: z.string().trim().toUpperCase().regex(/^ДМС-\d{4}-\d{6}$/, msg('v.policyNumberFormat', { example: 'ДМС-2026-000123' })),
+      // Any template MIG sets in «Нумерация документов»: ASCII letters, digits, «-» and «/».
+      policyNumber: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .max(60, msg('v.policyNumberFormat', { example: docNumber('policy', { year: 2026, n: 123 }) }))
+        .regex(DOC_NUMBER_RE, msg('v.policyNumberFormat', { example: docNumber('policy', { year: 2026, n: 123 }) })),
       pinfl: z.string().trim().regex(/^\d{14}$/, msg('v.pinflFormat')),
     })
     .strict(),
@@ -216,8 +222,8 @@ export const registryLineInput = z
     guaranteeNumber: z
       .string()
       .trim()
-      // eslint-disable-next-line mig/no-cyrillic-ui -- example of a document number format, not an interface string
-      .regex(/^ГП-\d{4}-\d{6}$/, msg('v.guaranteeNumberFormat', { example: 'ГП-2026-000123' }))
+      .max(60, msg('v.guaranteeNumberFormat', { example: docNumber('guarantee', { year: 2026, n: 123 }) }))
+      .regex(DOC_NUMBER_RE, msg('v.guaranteeNumberFormat', { example: docNumber('guarantee', { year: 2026, n: 123 }) }))
       .optional(),
   })
   .strict();

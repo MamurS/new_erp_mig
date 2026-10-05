@@ -15,9 +15,10 @@ import { toast } from '@/shared/ui/toast';
 import { INTEGRATION_MODE_LABEL } from '@/shared/domain/clinics';
 import { t, tm } from '@/i18n';
 import { formatNumber, formatPercent } from '@/shared/lib/format';
-import { useDocumentTitle } from '@/shared/lib/hooks';
+import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Chip } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { LegalFormOptions, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { PageHeader } from '@/shared/ui/page';
 import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
@@ -27,11 +28,12 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
   const defaultLimit = useDmsParam('assistanceGuaranteeAuthority');
   const create = useCreateAssistance();
   const navigate = useNavigate();
-  const [v, setV] = useState({ name: '', phone24x7: '', integrationMode: 'portal', contractNumber: '', feeModel: 'pepm', feeValue: '15000', limit: '', days: '10', adminName: '', adminEmail: '' });
+  const [v, setV] = useState({ legalForm: 'llc', name: '', phone24x7: '', integrationMode: 'portal', contractNumber: '', feeModel: 'pepm', feeValue: '15000', limit: '', days: '10', adminName: '', adminEmail: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }));
   const submit = async () => {
     const parsed = assistanceCreateSchema.safeParse({
+      legalForm: v.legalForm,
       name: v.name,
       phone24x7: v.phone24x7,
       integrationMode: v.integrationMode,
@@ -78,6 +80,13 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t('shell.legalForm.column')} error={tm(errors.legalForm) || undefined}>
+          {(a) => (
+            <Select {...a} value={v.legalForm} onChange={set('legalForm')}>
+              <LegalFormOptions />
+            </Select>
+          )}
+        </Field>
         <Field label={t('common.name')} error={tm(errors.name) || undefined}>
           {(a) => <Input {...a} maxLength={120} value={v.name} onChange={set('name')} />}
         </Field>
@@ -133,14 +142,21 @@ export default function AssistancesPage() {
   useDocumentTitle(t('staffOps.assistances.title'));
   useTopbar([{ label: t('staffOps.assistances.title') }]);
   const navigate = useNavigate();
-  const q = useAssistances();
+  const [f, setF] = useUrlFilters(['form', 'sort'] as const);
+  const forms = parseLegalForms(f.form);
+  const sort = parseSort(f.sort);
+  const q = useAssistances({
+    ...(forms.length ? { form: forms.join(',') } : {}),
+    ...(sort ? { sort: `${sort.key}:${sort.dir}` } : {}),
+  });
   const canManage = useCan('assistance.manage');
   const [creating, setCreating] = useState(false);
   const columns: Column<AssistanceListItem>[] = [
-    { key: 'name', header: t('staffOps.rebills.col.assistance'), cell: (a) => <span className="font-medium">{a.name}</span> },
+    { key: 'name', header: t('staffOps.rebills.col.assistance'), sortKey: 'name', cell: (a) => <span className="font-medium">{a.name}</span> },
+    legalFormColumn<AssistanceListItem>((a) => a.legalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'mode', header: t('staffOps.assistances.connection'), cell: (a) => INTEGRATION_MODE_LABEL[a.integrationMode] },
-    { key: 'clients', header: t('staffOps.assistances.col.clients'), align: 'right', cell: (a) => <span className="num">{a.clientsCount}</span> },
-    { key: 'insured', header: t('staffOps.assistances.col.insured'), align: 'right', cell: (a) => <span className="num">{formatNumber(a.insuredCount)}</span> },
+    { key: 'clients', header: t('staffOps.assistances.col.clients'), sortKey: 'clientsCount', align: 'right', cell: (a) => <span className="num">{a.clientsCount}</span> },
+    { key: 'insured', header: t('staffOps.assistances.col.insured'), sortKey: 'insuredCount', align: 'right', cell: (a) => <span className="num">{formatNumber(a.insuredCount)}</span> },
     { key: 'gp', header: t('staffOps.assistances.col.glOnTime'), align: 'right', cell: (a) => <span className="num">{formatPercent(a.kpi.guaranteesOnTimeShare)}</span> },
     { key: 'qa', header: t('staffOps.assistances.col.qa'), align: 'right', cell: (a) => <span className={a.kpi.qaAgreementShare < 0.9 ? 'num text-warning-text' : 'num'}>{formatPercent(a.kpi.qaAgreementShare)}</span> },
     { key: 'loss', header: t('staffOps.assistances.col.lossRatio'), align: 'right', cell: (a) => <span className="num">{a.kpi.lossRatio === null ? '—' : formatPercent(a.kpi.lossRatio)}</span> },
@@ -159,6 +175,8 @@ export default function AssistancesPage() {
           caption={t('staffOps.assistances.title')}
           columns={columns}
           rows={q.data}
+          sort={sort}
+          onSortChange={(s) => setF({ sort: formatSort(s) })}
           loading={q.isLoading}
           error={q.error}
           onRetry={() => void q.refetch()}

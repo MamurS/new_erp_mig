@@ -6,6 +6,7 @@ import { REGISTRY_STATUS_CHIP, REGISTRY_STATUS_LABEL } from '@/shared/domain/cli
 import { formatDate, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Chip } from '@/shared/ui/chips';
+import { legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { PageHeader } from '@/shared/ui/page';
 import { useTopbar } from '@/features/staff/topbar';
@@ -21,6 +22,7 @@ export default function RegistriesPage() {
   const q = useAssistRegistries();
   const columns: Column<SubRegistrySummary>[] = [
     { key: 'clinic', header: t('common.clinic'), cell: (r) => <span className="font-medium">{r.clinicName}</span> },
+    legalFormColumn<SubRegistrySummary>((r) => r.clinicLegalForm),
     { key: 'period', header: t('common.period'), cell: (r) => <span className="num">{r.period}</span> },
     { key: 'source', header: t('common.source'), cell: (r) => SOURCE_LABEL[r.source] },
     { key: 'sent', header: t('assist.registries.received'), cell: (r) => (r.submittedAt ? <span className="num">{formatDate(r.submittedAt)}</span> : '—') },

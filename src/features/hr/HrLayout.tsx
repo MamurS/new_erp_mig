@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
 import { BarChart3, CircleHelp, FileSignature, ReceiptText, Users } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
@@ -50,9 +51,12 @@ export default function HrLayout() {
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] text-muted">{t('shell.portal.hr')}</p>
               {company ? (
-                <p className="truncate font-heading text-[15px] font-semibold" data-testid="hr-company">
-                  {company}
-                </p>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="truncate font-heading text-[15px] font-semibold" data-testid="hr-company">
+                    {company}
+                  </p>
+                  <LegalFormChip code={overview.data?.companyLegalForm} />
+                </div>
               ) : (
                 <Skeleton className="mt-1 h-4 w-40" />
               )}

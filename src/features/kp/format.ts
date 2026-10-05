@@ -2,8 +2,10 @@
  * Pure formatting helpers for commercial offer (KP) documents. No DOM: the backend repeats them.
  * Every value that ends up in HTML goes through escapeHtml(), including already formatted numbers.
  */
-import type { Client, ISODate, KpLang, KpPaymentTerms } from '@/shared/types';
+import type { ISODate, KpLang, KpPaymentTerms } from '@/shared/types';
 import { escapeHtml } from '@/features/documents/html';
+import { getLocale, type Locale } from '@/i18n';
+import { formatLegalName, type DocLang, type LegalFormCode } from '@/shared/config/legalForms';
 
 export { escapeHtml };
 
@@ -33,14 +35,12 @@ export const PAYMENT_TERMS_LABEL: Record<KpLang, Record<KpPaymentTerms, string>>
   en: { single: 'Single payment', quarterly: 'Quarterly', monthly: 'Monthly' },
 };
 
-const LEGAL_FORM_EN: Record<Client['legalForm'], string> = {
-  ООО: 'LLC',
-  АО: 'JSC',
-  'СП ООО': 'JV LLC',
-  ЧП: 'PE',
-};
+const UI_DOC_LANG: Record<Locale, DocLang> = { ru: 'ru', 'uz-Latn': 'uz', en: 'en' };
 
-/** `ООО «Name»` (ru) or `LLC “Name”` (en). Returns plain text; escape before use in HTML. */
-export function clientDisplayName(legalForm: Client['legalForm'], name: string, lang: KpLang): string {
-  return lang === 'ru' ? `${legalForm} «${name}»` : `${LEGAL_FORM_EN[legalForm]} “${name}”`;
+/**
+ * Client's full legal name for the editor screen around the document: written in the interface
+ * language (`ООО «Name»` / `«Name» MChJ` / `Name LLC`). The document itself uses its own language.
+ */
+export function clientLegalNameUi(name: string, legalForm: LegalFormCode, locale: Locale = getLocale()): string {
+  return formatLegalName(name, legalForm, UI_DOC_LANG[locale]);
 }

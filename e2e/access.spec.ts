@@ -78,7 +78,7 @@ test.describe('4. IDOR', () => {
   test('insured gets 404 for a foreign claim id', async ({ page }) => {
     await login(page, 'operator');
     const list = (await api(page, 'GET', '/claims?pageSize=5')).data as { items: { id: string; insuredName: string }[] };
-    const foreign = list.items.find((c) => !c.insuredName.startsWith('Каримов Азиз'))!;
+    const foreign = list.items.find((c) => !c.insuredName.startsWith('Karimov Aziz'))!;
     await logoutFromSidebar(page);
     await login(page, 'insured');
     expect((await api(page, 'GET', `/me/claims/${foreign.id}`)).status).toBe(404);
@@ -91,7 +91,7 @@ test.describe('4. IDOR', () => {
   test('hr gets 404 for another company’s employee', async ({ page }) => {
     await login(page, 'operator');
     const others = (await api(page, 'GET', '/insured?pageSize=100')).data as { items: { id: string; clientName: string }[] };
-    const foreign = others.items.find((i) => i.clientName !== 'Ташкент Агрологистика')!;
+    const foreign = others.items.find((i) => i.clientName !== 'Toshkent Agrologistika')!;
     await logoutFromSidebar(page);
     await login(page, 'hr');
     expect((await api(page, 'GET', `/hr/employees/${foreign.id}`)).status).toBe(404);

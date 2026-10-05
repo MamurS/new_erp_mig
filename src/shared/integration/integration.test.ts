@@ -88,8 +88,8 @@ describe('clinic domain rules', () => {
     expect(tm(registryLineProblems({ ...base, price: 101 }, { priceItem: item })[0])).toContain('Цена выше прайса');
     expect(tm(registryLineProblems(base, { priceItem: undefined })[0])).toContain('нет в прайсе');
     expect(tm(registryLineProblems(base, { priceItem: gpItem })[0])).toContain('нужен номер гарантийного письма');
-    expect(tm(registryLineProblems({ ...base, guaranteeNumber: 'ГП-2026-000001' }, { priceItem: gpItem, guarantee: { status: 'requested', visitId: 'v1', serviceCode: 'IP-602' } })[0])).toContain('не одобрено');
-    expect(registryLineProblems({ ...base, guaranteeNumber: 'ГП-2026-000001' }, { priceItem: gpItem, guarantee: { status: 'approved', approvedAmount: 100, visitId: 'v1', serviceCode: 'IP-602' } })).toEqual([]);
+    expect(tm(registryLineProblems({ ...base, guaranteeNumber: 'GP-2026-000001' }, { priceItem: gpItem, guarantee: { status: 'requested', visitId: 'v1', serviceCode: 'IP-602' } })[0])).toContain('не одобрено');
+    expect(registryLineProblems({ ...base, guaranteeNumber: 'GP-2026-000001' }, { priceItem: gpItem, guarantee: { status: 'approved', approvedAmount: 100, visitId: 'v1', serviceCode: 'IP-602' } })).toEqual([]);
     expect(tm(registryLineProblems(base, { priceItem: item, policyFrom: '2026-10-01', policyTo: '2027-09-30' })[0])).toContain('полиса');
     expect(tm(registryLineProblems(base, { priceItem: item, visitFrom: '2026-09-11', visitTo: '2026-09-12' })[0])).toContain('визита');
   });

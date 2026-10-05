@@ -67,6 +67,7 @@ import {
   visitOfClinic,
   type ClinicActor,
 } from '../clinic-core';
+import { nextDocNumber, numbering } from '../params';
 
 const C = `${API}/clinic`;
 
@@ -130,6 +131,7 @@ export const clinicHandlers = [
         .sort((a, b) => (a.status === 'draft' ? -1 : b.status === 'draft' ? 1 : 0))[0];
       const out: ClinicOverview = {
         clinicName: clinic.name,
+        clinicLegalForm: clinic.legalForm,
         integrationMode: clinic.integrationMode,
         appointmentsToday: mine.filter((a) => isoDay(parseIso(a.startsAt)) === today && (a.status === 'confirmed' || a.status === 'requested')).length,
         unanswered: unanswered.length,
@@ -450,7 +452,7 @@ export const clinicHandlers = [
       const { actor, d } = requireClinic(request, 'clinic.check_patient');
       const clinic = clinicOf(d, actor.clinicId);
       const out: ClinicDocuments = {
-        contract: { number: `ДК-${clinic.id.slice(0, 4).toUpperCase()}`, signedAt: isoDay(parseIso(clinic.contractUntil) - 365 * DAY), validUntil: clinic.contractUntil },
+        contract: { number: nextDocNumber('clinicContract', { code: clinic.id.slice(0, 4) }), signedAt: isoDay(parseIso(clinic.contractUntil) - 365 * DAY), validUntil: clinic.contractUntil },
         acts: d.registries
           .filter((r) => r.clinicId === clinic.id && r.status !== 'draft' && r.status !== 'submitted')
           .sort((a, b) => (a.period < b.period ? 1 : -1))
@@ -520,7 +522,7 @@ export function createGuarantee(
   d.guaranteeSeq += 1;
   const g: GuaranteeRow = {
     id: randomId(),
-    number: guaranteeNumber(new Date().getFullYear(), d.guaranteeSeq),
+    number: guaranteeNumber(new Date().getFullYear(), d.guaranteeSeq, numbering()),
     clinicId: actor.clinicId,
     visitId: v.id,
     insuredId: who.id,

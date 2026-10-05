@@ -1,3 +1,4 @@
+import { LEGAL_FORMS } from '@/shared/config/legalForms';
 /*
  * Form schemas. The same schemas validate request bodies in the mock server (CLAUDE.md rule 8).
  * Every string is trimmed and length-limited; inputs are normalised (phones, dates, digits).
@@ -7,7 +8,7 @@ import { msg } from '@/i18n';
 import { claimCategory, claimStatus, limitCategory, specialty, staffRole } from '@/shared/api/schemas';
 import { todayISO } from '@/shared/lib/format';
 import { digitsOnly, parseRuDate } from '@/shared/lib/masks';
-import { dmsParamError, isDmsParamKey } from '@/shared/config/dmsParameters';
+import { dmsParamError, isDmsParamKey, isNumberingParamKey, numberingKindOf, numberingTemplateError } from '@/shared/config/dmsParameters';
 
 const text = (min: number, max: number, message?: string) =>
   z
@@ -135,8 +136,7 @@ export const makeKpParamsSchema = (today: () => string = () => todayISO()) =>
     });
 export const kpParamsSchema = makeKpParamsSchema();
 export const clientCreateSchema = z.object({
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
-  legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
+  legalForm: z.enum(LEGAL_FORMS),
   name: text(2, 120),
   inn: z
     .string()
@@ -204,6 +204,7 @@ export const clinicUserPatchSchema = z
   .refine((v) => v.role !== undefined || v.active !== undefined, msg('v.nothingToChange'));
 export const clinicAdminInviteSchema = z.object({ email: emailInput, fullName: text(3, 120) });
 export const clinicCreateSchema = z.object({
+  legalForm: z.enum(LEGAL_FORMS).default('llc'),
   name: text(3, 120),
   address: text(5, 200),
   district: text(2, 60),
@@ -330,6 +331,7 @@ export const assistanceContractSchema = z
     if (v.feeModel !== 'percent_of_claims' && (v.feeValue < 1 || !Number.isInteger(v.feeValue))) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['feeValue'], message: msg('v.feeWholeUzs') });
   });
 export const assistanceCreateSchema = z.object({
+  legalForm: z.enum(LEGAL_FORMS).default('llc'),
   name: text(3, 120),
   phone24x7: text(5, 30),
   integrationMode: z.enum(['portal', 'api', 'hybrid']),
@@ -355,13 +357,19 @@ export const complaintResolutionSchema = z.object({ resolution: text(5, 1000, ms
 /** An admin proposes a new value of a DMS parameter; it applies after a second person confirms. */
 export const dmsParamChangeSchema = z
   .object({
-    key: z.string().trim().max(60).refine(isDmsParamKey, msg('v.unknownParam')),
-    value: z.number({ invalid_type_error: msg('v.numberRequired') }),
+    key: z
+      .string()
+      .trim()
+      .max(60)
+      .refine((k) => isDmsParamKey(k) || isNumberingParamKey(k), msg('v.unknownParam')),
+    /** A number for DMS parameters; a numbering template (`numbering.*`) is a string, trimmed, without inner spaces. */
+    value: z.union([z.number({ invalid_type_error: msg('v.numberRequired') }), z.string().max(200).transform((s) => s.trim())], { invalid_type_error: msg('v.numberRequired') }),
     reason: text(5, 500, msg('v.basisMin5')),
   })
   .superRefine((v, ctx) => {
-    if (!isDmsParamKey(v.key)) return;
-    const error = dmsParamError(v.key, v.value);
+    let error: string | null = null;
+    if (isNumberingParamKey(v.key)) error = typeof v.value === 'string' ? numberingTemplateError(numberingKindOf(v.key), v.value) : msg('dom.numbering.chars');
+    else if (isDmsParamKey(v.key)) error = typeof v.value === 'number' ? dmsParamError(v.key, v.value) : msg('v.numberRequired');
     if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: error });
   });
 export const dmsParamRejectSchema = z.object({ reason: text(5, 500, msg('v.reasonMin5')) });
@@ -403,8 +411,7 @@ export const requisitesSchema = z.object({
   address: z.string().trim().max(200, msg('v.tooLong', { max: 200 })).optional(),
 });
 export const leadCreateSchema = z.object({
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
-  legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
+  legalForm: z.enum(LEGAL_FORMS),
   name: text(2, 120),
   inn: innInput,
   requisites: requisitesSchema,

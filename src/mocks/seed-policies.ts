@@ -9,11 +9,11 @@ import { digits, int, mulberry32, pick, SEED, uuidFrom } from './rng';
 import { DAY, isoDay, tzIso } from './time';
 
 const NEW_PEOPLE = [
-  ['Турсунов Бобур Алишерович', 'Логист'],
-  ['Юлдашева Малика Рустамовна', 'Бухгалтер'],
-  ['Каримов Шерзод Баходирович', 'Водитель-экспедитор'],
-  ['Назарова Дилноза Икромовна', 'Менеджер по закупкам'],
-  ['Хамидов Акмал Тимурович', 'Кладовщик'],
+  ['Tursunov Bobur Alisherovich', 'Логист'],
+  ['Yoʻldosheva Malika Rustamovna', 'Бухгалтер'],
+  ['Karimov Sherzod Bahodirovich', 'Водитель-экспедитор'],
+  ['Nazarova Dilnoza Ikromovna', 'Менеджер по закупкам'],
+  ['Hamidov Akmal Temurovich', 'Кладовщик'],
 ] as const;
 
 export function seedPolicyChanges(

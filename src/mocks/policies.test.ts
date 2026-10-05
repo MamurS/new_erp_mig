@@ -61,7 +61,7 @@ describe('policy issuance', () => {
     const r = await call<Policy>(`/clients/${client.id}/policies`, { method: 'POST', sid: uw, json: { ...terms, csv: CSV, hr: { fullName: 'Новая Эйчар Тестовна', email: 'hr@new-client.uz' } } });
     expect(r.status).toBe(200);
     expect(r.data).toMatchObject({ status: 'active', insuredCount: 2, familyCount: 2, premium: 2 * 3_800_000 + 2 * 3_040_000 });
-    expect(r.data.number).toMatch(/^ДМС-\d{4}-\d{6}$/);
+    expect(r.data.number).toMatch(/^DMS-\d{4}-\d{6}$/);
     const d = db();
     expect(d.insured.filter((i) => i.policyId === r.data.id)).toHaveLength(2);
     expect(d.clients.find((c) => c.id === client.id)).toMatchObject({ status: 'active', activePolicyId: r.data.id, premium: r.data.premium });
@@ -114,7 +114,7 @@ describe('changes of the insured list', () => {
     expect(policy.premium).toBe(premium + req.premiumDelta);
     const cr = db().changeRequests.find((c) => c.policyChangeId === req.id)!;
     expect(cr).toMatchObject({ type: 'add_insured', status: 'pending', contractId: policy.contractId, effectiveDate: tomorrow });
-    expect(db().insured.find((i) => i.id === cr.insuredId)?.certificateNumber).toMatch(/^СЕРТ-/);
+    expect(db().insured.find((i) => i.id === cr.insuredId)?.certificateNumber).toMatch(/^SERT-/);
     expect((await call('/policy-changes/decision', { method: 'POST', sid: uw, json: { ids: [req.id], decision: 'approve' } })).status).toBe(409);
     const mine = await call<{ items: HrEmployee[] }>(`/hr/employees?q=${encodeURIComponent('новик новикович')}`, { sid: hr });
     expect(mine.data.items.map((e) => e.status)).toEqual(['active']);

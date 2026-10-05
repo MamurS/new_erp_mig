@@ -95,7 +95,7 @@ describe('dashboard by role', () => {
     const row = (await call<QueueItem[]>('/queue?type=loss_ratio', sid)).data[0]!;
     const res = await call<Record<string, unknown>>(`/clients/${row.entityId}/loss-stats`, sid);
     expect(res.status).toBe(200);
-    expect(Object.keys(res.data).sort()).toEqual(['byCategory', 'byMonth', 'claimsAmount', 'claimsCount', 'clientId', 'clientName', 'lossRatio', 'lossRatioWarn', 'premium']);
+    expect(Object.keys(res.data).sort()).toEqual(['byCategory', 'byMonth', 'claimsAmount', 'claimsCount', 'clientId', 'clientLegalForm', 'clientName', 'lossRatio', 'lossRatioWarn', 'premium']);
     const text = JSON.stringify(res.data);
     const claims = db().claims.filter((c) => c.clientId === row.entityId);
     expect(claims.length).toBeGreaterThan(0);
@@ -110,7 +110,7 @@ describe('dashboard by role', () => {
     expect(card.data.activity.some((a) => /Новый убыток/.test(a.text))).toBe(false);
     const op = await login(ACCOUNTS.operator);
     const opCard = await call<{ activity: { text: string }[] }>(`/clients/${row.entityId}`, op.sid);
-    expect(opCard.data.activity.some((a) => /Новый убыток У-/.test(a.text))).toBe(true);
+    expect(opCard.data.activity.some((a) => /Новый убыток U-/.test(a.text))).toBe(true);
     // Roles without clients.read get 403.
     expect((await call(`/clients/${row.entityId}/loss-stats`, (await login(ACCOUNTS.claims_officer)).sid)).status).toBe(403);
   });
@@ -118,7 +118,7 @@ describe('dashboard by role', () => {
   it('a pending change is never in the queue of the person who proposed it (four eyes)', async () => {
     const { sid } = await login('admin2@demo.mig.uz');
     const q = await call<QueueItem[]>('/queue?type=all', sid);
-    const mine = new Set(db().dmsParams.changes.filter((c) => c.proposedByName === 'Сардор Назаров').map((c) => c.id));
+    const mine = new Set(db().dmsParams.changes.filter((c) => c.proposedByName === 'Nazarov Sardor Ravshanovich').map((c) => c.id));
     expect(q.data.some((i) => mine.has(i.entityId))).toBe(false);
   });
 

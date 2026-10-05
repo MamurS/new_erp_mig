@@ -14,7 +14,7 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Textarea } from '@/shared/ui/input';
 import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
-import { buildPdf, downloadPdf } from '@/features/hr/pdf';
+import { buildPdf, downloadPdf, pdfLegalName } from '@/features/hr/pdf';
 import { FilesPicker, GuaranteeChip, PageTitle, Panel } from '../components';
 import { t } from '@/i18n';
 
@@ -32,7 +32,7 @@ function guaranteePdf(g: GuaranteeView): string {
       'MIG DMS - Guarantee letter',
       '',
       `No ${g.number}`,
-      `Clinic: ${g.clinicName}`,
+      `Clinic: ${pdfLegalName(g.clinicName, g.clinicLegalForm)}`,
       `Service: ${g.serviceCode} ${g.serviceName}`,
       `ICD-10: ${g.icd10}`,
       `Approved amount: ${formatMoneyDoc(g.approvedAmount ?? 0)}`,

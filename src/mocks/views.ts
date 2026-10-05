@@ -4,6 +4,7 @@ import type { ClaimDetail, HrEmployee, InsuredDetail, InsuredListItem } from '@/
 import { insuredVisibility } from '@/shared/auth/permissions';
 import { CLAIM_TO_LIMIT, claimTransitions, requiresMedicalReview, toMyClaimStatus } from '@/shared/domain/claims';
 import type { ClaimRow, ClientRow, Db, InsuredRow } from './db';
+import type { LegalFormCode } from '@/shared/config/legalForms';
 import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from './mask';
 import { PROGRAMS } from './programs';
 import { limitExtras } from './assistance-core';
@@ -15,6 +16,21 @@ import { currentReserve, reserveTimeline } from './settlement-core';
 
 export function insuredCountFor(d: Db, clientId: string): number {
   return d.insured.filter((i) => i.clientId === clientId && i.status === 'active').length;
+}
+
+/** Legal form of a client (rows that show the client by name carry it next to the name). */
+export function clientLegalFormOf(d: Db, clientId: string | null | undefined): LegalFormCode | undefined {
+  return clientId ? d.clients.find((c) => c.id === clientId)?.legalForm : undefined;
+}
+
+/** Legal form of a clinic. */
+export function clinicLegalFormOf(d: Db, clinicId: string | null | undefined): LegalFormCode | undefined {
+  return clinicId ? d.clinics.find((c) => c.id === clinicId)?.legalForm : undefined;
+}
+
+/** Legal form of an assistance company. */
+export function assistanceLegalFormOf(d: Db, assistanceId: string | null | undefined): LegalFormCode | undefined {
+  return assistanceId ? d.assistances.find((a) => a.id === assistanceId)?.legalForm : undefined;
 }
 
 export function toClient(d: Db, c: ClientRow): Client {

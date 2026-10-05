@@ -17,7 +17,8 @@ import { formatDate, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
@@ -125,10 +126,17 @@ export default function EndorsementsPage() {
   useDocumentTitle(t('staffLc.contract.endorsements'));
   useTopbar([{ label: t('staffLc.contract.endorsements') }]);
   const navigate = useNavigate();
-  const [f, setF] = useUrlFilters(['tab'] as const);
+  const [f, setF] = useUrlFilters(['tab', 'form', 'sort', 'rform'] as const);
   const tab = f.tab === 'requests' ? 'requests' : 'endorsements';
+  const forms = parseLegalForms(f.form);
+  const reqForms = parseLegalForms(f.rform);
+  const sort = parseSort(f.sort);
   const requests = useChangeRequests();
-  const endorsements = useEndorsements();
+  const requestRows = useChangeRequests(reqForms.length ? { form: reqForms.join(',') } : {});
+  const endorsements = useEndorsements({
+    ...(forms.length ? { form: forms.join(',') } : {}),
+    ...(sort ? { sort: `${sort.key}:${sort.dir}` } : {}),
+  });
   const createEnd = useCreateEndorsements();
   const canManage = useCan('endorsements.manage');
   const periodicity = PERIODICITIES[useDmsParam('endorsementPeriodicity')] ?? 'monthly';
@@ -151,14 +159,16 @@ export default function EndorsementsPage() {
     { key: 'date', header: t('staffLc.endorsements.effectiveDate'), cell: (r) => <span className="num">{formatDate(r.effectiveDate)}</span> },
     { key: 'contract', header: t('common.contract'), cell: (r) => <span className="num">{r.contractNumber}</span> },
     { key: 'client', header: t('common.client'), cell: (r) => r.clientName },
+    legalFormColumn<ChangeRequestView>((r) => r.clientLegalForm, { selected: reqForms, onChange: (v) => setF({ rform: formatLegalForms(v) }) }),
     { key: 'type', header: t('common.type'), cell: (r) => CHANGE_TYPE_LABEL[r.type] },
     { key: 'desc', header: t('staffLc.endorsements.description'), cell: (r) => r.description ?? '—' },
     { key: 'by', header: t('staffLc.endorsements.requester'), cell: (r) => r.requestedBy.name ?? (r.requestedBy.role === 'hr' ? t('staffLc.endorsements.clientHr') : t('common.mig')) },
     { key: 'status', header: t('common.status'), cell: (r) => <Chip kind={REQUEST_CHIP[r.status]}>{r.endorsementNumber ?? REQUEST_STATUS[r.status]}</Chip> },
   ];
   const endColumns: Column<EndorsementView>[] = [
-    { key: 'num', header: t('staffLc.endorsements.endorsement'), cell: (e) => <span className="num font-medium">{e.number}</span> },
-    { key: 'client', header: t('common.client'), cell: (e) => e.clientName },
+    { key: 'num', header: t('staffLc.endorsements.endorsement'), sortKey: 'number', cell: (e) => <span className="num font-medium">{e.number}</span> },
+    { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (e) => e.clientName },
+    legalFormColumn<EndorsementView>((e) => e.clientLegalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'kind', header: t('staffLc.endorsements.kind'), cell: (e) => (e.kind === 'termination' ? t('staffLc.endorsements.termination') : t('staffLc.endorsements.changesCount', { n: e.lines.length })) },
     { key: 'total', header: t('common.amount'), align: 'right', cell: (e) => <span className={e.total < 0 ? 'num text-success-text' : 'num'}>{e.total < 0 ? t('staffLc.endorsements.refund', { amount: formatMoney(-e.total) }) : formatMoney(e.total)}</span> },
     { key: 'status', header: t('common.status'), cell: (e) => <Chip kind={e.status === 'signed' ? 'success' : e.status === 'draft' ? 'neutral' : 'warning'}>{ENDORSEMENT_STATUS_LABEL[e.status]}</Chip> },
@@ -199,12 +209,12 @@ export default function EndorsementsPage() {
         </TabsList>
         <TabsContent value="endorsements">
           <div className="rounded-card border border-border bg-surface">
-            <DataTable caption={t('staffLc.contract.endorsements')} columns={endColumns} rows={endorsements.data} loading={endorsements.isLoading} error={endorsements.error} rowKey={(e) => e.id} onRowClick={(e) => navigate(`/staff/endorsements/${e.id}`)} empty={t('staffLc.endorsements.empty')} />
+            <DataTable caption={t('staffLc.contract.endorsements')} columns={endColumns} rows={endorsements.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={endorsements.isLoading} error={endorsements.error} rowKey={(e) => e.id} onRowClick={(e) => navigate(`/staff/endorsements/${e.id}`)} empty={t('staffLc.endorsements.empty')} />
           </div>
         </TabsContent>
         <TabsContent value="requests">
           <div className="rounded-card border border-border bg-surface">
-            <DataTable caption={t('staffLc.endorsements.requests')} columns={reqColumns} rows={requests.data} loading={requests.isLoading} error={requests.error} rowKey={(r) => r.id} empty={t('staffLc.endorsements.requestsEmpty')} />
+            <DataTable caption={t('staffLc.endorsements.requests')} columns={reqColumns} rows={requestRows.data} loading={requestRows.isLoading} error={requestRows.error} rowKey={(r) => r.id} empty={t('staffLc.endorsements.requestsEmpty')} />
           </div>
         </TabsContent>
       </Tabs>

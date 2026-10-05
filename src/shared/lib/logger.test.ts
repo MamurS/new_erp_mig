@@ -32,7 +32,7 @@ describe('logger redaction', () => {
     expect(redactString('call +998 90 123 45 67 now')).toBe('call [redacted] now');
     expect(redactString('call 901234567')).toBe('call [redacted]');
     expect(redactString('mail a.b@mig.uz')).toBe('mail [redacted]');
-    expect(redactString('claim У-2026-004512')).toBe('claim У-2026-004512');
+    expect(redactString('claim U-2026-004512')).toBe('claim U-2026-004512');
   });
 
   it('never prints raw PII', () => {

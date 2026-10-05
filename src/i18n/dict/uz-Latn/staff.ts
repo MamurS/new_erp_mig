@@ -214,7 +214,6 @@ export const staff: Translation<typeof Ru> = {
   'staff.month.nov': 'noy',
   'staff.month.dec': 'dek',
   'staff.clientCard.docTitle': 'Mijoz kartochkasi',
-  'staff.clientCard.heading': '{form} «{name}»',
   'staff.clientCard.inn': 'STIR ',
   'staff.clientCard.manager': ' · menejer {name}',
   'staff.clientCard.issuePolicy': 'Polis rasmiylashtirish',

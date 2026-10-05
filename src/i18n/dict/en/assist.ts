@@ -151,7 +151,7 @@ export const assist: Translation<typeof Ru> = {
   'assist.registry.markPaid': 'Record payment',
   'assist.registry.paidAt': 'Payment date',
   'assist.registry.orderNumber': 'Payment order number',
-  'assist.registry.orderPlaceholder': 'PO-10452',
+  'assist.registry.orderPlaceholder': 'PP-10452',
   'assist.registry.docTitle': 'Clinic register',
   'assist.registry.crumb': 'Register',
   'assist.registry.lineAccepted': 'Line accepted: charged to the limit',

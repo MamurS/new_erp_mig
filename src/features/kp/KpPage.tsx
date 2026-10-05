@@ -32,6 +32,7 @@ import { useTopbar } from '@/features/staff/topbar';
 import { printDocFrame } from '@/features/documents/DocFrame';
 import { KpPreview } from './KpPreview';
 import { printHint } from './KpDownloadButton';
+import { clientLegalNameUi } from './format';
 import { kpContextOf, kpSrcdoc, renderKp, type KpRenderContext } from './render';
 import { KP_TEMPLATES } from './templates';
 
@@ -196,7 +197,7 @@ function KpEditor({ clientId, policyId, initial, letter, kp }: { clientId: strin
             {kp && <Chip kind={KP_STATUS_CHIP[kp.status]}>{KP_STATUS_LABEL[kp.status]}</Chip>}
           </h1>
           <p className="text-muted">
-            {t('kp.editor.subtitle', { legalForm: letter.clientLegalForm, name: letter.clientName, version: kp?.templateVersion ?? KP_TEMPLATE_VERSION[initial.templateId] })}
+            {t('kp.editor.subtitle', { client: clientLegalNameUi(letter.clientName, letter.clientLegalForm), version: kp?.templateVersion ?? KP_TEMPLATE_VERSION[initial.templateId] })}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">

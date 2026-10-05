@@ -15,7 +15,8 @@ import { formatDate, formatMoney, todayISO } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
@@ -75,8 +76,14 @@ function PaymentDialog({ invoice, onClose }: { invoice: InvoiceView; onClose: ()
 export default function InvoicesPage() {
   useDocumentTitle(t('staffLc.invoices.title'));
   useTopbar([{ label: t('staffLc.invoices.title') }]);
-  const [f, setF] = useUrlFilters(['status'] as const);
-  const q = useInvoices(f.status ? { status: f.status } : {});
+  const [f, setF] = useUrlFilters(['status', 'form', 'sort'] as const);
+  const forms = parseLegalForms(f.form);
+  const sort = parseSort(f.sort);
+  const q = useInvoices({
+    ...(f.status ? { status: f.status } : {}),
+    ...(forms.length ? { form: forms.join(',') } : {}),
+    ...(sort ? { sort: `${sort.key}:${sort.dir}` } : {}),
+  });
   const canPay = useCan('payments.record');
   const import1c = useImport1c();
   const [pay, setPay] = useState<InvoiceView | null>(null);
@@ -93,8 +100,9 @@ export default function InvoicesPage() {
   };
 
   const columns: Column<InvoiceView>[] = [
-    { key: 'num', header: t('staffLc.contract.invoice'), cell: (i) => <span className="num font-medium">{i.number}</span> },
-    { key: 'client', header: t('common.client'), cell: (i) => i.clientName },
+    { key: 'num', header: t('staffLc.contract.invoice'), sortKey: 'number', cell: (i) => <span className="num font-medium">{i.number}</span> },
+    { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (i) => i.clientName },
+    legalFormColumn<InvoiceView>((i) => i.clientLegalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     {
       key: 'doc',
       header: t('staffLc.invoices.basis'),
@@ -107,8 +115,8 @@ export default function InvoicesPage() {
           '—'
         ),
     },
-    { key: 'due', header: t('staffLc.contract.due'), cell: (i) => <span className="num">{formatDate(i.dueDate)}</span> },
-    { key: 'amount', header: t('common.amount'), align: 'right', cell: (i) => <span className="num whitespace-nowrap">{formatMoney(i.amount)}</span> },
+    { key: 'due', header: t('staffLc.contract.due'), sortKey: 'dueDate', cell: (i) => <span className="num">{formatDate(i.dueDate)}</span> },
+    { key: 'amount', header: t('common.amount'), sortKey: 'amount', align: 'right', cell: (i) => <span className="num whitespace-nowrap">{formatMoney(i.amount)}</span> },
     { key: 'paid', header: t('staffLc.invoices.paid'), align: 'right', cell: (i) => <span className="num whitespace-nowrap">{i.paid ? formatMoney(i.paid) : '—'}</span> },
     { key: 'status', header: t('common.status'), cell: (i) => <Chip kind={INVOICE_STATUS_CHIP[i.status]}>{INVOICE_STATUS_LABEL[i.status]}</Chip> },
     {
@@ -139,7 +147,7 @@ export default function InvoicesPage() {
           canPay && (
             <>
               {/* eslint-disable-next-line mig/no-cyrillic-ui -- sample row of a 1C bank statement file (data, not UI) */}
-              <Button variant="secondary" size="sm" onClick={() => downloadText(toCsv(['doc_number', 'date', 'amount', 'inn', 'purpose', 'payer'], [['1245', '2026-10-01', '1000000', '301234567', 'Оплата по счёту СЧ-2026-002001', 'ООО «Плательщик»']]), 'statement-1c-template.csv')}>
+              <Button variant="secondary" size="sm" onClick={() => downloadText(toCsv(['doc_number', 'date', 'amount', 'inn', 'purpose', 'payer'], [['1245', '2026-10-01', '1000000', '301234567', 'Оплата по счёту SCh-2026-002001', 'ООО «Плательщик»']]), 'statement-1c-template.csv')}>
                 <Download className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.invoices.statementTemplate')}
               </Button>
               <Button asChild variant="secondary" size="sm">
@@ -181,7 +189,7 @@ export default function InvoicesPage() {
         </Select>
       </div>
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption={t('staffLc.contract.invoices')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(i) => i.id} empty={t('staffLc.invoices.empty')} />
+        <DataTable caption={t('staffLc.contract.invoices')} columns={columns} rows={q.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(i) => i.id} empty={t('staffLc.invoices.empty')} />
       </div>
       {pay && <PaymentDialog invoice={pay} onClose={() => setPay(null)} />}
     </>

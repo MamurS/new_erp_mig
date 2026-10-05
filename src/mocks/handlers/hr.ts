@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import Papa from 'papaparse';
@@ -108,6 +109,7 @@ export const hrHandlers = [
       const manager = d.staff.find((s) => s.id === client.managerId);
       const out: HrOverview = {
         companyName: client.name,
+        companyLegalForm: client.legalForm,
         insuredCount: employees.length,
         notInApp: employees.filter((i) => i.appStatus !== 'active').length,
         nextInvoice,
@@ -147,7 +149,7 @@ export const hrHandlers = [
         if (!filter) list = [...requests.map((r) => requestRow(d, r)), ...list];
       }
       const term = q(url);
-      if (term) list = list.filter((i) => i.fullName.toLowerCase().includes(term) || i.position.toLowerCase().includes(term));
+      if (term) list = list.filter((i) => matchesSearch(term, i.fullName, i.position));
       const sort = url.searchParams.get('sort') ?? 'fullName:asc';
       const [key, dir] = sort.split(':');
       const mul = dir === 'desc' ? -1 : 1;

@@ -63,9 +63,9 @@ test('1. Registrar checks the app code, requests a guarantee letter, the doctor 
   await dialog.getByLabel('Код МКБ-10').fill('G43.9');
   await dialog.getByLabel('Комментарий врача').fill('Мигрень, показано МРТ');
   await dialog.getByRole('button', { name: 'Отправить запрос' }).click();
-  const toast = page.getByText(/Гарантийное письмо ГП-\d{4}-\d{6} запрошено/);
+  const toast = page.getByText(/Гарантийное письмо GP-\d{4}-\d{6} запрошено/);
   await expect(toast).toBeVisible();
-  const number = /ГП-\d{4}-\d{6}/.exec(await toast.innerText())![0];
+  const number = /GP-\d{4}-\d{6}/.exec(await toast.innerText())![0];
   await expect(page).toHaveURL(/\/clinic\/guarantees$/);
 
   // The demo patient is served by an assistance: its doctor decides within the authority (ASSISTANCE_SPEC §9.1).
@@ -79,7 +79,7 @@ test('1. Registrar checks the app code, requests a guarantee letter, the doctor 
   await page.goto('/clinic/guarantees');
   const row = page.getByRole('row').filter({ hasText: number });
   await expect(row).toContainText('Одобрено');
-  await expect(row).toContainText('Шифо Ассистанс Групп');
+  await expect(row).toContainText('Shifo Assistans Group');
 });
 
 test('2. Insured books in the demo clinic, registrar confirms, the app shows «Подтвердила клиника»', async ({ page }) => {
@@ -109,6 +109,8 @@ test('2. Insured books in the demo clinic, registrar confirms, the app shows «�
 });
 
 test('3. CSV registry: upload, submit; the payer\'s assistance rejects, the clinic disputes, it accepts and pays — the clinic sees «Оплачен»', async ({ page }) => {
+  // A multi-role scenario (several logins): ~40–55 s locally, over 60 s on a loaded CI runner.
+  test.setTimeout(120_000);
   await loginStaff(page, 'clinic_admin');
   const visitId = await openVisit(page);
   // Prices of the patient's payer (the demo patient is served by an assistance with its own price list).
@@ -155,14 +157,14 @@ test('3. CSV registry: upload, submit; the payer\'s assistance rejects, the clin
   await page.goto(`/assist/registries/${registryId}`);
   await page.getByRole('button', { name: /^Оплатить все принятые/ }).click();
   const pay = page.getByRole('dialog', { name: 'Отметить оплату клинике' });
-  await pay.getByLabel('Номер платёжного поручения').fill('ПП-10452');
+  await pay.getByLabel('Номер платёжного поручения').fill('PP-10452');
   await pay.getByRole('button', { name: 'Отметить оплату' }).click();
   await expect(page.getByTestId('registry-status')).toContainText('Оплачен');
 
   await as(page, 'clinicAdmin');
   await page.goto(`/clinic/registries/${registryId}`);
   await expect(page.getByTestId('registry-status')).toContainText('Оплачен');
-  await expect(page.getByTestId('line-payment').first()).toContainText('Оплачено ассистансом Шифо Ассистанс Групп');
+  await expect(page.getByTestId('line-payment').first()).toContainText('Оплачено ассистансом Shifo Assistans Group');
 });
 
 test('4. Isolation: no visit → 404, foreign letter → 404, registrar has no integration or staff pages', async ({ page }) => {
@@ -254,11 +256,11 @@ test('7. A card code works once: the second check fails', async ({ page }) => {
 test('8. The 11th failed policy + PINFL check is blocked', async ({ page }) => {
   await loginStaff(page, 'clinic_registrar');
   for (let k = 0; k < 10; k++) {
-    const r = await api(page, 'POST', '/clinic/check', { policyNumber: 'ДМС-2026-999999', pinfl: String(30000000000000 + k) });
+    const r = await api(page, 'POST', '/clinic/check', { policyNumber: 'DMS-2026-999999', pinfl: String(30000000000000 + k) });
     expect(r.status).toBe(404);
   }
   await page.goto('/clinic/check');
-  await page.getByLabel('Номер полиса').fill('ДМС-2026-999999');
+  await page.getByLabel('Номер полиса').fill('DMS-2026-999999');
   await page.getByLabel('ПИНФЛ').fill('31234567890123');
   await page.getByRole('button', { name: 'Проверить полис' }).click();
   await expect(page.getByTestId('check-error')).toContainText('заблокированы на 15 мин');

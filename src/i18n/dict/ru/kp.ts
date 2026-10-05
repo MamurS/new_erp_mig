@@ -11,7 +11,7 @@ export const kp = {
   'kp.editor.savedSent': '{number} сохранено и отправлено клиенту',
   'kp.editor.saved': '{number} сохранено в документах клиента',
   'kp.editor.revoked': '{number} отозвано',
-  'kp.editor.subtitle': '{legalForm} «{name}» · программа GOLD · шаблон {version}',
+  'kp.editor.subtitle': '{client} · программа GOLD · шаблон {version}',
   'kp.editor.saveDraft': 'Сохранить черновик',
   'kp.editor.saveSend': 'Сохранить и отправить клиенту',
   'kp.editor.revoke': 'Отозвать',

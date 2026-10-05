@@ -1,5 +1,6 @@
 /* Clinic business rules (CLINIC_SPEC) shared by the UI and the mock server. */
 import { defineLabels, msg } from '@/i18n';
+import { DEFAULT_NUMBERING, docNumber, type NumberingTemplates } from './numbering';
 import type {
   CoverageStatus,
   GuaranteeLetter,
@@ -161,8 +162,7 @@ export function registryStatusAfterReview(lines: RegistryLine[]): RegistryStatus
   return 'partially_accepted';
 }
 
-/** Guarantee-letter number: 'ГП-2026-000321'. */
-export function guaranteeNumber(year: number, seq: number): string {
-  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
-  return `ГП-${year}-${String(seq).padStart(6, '0')}`;
+/** Guarantee-letter number: 'GP-2026-000321' with the default template. */
+export function guaranteeNumber(year: number, seq: number, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
+  return docNumber('guarantee', { year, n: seq }, templates);
 }

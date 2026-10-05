@@ -128,7 +128,8 @@ function useStaffAssistMutation<V, R>(fn: (v: V) => Promise<R>) {
     },
   });
 }
-export const useAssistances = () => useQuery({ queryKey: sk.list, queryFn: () => request('/assistance', { schema: A.assistanceList }), staleTime: 60_000 });
+export const useAssistances = (p: Record<string, string> = {}) =>
+  useQuery({ queryKey: [...sk.list, p], queryFn: () => request('/assistance', { query: p, schema: A.assistanceList }), staleTime: 60_000 });
 export const useAssistanceCard = (id: string) => useQuery({ queryKey: sk.card(id), queryFn: () => request(`/assistance/${id}/card`, { schema: A.assistanceCard }) });
 export const useAssistanceCases = (id: string, enabled: boolean) =>
   useQuery({ queryKey: ['staff-assistance', 'cases', id], queryFn: () => request(`/assistance/${id}/cases`, { schema: z.array(A.assistanceCase) }), enabled });

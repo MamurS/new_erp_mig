@@ -12,7 +12,9 @@ import { isStaffRole } from '@/shared/domain/labels';
 import { assistanceOn } from '@/shared/domain/assistance';
 import { assignmentSchema, assistanceContractSchema, assistanceCreateSchema, complaintResolutionSchema, qaReviewSchema, rebillLineDecisionSchema } from '@/shared/schemas/forms';
 import { db, type Db } from '../db';
-import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
+import { API, audit, body, byLegalForm, byLegalName, conflict, filterLegalForm, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, sortBy } from '../http';
+import { assistanceLegalFormOf, clientLegalFormOf } from '../views';
+import { legalNameCollator } from '@/shared/config/legalForms';
 import {
   assistanceName,
   assistanceOf,
@@ -43,6 +45,7 @@ function listItem(d: Db, a: AssistanceCompany, now: number): AssistanceListItem 
   return {
     id: a.id,
     name: a.name,
+    legalForm: a.legalForm,
     phone24x7: a.phone24x7,
     integrationMode: a.integrationMode,
     contractNumber: a.contract.number,
@@ -55,7 +58,7 @@ function listItem(d: Db, a: AssistanceCompany, now: number): AssistanceListItem 
 }
 
 function qaView(d: Db, s: Db['qaSamples'][number]): QaSampleView {
-  return { ...s, assistanceName: assistanceName(d, s.assistanceId) ?? '—', ...(s.reviewedById ? { reviewedByName: d.staff.find((x) => x.id === s.reviewedById)?.fullName } : {}) };
+  return { ...s, assistanceName: assistanceName(d, s.assistanceId) ?? '—', assistanceLegalForm: assistanceLegalFormOf(d, s.assistanceId), ...(s.reviewedById ? { reviewedByName: d.staff.find((x) => x.id === s.reviewedById)?.fullName } : {}) };
 }
 
 function assignmentViews(d: Db, policyId: string): AssignmentView[] {
@@ -87,6 +90,7 @@ function reportByAssistance(d: Db): AssistanceReportRow[] {
     rows.push({
       assistanceId: id,
       name: id ? (assistanceName(d, id) ?? '—') : t('srv.noAssistance'),
+      legalForm: assistanceLegalFormOf(d, id),
       insuredCount,
       premium,
       paid,
@@ -102,11 +106,21 @@ export const staffAssistanceHandlers = [
   // ---- companies ----
   http.get(
     `${API}/assistance`,
-    route(({ request }) => {
+    route(({ request, url }) => {
       requireStaff(request);
       const d = db();
       const now = Date.now();
-      return d.assistances.map((a) => listItem(d, a, now));
+      const rows = filterLegalForm(
+        d.assistances.map((a) => listItem(d, a, now)),
+        url,
+        (a) => a.legalForm,
+      );
+      return sortBy(rows, url, {
+        name: byLegalName((a) => a.name),
+        legalForm: byLegalForm((a) => a.legalForm),
+        insuredCount: (a) => a.insuredCount,
+        clientsCount: (a) => a.clientsCount,
+      });
     }),
   ),
   http.post(
@@ -122,6 +136,7 @@ export const staffAssistanceHandlers = [
       const a: AssistanceCompany = {
         id: randomId(),
         name: input.name,
+        legalForm: input.legalForm,
         phone24x7: input.phone24x7,
         integrationMode: input.integrationMode,
         contract: { number: input.contractNumber, validFrom: todayIso(), validTo: isoDay(Date.now() + 365 * DAY), ...input.contract },
@@ -145,7 +160,7 @@ export const staffAssistanceHandlers = [
       for (const p of d.policies) {
         if (assistanceOn(d.assignments, p.id, todayIso()) !== a.id) continue;
         const from = d.assignments.filter((x) => x.policyId === p.id && x.assistanceId === a.id).sort((x, y) => (x.from < y.from ? 1 : -1))[0]?.from ?? p.startDate;
-        clients.set(p.clientId, { id: p.clientId, name: p.clientName, insuredCount: roster.filter((i) => i.policyId === p.id && i.status === 'active').length, policyNumber: p.number, from });
+        clients.set(p.clientId, { id: p.clientId, name: p.clientName, legalForm: clientLegalFormOf(d, p.clientId) ?? 'other', insuredCount: roster.filter((i) => i.policyId === p.id && i.status === 'active').length, policyNumber: p.number, from });
       }
       const hooks = d.webhookDeliveries.filter((w) => w.clinicId === a.id);
       const insuredCount = roster.filter((i) => i.status === 'active').length;
@@ -155,7 +170,7 @@ export const staffAssistanceHandlers = [
         assistance: a,
         kpi: kpiOf(d, a, now),
         insuredCount,
-        clients: [...clients.values()].sort((x, y) => x.name.localeCompare(y.name, 'ru')),
+        clients: [...clients.values()].sort((x, y) => legalNameCollator.compare(x.name, y.name)),
         users: d.assistUsers.filter((u) => u.assistanceId === a.id).map((u) => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt })),
         keys: d.integrationClients.filter((k) => k.clinicId === a.id).map(({ secretHash: _h, ...k }) => k),
         webhooks: {

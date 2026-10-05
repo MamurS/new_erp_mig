@@ -3,10 +3,12 @@ import { z } from 'zod';
 import type * as D from '@/shared/types/dto';
 import type * as T from '@/shared/types';
 import * as S from './schemas';
+import { LEGAL_FORMS } from '@/shared/config/legalForms';
 
 const uuid = z.string().min(1);
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoDateTime = z.string().min(10);
+const legalForm = z.enum(LEGAL_FORMS);
 const money = z.number();
 
 const dealStage = z.enum(['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active', 'lost']);
@@ -54,6 +56,7 @@ const deal = z.object({
 });
 const dealViewBase = deal.extend({
   clientName: z.string(),
+  clientLegalForm: legalForm.optional(),
   ownerName: z.string(),
   underwriterName: z.string().optional(),
   premium: money.nullable(),
@@ -97,6 +100,7 @@ export const quote: z.ZodType<T.Quote> = quoteBase;
 export const quoteView: z.ZodType<D.QuoteView> = quoteBase.extend({
   dealNumber: z.string(),
   clientName: z.string(),
+  clientLegalForm: legalForm.optional(),
   census: census.nullable(),
   startDate: isoDate,
   authorityProblem: z.string().nullable(),
@@ -214,7 +218,7 @@ const changeRequestBase = z.object({
   createdAt: isoDateTime.optional(),
   description: z.string().optional(),
 });
-export const changeRequestViews: z.ZodType<D.ChangeRequestView[]> = z.array(changeRequestBase.extend({ contractNumber: z.string(), clientName: z.string(), endorsementNumber: z.string().optional() }));
+export const changeRequestViews: z.ZodType<D.ChangeRequestView[]> = z.array(changeRequestBase.extend({ contractNumber: z.string(), clientName: z.string(), clientLegalForm: legalForm.optional(), endorsementNumber: z.string().optional() }));
 
 const endorsementBase = z.object({
   id: uuid,
@@ -237,6 +241,7 @@ export const endorsementView: z.ZodType<D.EndorsementView> = endorsementBase.ext
   contractNumber: z.string(),
   clientId: uuid,
   clientName: z.string(),
+  clientLegalForm: legalForm,
   clientInn: z.string(),
   migSignatory: signatoryOption.nullable(),
   clientSignatoryName: z.string(),
@@ -258,6 +263,7 @@ export const invoiceViews: z.ZodType<D.InvoiceView[]> = z.array(
     endorsementId: uuid.optional(),
     paid: money.optional(),
     clientName: z.string(),
+    clientLegalForm: legalForm.optional(),
     clientInn: z.string().optional(),
     contractNumber: z.string().optional(),
     endorsementNumber: z.string().optional(),
@@ -316,6 +322,7 @@ export const bankPaymentView: z.ZodType<D.BankPaymentView> = z.object({
   amount: money,
   payerInn: z.string(),
   payerName: z.string().optional(),
+  payerLegalForm: legalForm.optional(),
   purpose: z.string(),
   reason: z.enum(['third_party', 'over_remaining', 'several_numbers', 'ambiguous', 'amount_mismatch', 'no_invoices', 'unknown_payer']),
   importedAt: isoDateTime,
@@ -329,6 +336,7 @@ export const bankPaymentView: z.ZodType<D.BankPaymentView> = z.object({
       invoiceId: uuid,
       number: z.string(),
       clientName: z.string(),
+      clientLegalForm: legalForm.optional(),
       clientInn: z.string(),
       contractNumber: z.string().optional(),
       remaining: money,
