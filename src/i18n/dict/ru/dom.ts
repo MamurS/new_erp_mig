@@ -72,4 +72,6 @@ export const dom = {
   'dom.limits.fourEyes': 'Нужно подтверждение другого сотрудника',
   'dom.quote.discountAboveAuthority': 'Скидка {pct} выше ваших полномочий ({max})',
   'dom.quote.premiumAboveAuthority': 'Премия выше ваших полномочий',
+  'dom.numbering.chars': 'Только латинские буквы, цифры, «-» и «/» и подстановки в фигурных скобках',
+  'dom.numbering.missing': 'В шаблоне не хватает обязательной подстановки: {required}',
 } satisfies Record<string, string>;

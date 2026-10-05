@@ -23,14 +23,16 @@ export default function DocumentsPage() {
   useDocumentTitle(t('hr.nav.documents'));
   const invoices = useHrInvoices();
   const documents = useHrDocuments();
-  const company = useHrOverview().data?.companyName;
+  const overview = useHrOverview().data;
+  const company = overview?.companyName;
+  const companyForm = overview?.companyLegalForm;
 
   const downloadInvoice = (inv: Invoice) => {
-    downloadPdf(invoicePdf(inv, company), pdfFileName('invoice'));
+    downloadPdf(invoicePdf(inv, company, companyForm), pdfFileName('invoice'));
     toast.success(t('hr.docs.invoiceDownloaded'));
   };
   const downloadDocument = (doc: ClientDocument) => {
-    downloadPdf(documentPdf(doc, company), pdfFileName('document'));
+    downloadPdf(documentPdf(doc, company, companyForm), pdfFileName('document'));
     toast.success(t('hr.docs.documentDownloaded'));
   };
 

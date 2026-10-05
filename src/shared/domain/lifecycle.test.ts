@@ -202,17 +202,17 @@ describe('claims settlement', () => {
   describe('duplicate receipt across all insured', () => {
     const fiscal = { fiscalNumber: '412345678901', issuedAt: '2026-09-15T14:05', amount: 250_000, sellerInn: '201234567' };
     const mine = { ...base.claim, source: 'app' as const, receiptFiscal: fiscal };
-    const theirs = { id: 'c0', number: 'У-2026-000100', insuredId: 'i9', amountClaimed: 120_000, serviceDate: '2026-09-15', providerName: 'Другая подпись', source: 'app' as const };
+    const theirs = { id: 'c0', number: 'U-2026-000100', insuredId: 'i9', amountClaimed: 120_000, serviceDate: '2026-09-15', providerName: 'Другая подпись', source: 'app' as const };
     const message = (ctx: FlagContext) => tm(detectFlags(ctx).find((f) => f.code === 'duplicate_receipt')?.message);
     it('the same fiscal number of another person is a duplicate, whatever the claimed amount', () => {
-      expect(message({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...fiscal } }] })).toBe('Фискальный номер чека совпадает с чеком обращения У-2026-000100 другого застрахованного');
+      expect(message({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...fiscal } }] })).toBe('Фискальный номер чека совпадает с чеком обращения U-2026-000100 другого застрахованного');
     });
     it('different fiscal numbers are different receipts even with the same amount, date and point', () => {
       expect(codes({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...fiscal, fiscalNumber: '499999999999' } }] })).toEqual([]);
     });
     it('without a fiscal number: receipt amount, date and seller INN', () => {
       const unreadable = { ...fiscal, fiscalNumber: undefined, issuedAt: '2026-09-15T18:40' };
-      expect(message({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: unreadable }] })).toMatch(/^Та же сумма, дата и точка продажи, что в чеке обращения У-2026-000100/);
+      expect(message({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: unreadable }] })).toMatch(/^Та же сумма, дата и точка продажи, что в чеке обращения U-2026-000100/);
       expect(codes({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...unreadable, sellerInn: '209999999' } }] })).toEqual([]);
       expect(codes({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...unreadable, issuedAt: '2026-09-16T09:00' } }] })).toEqual([]);
     });

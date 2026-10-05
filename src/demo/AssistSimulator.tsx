@@ -4,6 +4,7 @@
  */
 import './messages';
 import { t, tm } from '@/i18n';
+import { docNumber } from '@/shared/domain/numbering';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bot } from 'lucide-react';
@@ -138,8 +139,7 @@ export function AssistSimulator() {
     if (!reg) return t('demo.assist.noUnpaid');
     const lines = reg.lines.filter((l) => l.status === 'accepted' && !l.payment);
     const amount = lines.reduce((s, l) => s + l.amount, 0);
-    // eslint-disable-next-line mig/no-cyrillic-ui -- demo data sent to the API, not an interface string
-    const r = await call('POST', `/assistance/registries/${reg.id}/payments`, { lineIds: lines.map((l) => l.id), paidAt: todayISO(), amount, paymentOrderNumber: `ПП-API-${String(Date.now()).slice(-5)}` });
+    const r = await call('POST', `/assistance/registries/${reg.id}/payments`, { lineIds: lines.map((l) => l.id), paidAt: todayISO(), amount, paymentOrderNumber: docNumber('paymentOrder', { n: Number(String(Date.now()).slice(-5)) }) });
     return r.status === 200 ? t('demo.assist.payDone', { n: lines.length }) : problemText(r);
   });
 

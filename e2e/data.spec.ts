@@ -48,7 +48,7 @@ test('6. HR pages show no diagnoses, claims or appointments of employees', async
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     const text = await page.locator('main').innerText();
-    expect(text, path).not.toMatch(/У-\d{4}-\d{6}/); // claim numbers
+    expect(text, path).not.toMatch(/\bU-\d{4}-\d{6}/); // claim numbers
     expect(text, path).not.toMatch(/\b[A-TV-Z]\d{2}\.\d\b/); // ICD-10 codes
     expect(text, path).not.toMatch(/Терапевт|Стоматолог|Кардиолог|Невролог/); // appointments
     expect(text, path).not.toMatch(/\d{14}/); // PINFL
@@ -85,6 +85,8 @@ test('7. XSS strings from the seed render as text; javascript: links are not cli
 });
 
 test('8. CSP: no violations on the main pages', async ({ page }) => {
+  // Sixteen pages in three portals, each waited to network idle: ~40 s alone, more under a full parallel run.
+  test.slow();
   const violations: string[] = [];
   page.on('console', (m) => {
     if (/Content Security Policy|Refused to/i.test(m.text())) violations.push(m.text());

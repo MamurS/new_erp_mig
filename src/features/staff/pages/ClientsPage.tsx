@@ -24,6 +24,7 @@ import { FilterChip } from '@/shared/ui/filter-chip';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { MaskedInput } from '@/shared/ui/masked-input';
 import { Kv } from '@/shared/ui/page';
+import { LegalFormChip, LegalFormOptions, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { SearchInput } from '@/shared/ui/search-input';
 import { SidePanel } from '@/shared/ui/side-panel';
 import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
@@ -77,13 +78,14 @@ export default function ClientsPage() {
       </Button>
     ) : null,
   );
-  const [f, setF] = useUrlFilters(['view', 'status', 'program', 'managerId', 'sort', 'page', 'panel'] as const);
+  const [f, setF] = useUrlFilters(['view', 'status', 'program', 'managerId', 'form', 'sort', 'page', 'panel'] as const);
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());
   const [hidden, setHidden] = useState<string[]>([]);
   const page = Number(f.page) || 1;
   const sort = parseSort(f.sort || 'name:asc');
-  const params = { view: f.view, status: f.status, program: f.program, managerId: f.managerId, sort: formatSort(sort), page, pageSize: 25, q };
+  const forms = parseLegalForms(f.form);
+  const params = { view: f.view, status: f.status, program: f.program, managerId: f.managerId, form: formatLegalForms(forms), sort: formatSort(sort), page, pageSize: 25, q };
   const list = useClients(params);
   const all = useClients({ pageSize: 100 });
   const managers = useMemo(() => {
@@ -102,13 +104,11 @@ export default function ClientsPage() {
       cell: (c) => (
         <span className="flex items-center gap-2">
           <Avatar name={c.name} square />
-          <span className="min-w-0">
-            <span className="block truncate font-medium">{c.name}</span>
-            <span className="block text-[12px] text-muted">{c.legalForm}</span>
-          </span>
+          <span className="min-w-0 truncate font-medium">{c.name}</span>
         </span>
       ),
     },
+    legalFormColumn<Client>((c) => c.legalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'program', header: t('common.program'), sortKey: 'program', cell: (c) => (c.program ? PROGRAM_LABEL[c.program] : <span className="text-muted">—</span>) },
     { key: 'insured', header: t('staff.clients.col.insured'), sortKey: 'insuredCount', align: 'right', cell: (c) => <span className="num">{formatNumber(c.insuredCount)}</span> },
     { key: 'premium', header: t('common.premium'), sortKey: 'premium', align: 'right', cell: (c) => <span className="num whitespace-nowrap">{c.premium ? formatMoneyShort(c.premium) : '—'}</span> },
@@ -227,7 +227,7 @@ export default function ClientsPage() {
                 title={t('staff.clients.notFound')}
                 description={t('staff.clients.notFoundHint')}
                 action={
-                  <Button variant="secondary" onClick={() => { setSearch(''); setF({ view: '', status: '', program: '', managerId: '' }); }}>
+                  <Button variant="secondary" onClick={() => { setSearch(''); setF({ view: '', status: '', program: '', managerId: '', form: '' }); }}>
                     {t('staff.clients.resetFilters')}
                   </Button>
                 }
@@ -265,6 +265,7 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
       ) : (
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
+            <LegalFormChip code={c.legalForm} />
             <StatusDot tone={CLIENT_TONE[c.status]}>{CLIENT_STATUS_LABEL[c.status]}</StatusDot>
             <span className="text-muted">{t('staff.clients.innLabel')}<span className="num">{c.inn}</span></span>
           </div>
@@ -330,8 +331,7 @@ function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const navigate = useNavigate();
   const form = useForm<NewClient>({
     resolver: zodResolver(clientCreateSchema),
-    // eslint-disable-next-line mig/no-cyrillic-ui -- legal form is a data value sent to the server
-    defaultValues: { legalForm: 'ООО', name: '', inn: '', status: 'draft' },
+    defaultValues: { legalForm: 'llc', name: '', inn: '', status: 'draft' },
     mode: 'onTouched',
   });
   const onSubmit = form.handleSubmit(async (v) => {
@@ -362,14 +362,11 @@ function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       }
     >
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
-        <div className="grid grid-cols-[120px_1fr] gap-3">
+        <div className="grid grid-cols-[160px_1fr] gap-3">
           <Field label={t('staff.clients.legalForm')}>
             {(a) => (
               <Select {...a} {...form.register('legalForm')}>
-                {/* eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values sent to the server */}
-                {['ООО', 'АО', 'СП ООО', 'ЧП'].map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
+                <LegalFormOptions />
               </Select>
             )}
           </Field>

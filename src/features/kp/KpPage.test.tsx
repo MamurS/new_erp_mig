@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { createMockServer, loginAs, renderRoutes } from '@/test/utils';
 import { db, resetDb } from '@/mocks/db';
 import { formatMoney } from '@/shared/lib/format';
+import { formatLegalName } from '@/shared/config/legalForms';
+import { escapeHtml } from '@/features/documents/html';
 import KpPage from './KpPage';
 
 const server = createMockServer();
@@ -32,7 +34,11 @@ function renderNew() {
   return { ...utils, clientId };
 }
 
-const frameHtml = () => screen.getByTitle(/Ташкент Агрологистика/).getAttribute('srcdoc') ?? '';
+function demoClient() {
+  return db().clients.find((c) => c.id === demoClientId())!;
+}
+
+const frameHtml = () => screen.getByTitle((title) => title.includes(demoClient().name)).getAttribute('srcdoc') ?? '';
 
 describe('KP screen', () => {
   it('is prefilled from the client, recalculates the total and refreshes the 17-page preview', async () => {
@@ -68,6 +74,22 @@ describe('KP screen', () => {
     await user.selectOptions(screen.getByLabelText('Язык'), 'en');
     await waitFor(() => expect(frameHtml()).toContain('Commercial offer'));
     expect(frameHtml()).toContain('7,000,000 UZS');
+  });
+
+  it('writes the client legal name in the language of the offer letter; the header uses the interface language', async () => {
+    const user = userEvent.setup();
+    renderNew();
+    await screen.findByLabelText('Сотрудников');
+    const { name, legalForm } = demoClient();
+    const ru = formatLegalName(name, legalForm, 'ru');
+    const en = formatLegalName(name, legalForm, 'en');
+    expect(screen.getByText((text) => text.startsWith(`${ru} · `))).toBeInTheDocument();
+    expect(frameHtml()).toContain(escapeHtml(ru));
+    await user.selectOptions(screen.getByLabelText('Язык'), 'en');
+    await waitFor(() => expect(frameHtml()).toContain(escapeHtml(en)));
+    expect(frameHtml()).not.toContain(escapeHtml(ru));
+    // the header stays in the interface language
+    expect(screen.getByText((text) => text.startsWith(`${ru} · `))).toBeInTheDocument();
   });
 
   it('shows validation errors and does not save invalid parameters', async () => {

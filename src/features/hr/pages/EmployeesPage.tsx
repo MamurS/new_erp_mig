@@ -298,7 +298,7 @@ function OverviewCards({ overview }: { overview: ReturnType<typeof useHrOverview
               variant="secondary"
               className={cn(HR_BTN, 'mt-auto self-start')}
               onClick={() => {
-                downloadPdf(invoicePdf(o.nextInvoice!, o.companyName), pdfFileName('invoice'));
+                downloadPdf(invoicePdf(o.nextInvoice!, o.companyName, o.companyLegalForm), pdfFileName('invoice'));
                 toast.success(t('hr.docs.invoiceDownloaded'));
               }}
             >

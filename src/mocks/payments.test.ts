@@ -55,7 +55,7 @@ function invoice(clientId: string, contractId: string, amount: number, dueInDays
   const inv: Invoice = {
     id: crypto.randomUUID(),
     clientId,
-    number: `СЧ-2026-${String(900 + seq).padStart(6, '0')}`,
+    number: `SCh-2026-${String(900 + seq).padStart(6, '0')}`,
     amount,
     issuedAt: today(),
     dueDate: new Date(Date.now() + dueInDays * 86_400_000).toISOString().slice(0, 10),
@@ -162,7 +162,8 @@ describe('payment matching (1C statement)', () => {
 
     const queue = (await call<BankPaymentView[]>('/payments/queue', { sid: acc })).data;
     const third = queue.find((b) => b.payerInn === holding.inn)!;
-    expect(third).toMatchObject({ reason: 'third_party', payerName: 'Холдинг' });
+    // A payer known by its INN is shown as that client (name and legal form), not as the statement wrote it.
+    expect(third).toMatchObject({ reason: 'third_party', payerName: holding.name, payerLegalForm: holding.legalForm });
     expect(third.candidates).toEqual([
       expect.objectContaining({ invoiceId: inv.id, why: 'number', clientInn: c.inn }),
     ]);

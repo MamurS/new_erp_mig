@@ -18,6 +18,7 @@ import type {
   ReserveChange,
   DmsParamChange,
   DmsParamKey,
+  NumberingParamKey,
   Appointment,
   AuditEntry,
   ChatMessage,
@@ -313,7 +314,8 @@ export interface Db {
   smsOutbox: { at: string; insuredId: UUID; text: string }[];
   // ---- DMS business parameters: only values changed from the demo defaults are stored ----
   dmsParams: {
-    values: Partial<Record<DmsParamKey, { value: number; changedAt: string; changedByName: string }>>;
+    /** Numeric parameters and numbering templates (`numbering.<kind>`). */
+    values: Partial<Record<DmsParamKey, { value: number; changedAt: string; changedByName: string }>> & Partial<Record<NumberingParamKey, { value: string; changedAt: string; changedByName: string }>>;
     changes: DmsParamChange[];
   };
   // ---- AI coverage check (AI_COVERAGE_SPEC): settings with four-eyes changes, the call log ----

@@ -9,7 +9,7 @@ test('1. A payment by a third party waits in «Ручная разноска» a
   await page.getByRole('link', { name: 'Ручная разноска' }).first().click();
   await expect(page).toHaveURL(/\/staff\/invoices\/queue$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Ручная разноска' })).toBeVisible();
-  const row = page.getByRole('row').filter({ hasText: 'ООО «Демо Холдинг Групп»' });
+  const row = page.getByRole('row').filter({ hasText: 'Demo Holding Group' });
   await expect(row).toContainText('Счёт указан, но плательщик — другой ИНН');
   await row.getByRole('button', { name: 'Разнести' }).click();
 
@@ -27,7 +27,7 @@ test('1. A payment by a third party waits in «Ручная разноска» a
   await expect(row).toHaveCount(0);
 
   await page.getByLabel('Статус').selectOption('allocated');
-  const done = page.getByRole('row').filter({ hasText: 'ООО «Демо Холдинг Групп»' });
+  const done = page.getByRole('row').filter({ hasText: 'Demo Holding Group' });
   await expect(done).toContainText('«Оплата холдингом за дочернюю компанию по письму»');
 });
 

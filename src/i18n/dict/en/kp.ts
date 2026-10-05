@@ -13,7 +13,7 @@ export const kp: Translation<typeof Ru> = {
   'kp.editor.savedSent': '{number} saved and sent to the client',
   'kp.editor.saved': '{number} saved to the client’s documents',
   'kp.editor.revoked': '{number} revoked',
-  'kp.editor.subtitle': '{legalForm} “{name}” · GOLD plan · template {version}',
+  'kp.editor.subtitle': '{client} · GOLD plan · template {version}',
   'kp.editor.saveDraft': 'Save draft',
   'kp.editor.saveSend': 'Save and send to the client',
   'kp.editor.revoke': 'Revoke',

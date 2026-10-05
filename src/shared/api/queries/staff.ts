@@ -8,9 +8,9 @@ const list = { placeholderData: keepPreviousData };
 
 // ---- dashboard ----
 export const useDashboard = () => useQuery({ queryKey: qk.dashboard, queryFn: () => request('/dashboard', { schema: S.dashboard }) });
-export const useQueue = (type: string) =>
+export const useQueue = (type: string, p: Record<string, string> = {}) =>
   // No placeholder from another tab: an action button must never belong to a row of the previous tab.
-  useQuery({ queryKey: qk.queue(type), queryFn: () => request('/queue', { query: { type }, schema: S.queueItems }) });
+  useQuery({ queryKey: qk.queue(type, p), queryFn: () => request('/queue', { query: { ...p, type }, schema: S.queueItems }) });
 export const useMedicalAccessFeed = (enabled: boolean) =>
   useQuery({ queryKey: qk.medicalFeed, queryFn: () => request('/dashboard/medical-access', { schema: S.auditList }), enabled });
 export const useIntegrations = () =>

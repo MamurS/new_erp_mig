@@ -16,7 +16,7 @@ export const CSV_COLUMN_LABEL: Readonly<Record<CsvColumn, string>> = defineLabel
 /** Template with the header row and one example row of fictional data. */
 export function templateCsv(): string {
   // eslint-disable-next-line mig/no-cyrillic-ui -- fictional sample data of the file format, not interface text
-  return toCsv(CSV_COLUMNS, [['Тестов Тест Тестович', '15.03.1990', '31503901234567', '998 90 123 45 67', 'Менеджер', '01.11.2026']]);
+  return toCsv(CSV_COLUMNS, [['Testov Test Testovich', '15.03.1990', '31503901234567', '998 90 123 45 67', 'Менеджер', '01.11.2026']]);
 }
 
 /** Returns a human-readable problem with the chosen file, or null when it can be read. */

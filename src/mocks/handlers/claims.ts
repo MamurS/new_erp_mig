@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { http, HttpResponse } from 'msw';
 import { z } from 'zod';
 import { declineAppointmentSchema, myClaimSchema, transitionSchema } from '@/shared/schemas/forms';
@@ -15,6 +16,7 @@ import { isOverdue } from './dashboard';
 import { findInsured } from './insured';
 import { renderReceiptPng } from '../receipt';
 import { currentReserve, refreshFlags } from '../settlement-core';
+import { nextDocNumber } from '../params';
 
 function findClaim(id: string): ClaimRow {
   const c = db().claims.find((x) => x.id === id);
@@ -25,7 +27,7 @@ function findClaim(id: string): ClaimRow {
 let seq = 9000;
 export function nextClaimNumber(): string {
   seq += 1;
-  return `У-${new Date().getFullYear()}-${String(seq).padStart(6, '0')}`;
+  return nextDocNumber('claim', { year: new Date().getFullYear(), n: seq });
 }
 
 export const claimHandlers = [
@@ -56,7 +58,7 @@ export const claimHandlers = [
       const term = q(url);
       if (term)
         list = list.filter(
-          (c) => c.number.toLowerCase().includes(term) || c.insuredName.toLowerCase().includes(term) || c.clientName.toLowerCase().includes(term),
+          (c) => matchesSearch(term, c.number, c.insuredName, c.clientName),
         );
       const sorted = sortBy(
         list,
@@ -204,7 +206,7 @@ export const claimHandlers = [
       const insuredId = url.searchParams.get('insuredId');
       if (insuredId) list = list.filter((a) => a.insuredId === insuredId);
       const term = q(url);
-      if (term) list = list.filter((a) => a.insuredName.toLowerCase().includes(term) || a.clinicName.toLowerCase().includes(term));
+      if (term) list = list.filter((a) => matchesSearch(term, a.insuredName, a.clinicName));
       const sorted = sortBy(
         list,
         url,

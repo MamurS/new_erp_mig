@@ -38,7 +38,7 @@ export const PAYMENT_CANDIDATE_WHY_LABEL = defineLabels<PaymentCandidateWhy>('la
 
 export const remainingOf = (i: Pick<OpenInvoice, 'amount' | 'paid'>): Money => Math.max(0, i.amount - i.paid);
 
-/** Upper case, one kind of dash, no spaces: «сч - 2026 - 002001» and «СЧ-2026-002001» are the same. */
+/** Upper case, one kind of dash, no spaces: «sch - 2026 - 002001» and «SCh-2026-002001» are the same. */
 function normalizeRef(s: string): string {
   return s
     .toUpperCase()

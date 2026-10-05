@@ -197,8 +197,8 @@ describe('rebills (§5.5, §13.4–13.5)', () => {
     for (const l of pending) expect((await call(`/assist/registries/${r.id}/lines/${l.id}/decision`, { method: 'POST', sid: doc, json: { decision: 'accept' } })).status).toBe(200);
     const unpaid = r.lines.filter((l) => l.payer === A1().id && l.status === 'accepted' && !l.payment);
     const total = unpaid.reduce((s, l) => s + l.amount, 0);
-    expect((await call(`/assist/registries/${r.id}/payments`, { method: 'POST', sid: billing, json: { lineIds: unpaid.map((l) => l.id), paidAt: today(), amount: total + 1, orderNumber: 'ПП-1' } })).status).toBe(422);
-    expect((await call(`/assist/registries/${r.id}/payments`, { method: 'POST', sid: billing, json: { lineIds: unpaid.map((l) => l.id), paidAt: today(), amount: total, orderNumber: 'ПП-1' } })).status).toBe(200);
+    expect((await call(`/assist/registries/${r.id}/payments`, { method: 'POST', sid: billing, json: { lineIds: unpaid.map((l) => l.id), paidAt: today(), amount: total + 1, orderNumber: 'PP-1' } })).status).toBe(422);
+    expect((await call(`/assist/registries/${r.id}/payments`, { method: 'POST', sid: billing, json: { lineIds: unpaid.map((l) => l.id), paidAt: today(), amount: total, orderNumber: 'PP-1' } })).status).toBe(200);
 
     const draft = await call<{ id: string; lines: { id: string; registryLineId: string; checks: unknown[] }[]; fee: { formula: string } }>('/assist/rebills', { method: 'POST', sid: billing, json: { period } });
     expect(draft.status).toBe(200);
@@ -360,7 +360,7 @@ describe('call centre, curator and MIG admin (§2, §5.1–5.2, §5.7, §10)', (
       name: 'Самарканд Ассистанс Плюс',
       phone24x7: '+998 66 200 00 00',
       integrationMode: 'portal',
-      contractNumber: 'ДА-2026-004',
+      contractNumber: 'DA-2026-004',
       contract: { feeModel: 'per_case', feeValue: 40000, guaranteeAuthorityLimit: 8000000, rebillPaymentDays: 15 },
       admin: { fullName: 'Дилноза Каримова', email: 'admin@samarkand-assist.uz' },
     };

@@ -97,7 +97,7 @@
 | `{{mig.signatory.name}}` | Подписант МИГ | Contract.params.migSignatoryId → StaffUser.fullName |
 | `{{mig.signatory.position}}` | Должность подписанта МИГ | Роль подписанта (StaffUser.role) |
 | `{{mig.signatory.basis}}` | Основание полномочий подписанта МИГ | StaffUser.signatory.basis |
-| `{{client.name}}` | Наименование страхователя | Карточка клиента: Client.legalForm + Client.name |
+| `{{client.name}}` | Наименование страхователя | Карточка клиента: formatLegalName(Client.name, Client.legalForm, язык документа) |
 | `{{client.inn}}` | ИНН страхователя | Client.inn |
 | `{{client.address}}` | Адрес страхователя | Client.requisites.address |
 | `{{client.bank}}` | Банк страхователя | Client.requisites.bank |
@@ -160,7 +160,7 @@
 | `{{contract.number}}` | Номер договора | Contract.number |
 | `{{mig.name}}` | Наименование страховщика | Реквизиты МИГ |
 | `{{mig.signatory.name}}` | Подписант МИГ | Подписант договора |
-| `{{client.name}}` | Наименование страхователя | Client.legalForm + Client.name |
+| `{{client.name}}` | Наименование страхователя | formatLegalName(Client.name, Client.legalForm, язык документа) |
 | `{{client.signatory.name}}` | Подписант клиента | Contract.params.clientSignatory.name |
 
 ### Таблицы
@@ -201,11 +201,11 @@
 | `{{contract.number}}` | Номер договора | Contract.number |
 | `{{insured.name}}` | ФИО застрахованного | Insured.fullName |
 | `{{insured.from}}` | Начало покрытия | Insured.insuredFrom |
-| `{{client.name}}` | Страхователь | Client.legalForm + Client.name |
+| `{{client.name}}` | Страхователь | formatLegalName(Client.name, Client.legalForm, язык документа) |
 | `{{policy.number}}` | Номер полиса | Policy.number |
 | `{{policy.endDate}}` | Окончание срока страхования | Policy.endDate |
 | `{{program.name}}` | Программа | Policy.program |
-| `{{assistance.name}}` | Кто обслуживает 24/7 | AssistanceCompany.name или «MIG» |
+| `{{assistance.name}}` | Кто обслуживает 24/7 | formatLegalName(AssistanceCompany.name, AssistanceCompany.legalForm, язык документа) или «MIG» |
 | `{{assistance.phone}}` | Телефон 24/7 | AssistanceCompany.phone24x7 или линия МИГ |
 
 ## Письмо о решении по убытку (`claimDecisionLetter`)

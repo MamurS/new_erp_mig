@@ -211,7 +211,6 @@ export const staff: Translation<typeof Ru> = {
   'staff.month.nov': 'Nov',
   'staff.month.dec': 'Dec',
   'staff.clientCard.docTitle': 'Client card',
-  'staff.clientCard.heading': '{form} «{name}»',
   'staff.clientCard.inn': 'TIN ',
   'staff.clientCard.manager': ' · manager {name}',
   'staff.clientCard.issuePolicy': 'Issue policy',

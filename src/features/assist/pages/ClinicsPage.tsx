@@ -1,4 +1,5 @@
 /* Network clinics and their prices for this assistance (§5.3): the pair «clinic + payer». Read-only. */
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { useState } from 'react';
 import { useAssistClinics } from '@/shared/api/queries/assist';
 import { SERVICE_CATEGORY_LABEL } from '@/shared/domain/clinics';
@@ -30,7 +31,10 @@ export default function ClinicsPage() {
                   <li key={c.clinicId}>
                     <button type="button" onClick={() => setActive(c.clinicId)} className={cn('flex w-full items-center justify-between gap-2 border-b border-border-soft px-3 py-2 text-left hover:bg-rail', current?.clinicId === c.clinicId && 'bg-rail')}>
                       <span className="min-w-0">
-                        <span className="block truncate font-medium">{c.clinicName}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="min-w-0 truncate font-medium">{c.clinicName}</span>
+                          <LegalFormChip code={c.clinicLegalForm} />
+                        </span>
                         <span className="block text-[12px] text-muted">{c.city}</span>
                       </span>
                       {c.ownPrices && <Chip kind="accent">{t('assist.clinics.ownPrice')}</Chip>}

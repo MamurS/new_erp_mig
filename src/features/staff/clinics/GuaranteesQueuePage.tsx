@@ -16,6 +16,7 @@ import { addDaysISO, formatDate, formatDateTime, formatMoney, todayISO } from '@
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
+import { legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Textarea } from '@/shared/ui/input';
@@ -201,6 +202,7 @@ export default function GuaranteesQueuePage() {
     { key: 'num', header: t('common.number'), cell: (g) => <span className="num font-medium">{g.number}</span> },
     { key: 'created', header: t('common.created'), cell: (g) => <span className="num text-muted">{formatDateTime(g.createdAt)}</span> },
     { key: 'clinic', header: t('common.clinic'), cell: (g) => g.clinicName },
+    legalFormColumn<GuaranteeView>((g) => g.clinicLegalForm),
     { key: 'patient', header: t('common.patient'), cell: (g) => g.insuredName },
     {
       key: 'owner',

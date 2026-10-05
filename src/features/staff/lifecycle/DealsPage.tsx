@@ -14,7 +14,8 @@ import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { LegalFormChip, LegalFormOptions, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
@@ -23,8 +24,7 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
 const EMPTY_LEAD = {
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal form is contract data, not UI text
-  legalForm: 'ООО',
+  legalForm: 'llc',
   name: '',
   inn: '',
   bank: '',
@@ -100,10 +100,7 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
         <Field label={t('staffLc.deals.legalForm')} error={tm(errors.legalForm) || undefined}>
           {(a) => (
             <Select {...a} value={v.legalForm} onChange={set('legalForm')}>
-              {/* eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values stored in the contract */}
-              {['ООО', 'АО', 'СП ООО', 'ЧП'].map((x) => (
-                <option key={x}>{x}</option>
-              ))}
+              <LegalFormOptions />
             </Select>
           )}
         </Field>
@@ -133,7 +130,10 @@ function DealCardTile({ d }: { d: DealView }) {
       data-testid="deal-card"
       aria-label={t('staffLc.deals.tileAria', { number: d.number, client: d.clientName })}
     >
-      <span className="block truncate font-semibold">{d.clientName}</span>
+      <span className="flex items-center gap-1.5">
+        <span className="min-w-0 truncate font-semibold">{d.clientName}</span>
+        <LegalFormChip code={d.clientLegalForm} />
+      </span>
       <span className="mt-0.5 flex items-center justify-between gap-2 text-[12px] text-muted">
         <span className="num">{d.number}</span>
         {d.type === 'renewal' && <Chip kind="renewal">{t('staffLc.deals.renewalChip')}</Chip>}
@@ -151,16 +151,25 @@ export default function DealsPage() {
   useTopbar([{ label: t('staffLc.deals.title') }]);
   const navigate = useNavigate();
   const canCreate = useCan('leads.manage');
-  const [f, setF] = useUrlFilters(['view', 'owner', 'type'] as const);
-  const q = useDeals({ ...(f.owner ? { ownerId: f.owner } : {}), ...(f.type ? { type: f.type } : {}) });
+  const [f, setF] = useUrlFilters(['view', 'owner', 'type', 'form', 'sort'] as const);
+  const view = f.view === 'table' ? 'table' : 'board';
+  // The form filter and the sort live in the table's header: the board always shows the whole funnel.
+  const forms = view === 'table' ? parseLegalForms(f.form) : [];
+  const sort = view === 'table' && f.sort ? parseSort(f.sort) : null;
+  const q = useDeals({
+    ...(f.owner ? { ownerId: f.owner } : {}),
+    ...(f.type ? { type: f.type } : {}),
+    ...(forms.length ? { form: forms.join(',') } : {}),
+    ...(sort ? { sort: formatSort(sort) } : {}),
+  });
   const directory = useStaffDirectory();
   const managers = (directory.data ?? []).filter((s) => s.role === 'sales_manager');
   const [lead, setLead] = useState(false);
-  const view = f.view === 'table' ? 'table' : 'board';
 
   const columns: Column<DealView>[] = [
     { key: 'num', header: t('staffLc.deal.fallback'), cell: (d) => <span className="num font-medium">{d.number}</span> },
-    { key: 'client', header: t('common.client'), cell: (d) => d.clientName },
+    { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (d) => d.clientName },
+    legalFormColumn<DealView>((d) => d.clientLegalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'type', header: t('common.type'), cell: (d) => (d.type === 'renewal' ? t('staffLc.deals.typeRenewal') : t('staffLc.deals.typeNew')) },
     { key: 'stage', header: t('staffLc.deals.stage'), cell: (d) => <Chip kind={d.stage === 'lost' ? 'danger' : d.stage === 'active' ? 'success' : 'accent'}>{DEAL_STAGE_LABEL[d.stage]}</Chip> },
     { key: 'owner', header: t('common.manager'), cell: (d) => d.ownerName },
@@ -208,7 +217,7 @@ export default function DealsPage() {
       </div>
       {view === 'table' ? (
         <div className="rounded-card border border-border bg-surface">
-          <DataTable caption={t('staffLc.deals.title')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(d) => d.id} onRowClick={(d) => navigate(`/staff/deals/${d.id}`)} empty={t('staffLc.deals.empty')} />
+          <DataTable caption={t('staffLc.deals.title')} columns={columns} rows={q.data} sort={sort ?? undefined} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(d) => d.id} onRowClick={(d) => navigate(`/staff/deals/${d.id}`)} empty={t('staffLc.deals.empty')} />
         </div>
       ) : (
         <QueryState query={q}>

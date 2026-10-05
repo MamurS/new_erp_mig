@@ -3,7 +3,7 @@ export type Params = Record<string, string | number | boolean | undefined | null
 export const qk = {
   me: ['auth', 'me'] as const,
   dashboard: ['dashboard'] as const,
-  queue: (type: string) => ['queue', type] as const,
+  queue: (type: string, p: Record<string, string> = {}) => ['queue', type, p] as const,
   medicalFeed: ['dashboard', 'medical-access'] as const,
   integrations: ['integrations'] as const,
   clients: (p: Params) => ['clients', p] as const,

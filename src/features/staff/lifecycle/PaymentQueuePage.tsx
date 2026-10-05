@@ -15,7 +15,9 @@ import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { LegalFormChip, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
+import type { LegalFormCode } from '@/shared/config/legalForms';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
@@ -26,6 +28,7 @@ interface Row {
   invoiceId: string;
   number: string;
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   clientInn?: string;
   contractNumber?: string;
   remaining: number;
@@ -56,6 +59,7 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
           invoiceId: i.id,
           number: i.number,
           clientName: i.clientName,
+          clientLegalForm: i.clientLegalForm,
           clientInn: i.clientInn,
           contractNumber: i.endorsementNumber ?? i.contractNumber,
           remaining: i.amount - (i.paid ?? 0),
@@ -163,7 +167,7 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
                     aria-label={t('staffLc.queue.invoiceAria', { number: r.number })}
                   />
                   <span className="min-w-0">
-                    <span className="num font-medium">{r.number}</span> · {r.clientName}
+                    <span className="num font-medium">{r.number}</span> · {r.clientName} <LegalFormChip code={r.clientLegalForm} />
                     {r.contractNumber && <span className="num text-muted"> · {r.contractNumber}</span>}
                     <span className="block text-[12px] text-muted">
                       {t('staffLc.queue.remaining', { amount: formatMoney(r.remaining) })}
@@ -249,15 +253,21 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
 export default function PaymentQueuePage() {
   useDocumentTitle(t('staffLc.invoices.manualMatching'));
   useTopbar([{ label: t('staffLc.invoices.title'), to: '/staff/invoices' }, { label: t('staffLc.invoices.manualMatching') }]);
-  const [f, setF] = useUrlFilters(['status'] as const);
+  const [f, setF] = useUrlFilters(['status', 'form', 'sort'] as const);
   const status = f.status === 'allocated' ? 'allocated' : 'pending';
-  const q = usePaymentQueue(status);
+  const forms = parseLegalForms(f.form);
+  const sort = parseSort(f.sort);
+  const q = usePaymentQueue(status, {
+    ...(forms.length ? { form: forms.join(',') } : {}),
+    ...(sort ? { sort: `${sort.key}:${sort.dir}` } : {}),
+  });
   const [active, setActive] = useState<BankPaymentView | null>(null);
 
   const columns: Column<BankPaymentView>[] = [
     {
       key: 'date',
       header: t('common.date'),
+      sortKey: 'date',
       cell: (b) => (
         <span>
           <span className="num">{formatDate(b.date)}</span>
@@ -268,13 +278,15 @@ export default function PaymentQueuePage() {
     {
       key: 'payer',
       header: t('staffLc.queue.payer'),
+      sortKey: 'payerName',
       cell: (b) => (
         <span>
-          <span className="num">{t('staffLc.queue.inn', { inn: b.payerInn || '—' })}</span>
-          {b.payerName && <span className="block text-[12px] text-muted">{b.payerName}</span>}
+          {b.payerName && <span className="block">{b.payerName}</span>}
+          <span className="num block text-[12px] text-muted">{t('staffLc.queue.inn', { inn: b.payerInn || '—' })}</span>
         </span>
       ),
     },
+    legalFormColumn<BankPaymentView>((b) => b.payerLegalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     {
       key: 'purpose',
       header: t('staffLc.queue.purpose'),
@@ -283,6 +295,7 @@ export default function PaymentQueuePage() {
     {
       key: 'amount',
       header: t('common.amount'),
+      sortKey: 'amount',
       align: 'right',
       cell: (b) => <span className="num whitespace-nowrap">{formatMoney(b.amount)}</span>,
     },
@@ -365,6 +378,8 @@ export default function PaymentQueuePage() {
           caption={t('staffLc.queue.caption')}
           columns={columns}
           rows={q.data}
+          sort={sort}
+          onSortChange={(s) => setF({ sort: formatSort(s) })}
           loading={q.isLoading}
           error={q.error}
           onRetry={() => void q.refetch()}

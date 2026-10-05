@@ -1,3 +1,5 @@
+import type { LegalFormCode } from '@/shared/config/legalForms';
+import type { DocNumberKind } from '@/shared/domain/numbering';
 export type UUID = string;
 export type ISODate = string;      // '2026-09-29'
 export type ISODateTime = string;  // '2026-09-29T14:21:00+05:00'
@@ -41,8 +43,8 @@ export type ClientStatus = 'lead' | 'draft' | 'negotiation' | 'active' | 'renewa
 
 export interface Client {
   id: UUID;
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API contract
-  legalForm: 'ООО' | 'АО' | 'СП ООО' | 'ЧП';
+  /** Code of the legal form (src/shared/config/legalForms.ts); `name` is the official Latin name without it. */
+  legalForm: LegalFormCode;
   name: string;
   inn: string;                             // 9 цифр, не ПДн
   status: ClientStatus;
@@ -75,9 +77,10 @@ export type PolicyStatus = 'draft' | 'active' | 'expired' | 'cancelled';
 
 export interface Policy {
   id: UUID;
-  number: string;                          // 'ДМС-2026-000123'
+  number: string;                          // 'DMS-2026-000123'
   clientId: UUID;
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   program: ProgramCode;
   startDate: ISODate;
   endDate: ISODate;
@@ -139,7 +142,7 @@ export interface Insured {
   attachedClinicId: UUID;
   insuredFrom: ISODate;
   status: 'active' | 'excluded';
-  certificateNumber?: string;              // 'СЕРТ-2026-000123-0001' (LIFECYCLE_SPEC §10)
+  certificateNumber?: string;              // 'SERT-2026-000123-0001' (LIFECYCLE_SPEC §10)
   contractId?: UUID;
 }
 
@@ -175,7 +178,7 @@ export interface ClaimEvent {
 
 export interface Claim {
   id: UUID;
-  number: string;                          // 'У-2026-004512'
+  number: string;                          // 'U-2026-004512'
   insuredId: UUID;
   insuredName: string;
   clientId: UUID;
@@ -316,7 +319,9 @@ export interface Appointment {
 
 export interface Clinic {
   id: UUID;
+  /** Official Latin name without the legal form and without quotes. */
   name: string;
+  legalForm: LegalFormCode;
   address: string;
   district: string;
   specialties: Specialty[];
@@ -518,7 +523,7 @@ export interface KpParams {
 
 export interface KpDocument {
   id: UUID;
-  number: string;             // 'КП-2026-000123'
+  number: string;             // 'KP-2026-000123'
   clientId: UUID;
   clientName: string;
   clientLegalForm: Client['legalForm'];   // для страницы-письма
@@ -566,7 +571,7 @@ export type GuaranteeStatus = 'requested' | 'info_requested' | 'approved' | 'rej
 
 export interface GuaranteeLetter {
   id: UUID;
-  number: string;              // 'ГП-2026-000321'
+  number: string;              // 'GP-2026-000321'
   clinicId: UUID;
   visitId: UUID;
   insuredName: string;
@@ -707,7 +712,9 @@ export interface AssistanceKpi {
 
 export interface AssistanceCompany {
   id: UUID;
+  /** Official Latin name without the legal form and without quotes. */
   name: string;
+  legalForm: LegalFormCode;
   phone24x7: string;                       // показывается застрахованным
   integrationMode: IntegrationModeOf;
   contract: {
@@ -737,7 +744,7 @@ export type AssistanceCaseStatus = 'open' | 'in_progress' | 'waiting' | 'resolve
 
 export interface AssistanceCase {
   id: UUID;
-  number: string;                          // 'ОБР-2026-012345'
+  number: string;                          // 'OBR-2026-012345'
   assistanceId: UUID;
   insuredId: UUID;
   insuredName: string;
@@ -778,7 +785,7 @@ export interface RebillLine {
 
 export interface Rebill {
   id: UUID;
-  number: string;                          // 'СЧА-2026-09-A1'
+  number: string;                          // 'SChA-2026-09-A1'
   assistanceId: UUID;
   period: string;                          // 'YYYY-MM'
   lines: RebillLine[];
@@ -845,6 +852,21 @@ export type DmsParamKey =
 
 export type DmsParamValues = Record<DmsParamKey, number>;
 
+/** Numbering template of a document kind (src/shared/domain/numbering.ts), changed like the other parameters. */
+export type NumberingParamKey = `numbering.${DocNumberKind}`;
+/** Any parameter a change request may target: a numeric DMS parameter or a numbering template. */
+export type ParamKey = DmsParamKey | NumberingParamKey;
+
+export interface NumberingParameter {
+  kind: DocNumberKind;
+  /** Template such as 'DMS-D-{YYYY}-{N:6}'. */
+  value: string;
+  /** Never changed since the seed: a demo value MIG still has to confirm. */
+  isDemo: boolean;
+  changedAt?: ISODateTime;
+  changedByName?: string;
+}
+
 export interface DmsParameter {
   key: DmsParamKey;
   value: number;
@@ -859,9 +881,10 @@ export type DmsParamChangeStatus = 'pending' | 'applied' | 'rejected';
 /** A change is applied only after a second person (admin or underwriter) confirms it: four-eyes. */
 export interface DmsParamChange {
   id: UUID;
-  key: DmsParamKey;
-  from: number;
-  to: number;
+  key: ParamKey;
+  /** A number for DMS parameters, a template string for `numbering.*`. */
+  from: number | string;
+  to: number | string;
   reason: string;
   status: DmsParamChangeStatus;
   proposedById: UUID;
@@ -897,7 +920,7 @@ export type DealStage =
 
 export interface Deal {
   id: UUID;
-  number: string;                          // 'СД-2026-000045'
+  number: string;                          // 'SD-2026-000045'
   clientId: UUID;
   type: 'new' | 'renewal';
   stage: DealStage;
@@ -999,7 +1022,7 @@ export interface ClauseOverride {
 
 export interface Contract {
   id: UUID;
-  number: string;                          // 'ДМС-Д-2026-000123'
+  number: string;                          // 'DMS-D-2026-000123'
   dealId: UUID;
   clientId: UUID;
   clientName: string;
@@ -1072,7 +1095,9 @@ export interface BankPayment {
   date: ISODate;
   amount: Money;
   payerInn: string;
+  /** Payer as known by its INN (a client), else as written in the statement. */
   payerName?: string;
+  payerLegalForm?: LegalFormCode;
   purpose: string;
   reason: PaymentQueueReason;
   importedAt: ISODateTime;
@@ -1103,7 +1128,7 @@ export type EndorsementStatus = 'draft' | 'legal_review' | 'approved' | 'sent' |
 
 export interface Endorsement {
   id: UUID;
-  number: string;                          // 'ДС-3 к ДМС-Д-2026-000123'
+  number: string;                          // 'DS-3/DMS-D-2026-000123'
   contractId: UUID;
   kind?: 'changes' | 'termination';
   terminationDate?: ISODate;

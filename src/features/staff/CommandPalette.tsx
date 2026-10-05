@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Command } from 'cmdk';
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import * as D from '@radix-ui/react-dialog';
 import { Building2, FileText, Receipt, User, CornerDownLeft } from 'lucide-react';
 import type { SessionUser } from '@/shared/types';
@@ -101,7 +102,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
               )}
               <Command.Group heading={t('staff.palette.sections')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                 {sections
-                  .filter((s) => !term || s.label.toLowerCase().includes(term.toLowerCase()))
+                  .filter((s) => matchesSearch(term, s.label))
                   .map((s) => (
                     <Command.Item key={s.path} value={`s-${s.path}`} onSelect={() => go(s.path)} className={itemCls}>
                       <s.icon className="h-4 w-4 text-muted" aria-hidden /> {s.label}

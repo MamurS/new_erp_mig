@@ -7,9 +7,11 @@ import type { ChangeRequest, Census, Client, Contract, Deal, Endorsement, KpDocu
 import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 import { calculateQuote, type CensusRow } from '@/shared/domain/tariff';
 import { addLine, excludeLine, REFUND_RULES } from '@/shared/domain/endorsements';
-import { buildPaymentSchedule, certificateNumber, contractNumber, dealNumber, defaultStartDate, endorsementNumber } from '@/shared/domain/contracts';
+import { buildPaymentSchedule, defaultStartDate } from '@/shared/domain/contracts';
+import { docNumber } from '@/shared/domain/numbering';
+import { formatLegalName } from '@/shared/config/legalForms';
 import { defaultEndDate, tariffOf } from '@/shared/domain/policies';
-import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
+import { KP_TEMPLATE_VERSION, kpTotalPremium } from '@/shared/domain/kp';
 import { detectFlags } from '@/shared/domain/settlement';
 import { statementLineKey } from '@/shared/domain/payments';
 import { DOC_TEMPLATES } from '@/features/documents/templates';
@@ -20,14 +22,14 @@ import { DAY, isoDay, parseIso, tzIso } from './time';
 import { PROGRAMS } from './programs';
 
 const LEADS: Pick<Client, 'legalForm' | 'name' | 'inn'>[] = [
-  { legalForm: 'ООО', name: 'Самарканд Агро Экспорт', inn: '309112233' },
-  { legalForm: 'АО', name: 'Ферганский текстильный комбинат', inn: '305445566' },
+  { legalForm: 'llc', name: 'Samarqand Agro Eksport', inn: '309112233' },
+  { legalForm: 'jsc', name: 'Fargʻona Tekstil Kombinati', inn: '305445566' },
 ];
 const PROSPECTS: Pick<Client, 'legalForm' | 'name' | 'inn'>[] = [
-  { legalForm: 'ООО', name: 'Наманган Строй Инвест', inn: '307778899' },
-  { legalForm: 'СП ООО', name: 'Бухара Тревел Сервис', inn: '308001122' },
-  { legalForm: 'ООО', name: 'Хорезм Логистик Плюс', inn: '306334455' },
-  { legalForm: 'АО', name: 'Андижан Фарм Дистрибуция', inn: '304556677' },
+  { legalForm: 'llc', name: 'Fargʻona Qurilish', inn: '307778899' },
+  { legalForm: 'jv_llc', name: 'Buxoro Savdo', inn: '308001122' },
+  { legalForm: 'private_enterprise', name: 'Xorazm Logistik', inn: '306334455' },
+  { legalForm: 'jsc', name: 'Andijon Farm Distribyusiya', inn: '304556677' },
 ];
 
 function census(rng: Rng, employees: number, year: number): CensusRow[] {
@@ -62,11 +64,11 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       status,
       managerId: sales.id,
       managerName: sales.fullName,
-      hrContact: { name: pick(rng, ['Шахло Азимова', 'Бекзод Рашидов', 'Мадина Юлдашева', 'Отабек Султанов']), phone: `+99890${int(rng, 1000000, 9999999)}`, email: `hr@${c.inn}.example.uz` },
+      hrContact: { name: pick(rng, ['Azimova Shahlo Ravshanovna', 'Rashidov Bekzod Akmalovich', 'Yoʻldosheva Madina Farhodovna', 'Sultonov Otabek Bahromovich']), phone: `+99890${int(rng, 1000000, 9999999)}`, email: `hr@${c.inn}.example.uz` },
       premium: 0,
       lossRatio: null,
       createdAt: at(daysAgo),
-      requisites: { bank: 'АКБ «Демо Банк»', account: `2020800${int(rng, 1000000, 9999999)}${int(rng, 100000, 999999)}`, mfo: '00000', director: pick(rng, ['Алиев Рустам Каримович', 'Юсупова Дилноза Анваровна', 'Ким Сергей Владимирович']), directorBasis: 'Устав', address: 'г. Ташкент' },
+      requisites: { bank: 'Demo Bank ATB', account: `2020800${int(rng, 1000000, 9999999)}${int(rng, 100000, 999999)}`, mfo: '00000', director: pick(rng, ['Aliyev Rustam Karimovich', 'Yusupova Dilnoza Anvarovna', 'Kim Sergey Vladimirovich']), directorBasis: 'Устав', address: 'г. Ташкент' },
       estimatedHeadcount: headcount,
       currentInsurer: pick(rng, ['Нет', 'Другой страховщик']),
       assistanceId: null,
@@ -78,7 +80,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     d.dealSeq += 1;
     const deal: Deal = {
       id: id(),
-      number: dealNumber(year, d.dealSeq),
+      number: docNumber('deal', { year, n: d.dealSeq }),
       clientId: client.id,
       type,
       stage,
@@ -89,7 +91,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       updatedAt: at(Math.max(0, daysAgo - 3)),
     };
     d.deals.push(deal);
-    event(deal.id, daysAgo, sales.fullName, `Лид создан: ${client.legalForm} «${client.name}»`);
+    event(deal.id, daysAgo, sales.fullName, `Лид создан: ${formatLegalName(client.name, client.legalForm, 'ru')}`);
     return deal;
   };
   const withCensus = (deal: Deal, employees: number, daysAgo: number): Census => {
@@ -142,7 +144,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     };
     const kp: KpDocument = {
       id: id(),
-      number: kpNumber(year, d.kpSeq),
+      number: docNumber('kp', { year, n: d.kpSeq }),
       clientId: client.id,
       clientName: client.name,
       clientLegalForm: client.legalForm,
@@ -170,7 +172,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const total = kp.params.premiumEmployee * kp.params.employees + kp.params.premiumFamily * kp.params.familyMembers;
     const c: Contract = {
       id: id(),
-      number: contractNumber(year, d.contractSeq),
+      number: docNumber('contract', { year, n: d.contractSeq }),
       dealId: deal.id,
       clientId: client.id,
       clientName: client.name,
@@ -281,10 +283,10 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   const tariff = tariffOf(demoPolicy);
   const employees = members.length;
   const family = members.reduce((s, i) => s + i.familyMembersCount, 0);
-  demoClient.requisites = { bank: 'АКБ «Демо Банк»', account: '20208000900123456789', mfo: '00000', director: 'Турсунов Бахтиёр Алишерович', directorBasis: 'Устав', address: 'г. Ташкент, Юнусабадский р-н' };
+  demoClient.requisites = { bank: 'Demo Bank ATB', account: '20208000900123456789', mfo: '00000', director: 'Tursunov Baxtiyor Alisherovich', directorBasis: 'Устав', address: 'г. Ташкент, Юнусабадский р-н' };
   const demoDeal: Deal = {
     id: id(),
-    number: dealNumber(year, ++d.dealSeq),
+    number: docNumber('deal', { year, n: ++d.dealSeq }),
     clientId: demoClient.id,
     type: 'new',
     stage: 'active',
@@ -296,10 +298,12 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   };
   d.deals.push(demoDeal);
   d.contractSeq += 1;
+  const demoContractYear = Number(demoPolicy.startDate.slice(0, 4));
+  const demoContractSeq = d.contractSeq;
   const total = tariff.employee * employees + tariff.family * family;
   const demoContract: Contract = {
     id: id(),
-    number: contractNumber(Number(demoPolicy.startDate.slice(0, 4)), d.contractSeq),
+    number: docNumber('contract', { year: demoContractYear, n: demoContractSeq }),
     dealId: demoDeal.id,
     clientId: demoClient.id,
     clientName: demoClient.name,
@@ -338,7 +342,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   demoPolicy.contractId = demoContract.id;
   members.forEach((m, k) => {
     m.contractId = demoContract.id;
-    m.certificateNumber = certificateNumber(demoContract.number, k + 1);
+    m.certificateNumber = docNumber('certificate', { year: demoContractYear, n: demoContractSeq, m: k + 1 });
   });
   d.contractInsured.push({ contractId: demoContract.id, rows: members.map((m) => ({ fullName: m.fullName, birthDate: m.birthDate, pinfl: m.pinfl, phone: m.phone, position: m.position, familyMembers: m.familyMembersCount })) });
   for (const inv of d.invoices.filter((i) => i.clientId === demoClient.id)) {
@@ -355,8 +359,9 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       date: isoDay(now - DAY),
       amount: upcoming.amount,
       payerInn: '302998877',
-      payerName: 'ООО «Демо Холдинг Групп»',
-      purpose: `Оплата за ${demoClient.legalForm} «${demoClient.name}» по счёту ${upcoming.number}, договор ${demoContract.number}`,
+      payerName: 'Demo Holding Group',
+      payerLegalForm: 'llc',
+      purpose: `Оплата за ${formatLegalName(demoClient.name, demoClient.legalForm, 'ru')} по счёту ${upcoming.number}, договор ${demoContract.number}`,
       reason: 'third_party',
       importedAt: at(1),
       importedByName: accountant?.fullName ?? 'Бухгалтер',
@@ -371,7 +376,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     date: isoDay(now - 2 * DAY),
     amount: 12_500_000,
     payerInn: '301556677',
-    payerName: 'ООО «Ташкент Сервис Трейд»',
+    payerName: 'Toshkent Servis Treyd',
+    payerLegalForm: 'llc',
     purpose: 'Оплата по договору страхования ДМС',
     reason: 'unknown_payer',
     importedAt: at(2),
@@ -417,7 +423,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const lines = requests.map(line);
     const e: Endorsement = {
       id: id(),
-      number: endorsementNumber(n, demoContract.number),
+      number: docNumber('endorsement', { n, ref: demoContract.number }),
       contractId: demoContract.id,
       kind: 'changes',
       changeRequestIds: requests.map((r) => r.id),
@@ -441,7 +447,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   if (first) {
     const r1 = request('add_insured', first.id, first.insuredFrom, 'included', `Включение: ${short(first.fullName)} (${first.position})`);
     const e1 = endorsement(1, [r1], 'signed', 20);
-    const inv = { id: id(), clientId: demoClient.id, number: `СЧ-${year}-ДС1`, amount: Math.max(1000, e1.total), issuedAt: isoDay(now - 19 * DAY), dueDate: isoDay(now - 9 * DAY), status: 'paid' as const, contractId: demoContract.id, endorsementId: e1.id, paid: Math.max(1000, e1.total) };
+    const inv = { id: id(), clientId: demoClient.id, number: docNumber('invoice', { year, n: 9101 }), amount: Math.max(1000, e1.total), issuedAt: isoDay(now - 19 * DAY), dueDate: isoDay(now - 9 * DAY), status: 'paid' as const, contractId: demoContract.id, endorsementId: e1.id, paid: Math.max(1000, e1.total) };
     d.invoices.unshift(inv);
     e1.invoiceId = inv.id;
     d.documents.unshift({ id: id(), clientId: demoClient.id, title: `Дополнительное соглашение ${e1.number}`, kind: 'endorsement', createdAt: isoDay(now - 19 * DAY) });
@@ -494,7 +500,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   {
     const deal: Deal = {
       id: id(),
-      number: dealNumber(year, ++d.dealSeq),
+      number: docNumber('deal', { year, n: ++d.dealSeq }),
       clientId: demoClient.id,
       type: 'renewal',
       stage: 'kp_sent',

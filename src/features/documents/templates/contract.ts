@@ -129,7 +129,7 @@ export const CONTRACT_TEMPLATE: DocTemplate = {
     { key: 'mig.signatory.name', description: 'Подписант МИГ', source: 'Contract.params.migSignatoryId → StaffUser.fullName' },
     { key: 'mig.signatory.position', description: 'Должность подписанта МИГ', source: 'Роль подписанта (StaffUser.role)' },
     { key: 'mig.signatory.basis', description: 'Основание полномочий подписанта МИГ', source: 'StaffUser.signatory.basis' },
-    { key: 'client.name', description: 'Наименование страхователя', source: 'Карточка клиента: Client.legalForm + Client.name' },
+    { key: 'client.name', description: 'Наименование страхователя', source: 'Карточка клиента: formatLegalName(Client.name, Client.legalForm, язык документа)' },
     { key: 'client.inn', description: 'ИНН страхователя', source: 'Client.inn' },
     { key: 'client.address', description: 'Адрес страхователя', source: 'Client.requisites.address' },
     { key: 'client.bank', description: 'Банк страхователя', source: 'Client.requisites.bank' },

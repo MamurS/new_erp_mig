@@ -16,6 +16,7 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { Field, Input, Select } from '@/shared/ui/input';
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Card, Kv, PageHeader } from '@/shared/ui/page';
 import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
@@ -224,7 +225,8 @@ function DealInfo({ deal }: { deal: DealCard }) {
         <Kv label={t('common.client')}>
           <Link className="text-accent-text underline-offset-2 hover:underline" to={`/staff/clients/${deal.clientId}`}>
             {deal.clientName}
-          </Link>
+          </Link>{' '}
+          <LegalFormChip code={deal.clientLegalForm} />
         </Kv>
         <Kv label={t('common.type')}>{deal.type === 'renewal' ? t('staffLc.deals.typeRenewal') : t('staffLc.deals.typeNew')}</Kv>
         <Kv label={t('common.manager')}>{deal.ownerName}</Kv>
@@ -327,6 +329,7 @@ export default function DealCardPage() {
             title={
               <span className="flex flex-wrap items-center gap-2">
                 {deal.clientName}
+                <LegalFormChip code={deal.clientLegalForm} />
                 {deal.type === 'renewal' && <Chip kind="renewal">{t('staffLc.deals.renewalChip')}</Chip>}
               </span>
             }

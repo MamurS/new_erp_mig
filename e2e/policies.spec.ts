@@ -48,7 +48,7 @@ test('1. Underwriter issues a policy from a CSV of 3 employees and invites HR, w
   await page.getByLabel('Email HR').fill('hr@new-policy.uz');
   await page.getByRole('button', { name: 'Оформить полис' }).click();
   await expect(page).toHaveURL(/\/staff\/policies\/[0-9a-f-]{36}$/);
-  await expect(page.getByText(/Полис ДМС-\d{4}-\d{6} оформлен/)).toBeVisible();
+  await expect(page.getByText(/Полис DMS-\d{4}-\d{6} оформлен/)).toBeVisible();
   const policyId = page.url().split('/').pop()!;
   const policy = (await api(page, 'GET', `/policies/${policyId}`)).data as { insuredCount: number; familyCount: number; premium: number };
   expect(policy).toMatchObject({ insuredCount: 3, familyCount: 3, premium: 3 * 5_200_000 + 3 * 4_160_000 });

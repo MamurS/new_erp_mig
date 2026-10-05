@@ -10,6 +10,7 @@ import { Button } from '@/shared/ui/button';
 import { StatusDot } from '@/shared/ui/chips';
 import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
 import { FilterChip } from '@/shared/ui/filter-chip';
+import { formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { SearchInput } from '@/shared/ui/search-input';
 import { EmptyState } from '@/shared/ui/states';
 import { ExportButton } from '../components/ExportButton';
@@ -21,16 +22,18 @@ export default function PoliciesPage() {
   useDocumentTitle(t('staff.policies.title'));
   useTopbar([{ label: t('staff.policies.title') }]);
   const navigate = useNavigate();
-  const [f, setF] = useUrlFilters(['status', 'program', 'sort', 'page'] as const);
+  const [f, setF] = useUrlFilters(['status', 'program', 'form', 'sort', 'page'] as const);
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());
   const page = Number(f.page) || 1;
   const sort = parseSort(f.sort || 'endDate:asc');
-  const list = usePolicies({ status: f.status, program: f.program, sort: formatSort(sort), page, pageSize: 25, q });
+  const forms = parseLegalForms(f.form);
+  const list = usePolicies({ status: f.status, program: f.program, form: formatLegalForms(forms), sort: formatSort(sort), page, pageSize: 25, q });
 
   const cols: Column<Policy>[] = [
     { key: 'number', header: t('common.number'), sortKey: 'number', cell: (p) => <span className="num font-medium">{p.number}</span> },
     { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (p) => p.clientName },
+    legalFormColumn<Policy>((p) => p.clientLegalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'program', header: t('common.program'), sortKey: 'program', cell: (p) => PROGRAM_LABEL[p.program] },
     { key: 'start', header: t('common.start'), sortKey: 'startDate', cell: (p) => formatDate(p.startDate) },
     { key: 'end', header: t('common.end'), sortKey: 'endDate', cell: (p) => (p.status === 'active' ? <RenewalCell date={p.endDate} /> : formatDate(p.endDate)) },
@@ -82,7 +85,7 @@ export default function PoliciesPage() {
             <EmptyState
               title={t('staff.policies.notFound')}
               description={t('staff.clients.notFoundHint')}
-              action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ status: '', program: '' }); }}>{t('staff.clients.resetFilters')}</Button>}
+              action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ status: '', program: '', form: '' }); }}>{t('staff.clients.resetFilters')}</Button>}
             />
           }
         />

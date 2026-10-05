@@ -82,7 +82,7 @@ describe('patient check and visits', () => {
     expectContract(I.coverageCheckResult, r.data);
     const text = JSON.stringify(r.data);
     expect(text).not.toMatch(/limit"|used"|pinfl|\d{14}/i);
-    expect((r.data as { person: { fullName: string } }).person.fullName).toBe('Каримов Азиз Бахромович');
+    expect((r.data as { person: { fullName: string } }).person.fullName).toBe('Karimov Aziz Bahromovich');
     // the same code again, and the scanned MIG-DMS form of the raw token
     const again = await call<{ key: I18nKey }>('/clinic/check', { method: 'POST', sid: reg, json: { qrToken: card.shortCode } });
     expect(again.status).toBe(410);
@@ -103,10 +103,10 @@ describe('patient check and visits', () => {
 
   it('policy number + PINFL: 10 failures in a row lock checks for 15 minutes', async () => {
     const reg = await login('registrar@demo-clinic.uz');
-    const bad = { policyNumber: 'ДМС-2026-000101', pinfl: '00000000000000' };
+    const bad = { policyNumber: 'DMS-2026-000101', pinfl: '00000000000000' };
     for (let k = 0; k < 10; k++) expect((await call('/clinic/check', { method: 'POST', sid: reg, json: bad })).status).toBe(404);
     const d = db();
-    const demo = d.insured.find((i) => i.fullName === 'Каримов Азиз Бахромович')!;
+    const demo = d.insured.find((i) => i.fullName === 'Karimov Aziz Bahromovich')!;
     const policy = d.policies.find((p) => p.id === demo.policyId)!;
     const good = await call<{ key: I18nKey }>('/clinic/check', { method: 'POST', sid: reg, json: { policyNumber: policy.number, pinfl: demo.pinfl } });
     expect(good.status).toBe(429);

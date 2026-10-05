@@ -262,7 +262,7 @@ export const meHandlers = [
       const d = db();
       const id = currentAssistance(d, me.policyId);
       const a = id ? d.assistances.find((x) => x.id === id) : undefined;
-      const out: { assistance: AssistanceBrief | null } = { assistance: a ? { id: a.id, name: a.name, phone24x7: a.phone24x7, integrationMode: a.integrationMode } : null };
+      const out: { assistance: AssistanceBrief | null } = { assistance: a ? { id: a.id, name: a.name, legalForm: a.legalForm, phone24x7: a.phone24x7, integrationMode: a.integrationMode } : null };
       return out;
     }),
   ),

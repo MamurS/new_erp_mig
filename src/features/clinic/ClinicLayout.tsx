@@ -1,5 +1,6 @@
 import { ContentScroll } from '@/shared/ui/content-scroll';
 /* Clinic cabinet shell (CLINIC_SPEC §4): client theme for the content, the common side panel for navigation. */
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
 import { CalendarClock, ClipboardList, FileCheck, FolderOpen, House, PlugZap, ScanLine, Users, type LucideIcon } from 'lucide-react';
 import { can, type Action } from '@/shared/auth/permissions';
@@ -63,9 +64,12 @@ export default function ClinicLayout() {
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] text-muted">{t('shell.portal.clinic')}</p>
               {clinicName ? (
-                <p className="truncate font-heading text-[15px] font-semibold" data-testid="clinic-name">
-                  {clinicName}
-                </p>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="truncate font-heading text-[15px] font-semibold" data-testid="clinic-name">
+                    {clinicName}
+                  </p>
+                  <LegalFormChip code={overview.data?.clinicLegalForm} />
+                </div>
               ) : (
                 <Skeleton className="mt-1 h-4 w-40" />
               )}

@@ -46,4 +46,8 @@ export const shell: Translation<typeof Ru> = {
   'shell.sidePanel.label': 'Details',
   'shell.sidePanel.close': 'Close panel',
   'shell.toast.close': 'Close notification',
+  'shell.table.filterBy': 'Filter: {label}',
+  'shell.table.clearFilter': 'Clear filter',
+  'shell.legalForm.column': 'Form',
+  'shell.legalForm.aria': 'Legal form: {form}',
 };

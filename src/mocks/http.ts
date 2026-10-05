@@ -11,6 +11,7 @@ import { saveSessions, scheduleSaveDb } from './persist';
 import { randomId } from './rng';
 import { tzIso } from './time';
 import { hasKey, unpack, type I18nKey, type Params } from '@/i18n/core';
+import { LEGAL_FORMS, isLegalForm, legalNameCollator, type LegalFormCode } from '@/shared/config/legalForms';
 
 export const API = '*/api';
 
@@ -239,8 +240,10 @@ export function paginate<T>(items: T[], url: URL): { items: T[]; total: number; 
   return { items: items.slice((page - 1) * pageSize, page * pageSize), total: items.length, page, pageSize };
 }
 
+type SortGetter<T> = ((x: T) => string | number | null | undefined) & { collator?: Intl.Collator };
+
 /** `?sort=premium:desc` over an allow-list of keys. */
-export function sortBy<T>(items: T[], url: URL, allowed: Record<string, (x: T) => string | number | null | undefined>, fallback?: string): T[] {
+export function sortBy<T>(items: T[], url: URL, allowed: Record<string, SortGetter<T>>, fallback?: string): T[] {
   const raw = url.searchParams.get('sort') ?? fallback ?? '';
   const [key = '', dir = 'asc'] = raw.split(':');
   const get = allowed[key];
@@ -253,7 +256,37 @@ export function sortBy<T>(items: T[], url: URL, allowed: Record<string, (x: T) =
     if (va === null || va === undefined) return 1;
     if (vb === null || vb === undefined) return -1;
     if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul;
+    if (get.collator) return get.collator.compare(String(va), String(vb)) * mul;
     return String(va).localeCompare(String(vb), 'ru') * mul;
+  });
+}
+
+/** Sort key of a legal entity's name: case, quotes and apostrophe variants ignored (names carry no form). */
+export function byLegalName<T>(get: (x: T) => string | null | undefined): SortGetter<T> {
+  return Object.assign((x: T) => get(x), { collator: legalNameCollator });
+}
+
+/** Sort key of a legal form: the order of LEGAL_FORMS. */
+export function byLegalForm<T>(get: (x: T) => LegalFormCode | null | undefined): SortGetter<T> {
+  return (x: T) => {
+    const f = get(x);
+    return f ? LEGAL_FORMS.indexOf(f) : null;
+  };
+}
+
+/** `?form=llc,jsc`: the selected legal forms, or null when the filter is off. Unknown codes are ignored. */
+export function legalFormsParam(url: URL, key = 'form'): Set<LegalFormCode> | null {
+  const codes = (url.searchParams.get(key) ?? '').split(',').filter(isLegalForm);
+  return codes.length ? new Set(codes) : null;
+}
+
+/** Keeps the rows whose legal form is selected in `?form=` (all rows when the filter is off). */
+export function filterLegalForm<T>(items: T[], url: URL, get: (x: T) => LegalFormCode | null | undefined, key = 'form'): T[] {
+  const forms = legalFormsParam(url, key);
+  if (!forms) return items;
+  return items.filter((x) => {
+    const f = get(x);
+    return !!f && forms.has(f);
   });
 }
 

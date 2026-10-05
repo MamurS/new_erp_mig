@@ -40,6 +40,7 @@ import { assistanceOf, authorityLimitOf, linesOf, requireAssistanceScope, requir
 import { isOverdueRequest, refreshGuarantee, respondToAppointment, toGuaranteeLetter } from '../clinic-core';
 import { ApiProblem, apiRoute, BASE, page, pathParam, readJson, toIntegrationAppointment, type ApiCtx, type Handler } from './integration';
 import { decideAsAssistance, decideLine, disputeRebillLine, recordPayment, submitRebill } from './assist';
+import { nextDocNumber } from '../params';
 
 const AB = `${BASE}/assistance`;
 const notFound = () => new ApiProblem(404, 'not_found', 'Не найдено');
@@ -137,7 +138,7 @@ export const integrationAssistanceHandlers = [
       ctx.d.caseSeq += 1;
       const c: AssistanceCaseRow = {
         id: randomId(),
-        number: `ОБР-${new Date(now).getFullYear()}-${String(ctx.d.caseSeq).padStart(6, '0')}`,
+        number: nextDocNumber('case', { year: new Date(now).getFullYear(), n: ctx.d.caseSeq }),
         assistanceId,
         insuredId: i.id,
         insuredName: i.fullName,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPdf, invoicePdf, pdfFileName, toPdfAscii } from './pdf';
+import { buildPdf, documentPdf, invoicePdf, pdfFileName, pdfLegalName, toPdfAscii } from './pdf';
 
 describe('pdf stub', () => {
   it('produces ASCII-only PDF with correct xref offsets', () => {
@@ -34,5 +34,23 @@ describe('pdf stub', () => {
     expect(pdf).toContain('INV-2026-001');
     expect(pdf).toContain('12 500 000 UZS');
     expect(pdfFileName('invoice', new Date('2026-09-29T08:00:00Z'))).toBe('invoice-2026-09-29.pdf');
+  });
+
+  it('prints the customer with its legal form in English, Uzbek apostrophes as ASCII', () => {
+    const inv = {
+      id: '00000000-0000-4000-8000-000000000000',
+      clientId: '00000000-0000-4000-8000-000000000001',
+      number: 'SCh-2026-000001',
+      amount: 1_000,
+      issuedAt: '2026-09-01',
+      dueDate: '2026-10-01',
+      status: 'unpaid',
+    } as const;
+    expect(pdfLegalName('Toshkent Agrologistika', 'llc')).toBe('Toshkent Agrologistika LLC');
+    expect(pdfLegalName('Toshkent Agrologistika')).toBe('Toshkent Agrologistika');
+    expect(invoicePdf(inv, 'Toshkent Agrologistika', 'llc')).toContain('(Customer: Toshkent Agrologistika LLC) Tj');
+    expect(invoicePdf(inv, 'Toshkent Agrologistika')).toContain('(Customer: Toshkent Agrologistika) Tj');
+    const doc = documentPdf({ id: inv.id, clientId: inv.clientId, title: 'Policy', kind: 'policy', createdAt: '2026-09-01' }, 'Qoʻqon Gʻalla', 'jsc');
+    expect(doc).toContain("(Customer: Qo'qon G'alla JSC) Tj");
   });
 });

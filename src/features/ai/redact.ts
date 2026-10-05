@@ -12,13 +12,14 @@ export interface RedactResult {
 // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
 const NAME_KIND = 'ФИО';
 
+/** Document numbers in the demo templates (src/shared/domain/numbering.ts); the Cyrillic prefixes of older data too. */
 const RULES: { kind: string; re: RegExp }[] = [
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
-  { kind: 'СЕРТИФИКАТ', re: /СЕРТ-\d{4}-\d{6}-\d{4}/giu },
+  { kind: 'СЕРТИФИКАТ', re: /(?:SERT|СЕРТ)-\d{4}-\d{6}-\d{4}/giu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
-  { kind: 'ДОГОВОР', re: /ДМС-Д-\d{4}-\d{6}/giu },
+  { kind: 'ДОГОВОР', re: /(?:DMS-D|ДМС-Д)-\d{4}-\d{6}/giu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
-  { kind: 'ПОЛИС', re: /ДМС-\d{4}-\d{6}/giu },
+  { kind: 'ПОЛИС', re: /(?:DMS|ДМС)-\d{4}-\d{6}/giu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
   { kind: 'ПИНФЛ', re: /(?<!\d)\d{14}(?!\d)/gu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
@@ -28,6 +29,8 @@ const RULES: { kind: string; re: RegExp }[] = [
 
 /** Three capitalised Cyrillic words, the last with a patronymic ending: «Иванов Иван Иванович». */
 const FULL_NAME = /(?<!\p{L})[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+(?:вич|вна|ична)(?!\p{L})/gu;
+/** Latin names as in the ID card / MyID: «Sobirov Akmal Ravshanovich», «Karimova Dilnoza Bahromovna». */
+const FULL_NAME_LATIN = /(?<!\p{L})[A-Z][a-zʻʼ']+\s+[A-Z][a-zʻʼ']+\s+[A-Z][a-zʻʼ']+(?:ovich|evich|ovna|evna)(?!\p{L})/gu;
 
 export function redactForAi(input: string, known: { names?: readonly string[] } = {}): RedactResult {
   const labels: Record<string, string> = {};
@@ -50,6 +53,7 @@ export function redactForAi(input: string, known: { names?: readonly string[] } 
     }
   }
   text = text.replace(FULL_NAME, (m) => put(NAME_KIND, m));
+  text = text.replace(FULL_NAME_LATIN, (m) => put(NAME_KIND, m));
   for (const r of RULES) text = text.replace(r.re, (m) => put(r.kind, m));
   return { text, labels };
 }

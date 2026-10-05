@@ -10,6 +10,7 @@ import type { ClientRow, Db, InsuredRow, PolicyChangeRow } from './db';
 import { HttpError, httpErrorOf } from './http';
 import { randomId } from './rng';
 import { tzIso } from './time';
+import { maxDocSeq, nextDocNumber } from './params';
 
 export type PolicyListRow = ReturnType<typeof policyListRowSchema.parse>;
 
@@ -79,9 +80,8 @@ export function activePolicyOf(d: Db, client: ClientRow): Policy | undefined {
 }
 
 export function nextPolicyNumber(d: Db, year: number): string {
-  const prefix = `ДМС-${year}-`;
-  const max = d.policies.filter((p) => p.number.startsWith(prefix)).reduce((m, p) => Math.max(m, Number(p.number.slice(prefix.length)) || 0), 100);
-  return `${prefix}${String(max + 1).padStart(6, '0')}`;
+  const max = maxDocSeq('policy', d.policies.map((p) => p.number), { year, floor: 100 });
+  return nextDocNumber('policy', { year, n: max + 1 });
 }
 
 export function toPolicyChange(row: PolicyChangeRow): PolicyChange {

@@ -9,7 +9,8 @@ import { DECISION_KIND_LABEL } from '@/shared/domain/settlement';
 import { translate, type I18nKey } from '@/i18n';
 import { formatDateDoc as formatDate, formatMoneyDoc as formatMoney } from '@/shared/lib/format';
 import { PROGRAMS } from '@/shared/domain/programs';
-import { MIG_REQUISITES, MIG_RULES_REF } from './mig';
+import { formatLegalName, type DocLang, type LegalFormCode } from '@/shared/config/legalForms';
+import { MIG_REQUISITES, MIG_RULES_REF, migLegalName } from './mig';
 import type { StubRenderInput } from './render';
 
 /**
@@ -19,12 +20,27 @@ import type { StubRenderInput } from './render';
 const docLabel = (prefix: 'labels.limitCategory' | 'labels.program' | 'labels.role', id: string): string =>
   translate('ru', `${prefix}.${id}` as I18nKey);
 
+/**
+ * Full legal name of a party in the document's language (`ООО «Name»`, `«Name» MChJ`, `Name LLC`).
+ * Without a known form the bare official name is printed.
+ */
+const legalName = (name: string, legalForm: LegalFormCode | undefined, lang: DocLang): string =>
+  legalForm ? formatLegalName(name, legalForm, lang) : name;
 
-const clientName = (c: { legalForm: string; name: string }) => `${c.legalForm} «${c.name}»`;
+/**
+ * Options of the contract and endorsement builders. `lang` is the document's language (the stub templates are Russian, so
+ * `ru` by default); it is never taken from the interface.
+ */
+export interface DocBuildOptions {
+  showChanges?: boolean;
+  lang?: DocLang;
+}
+
 const sideLine = (s: ContractView['signing']['mig']) =>
   s ? `${s.signerName} · ${s.method === 'eimzo' ? `ЭЦП, сертификат ${s.certificate?.serial ?? ''}` : s.method === 'edo' ? `ЭДО ${s.edoProvider ?? ''}` : s.method === 'scan' ? 'скан проверен' : 'на бумаге'} · ${formatDate(s.signedAt)}` : undefined;
 
-export function contractDocument(c: ContractView, opts: { showChanges?: boolean } = {}): StubRenderInput {
+export function contractDocument(c: ContractView, opts: DocBuildOptions = {}): StubRenderInput {
+  const lang = opts.lang ?? 'ru';
   const r = c.client.requisites;
   const limits = PROGRAMS[c.params.program].limits;
   const values: Record<string, string> = {
@@ -36,13 +52,13 @@ export function contractDocument(c: ContractView, opts: { showChanges?: boolean 
     'contract.activationRule': ACTIVATION_RULE_LABEL[c.params.activationRule],
     'contract.paymentFrequency': PAYMENT_FREQUENCY_LABEL[c.params.paymentFrequency].toLowerCase(),
     'contract.rulesRef': MIG_RULES_REF,
-    'mig.name': MIG_REQUISITES.name,
+    'mig.name': migLegalName(lang),
     'mig.inn': MIG_REQUISITES.inn,
     'mig.address': MIG_REQUISITES.address,
     'mig.bank': MIG_REQUISITES.bank,
     'mig.account': MIG_REQUISITES.account,
     'mig.mfo': MIG_REQUISITES.mfo,
-    'client.name': clientName(c.client),
+    'client.name': legalName(c.client.name, c.client.legalForm, lang),
     'client.inn': c.client.inn,
     'client.signatory.name': c.params.clientSignatory.name,
     'client.signatory.position': c.params.clientSignatory.position.toLowerCase(),
@@ -81,7 +97,8 @@ export function contractDocument(c: ContractView, opts: { showChanges?: boolean 
   };
 }
 
-export function endorsementDocument(e: EndorsementView, opts: { showChanges?: boolean } = {}): StubRenderInput {
+export function endorsementDocument(e: EndorsementView, opts: DocBuildOptions = {}): StubRenderInput {
+  const lang = opts.lang ?? 'ru';
   const effective = e.kind === 'termination' && e.terminationDate ? formatDate(e.terminationDate) : [...new Set(e.requests.map((r) => formatDate(r.effectiveDate)))].join(', ') || '—';
   return {
     templateId: 'endorsement',
@@ -94,9 +111,9 @@ export function endorsementDocument(e: EndorsementView, opts: { showChanges?: bo
       'endorsement.total': formatMoney(Math.abs(e.total)),
       'endorsement.totalLabel': e.total >= 0 ? 'к доплате' : 'к возврату',
       'contract.number': e.contractNumber,
-      'mig.name': MIG_REQUISITES.name,
+      'mig.name': migLegalName(lang),
       'mig.signatory.name': e.migSignatory?.fullName ?? '—',
-      'client.name': e.clientName,
+      'client.name': legalName(e.clientName, e.clientLegalForm, lang),
       'client.signatory.name': e.clientSignatoryName,
     },
     overrides: Object.fromEntries(e.clauseOverrides.map((o) => [o.clauseId, o.text])),
@@ -106,7 +123,9 @@ export function endorsementDocument(e: EndorsementView, opts: { showChanges?: bo
   };
 }
 
+/** The certificate stub exists in Russian only (it is also mapped over lists, so it takes no options). */
 export function certificateDocument(c: CertificateView): StubRenderInput {
+  const lang: DocLang = 'ru';
   return {
     templateId: 'certificate',
     title: `Сертификат ${c.certificateNumber}`,
@@ -115,18 +134,19 @@ export function certificateDocument(c: CertificateView): StubRenderInput {
       'contract.number': c.contractNumber,
       'insured.name': c.fullName,
       'insured.from': formatDate(c.insuredFrom),
-      'client.name': c.clientName,
+      'client.name': legalName(c.clientName, c.clientLegalForm, lang),
       'policy.number': c.policyNumber,
       'policy.endDate': formatDate(c.policyEndDate),
       'program.name': docLabel('labels.program', c.program),
-      'assistance.name': c.assistanceName,
+      'assistance.name': legalName(c.assistanceName, c.assistanceLegalForm, lang),
       'assistance.phone': c.assistancePhone,
-      'mig.name': MIG_REQUISITES.name,
+      'mig.name': migLegalName(lang),
     },
   };
 }
 
 export function letterDocument(l: ClaimLetter): StubRenderInput {
+  const lang: DocLang = 'ru';
   return {
     templateId: 'claimDecisionLetter',
     title: `Решение по обращению ${l.claimNumber}`,
@@ -139,7 +159,7 @@ export function letterDocument(l: ClaimLetter): StubRenderInput {
       'decision.amount': formatMoney(l.decision.amount),
       'decision.clause': l.decision.clauseRef ?? 'Решение принято в пределах программы страхования',
       'decision.reason': l.decision.reason || 'Расходы возмещаются в полном объёме',
-      'mig.name': MIG_REQUISITES.name,
+      'mig.name': migLegalName(lang),
     },
   };
 }

@@ -15,7 +15,7 @@ import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requ
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
-import { dmsParam } from '../params';
+import { dmsParam, numbering } from '../params';
 import { ensureRenewalDeal } from './lifecycle';
 
 const DEFAULT_SUM = 200_000_000;
@@ -129,7 +129,7 @@ export const kpHandlers = [
       d.kpSeq += 1;
       const kp: KpDocument = {
         id: randomId(),
-        number: kpNumber(new Date(now).getFullYear(), d.kpSeq),
+        number: kpNumber(new Date(now).getFullYear(), d.kpSeq, numbering()),
         clientId: client.id,
         clientName: client.name,
         clientLegalForm: client.legalForm,

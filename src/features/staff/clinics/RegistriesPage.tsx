@@ -7,6 +7,7 @@ import { t } from '@/i18n';
 import { formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Chip } from '@/shared/ui/chips';
+import { legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { EmptyState } from '@/shared/ui/states';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
@@ -30,6 +31,7 @@ export default function RegistriesPage() {
   const list = useStaffRegistries({ ...(status === 'all' ? {} : { status }), ...(f.clinicId ? { clinicId: f.clinicId } : {}) });
   const cols: Column<RegistrySummary>[] = [
     { key: 'clinic', header: t('common.clinic'), cell: (r) => <span className="font-medium">{r.clinicName}</span> },
+    legalFormColumn<RegistrySummary>((r) => r.clinicLegalForm),
     { key: 'period', header: t('common.period'), cell: (r) => <span className="num">{r.period}</span> },
     { key: 'source', header: t('common.source'), cell: (r) => <Chip kind={r.source === 'api' ? 'sky' : 'neutral'}>{sourceLabel(r.source)}</Chip> },
     { key: 'sent', header: t('staffOps.registries.col.sent'), cell: (r) => <span className="num text-muted">{r.submittedAt ? formatDateTime(r.submittedAt) : '—'}</span> },

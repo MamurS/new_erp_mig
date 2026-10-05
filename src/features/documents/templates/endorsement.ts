@@ -42,7 +42,7 @@ export const ENDORSEMENT_TEMPLATE: DocTemplate = {
     { key: 'contract.number', description: 'Номер договора', source: 'Contract.number' },
     { key: 'mig.name', description: 'Наименование страховщика', source: 'Реквизиты МИГ' },
     { key: 'mig.signatory.name', description: 'Подписант МИГ', source: 'Подписант договора' },
-    { key: 'client.name', description: 'Наименование страхователя', source: 'Client.legalForm + Client.name' },
+    { key: 'client.name', description: 'Наименование страхователя', source: 'formatLegalName(Client.name, Client.legalForm, язык документа)' },
     { key: 'client.signatory.name', description: 'Подписант клиента', source: 'Contract.params.clientSignatory.name' },
   ],
   tables: [

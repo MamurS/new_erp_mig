@@ -6,6 +6,7 @@
 import type { ClientDocument, Invoice } from '@/shared/types';
 import { formatDate, formatMoneyDoc, todayISO } from '@/shared/lib/format';
 import { downloadText } from '@/shared/lib/csv';
+import { formatLegalName, type LegalFormCode } from '@/shared/config/legalForms';
 
 const TRANSLIT: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm',
@@ -29,6 +30,9 @@ export function toPdfAscii(input: string): string {
       out += '-';
     } else if (/[«»“”]/.test(ch)) {
       out += '"';
+    } else if (/[\u02bb\u02bc\u2018\u2019]/.test(ch)) {
+      // Uzbek oʻ / gʻ and the tutuq belgisi of Latin names
+      out += "'";
     } else if (/[\x20-\x7e]/.test(ch)) {
       out += ch;
     } else {
@@ -82,15 +86,20 @@ const DOC_KIND_EN: Record<ClientDocument['kind'], string> = {
   insured_list: 'List of insured persons',
 };
 
+/** Legal name as printed in the (English) stubs: `Name LLC`; the bare name when the form is unknown. */
+export function pdfLegalName(name: string, legalForm?: LegalFormCode): string {
+  return legalForm ? formatLegalName(name, legalForm, 'en') : name;
+}
+
 const FOOTER = ['', 'Mosaic Insurance Group - voluntary medical insurance (DMS).', 'Demo document generated in the browser. It contains no personal data of employees.'];
 
-export function invoicePdf(inv: Invoice, companyName?: string): string {
+export function invoicePdf(inv: Invoice, companyName?: string, companyLegalForm?: LegalFormCode): string {
   return buildPdf(
     [
       'MIG DMS - Invoice',
       '',
       `Invoice No ${inv.number}`,
-      ...(companyName ? [`Customer: ${companyName}`] : []),
+      ...(companyName ? [`Customer: ${pdfLegalName(companyName, companyLegalForm)}`] : []),
       `Amount: ${formatMoneyDoc(inv.amount)}`,
       `Issued: ${formatDate(inv.issuedAt)}`,
       `Due date: ${formatDate(inv.dueDate)}`,
@@ -101,13 +110,13 @@ export function invoicePdf(inv: Invoice, companyName?: string): string {
   );
 }
 
-export function documentPdf(doc: ClientDocument, companyName?: string): string {
+export function documentPdf(doc: ClientDocument, companyName?: string, companyLegalForm?: LegalFormCode): string {
   return buildPdf(
     [
       `MIG DMS - ${DOC_KIND_EN[doc.kind]}`,
       '',
       `Title: ${doc.title}`,
-      ...(companyName ? [`Customer: ${companyName}`] : []),
+      ...(companyName ? [`Customer: ${pdfLegalName(companyName, companyLegalForm)}`] : []),
       `Date: ${formatDate(doc.createdAt)}`,
       ...FOOTER,
     ],

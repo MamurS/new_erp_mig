@@ -74,4 +74,6 @@ export const dom: Translation<typeof Ru> = {
   'dom.limits.fourEyes': 'Boshqa xodimning tasdigʻi kerak',
   'dom.quote.discountAboveAuthority': '{pct} chegirma vakolatlaringizdan yuqori ({max})',
   'dom.quote.premiumAboveAuthority': 'Sugʻurta mukofoti vakolatlaringizdan yuqori',
+  'dom.numbering.chars': 'Faqat lotin harflari, raqamlar, «-» va «/» hamda jingalak qavslardagi oʻrinbosarlar',
+  'dom.numbering.missing': 'Shablonda majburiy oʻrinbosar yetishmayapti: {required}',
 };

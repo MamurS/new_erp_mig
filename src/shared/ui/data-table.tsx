@@ -1,6 +1,7 @@
 import { t } from '@/i18n';
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import * as M from '@radix-ui/react-dropdown-menu';
+import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, ListFilter } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { formatNumber } from '@/shared/lib/format';
 import { Button } from './button';
@@ -16,6 +17,14 @@ export interface Column<T> {
   className?: string;
   align?: 'left' | 'right';
   hideable?: boolean;
+  /** Filter by values in the header (a list of checkboxes); the page applies it (usually on the server). */
+  filter?: ColumnFilter;
+}
+
+export interface ColumnFilter {
+  options: { value: string; label: string; title?: string }[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
 }
 
 export interface SortState {
@@ -129,6 +138,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
                     aria-sort={active ? (p.sort?.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                     className={cn('h-9 whitespace-nowrap px-3 text-[12px] font-normal text-muted', c.align === 'right' && 'text-right', c.className)}
                   >
+                    <span className="inline-flex items-center gap-0.5">
                     {c.sortKey && p.onSortChange ? (
                       <button
                         type="button"
@@ -152,6 +162,8 @@ export function DataTable<T>(p: DataTableProps<T>) {
                     ) : (
                       c.header
                     )}
+                    {c.filter && <HeaderFilter label={c.header} filter={c.filter} />}
+                    </span>
                   </th>
                 );
               })}
@@ -239,5 +251,66 @@ export function DataTable<T>(p: DataTableProps<T>) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Values filter in a column header: checkboxes, «reset» when something is selected. */
+function HeaderFilter({ label, filter }: { label: string; filter: ColumnFilter }) {
+  const active = filter.selected.length > 0;
+  const toggle = (v: string, on: boolean) =>
+    filter.onChange(on ? [...filter.selected, v] : filter.selected.filter((x) => x !== v));
+  return (
+    <M.Root>
+      <M.Trigger asChild>
+        <button
+          type="button"
+          aria-label={t('shell.table.filterBy', { label })}
+          data-active={active || undefined}
+          className={cn(
+            'inline-flex items-center gap-0.5 rounded-sm p-0.5 hover:text-text',
+            active && 'text-accent-text',
+          )}
+        >
+          <ListFilter className="h-3 w-3" aria-hidden />
+          {active && <span className="num text-[10px]">{filter.selected.length}</span>}
+        </button>
+      </M.Trigger>
+      <M.Portal>
+        <M.Content
+          align="start"
+          sideOffset={4}
+          className="z-50 max-h-80 min-w-[180px] overflow-y-auto rounded-card border border-border bg-surface p-1 text-[13px] text-text shadow-lg"
+        >
+          {filter.options.map((o) => (
+            <M.CheckboxItem
+              key={o.value}
+              checked={filter.selected.includes(o.value)}
+              onCheckedChange={(on) => toggle(o.value, on === true)}
+              onSelect={(e) => e.preventDefault()}
+              title={o.title}
+              className="flex cursor-pointer items-center gap-2 rounded-btn px-2 py-1.5 outline-hidden data-highlighted:bg-rail"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-sm border border-border">
+                <M.ItemIndicator>
+                  <Check className="h-3 w-3" aria-hidden />
+                </M.ItemIndicator>
+              </span>
+              {o.label}
+            </M.CheckboxItem>
+          ))}
+          {active && (
+            <>
+              <M.Separator className="my-1 h-px bg-border" />
+              <M.Item
+                onSelect={() => filter.onChange([])}
+                className="cursor-pointer rounded-btn px-2 py-1.5 text-muted outline-hidden data-highlighted:bg-rail"
+              >
+                {t('shell.table.clearFilter')}
+              </M.Item>
+            </>
+          )}
+        </M.Content>
+      </M.Portal>
+    </M.Root>
   );
 }

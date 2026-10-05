@@ -3,6 +3,7 @@ import { ContentScroll } from '@/shared/ui/content-scroll';
  * Assistance portal shell (ASSISTANCE_SPEC §6): the dense `staff` theme for the call centre, a rail of
  * collapsible side navigation grouped by work and a top bar with the assistance name and the «Портал партнёра» mark.
  */
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
@@ -57,6 +58,7 @@ export default function AssistLayout() {
               ) : (
                 <Skeleton className="h-4 w-32" />
               )}
+              {name && <LegalFormChip code={overview.data?.assistance.legalForm} />}
               <span className="hidden rounded-btn bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent-text sm:inline">{t('assist.layout.partnerPortal')}</span>
             </div>
             <div className="min-w-0 flex-1">

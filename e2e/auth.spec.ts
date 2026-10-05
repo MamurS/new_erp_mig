@@ -10,7 +10,7 @@ test.describe('1. Login with every role, MFA, logout', () => {
         await page.goto('/app/profile');
         // Wait for the profile data and the web fonts: until then the text above re-flows and the
         // buttons move, so a click aimed at «Выйти» could land next to it.
-        await expect(page.getByText('Каримов Азиз Бахромович')).toBeVisible();
+        await expect(page.getByText('Karimov Aziz Bahromovich')).toBeVisible();
         await page.evaluate(() => document.fonts.ready.then(() => undefined));
         await page.getByRole('button', { name: 'Выйти', exact: true }).click();
         await expect(page).toHaveURL(/\/app\/login/);

@@ -9,7 +9,7 @@ import type { ClinicCard, ClinicUserView } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
 import { approvalOutcome, registryStatusAfterReview } from '@/shared/domain/clinics';
-import { dmsParam } from '../params';
+import { dmsParam, nextDocNumber } from '../params';
 import { clinicAdminInviteSchema, clinicCreateSchema, clinicModeSchema, guaranteeDecisionSchema, registryLineDecisionSchema } from '@/shared/schemas/forms';
 import { db, type ClinicUserRow, type Db } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
@@ -43,7 +43,7 @@ function clinicCard(d: Db, clinic: Clinic): ClinicCard {
   const hooks = d.webhookDeliveries.filter((w) => w.clinicId === clinic.id);
   return {
     clinic,
-    contractNumber: `ДК-${clinic.id.slice(0, 4).toUpperCase()}`,
+    contractNumber: nextDocNumber('clinicContract', { code: clinic.id.slice(0, 4) }),
     metrics: {
       avgResponseMinutes: avg,
       rejectedLineShare: reviewed.length ? rejected / reviewed.length : null,
@@ -295,7 +295,7 @@ export const staffClinicHandlers = [
       const toPay = mine.filter((l) => l.status === 'accepted' && !l.payment);
       if (!toPay.length) throw conflict('srv.registry.migLinesPaid');
       const paidAt = tzIso(Date.now());
-      const orderNumber = `ПП-МИГ-${String(Date.now()).slice(-6)}`;
+      const orderNumber = nextDocNumber('paymentOrder', { n: Number(String(Date.now()).slice(-6)) });
       for (const l of toPay) l.payment = { paidAt: paidAt.slice(0, 10), amount: l.amount, orderNumber };
       settleRegistry(r);
       recomputeRegistry(r);

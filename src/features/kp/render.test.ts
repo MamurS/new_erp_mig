@@ -21,10 +21,10 @@ const PARAMS: KpParams = {
   paymentTerms: 'quarterly',
 };
 const CTX: KpRenderContext = {
-  number: 'КП-2026-000123',
+  number: 'KP-2026-000123',
   date: '2026-09-30',
-  clientLegalForm: 'ООО',
-  clientName: 'Ташкент Агрологистика',
+  clientLegalForm: 'llc',
+  clientName: 'Toshkent Agrologistika',
   clientInn: '301234567',
   underwriterName: 'Дилшод Султанов',
   underwriterEmail: 'underwriter@demo.mig.uz',
@@ -57,8 +57,8 @@ describe('renderKp', () => {
         const letter = pagesHtml[KP_LETTER_PAGE_INDEX]!;
         expect(KP_LETTER_PAGE_INDEX).toBe(1);
         expect(letter).toContain(lang === 'ru' ? 'Коммерческое предложение' : 'Commercial offer');
-        expect(letter).toContain('Ташкент Агрологистика');
-        expect(brochure.join('')).not.toContain('Ташкент Агрологистика');
+        expect(letter).toContain('Toshkent Agrologistika');
+        expect(brochure.join('')).not.toContain('Toshkent Agrologistika');
         // pages 3–17 are brochure pages 2–16: same markup once the placeholders are taken out
         const rest = pagesHtml.slice(2);
         expect(rest).toHaveLength(15);
@@ -79,9 +79,9 @@ describe('renderKp', () => {
   it('the offer letter has client, table and total; RU and EN', () => {
     const ru = renderKp(PARAMS, CTX).pagesHtml[1]!;
     expect(ru).toContain('Коммерческое предложение');
-    expect(ru).toContain('КП-2026-000123');
+    expect(ru).toContain('KP-2026-000123');
     expect(ru).toContain('30.10.2026');
-    expect(ru).toContain('ООО «Ташкент Агрологистика»');
+    expect(ru).toContain('ООО «Toshkent Agrologistika»');
     expect(ru).toContain('ИНН 301234567');
     expect(ru).toContain('01.01.2027 — 31.12.2027');
     expect(ru).toContain('Сотрудники');
@@ -96,7 +96,17 @@ describe('renderKp', () => {
     expect(en).toContain('Valid until');
     expect(en).toContain('735,000,000 UZS');
     expect(en).toContain('Monthly');
-    expect(en).toContain('LLC “Ташкент Агрологистика”');
+    expect(en).toContain('Toshkent Agrologistika LLC');
+    expect(en).not.toContain('ООО');
+  });
+
+  it('writes the legal form in the offer language, not the interface language', () => {
+    const ctx: KpRenderContext = { ...CTX, clientLegalForm: 'jsc', clientName: 'Samarqand Oʻgʻit' };
+    const ru = renderKp(PARAMS, ctx).pagesHtml[KP_LETTER_PAGE_INDEX]!;
+    const en = renderKp({ ...PARAMS, lang: 'en' }, ctx).pagesHtml[KP_LETTER_PAGE_INDEX]!;
+    expect(ru).toContain('АО «Samarqand Oʻgʻit»');
+    expect(en).toContain('Samarqand Oʻgʻit JSC');
+    expect(en).not.toContain('АО');
   });
 
   it('escapes the client name, the underwriter name and other text: no markup gets through', () => {
@@ -122,7 +132,7 @@ describe('renderKp', () => {
     expect(html).not.toContain('src="assets/');
     expect(html).toContain('@page { size: 210mm 297mm; margin: 0; }');
     expect(html).toContain('print-color-adjust: exact');
-    expect(html).toContain('<title>КП-2026-000123 — Ташкент Агрологистика</title>');
+    expect(html).toContain('<title>KP-2026-000123 — Toshkent Agrologistika</title>');
     expect(html.match(/<div class="page">/g)).toHaveLength(17);
   });
 
@@ -164,7 +174,7 @@ describe('domain', () => {
     expect(kpTotalPremium({ ...PARAMS, familyMembers: 0 })).toBe(675_000_000);
   });
   it('document title strips file-system special characters', () => {
-    expect(kpDocumentTitle('КП-2026-000123', 'Ташкент Агрологистика')).toBe('КП-2026-000123 — Ташкент Агрологистика');
-    expect(kpDocumentTitle('КП-2026-000123', 'A/B\\C:D*E?F"G<H>I|J\u0007')).toBe('КП-2026-000123 — ABCDEFGHIJ');
+    expect(kpDocumentTitle('KP-2026-000123', 'Toshkent Agrologistika')).toBe('KP-2026-000123 — Toshkent Agrologistika');
+    expect(kpDocumentTitle('KP-2026-000123', 'A/B\\C:D*E?F"G<H>I|J\u0007')).toBe('KP-2026-000123 — ABCDEFGHIJ');
   });
 });
