@@ -150,42 +150,40 @@ test.describe('Search across scripts', () => {
 });
 
 test.describe('Languages and scripts', () => {
-  test('names and numbers are the same in ru, uz-Latn and en; only the form chip changes', async ({ page }) => {
-    await loginStaff(page, 'underwriter');
-
-    const snapshot = async (path: string, nameCol: number, numCol: number | null, nameInner: string) => {
-      await page.goto(path);
+  const LANG_PAGES = [
+    { title: 'clients', path: '/staff/clients?sort=name:asc', nameCol: 0, numCol: null, nameInner: '.font-medium' },
+    { title: 'endorsements', path: '/staff/endorsements?sort=number:asc', nameCol: 1, numCol: 0, nameInner: '' },
+  ] as const;
+  for (const p of LANG_PAGES) {
+    test(`${p.title}: names and numbers are the same in ru, uz-Latn and en; only the form chip changes`, async ({ page }) => {
+      await loginStaff(page, 'underwriter');
+      await page.goto(p.path);
       await expect(rows(page).first()).toBeVisible();
-      return {
-        names: await cellTexts(page, nameCol, nameInner),
-        numbers: numCol === null ? [] : await cellTexts(page, numCol, '.num'),
+      // The language changes in place (no reload): the table re-renders with the same rows.
+      const snapshot = async () => ({
+        names: await cellTexts(page, p.nameCol, p.nameInner),
+        numbers: p.numCol === null ? [] : await cellTexts(page, p.numCol, '.num'),
         chips: await rows(page).getByTestId('legal-form').allInnerTexts(),
         codes: await chipCodes(page),
-      };
-    };
-    const pages = [
-      { path: '/staff/clients?sort=name:asc', nameCol: 0, numCol: null, nameInner: '.font-medium' },
-      { path: '/staff/endorsements?sort=number:asc', nameCol: 1, numCol: 0, nameInner: '' },
-    ];
+      });
+      const base = await snapshot();
+      expect(base.names.length).toBeGreaterThan(0);
+      if (p.numCol !== null) expect(base.numbers.some((n) => /^DS-\d+\/DMS-D-/.test(n)), base.numbers.join(', ')).toBe(true);
 
-    const base = [];
-    for (const p of pages) base.push(await snapshot(p.path, p.nameCol, p.numCol, p.nameInner));
-    expect(base[1]!.numbers.some((n) => /^DS-\d+\/DMS-D-/.test(n)), base[1]!.numbers.join(', ')).toBe(true);
-
-    for (const lang of ['uz-Latn', 'en', 'ru'] as const) {
-      await setLanguage(page, lang);
-      for (const [i, p] of pages.entries()) {
-        const s = await snapshot(p.path, p.nameCol, p.numCol, p.nameInner);
-        const b = base[i]!;
-        expect(s.names, `${lang} ${p.path}`).toEqual(b.names);
-        expect(s.numbers, `${lang} ${p.path}`).toEqual(b.numbers);
-        expect(s.codes, `${lang} ${p.path}`).toEqual(b.codes);
+      for (const lang of ['uz-Latn', 'en', 'ru'] as const) {
+        await setLanguage(page, lang);
+        const llcChips = rows(page).locator('[data-testid="legal-form"][data-code="llc"]');
+        await expect(llcChips.first()).toHaveText(LLC[lang]);
+        const s = await snapshot();
+        expect(s.names, lang).toEqual(base.names);
+        expect(s.numbers, lang).toEqual(base.numbers);
+        expect(s.codes, lang).toEqual(base.codes);
         const llc = s.codes.flatMap((c, j) => (c === 'llc' ? [s.chips[j]] : []));
-        expect(llc.length, p.path).toBeGreaterThan(0);
-        expect(new Set(llc), `${lang} ${p.path}`).toEqual(new Set([LLC[lang]]));
+        expect(llc.length).toBeGreaterThan(0);
+        expect(new Set(llc), lang).toEqual(new Set([LLC[lang]]));
       }
-    }
-  });
+    });
+  }
 
   test('no Cyrillic in names and numbers of clients and endorsements in ru', async ({ page }) => {
     await loginStaff(page, 'underwriter');
