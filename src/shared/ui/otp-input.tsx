@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { cn } from '@/shared/lib/cn';
 
@@ -22,8 +23,8 @@ export function OtpInput({
   invalid,
   large,
   autoFocus,
-  groupLabel = 'Код подтверждения',
-  digitLabel = (n) => `Цифра ${n}`,
+  groupLabel = t('shell.otp.group'),
+  digitLabel = (n) => t('shell.otp.digit', { n }),
 }: OtpInputProps) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? '');

@@ -334,7 +334,7 @@ export function lineProblems(d: Db, clinicId: UUID, line: RegistryLine): string[
     visitFrom: v ? isoDay(parseIso(v.openedAt)) : undefined,
     visitTo: v ? isoDay(parseIso(v.expiresAt)) : undefined,
   });
-  if (line.visitId && !v) problems.push('Визит не найден');
+  if (line.visitId && !v) problems.push(msg('srv.registry.visitNotFound'));
   return problems;
 }
 

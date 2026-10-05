@@ -2,7 +2,7 @@
  * Clinic cabinet API (/api/clinic/...). Every handler resolves the clinic from the session, never
  * from the request; objects of other clinics answer 404 (CLINIC_SPEC §9.9).
  */
-import { msg } from '@/i18n/core';
+import { msg, tm } from '@/i18n/core';
 import { http } from 'msw';
 import Papa from 'papaparse';
 import { z } from 'zod';
@@ -367,22 +367,22 @@ export const clinicHandlers = [
         };
         const r = registryLineInput.safeParse(candidate);
         if (!r.success) {
-          errors.push({ row: rowNo, message: r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
+          errors.push({ row: rowNo, message: r.error.issues.map((i) => `${i.path.join('.')}: ${tm(i.message)}`).join('; ') });
           continue;
         }
         if (!r.data.serviceDate.startsWith(period)) {
-          errors.push({ row: rowNo, message: `Дата услуги вне периода ${period}` });
+          errors.push({ row: rowNo, message: msg('srv.registry.outOfPeriod', { period }) });
           continue;
         }
         let line;
         try {
           line = buildLine(d, actor.clinicId, r.data);
         } catch {
-          errors.push({ row: rowNo, message: 'Визит не найден в вашей клинике' });
+          errors.push({ row: rowNo, message: msg('srv.registry.visitNotInClinic') });
           continue;
         }
         const problems = lineProblems(d, actor.clinicId, line);
-        if (problems.length) errors.push({ row: rowNo, message: problems.join('; ') });
+        if (problems.length) errors.push({ row: rowNo, message: problems.length === 1 ? problems[0]! : problems.map((p) => tm(p)).join('; ') });
         else lines.push(line);
       }
       const out: RegistryImportResult = { total: parsed.data.length, valid: lines.length, errors };

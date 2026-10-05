@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -177,22 +178,26 @@ export function DataTable<T>(p: DataTableProps<T>) {
         </table>
       </div>
       {p.error && !p.loading ? <ErrorState error={p.error} onRetry={p.onRetry} /> : null}
-      {!p.loading && !p.error && p.rows && p.rows.length === 0 ? (p.empty ?? <EmptyState title="Ничего не найдено" description="Измените фильтры или поиск" />) : null}
+      {!p.loading && !p.error && p.rows && p.rows.length === 0 ? (p.empty ?? <EmptyState title={t('common.notFound')} description={t('shell.table.emptyHint')} />) : null}
       {(p.onPageChange || p.footer) && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-muted">
           <div>{p.footer}</div>
           {p.onPageChange && p.total !== undefined && p.total > 0 && (
-            <nav className="flex items-center gap-2" aria-label="Страницы">
+            <nav className="flex items-center gap-2" aria-label={t('shell.table.pages')}>
               <span>
-                {formatNumber((p.page! - 1) * p.pageSize! + 1)}–{formatNumber(Math.min(p.total, p.page! * p.pageSize!))} из {formatNumber(p.total)}
+                {t('shell.table.range', {
+                  from: formatNumber((p.page! - 1) * p.pageSize! + 1),
+                  to: formatNumber(Math.min(p.total, p.page! * p.pageSize!)),
+                  total: formatNumber(p.total),
+                })}
               </span>
-              <Button variant="secondary" size="icon" aria-label="Предыдущая страница" disabled={p.page! <= 1} onClick={() => p.onPageChange?.(p.page! - 1)}>
+              <Button variant="secondary" size="icon" aria-label={t('common.prevPage')} disabled={p.page! <= 1} onClick={() => p.onPageChange?.(p.page! - 1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
                 size="icon"
-                aria-label="Следующая страница"
+                aria-label={t('common.nextPage')}
                 disabled={p.page! >= totalPages}
                 onClick={() => p.onPageChange?.(p.page! + 1)}
               >

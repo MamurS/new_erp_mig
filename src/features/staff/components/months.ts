@@ -1,6 +1,19 @@
 import { defineLabels } from '@/i18n';
 
-const MONTH_IDS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const;
+const MONTH_IDS = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
+] as const;
 const MONTH_LABEL = defineLabels('staff.month', MONTH_IDS);
 
 /** Short month name for chart axes, from `YYYY-MM`: `янв`, `yan`, `Jan`. */

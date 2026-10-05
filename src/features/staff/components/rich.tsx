@@ -9,7 +9,9 @@ export function Rich({ k, values }: { k: I18nKey; values: Record<string, ReactNo
   const parts = t(k).split(/\{(\w+)\}/);
   return (
     <>
-      {parts.map((p, i) => (i % 2 === 1 ? <Fragment key={i}>{p in values ? values[p] : `{${p}}`}</Fragment> : p))}
+      {parts.map((p, i) =>
+        i % 2 === 1 ? <Fragment key={i}>{p in values ? values[p] : `{${p}}`}</Fragment> : p,
+      )}
     </>
   );
 }

@@ -762,12 +762,12 @@ export const contractHandlers = [
         const date = (row.date ?? '').trim();
         const inn = (row.inn ?? '').replace(/\D/g, '').slice(0, 14);
         if (!Number.isInteger(amount) || amount <= 0 || amount > 100_000_000_000 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-          out.unmatched.push({ line, reason: 'Дата ГГГГ-ММ-ДД и сумма — целое число' });
+          out.unmatched.push({ line, reason: msg('srv.statement.badDateOrAmount') });
           continue;
         }
         const docNumber = (row.doc_number ?? '').trim().slice(0, 40);
         if (!docNumber) {
-          out.unmatched.push({ line, reason: 'Нет номера платёжного документа' });
+          out.unmatched.push({ line, reason: msg('srv.statement.noDocNumber') });
           continue;
         }
         // A repeated upload (or the same line twice in one file) changes nothing.

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import * as D from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -16,7 +17,7 @@ export interface ModalProps {
 }
 
 /** Accessible modal (Radix: focus trap, Esc, aria). */
-export function Modal({ open, onOpenChange, title, description, children, footer, className, wide, closeLabel = 'Закрыть' }: ModalProps) {
+export function Modal({ open, onOpenChange, title, description, children, footer, className, wide, closeLabel = t('common.close') }: ModalProps) {
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>

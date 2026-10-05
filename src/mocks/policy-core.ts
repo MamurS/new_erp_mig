@@ -31,7 +31,7 @@ export function parsePolicyList(text: string): { total: number; rows: PolicyList
       return;
     }
     if (seen.has(r.data.pinfl)) {
-      errors.push({ row: idx + 2, field: 'pinfl', message: 'ПИНФЛ повторяется в файле' });
+      errors.push({ row: idx + 2, field: 'pinfl', message: msg('srv.census.pinflRepeated') });
       return;
     }
     seen.add(r.data.pinfl);

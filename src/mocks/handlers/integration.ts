@@ -406,7 +406,7 @@ export const integrationHandlers = [
         try {
           const line = buildLine(d, actor.clinicId, l);
           const problems = lineProblems(d, actor.clinicId, line);
-          if (problems.length) errors[`lines[${i}]`] = problems.join('; ');
+          if (problems.length) errors[`lines[${i}]`] = problems.map(ruText).join('; ');
           return [line];
         } catch {
           errors[`lines[${i}]`] = 'Визит не найден в вашей клинике';

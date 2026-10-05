@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { ReactNode } from 'react';
 import { AlertCircle, Inbox } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -10,7 +11,7 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function SkeletonRows({ rows = 6, className }: { rows?: number; className?: string }) {
   return (
-    <div className={cn('flex flex-col gap-2 p-3', className)} role="status" aria-label="Загрузка">
+    <div className={cn('flex flex-col gap-2 p-3', className)} role="status" aria-label={t('common.loading')}>
       {Array.from({ length: rows }, (_, i) => (
         <Skeleton key={i} className="h-7 w-full" />
       ))}
@@ -45,11 +46,11 @@ export function ErrorState({ error, onRetry, className }: { error: unknown; onRe
   return (
     <div role="alert" className={cn('flex flex-col items-center justify-center gap-2 px-6 py-10 text-center', className)}>
       <AlertCircle className="h-8 w-8 text-danger" aria-hidden />
-      <p className="font-semibold">Не удалось загрузить данные</p>
+      <p className="font-semibold">{t('shell.loadFailed')}</p>
       <p className="max-w-sm text-muted">{errorMessage(error)}</p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry} className="mt-2">
-          Повторить
+          {t('common.retry')}
         </Button>
       )}
     </div>

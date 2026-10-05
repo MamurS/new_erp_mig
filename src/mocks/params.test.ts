@@ -98,7 +98,7 @@ describe('DMS parameters', () => {
     const audit = db().audit.filter((e: AuditEntry) => e.targetType === 'parameter');
     const changed = audit.find((e) => e.action === 'dms_param_changed')!;
     expect(changed.actorName).toBe('Дмитрий Соколов');
-    expect(changed.targetLabel).toMatch(/Порог двух подписей на ГП: 20\s000\s000\sUZS → 25\s000\s000\sUZS/);
+    expect(changed.targetLabel).toMatch(/Порог двух подписей на ГП: 20\s000\s000\s(?:сум|UZS) → 25\s000\s000\s(?:сум|UZS)/);
     expect(changed.reason).toContain('Тимур Алиев');
     expect(changed.at).toBeTruthy();
     expect(audit.some((e) => e.action === 'dms_param_proposed' && e.actorName === 'Тимур Алиев')).toBe(true);

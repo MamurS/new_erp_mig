@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
@@ -36,7 +37,7 @@ export interface Crumb {
 
 export function Breadcrumbs({ items }: { items: Crumb[] }) {
   return (
-    <nav aria-label="Хлебные крошки" className="flex min-w-0 items-center gap-1 text-[13px]">
+    <nav aria-label={t('shell.breadcrumbs')} className="flex min-w-0 items-center gap-1 text-[13px]">
       {items.map((c, i) => (
         <span key={i} className="flex min-w-0 items-center gap-1">
           {i > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />}

@@ -1,3 +1,4 @@
+import { t, tm } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -5,7 +6,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import type { z } from 'zod';
 import { loginSchema } from '@/shared/schemas/forms';
 import { useLogin } from '@/shared/api/queries/auth';
-import { ApiRequestError, errorMessage } from '@/shared/api/client';
+import { errorMessage } from '@/shared/api/client';
 import { takeLogoutNotice, useSession } from '@/shared/auth/session';
 import { homeFor } from '@/shared/auth/home';
 import { targetAfterLogin } from '@/shared/lib/redirect';
@@ -18,7 +19,7 @@ import { AuthCard, Notice } from './AuthCard';
 type Values = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  useDocumentTitle('Вход');
+  useDocumentTitle(t('auth.login.title'));
   const session = useSession();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -41,25 +42,25 @@ export default function LoginPage() {
       const res = await login.mutateAsync(values);
       navigate('/login/otp', { state: { challengeId: res.challengeId, resendInSec: res.resendInSec, next } });
     } catch (e) {
-      setServerError(e instanceof ApiRequestError ? e.message : errorMessage(e));
+      setServerError(errorMessage(e));
       form.setValue('password', '');
       form.setFocus('password');
     }
   });
 
   return (
-    <AuthCard title="Вход" subtitle="Для сотрудников MIG и HR компаний-клиентов">
-      {notice && <Notice>{notice}</Notice>}
+    <AuthCard title={t('auth.login.title')} subtitle={t('auth.login.subtitle')}>
+      {notice && <Notice>{tm(notice)}</Notice>}
       {serverError && <Notice tone="danger">{serverError}</Notice>}
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        <Field label="Email" error={form.formState.errors.email?.message}>
+        <Field label={t('common.email')} error={form.formState.errors.email?.message}>
           {(a) => <Input {...a} type="email" autoComplete="username" {...form.register('email')} />}
         </Field>
-        <Field label="Пароль" error={form.formState.errors.password?.message}>
+        <Field label={t('auth.login.password')} error={form.formState.errors.password?.message}>
           {(a) => <Input {...a} type="password" autoComplete="current-password" {...form.register('password')} />}
         </Field>
         <Button type="submit" size="lg" loading={login.isPending} className="mt-1 h-10 text-[14px]">
-          Войти
+          {t('auth.login.submit')}
         </Button>
       </form>
       {demo && (

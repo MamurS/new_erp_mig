@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { ReactNode } from 'react';
 import { Button } from './button';
 import { Modal } from './dialog';
@@ -27,7 +28,7 @@ export function ConfirmDialog(p: ConfirmDialogProps) {
       footer={
         <>
           <Button variant="secondary" onClick={() => p.onOpenChange(false)}>
-            {p.cancelLabel ?? 'Отмена'}
+            {p.cancelLabel ?? t('common.cancel')}
           </Button>
           <Button variant={p.danger ? 'danger' : 'primary'} loading={p.loading} disabled={p.disabled} onClick={p.onConfirm}>
             {p.confirmLabel}

@@ -3,6 +3,7 @@
  * integration API (ASSISTANCE_SPEC). Scope by the date of the event, payers of registry lines, limits
  * with guarantee reserves, rebills with automatic checks, KPI and the quality-control sample.
  */
+import { msg } from '@/i18n/core';
 import type {
   AssistanceCompany,
   AssistanceKpi,
@@ -199,7 +200,7 @@ export function findRegistryLine(d: Db, lineId: UUID): { r: Registry; l: Registr
 /** Automatic checks of one rebill line against the data of MIG (§5.5). */
 export function checksFor(d: Db, rebill: Pick<Rebill, 'id' | 'assistanceId'>, line: Pick<RebillLine, 'registryLineId'>): RebillLine['checks'] {
   const found = findRegistryLine(d, line.registryLineId);
-  if (!found) return [{ code: 'not_paid_to_clinic', message: 'Строка реестра не найдена' }];
+  if (!found) return [{ code: 'not_paid_to_clinic', message: msg('srv.rebill.registryLineNotFound') }];
   const { r, l } = found;
   const who = insuredOfVisit(d, l.visitId);
   const policy = who && d.policies.find((p) => p.id === who.policyId);

@@ -39,7 +39,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.layout.openSearch': 'Qidiruvni ochish',
   'staff.layout.mfaHint': 'Korporativ VPN orqali MFA bilan kirish',
   'staff.palette.title': 'Buyruqlar palitrasi',
-  'staff.palette.description': 'Mijozlar, polislar, sugʻurtalanganlar, zararlar va boʻlimlar boʻyicha qidiruv',
+  'staff.palette.description':
+    'Mijozlar, polislar, sugʻurtalanganlar, zararlar va boʻlimlar boʻyicha qidiruv',
   'staff.palette.placeholder': 'Mijoz, STIR, polis yoki zarar raqami, F.I.Sh.…',
   'staff.palette.minChars': 'Kamida 2 ta belgi kiriting',
   'staff.palette.clients': 'Mijozlar',
@@ -59,18 +60,22 @@ export const staff: Translation<typeof Ru> = {
   'staff.docs.caption': 'Mijoz hujjatlari',
   'staff.docs.empty': 'Hujjatlar yoʻq',
   'staff.docs.revokeTitle': 'TT qaytarib olinsinmi?',
-  'staff.docs.revokeText': 'Mijozning HR xodimi bu taklifni koʻrmaydi. Yangi versiyasini yaratish mumkin boʻladi.',
+  'staff.docs.revokeText':
+    'Mijozning HR xodimi bu taklifni koʻrmaydi. Yangi versiyasini yaratish mumkin boʻladi.',
   'staff.export.label': 'CSV ga eksport',
   'staff.export.done': 'Eksport tayyor. Audit jurnaliga yozuv qoʻshildi',
   'staff.hrLetter.defaultSubject': 'ITS polisini uzaytirish',
-  'staff.hrLetter.defaultText': 'Assalomu alaykum! Kompaniyangiz ITS polisining amal qilish muddati tez orada tugashini eslatamiz. Uzaytirish boʻyicha taklif tayyorlaymiz — iltimos, ushbu xatga javob bering.',
+  'staff.hrLetter.defaultText':
+    'Assalomu alaykum! Kompaniyangiz ITS polisining amal qilish muddati tez orada tugashini eslatamiz. Uzaytirish boʻyicha taklif tayyorlaymiz — iltimos, ushbu xatga javob bering.',
   'staff.hrLetter.title': 'HR ga xat',
-  'staff.hrLetter.description': 'Xat «{client}» kompaniyasining HR kontaktiga dms@mig.example manzilidan yuboriladi.',
+  'staff.hrLetter.description':
+    'Xat «{client}» kompaniyasining HR kontaktiga dms@mig.example manzilidan yuboriladi.',
   'staff.hrLetter.sent': 'HR ga xat yuborildi',
   'staff.hrLetter.submit': 'Xatni yuborish',
   'staff.hrLetter.subject': 'Mavzu',
   'staff.hrLetter.text': 'Matn',
-  'staff.limits.nearWarning': 'Limit deyarli tugadi: {categories}. Mijozdan qoʻshimcha toʻlov yoki limitni oʻzgartirish kerakligini aniqlang.',
+  'staff.limits.nearWarning':
+    'Limit deyarli tugadi: {categories}. Mijozdan qoʻshimcha toʻlov yoki limitni oʻzgartirish kerakligini aniqlang.',
   'staff.limits.barLabel': '«{category}» limiti',
   'staff.limits.reservedGl': 'Tasdiqlangan kafolat xatlari boʻyicha zaxira',
   'staff.limits.reservedRest': '{reserved} · qoldiq {rest}',
@@ -84,7 +89,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.sla.overdue': 'muddati oʻtgan {when}',
   'staff.medical.expired': 'Tibbiy kartaga kirish muddati tugadi',
   'staff.medical.title': 'Tibbiy karta',
-  'staff.medical.closedForRole': 'Rolingiz uchun yopiq. Uni sababini koʻrsatgan holda ekspert shifokor ochishi mumkin',
+  'staff.medical.closedForRole':
+    'Rolingiz uchun yopiq. Uni sababini koʻrsatgan holda ekspert shifokor ochishi mumkin',
   'staff.medical.timeLeft': 'Kirish yana {time}',
   'staff.medical.close': 'Tibbiy kartani yopish',
   'staff.medical.hint': 'Kirish sabab koʻrsatilgan holda 15 daqiqaga beriladi va audit jurnaliga yoziladi.',
@@ -97,7 +103,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.medical.reasonMin': 'Sababini yozing: kamida 10 ta belgi',
   'staff.medical.opened': 'Tibbiy karta 15 daqiqaga ochildi',
   'staff.medical.accessTitle': 'Tibbiy kartaga kirish',
-  'staff.medical.accessText': 'Sababini koʻrsating. Kirish 15 daqiqa amal qiladi va audit jurnaliga yoziladi.',
+  'staff.medical.accessText':
+    'Sababini koʻrsating. Kirish 15 daqiqa amal qiladi va audit jurnaliga yoziladi.',
   'staff.medical.quickClaim': 'Zarar boʻyicha tibbiy ekspertiza',
   'staff.medical.quickTreatment': 'Davolanish asosliligini tekshirish',
   'staff.medical.reason': 'Sabab',
@@ -220,7 +227,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.clientCard.chartAria': 'Oxirgi 12 oy uchun oylar boʻyicha zararlar summasi grafigi',
   'staff.clientCard.monthTooltip': 'Oy: {month}',
   'staff.clientCard.claimsByCategory': 'Toifalar boʻyicha zararlar',
-  'staff.clientCard.aggregatesOnly': 'Faqat umumlashtirilgan koʻrsatkichlar, tashxislar va alohida shaxslar maʼlumotlarisiz.',
+  'staff.clientCard.aggregatesOnly':
+    'Faqat umumlashtirilgan koʻrsatkichlar, tashxislar va alohida shaxslar maʼlumotlarisiz.',
   'staff.clientCard.noClaims': 'Zararlar yoʻq',
   'staff.clientCard.count': 'Soni',
   'staff.clientCard.colPinfl': 'JShShIR',
@@ -264,7 +272,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.insuredCard.chooseClinic': 'Klinikani tanlang',
   'staff.insuredCard.day': 'Kun',
   'staff.insuredCard.noSlots': 'Boʻsh vaqt yoʻq — boshqa kunni tanlang',
-  'staff.insuredCard.glDescription': 'Xat klinikaga xizmat polis boʻyicha toʻlanishini tasdiqlaydi. «Hujjatlar» boʻlimida paydo boʻladi.',
+  'staff.insuredCard.glDescription':
+    'Xat klinikaga xizmat polis boʻyicha toʻlanishini tasdiqlaydi. «Hujjatlar» boʻlimida paydo boʻladi.',
   'staff.insuredCard.glCreated': 'Kafolat xati yaratildi',
   'staff.insuredCard.glCreate': 'Kafolat xatini yaratish',
   'staff.insuredCard.serviceHint': 'Masalan: bel qismi MRT',
@@ -290,15 +299,19 @@ export const staff: Translation<typeof Ru> = {
   'staff.claimCard.dateTime': 'Sana va vaqt',
   'staff.claimCard.receiptAmount': 'Chek summasi',
   'staff.claimCard.sellerInn': 'Savdo nuqtasining STIR',
-  'staff.claimCard.fiscalHint': 'Server tomonidan chek fotosuratidan aniqlandi. Soliq QR kodi boʻyicha haqiqiylik backendda tekshiriladi.',
+  'staff.claimCard.fiscalHint':
+    'Server tomonidan chek fotosuratidan aniqlandi. Soliq QR kodi boʻyicha haqiqiylik backendda tekshiriladi.',
   'staff.claimCard.attachments': 'Ilovalar',
   'staff.claimCard.noAttachments': 'Ilovalar yoʻq',
   'staff.claimCard.unavailable': '{action} mavjud emas: {reason}',
   'staff.claimCard.limitCheck': 'Limitni tekshirish',
-  'staff.claimCard.limitText': '«{label}» limiti: {limit} dan {used} ishlatilgan, toʻlovdan keyin {after} qoladi',
+  'staff.claimCard.limitText':
+    '«{label}» limiti: {limit} dan {used} ishlatilgan, toʻlovdan keyin {after} qoladi',
   'staff.claimCard.usedPlusPayout': 'Ishlatilgan + ushbu toʻlov',
-  'staff.claimCard.exceeds': 'Summa limit qoldigʻidan {over} ga oshadi. Qisman — {amount} ga tasdiqlashni taklif qilamiz.',
-  'staff.claimCard.medicalRequired': 'Bu zarar uchun tibbiy ekspertiza majburiy: stomatologiya, statsionar yoki summa 5 000 000 soʻmdan ortiq.',
+  'staff.claimCard.exceeds':
+    'Summa limit qoldigʻidan {over} ga oshadi. Qisman — {amount} ga tasdiqlashni taklif qilamiz.',
+  'staff.claimCard.medicalRequired':
+    'Bu zarar uchun tibbiy ekspertiza majburiy: stomatologiya, statsionar yoki summa 5 000 000 soʻmdan ortiq.',
   'staff.claimCard.openAttachment': '{name} ilovasini ochish',
   'staff.claimCard.zoomOut': 'Kichraytirish',
   'staff.claimCard.zoomIn': 'Kattalashtirish',
@@ -308,7 +321,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.claimCard.amountRange': 'Summa 1 dan talab qilingan summagacha',
   'staff.claimCard.partialComment': 'Qisman tasdiqlandi',
   'staff.claimCard.transitionTitle': '{action}: {number}',
-  'staff.claimCard.rejectText': 'Sugʻurtalangan shaxs rad etish sababini ilovada koʻradi. Rad etishni bekor qilib boʻlmaydi — faqat yangi murojaat orqali.',
+  'staff.claimCard.rejectText':
+    'Sugʻurtalangan shaxs rad etish sababini ilovada koʻradi. Rad etishni bekor qilib boʻlmaydi — faqat yangi murojaat orqali.',
   'staff.claimCard.approveText': 'Tasdiqlangandan keyin zarar toʻlov uchun buxgalteriyaga yuboriladi.',
   'staff.claimCard.statusText': 'Holat «{status}» ga oʻzgaradi. Harakat jurnalga yoziladi.',
   'staff.claimCard.payoutUzs': 'Toʻlanadigan summa, soʻm',
@@ -352,7 +366,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.policyCard.insuredCaption': 'Polis boʻyicha sugʻurtalanganlar',
   'staff.audit.title': 'Audit jurnali',
   'staff.audit.colObject': 'Obyekt',
-  'staff.audit.intro': 'Barcha kirishlar, shaxsga doir va tibbiy maʼlumotlarni koʻrishlar, eksportlar va huquqlar oʻzgarishlari. Obyektlar shaxsga doir maʼlumotlarsiz koʻrsatilgan.',
+  'staff.audit.intro':
+    'Barcha kirishlar, shaxsga doir va tibbiy maʼlumotlarni koʻrishlar, eksportlar va huquqlar oʻzgarishlari. Obyektlar shaxsga doir maʼlumotlarsiz koʻrsatilgan.',
   'staff.audit.allEmployees': 'Barcha xodimlar',
   'staff.audit.assistance': 'Assistans',
   'staff.audit.allInclMig': 'Hammasi, MIG bilan birga',
@@ -380,7 +395,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.appts.dayCaption': '{date} kuni klinikalar boʻyicha qabullar',
   'staff.appts.reasonRequired': 'Sababini koʻrsating',
   'staff.appts.declineTitle': 'Qabulni rad etish',
-  'staff.appts.declineText': 'Sugʻurtalangan shaxs sababi koʻrsatilgan bildirishnoma oladi va boshqa vaqtga yozilishi mumkin.',
+  'staff.appts.declineText':
+    'Sugʻurtalangan shaxs sababi koʻrsatilgan bildirishnoma oladi va boshqa vaqtga yozilishi mumkin.',
   'staff.appts.declined': 'Qabul rad etildi',
   'staff.appts.quickDoctor': 'Shifokor bu vaqtda qabul qilmaydi',
   'staff.appts.quickProgram': 'Klinika bu dastur bilan ishlamaydi',
@@ -419,16 +435,19 @@ export const staff: Translation<typeof Ru> = {
   'staff.users.deactivate': 'Faolsizlantirish',
   'staff.users.activate': 'Faollashtirish',
   'staff.users.roleTitle': 'Rol oʻzgartirilsinmi?',
-  'staff.users.roleText': '{name}: «{from}» → «{to}». Huquqlar darhol oʻzgaradi, xodimning faol seanslari yakunlanadi. Harakat audit jurnaliga yoziladi.',
+  'staff.users.roleText':
+    '{name}: «{from}» → «{to}». Huquqlar darhol oʻzgaradi, xodimning faol seanslari yakunlanadi. Harakat audit jurnaliga yoziladi.',
   'staff.users.roleConfirm': 'Rolni oʻzgartirish',
   'staff.users.roleChanged': 'Rol oʻzgartirildi',
   'staff.users.deactivateTitle': 'Xodim faolsizlantirilsinmi?',
-  'staff.users.deactivateText': '{name} endi kira olmaydi, faol seanslar yakunlanadi. Maʼlumotlar va jurnal saqlanadi.',
+  'staff.users.deactivateText':
+    '{name} endi kira olmaydi, faol seanslar yakunlanadi. Maʼlumotlar va jurnal saqlanadi.',
   'staff.users.deactivatedToast': 'Xodim faolsizlantirildi',
   'staff.users.activateTitle': 'Xodim faollashtirilsinmi?',
   'staff.users.activateText': 'Xodim yana portalga kira oladi.',
   'staff.users.activatedToast': 'Xodim faollashtirildi',
-  'staff.users.intro': 'Portalga kirish huquqiga ega MIG xodimlari. Administrator tibbiy maʼlumotlar va zararlarga kira olmaydi.',
+  'staff.users.intro':
+    'Portalga kirish huquqiga ega MIG xodimlari. Administrator tibbiy maʼlumotlar va zararlarga kira olmaydi.',
   'staff.users.caption': 'Xodimlar',
   'staff.reports.title': 'Hisobotlar',
   'staff.reports.lossByClient': 'Mijozlar boʻyicha zararlilik darajasi',
@@ -453,10 +472,12 @@ export const staff: Translation<typeof Ru> = {
   'staff.reports.colPaid': 'Toʻlovlar',
   'staff.reports.colFee': 'Mukofot puli',
   'staff.reports.colPerInsured': 'Bir sugʻurtalangan shaxsga',
-  'staff.reports.footnote': 'Zararlilik darajasi foizlari: {pct} va undan yuqorisi toʻq sariq rangda belgilangan.',
+  'staff.reports.footnote':
+    'Zararlilik darajasi foizlari: {pct} va undan yuqorisi toʻq sariq rangda belgilangan.',
   'staff.loss.docTitle': 'Mijozning zararlilik darajasi',
   'staff.loss.heading': 'Zararlilik darajasi: {client}',
-  'staff.loss.subtitle': 'Faqat 12 oy uchun umumlashtirilgan koʻrsatkichlar: summalar, toifalar va oylar. Alohida zararlar, sugʻurtalanganlar va tashxislar bu yerda koʻrsatilmaydi.',
+  'staff.loss.subtitle':
+    'Faqat 12 oy uchun umumlashtirilgan koʻrsatkichlar: summalar, toifalar va oylar. Alohida zararlar, sugʻurtalanganlar va tashxislar bu yerda koʻrsatilmaydi.',
   'staff.loss.claimsAmount': 'Zararlar (toʻlovlar va talab qilingan)',
   'staff.loss.requests': 'Murojaatlar',
   'staff.loss.threshold': 'Eʼtibor chegarasi — {pct} (ITS parametri «Zararlilik darajasi chegarasi»).',
@@ -479,7 +500,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.limitReq.tab.approved': 'Tasdiqlanganlar',
   'staff.limitReq.tab.rejected': 'Rad etilganlar',
   'staff.limitReq.empty': 'Soʻrovlar yoʻq',
-  'staff.limitReq.emptyHint': 'Limitni oʻzgartirishni sugʻurtalangan shaxs yoki polis kartochkasidan soʻrash mumkin',
+  'staff.limitReq.emptyHint':
+    'Limitni oʻzgartirishni sugʻurtalangan shaxs yoki polis kartochkasidan soʻrash mumkin',
   'staff.limitReq.rejectTitle': 'Soʻrovni rad etish',
   'staff.limitReq.rejectText': 'Limit avvalgidek qoladi. Soʻrov muallifi izohingizni koʻradi.',
   'staff.limitReq.rejected': 'Soʻrov rad etildi',
@@ -496,7 +518,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.params.newValueUnit': 'Yangi qiymat, {unit}',
   'staff.params.basis': 'Asos',
   'staff.params.basisHint': 'Masalan, buyruq raqami yoki boshqaruv qarori',
-  'staff.params.applyNote': 'Qiymat boshqa administrator yoki anderrayter tasdiqlagandan keyin oʻzgaradi. Taklif va qaror audit jurnaliga yoziladi.',
+  'staff.params.applyNote':
+    'Qiymat boshqa administrator yoki anderrayter tasdiqlagandan keyin oʻzgaradi. Taklif va qaror audit jurnaliga yoziladi.',
   'staff.params.withdrawProposal': 'Taklifni qaytarib olish',
   'staff.params.rejectChange': 'Oʻzgarishni rad etish',
   'staff.params.withdrawn': 'Taklif qaytarib olindi',
@@ -507,7 +530,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.params.confirmAria': 'Tasdiqlash: {label}',
   'staff.params.applied': 'Oʻzgarish qoʻllandi',
   'staff.params.title': 'ITS parametrlari',
-  'staff.params.intro': 'Portallar, mock-server va integratsiyalar ishlaydigan biznes parametrlari. «Demo qiymat» belgisi MIG oʻz qiymatini tasdiqlamaguncha turadi. Oʻzgarish ikkinchi xodim (administrator yoki anderrayter) tasdiqlagandan keyin qoʻllanadi.',
+  'staff.params.intro':
+    'Portallar, mock-server va integratsiyalar ishlaydigan biznes parametrlari. «Demo qiymat» belgisi MIG oʻz qiymatini tasdiqlamaguncha turadi. Oʻzgarish ikkinchi xodim (administrator yoki anderrayter) tasdiqlagandan keyin qoʻllanadi.',
   'staff.params.colParam': 'Parametr',
   'staff.params.colValue': 'Qiymat',
   'staff.params.colAllowed': 'Ruxsat etilgan',

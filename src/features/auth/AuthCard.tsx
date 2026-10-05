@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { t } from '@/i18n';
+import { LanguageSwitch } from '@/shared/ui/language-switch';
 import { ShieldCheck } from 'lucide-react';
 
 export function AuthCard({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
@@ -11,8 +13,9 @@ export function AuthCard({ title, subtitle, children, footer }: { title: string;
           </span>
           <div>
             <div className="font-bold">Mosaic Insurance Group</div>
-            <div className="text-[12px] text-muted">ДМС · портал сотрудников и клиентов</div>
+            <div className="text-[12px] text-muted">{t('auth.card.tagline')}</div>
           </div>
+          <LanguageSwitch className="ml-auto" />
         </div>
         <div className="rounded-card border border-border bg-surface p-6">
           <h1 className="text-[20px] font-bold">{title}</h1>

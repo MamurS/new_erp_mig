@@ -293,7 +293,8 @@ describe('payment matching (1C statement)', () => {
     expect(third.data.matched + third.data.queued).toBe(2);
     // A line without the payment document number is an error, not a payment.
     const noDoc = await call<ImportPaymentsResult>('/payments/import-1c', { method: 'POST', sid: acc, text: `doc_number,date,amount,inn,purpose\n,${today()},1000,${c.inn},x` });
-    expect(noDoc.data.unmatched).toEqual([{ line: 2, reason: 'Нет номера платёжного документа' }]);
+    expect(noDoc.data.unmatched).toEqual([{ line: 2, reason: 'srv.statement.noDocNumber' }]);
+    expect(tm(noDoc.data.unmatched[0]?.reason)).toBe('Нет номера платёжного документа');
     expect((await call('/payments/import-1c', { method: 'POST', sid: acc, text: `date,amount,inn,purpose\n${today()},1000,${c.inn},x` })).status).toBe(422);
   });
 

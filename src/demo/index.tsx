@@ -2,6 +2,7 @@
  * Demo module. Loaded only when VITE_DEMO_MODE === 'true'; absent from other builds.
  * «Войти как…» performs a real login through the mock API, it never changes the role client-side.
  */
+import { defineLabels, t } from '@/i18n';
 import { useEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { flushSync } from 'react-dom';
@@ -24,13 +25,14 @@ import { DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_CODE, DEMO_HR, DEMO_INSURED_
 type Account = { role: Role; login: string; label?: string };
 
 /** One entry per demo account, grouped by portal: a role may have several (a claims officer and their head). */
-const GROUPS: { title: string; accounts: Account[] }[] = [
-  { title: 'МИГ', accounts: DEMO_STAFF.map((s) => ({ role: s.role as Role, login: s.email, label: s.label })) },
-  { title: 'Ассистанс', accounts: DEMO_ASSIST_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
-  { title: 'Клиника', accounts: DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
-  { title: 'HR компании', accounts: [{ role: 'hr', login: DEMO_HR.email }] },
-  { title: 'Застрахованный', accounts: [{ role: 'insured', login: '+998 90 000 00 01' }] },
+const GROUPS: { id: 'mig' | 'assist' | 'clinic' | 'hr' | 'insured'; accounts: Account[] }[] = [
+  { id: 'mig', accounts: DEMO_STAFF.map((s) => ({ role: s.role as Role, login: s.email, label: s.label })) },
+  { id: 'assist', accounts: DEMO_ASSIST_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
+  { id: 'clinic', accounts: DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
+  { id: 'hr', accounts: [{ role: 'hr', login: DEMO_HR.email }] },
+  { id: 'insured', accounts: [{ role: 'insured', login: '+998 90 000 00 01' }] },
 ];
+const GROUP_TITLE = defineLabels('demo.group', ['mig', 'assist', 'clinic', 'hr', 'insured'] as const);
 
 const accountLabel = (a: Account) => a.label ?? ROLE_LABEL[a.role];
 
@@ -73,11 +75,11 @@ function DemoBanner() {
       data-theme="staff"
       className="sticky top-0 z-45 flex h-9 items-center justify-between gap-2 border-b border-warning/40 bg-warning-soft px-3 text-[12px] text-warning-text"
       role="region"
-      aria-label="Демо-режим"
+      aria-label={t('demo.banner.label')}
     >
       <span className="flex min-w-0 items-center gap-1.5 truncate font-semibold">
         <FlaskConical className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        Демо-версия · все данные вымышленные
+        {t('demo.banner.text')}
       </span>
       <div className="flex shrink-0 items-center gap-1">
         <LoginAsMenu
@@ -88,7 +90,7 @@ function DemoBanner() {
               qc.clear();
               const role = await loginAs(a);
               navigate(homeFor(role));
-              toast.success(`Вы вошли как «${a.label ?? ROLE_LABEL[role]}»`);
+              toast.success(t('demo.loginAs.done', { label: a.label ?? ROLE_LABEL[role] }));
             } catch (e) {
               toast.error(errorMessage(e));
             } finally {
@@ -101,7 +103,7 @@ function DemoBanner() {
           className="hidden h-7 items-center gap-1 rounded-btn px-2 font-medium hover:bg-warning/10 sm:inline-flex"
           onClick={() => setConfirmReset(true)}
         >
-          <RotateCcw className="h-3 w-3" aria-hidden /> Сбросить данные
+          <RotateCcw className="h-3 w-3" aria-hidden /> {t('demo.reset.action')}
         </button>
         <label className="hidden cursor-pointer items-center gap-1.5 px-2 font-medium md:flex">
           <input
@@ -112,22 +114,22 @@ function DemoBanner() {
               setFailures(enabled);
               try {
                 await request('/__demo/failures', { method: 'POST', body: { enabled } });
-                toast.info(enabled ? 'Сбои сети включены: 10% запросов завершатся ошибкой' : 'Сбои сети выключены');
+                toast.info(enabled ? t('demo.failures.on') : t('demo.failures.off'));
               } catch (err) {
                 setFailures(!enabled);
                 toast.error(errorMessage(err));
               }
             }}
           />
-          Имитировать сбои сети
+          {t('demo.failures.label')}
         </label>
       </div>
       <ConfirmDialog
         open={confirmReset}
         onOpenChange={setConfirmReset}
-        title="Сбросить данные?"
-        description="Все изменения в демо (записи, убытки, сотрудники, журнал) будут удалены, данные вернутся к исходным."
-        confirmLabel="Сбросить данные"
+        title={t('demo.reset.title')}
+        description={t('demo.reset.description')}
+        confirmLabel={t('demo.reset.action')}
         danger
         loading={busy}
         onConfirm={async () => {
@@ -135,7 +137,7 @@ function DemoBanner() {
           try {
             await request('/__demo/reset', { method: 'POST' });
             await qc.invalidateQueries();
-            toast.success('Данные сброшены');
+            toast.success(t('demo.reset.done'));
             setConfirmReset(false);
           } catch (e) {
             toast.error(errorMessage(e));
@@ -154,7 +156,9 @@ function LoginAsMenu({ busy, onPick }: { busy: boolean; onPick: (a: Account) => 
   const [query, setQuery] = useState('');
   const list = useRef<HTMLDivElement>(null);
   const q = query.trim().toLowerCase();
-  const groups = GROUPS.map((g) => ({ ...g, accounts: g.accounts.filter((a) => !q || `${g.title} ${accountLabel(a)} ${a.login}`.toLowerCase().includes(q)) })).filter((g) => g.accounts.length > 0);
+  const groups = GROUPS.map((g) => ({ ...g, title: GROUP_TITLE[g.id] }))
+    .map((g) => ({ ...g, accounts: g.accounts.filter((a) => !q || `${g.title} ${accountLabel(a)} ${a.login}`.toLowerCase().includes(q)) }))
+    .filter((g) => g.accounts.length > 0);
   const items = () => Array.from(list.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
   const move = (from: HTMLElement | null, step: number) => {
     const all = items();
@@ -171,7 +175,7 @@ function LoginAsMenu({ busy, onPick }: { busy: boolean; onPick: (a: Account) => 
     >
       <Popover.Trigger asChild>
         <button type="button" className="inline-flex h-7 items-center gap-1 rounded-btn px-2 font-medium hover:bg-warning/10" disabled={busy}>
-          Войти как… <ChevronDown className="h-3 w-3" aria-hidden />
+          {t('demo.loginAs.button')} <ChevronDown className="h-3 w-3" aria-hidden />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -185,8 +189,8 @@ function LoginAsMenu({ busy, onPick }: { busy: boolean; onPick: (a: Account) => 
             <Search className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
             <input
               autoFocus
-              aria-label="Поиск аккаунта"
-              placeholder="Роль, портал или email"
+              aria-label={t('demo.loginAs.search')}
+              placeholder={t('demo.loginAs.placeholder')}
               className="h-10 w-full bg-transparent outline-hidden placeholder:text-muted"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -201,8 +205,8 @@ function LoginAsMenu({ busy, onPick }: { busy: boolean; onPick: (a: Account) => 
               }}
             />
           </div>
-          <div ref={list} role="menu" aria-label="Демо-аккаунты" className="min-h-0 flex-1 overflow-y-auto p-1">
-            {groups.length === 0 && <p className="px-2 py-3 text-muted">Ничего не найдено</p>}
+          <div ref={list} role="menu" aria-label={t('demo.loginAs.menu')} className="min-h-0 flex-1 overflow-y-auto p-1">
+            {groups.length === 0 && <p className="px-2 py-3 text-muted">{t('common.notFound')}</p>}
             {groups.map((g) => (
               <div key={g.title} role="group" aria-label={g.title} className="mb-1">
                 <p aria-hidden className="px-2 pb-0.5 pt-2 text-[11px] text-muted">
@@ -249,7 +253,7 @@ function StaffLoginHints({ onPick }: { onPick: (email: string, password: string)
   return (
     <div className="mt-6 border-t border-border pt-4">
       <p className="mb-2 text-[12px] text-muted">
-        Демо-аккаунты · пароль <span className="num">{DEMO_PASSWORD}</span> · код <span className="num">{DEMO_CODE}</span>
+        {t('demo.hints.staff', { password: DEMO_PASSWORD, code: DEMO_CODE })}
       </p>
       <ul className="flex flex-col gap-1">
         {list.map((a) => (
@@ -259,7 +263,7 @@ function StaffLoginHints({ onPick }: { onPick: (email: string, password: string)
               <span className="block truncate text-[12px] text-muted">{a.email}</span>
             </span>
             <button type="button" className="text-[12px] font-medium text-accent-text hover:underline" onClick={() => onPick(a.email, DEMO_PASSWORD)}>
-              Подставить
+              {t('demo.hints.fill')}
             </button>
           </li>
         ))}
@@ -271,9 +275,9 @@ function StaffLoginHints({ onPick }: { onPick: (email: string, password: string)
 function PhoneLoginHint({ onPick }: { onPick: (phone: string) => void }) {
   return (
     <p className="mt-4 text-center text-[13px] text-muted">
-      Демо: <span className="num">+998 90 000 00 01</span>, код <span className="num">{DEMO_CODE}</span> ·{' '}
+      {t('demo.hints.phone', { phone: '+998 90 000 00 01', code: DEMO_CODE })} ·{' '}
       <button type="button" className="font-semibold text-accent underline" onClick={() => onPick('+998 90 000 00 01')}>
-        Подставить
+        {t('demo.hints.fill')}
       </button>
     </p>
   );
@@ -282,7 +286,7 @@ function PhoneLoginHint({ onPick }: { onPick: (phone: string) => void }) {
 function CodeHint() {
   return (
     <p className="mt-4 text-center text-[12px] text-muted">
-      Демо-код: <span className="num">{DEMO_CODE}</span>
+      {t('demo.hints.demoCode')} <span className="num">{DEMO_CODE}</span>
     </p>
   );
 }
