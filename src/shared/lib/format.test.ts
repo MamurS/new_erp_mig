@@ -39,7 +39,8 @@ describe('format', () => {
     expect(plural(1, ['клиент', 'клиента', 'клиентов'])).toBe('клиент');
     expect(plural(3, ['клиент', 'клиента', 'клиентов'])).toBe('клиента');
     expect(plural(11, ['клиент', 'клиента', 'клиентов'])).toBe('клиентов');
-    expect(initials('ООО Ташкент Агрологистика')).toBe('ТА');
+    expect(initials('Toshkent Agrologistika')).toBe('TA');
+    expect(initials('Oʻzbekiston Temir Yoʻllari')).toBe('OT');
     expect(formatCountdown(65)).toBe('1:05');
   });
 });

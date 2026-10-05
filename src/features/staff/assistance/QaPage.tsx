@@ -9,6 +9,7 @@ import { formatDate } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
+import { legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Textarea } from '@/shared/ui/input';
@@ -41,6 +42,7 @@ export default function QaPage() {
   const columns: Column<QaSampleView>[] = [
     { key: 'date', header: t('staffOps.qa.col.since'), cell: (s) => <span className="num">{formatDate(s.createdAt)}</span> },
     { key: 'who', header: t('staffOps.rebills.col.assistance'), cell: (s) => s.assistanceName },
+    legalFormColumn<QaSampleView>((s) => s.assistanceLegalForm),
     { key: 'type', header: t('common.decision'), cell: (s) => (s.subject.type === 'guarantee' ? t('staffOps.qa.subject.guarantee') : t('staffOps.qa.subject.registryLine')) },
     { key: 'label', header: t('staffOps.qa.col.subject'), cell: (s) => s.subject.label },
     { key: 'verdict', header: t('staffOps.qa.col.verdict'), cell: (s) => <QaVerdict s={s} /> },

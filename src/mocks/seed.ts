@@ -73,7 +73,7 @@ const INDUSTRIES = [
 ];
 /** Legal forms of clients by weight: mostly LLCs, a few JSCs, joint ventures and private enterprises, single others. */
 const CLIENT_FORMS: LegalFormCode[] = [
-  ...Array<LegalFormCode>(11).fill('llc'),
+  ...Array<LegalFormCode>(14).fill('llc'),
   'jsc', 'jsc', 'jsc',
   'jv_llc', 'jv_llc',
   'private_enterprise', 'private_enterprise',

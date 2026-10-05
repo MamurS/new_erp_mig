@@ -98,8 +98,8 @@ describe('Latin seed', () => {
     const d = db();
     for (const x of [...d.clients, ...d.clinics, ...d.assistances]) expect(LEGAL_FORMS).toContain(x.legalForm);
     const forms = d.clients.map((c) => c.legalForm);
-    const llc = forms.filter((f) => f === 'llc').length;
-    expect(llc * 2).toBeGreaterThan(forms.length);
+    const count = (f: string) => forms.filter((x) => x === f).length;
+    for (const f of LEGAL_FORMS.filter((x) => x !== 'llc')) expect(count('llc'), f).toBeGreaterThan(count(f));
     expect(new Set(forms).size).toBeGreaterThanOrEqual(4);
     const demo = d.clients.find((c) => c.name === 'Toshkent Agrologistika');
     expect(demo?.legalForm).toBe('llc');

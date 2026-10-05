@@ -159,11 +159,11 @@ export function plural(n: number, forms: readonly [string, string, string]): str
 
 /** Two-letter initials for avatars. */
 export function initials(name: string): string {
+  // Names of legal entities carry no legal form (it is a separate field), so every word counts.
   const words = name
     .replace(/[«»"'()]/g, ' ')
     .split(/\s+/)
-    // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms in company names (data) are skipped
-    .filter((w) => w && !['ООО', 'АО', 'СП', 'ЧП'].includes(w));
+    .filter(Boolean);
   return words
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? '')

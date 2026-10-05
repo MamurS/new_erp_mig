@@ -6,6 +6,7 @@ import { useCan } from '@/shared/auth/guards';
 import { t } from '@/i18n';
 import { formatDate, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
+import { legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { PageHeader } from '@/shared/ui/page';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
@@ -30,6 +31,7 @@ export default function RebillsPage() {
   const columns: Column<RebillSummary>[] = [
     { key: 'num', header: t('common.number'), cell: (b) => <span className="num font-medium">{b.number}</span> },
     { key: 'who', header: t('staffOps.rebills.col.assistance'), cell: (b) => b.assistanceName },
+    legalFormColumn<RebillSummary>((b) => b.assistanceLegalForm),
     { key: 'period', header: t('common.period'), cell: (b) => <span className="num">{b.period}</span> },
     { key: 'lines', header: t('staffOps.clinicCard.lines'), align: 'right', cell: (b) => <span className="num">{b.lineCount}</span> },
     { key: 'flags', header: t('staffOps.rebills.col.flagged'), align: 'right', cell: (b) => <span className={b.flaggedCount ? 'num font-semibold text-danger-text' : 'num text-muted'}>{b.flaggedCount}</span> },

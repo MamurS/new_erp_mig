@@ -1,3 +1,4 @@
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { t, tp } from '@/i18n';
 import { useState } from 'react';
 import {
@@ -146,7 +147,9 @@ export default function ReportsPage() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.assistanceId ?? 'mig'} className="border-t border-border-soft">
-                    <td className="px-4 py-1.5 font-medium">{r.name}</td>
+                    <td className="px-4 py-1.5 font-medium">
+                      {r.name} <LegalFormChip code={r.legalForm} />
+                    </td>
                     <td className="num px-4 py-1.5 text-right">{formatNumber(r.insuredCount)}</td>
                     <td className="num px-4 py-1.5 text-right">{formatMoney(r.premium)}</td>
                     <td className="num px-4 py-1.5 text-right">{formatMoney(r.paid)}</td>
