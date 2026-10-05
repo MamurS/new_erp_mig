@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { Action } from '@/shared/auth/permissions';
 import type { SessionUser } from '@/shared/types';
 import type {
+import { msg } from '@/i18n/core';
   ClinicDocuments,
   ClinicOverview,
   ClinicUserView,
@@ -82,24 +83,24 @@ async function readForm(request: Request): Promise<FormData> {
   try {
     return await request.formData();
   } catch {
-    throw new HttpError(400, 'validation', 'Некорректные данные формы');
+    throw new HttpError(400, 'validation', 'srv.form.invalid');
   }
 }
 
 /** PDF, JPEG, PNG up to 10 MB, checked by magic bytes (images arrive already re-encoded by the browser). */
 async function readAttachment(file: File): Promise<{ bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'application/pdf' }> {
-  if (file.size === 0 || file.size > GUARANTEE_FILE_MAX_BYTES) throw new HttpError(422, 'validation', 'Файл больше 10 МБ', { files: 'Файл больше 10 МБ' });
+  if (file.size === 0 || file.size > GUARANTEE_FILE_MAX_BYTES) throw new HttpError(422, 'validation', 'srv.file.tooLarge10mb', { fields: { files: msg('srv.file.tooLarge10mb') } });
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = detectMime(bytes);
   if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') {
-    throw new HttpError(422, 'validation', 'Можно загрузить только PDF, JPEG или PNG', { files: 'Неподдерживаемый формат' });
+    throw new HttpError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { files: msg('srv.file.unsupported') } });
   }
   return { bytes, mime };
 }
 
 export async function attachGuaranteeFiles(d: Db, g: GuaranteeRow, form: FormData): Promise<void> {
   const files = form.getAll('files').filter((f): f is File => f instanceof File);
-  if (g.attachments.length + files.length > 10) throw new HttpError(422, 'validation', 'Не больше 10 файлов', { files: 'Не больше 10 файлов' });
+  if (g.attachments.length + files.length > 10) throw new HttpError(422, 'validation', 'srv.file.max10', { fields: { files: msg('srv.file.max10') } });
   for (const file of files) {
     const { bytes, mime } = await readAttachment(file);
     const id = randomId();
@@ -261,7 +262,7 @@ export const clinicHandlers = [
       const { actor, d } = requireClinic(ctx.request, 'guarantees.request');
       const g = d.guarantees.find((x) => x.id === param(ctx, 'id') && x.clinicId === actor.clinicId);
       if (!g) throw notFound();
-      if (g.status !== 'requested' && g.status !== 'info_requested') throw conflict('По этому письму уже принято решение');
+      if (g.status !== 'requested' && g.status !== 'info_requested') throw conflict('srv.guarantee.alreadyDecided');
       const form = await readForm(ctx.request);
       const commentRaw = form.get('comment');
       await attachGuaranteeFiles(d, g, form);
@@ -344,8 +345,8 @@ export const clinicHandlers = [
       const form = await readForm(request);
       const file = form.get('file');
       const { period } = validate(registryBuildSchema, { period: form.get('period') });
-      if (!(file instanceof File)) throw new HttpError(422, 'validation', 'Выберите файл CSV', { file: 'Выберите файл CSV' });
-      if (file.size > REGISTRY_CSV_MAX_BYTES) throw new HttpError(422, 'validation', 'Файл больше 5 МБ', { file: 'Файл больше 5 МБ' });
+      if (!(file instanceof File)) throw new HttpError(422, 'validation', 'srv.file.chooseCsv', { fields: { file: msg('srv.file.chooseCsv') } });
+      if (file.size > REGISTRY_CSV_MAX_BYTES) throw new HttpError(422, 'validation', 'srv.file.tooLarge5mb', { fields: { file: msg('srv.file.tooLarge5mb') } });
       const parsed = Papa.parse<Record<string, string>>(await file.text(), { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim().toLowerCase() });
       if (parsed.data.length > REGISTRY_CSV_MAX_ROWS) throw new HttpError(422, 'validation', `Не больше ${REGISTRY_CSV_MAX_ROWS} строк`, { file: 'Слишком много строк' });
       const required = ['visit_id', 'service_date', 'service_code', 'icd10', 'quantity', 'price'];
@@ -386,7 +387,7 @@ export const clinicHandlers = [
       }
       const out: RegistryImportResult = { total: parsed.data.length, valid: lines.length, errors };
       if (url.searchParams.get('commit') === '1') {
-        if (!lines.length) throw new HttpError(422, 'validation', 'Нет корректных строк для загрузки');
+        if (!lines.length) throw new HttpError(422, 'validation', 'srv.registry.noValidRows');
         const reg = { id: randomId(), clinicId: actor.clinicId, period, status: 'draft' as const, source: 'csv' as const, lines, totals: { claimed: 0, accepted: 0, rejected: 0, paid: 0 } };
         recomputeRegistry(reg);
         d.registries.push(reg);
@@ -400,7 +401,7 @@ export const clinicHandlers = [
     route(async (ctx) => {
       const { actor, d } = requireClinic(ctx.request, 'registries.submit');
       const r = registryOfClinic(d, actor.clinicId, param(ctx, 'id'));
-      if (r.status !== 'draft') throw conflict('Менять можно только черновик');
+      if (r.status !== 'draft') throw conflict('srv.registry.draftOnly');
       r.lines.push(buildLine(d, actor.clinicId, await body(ctx.request, registryLineInput)));
       recomputeRegistry(r);
       return toRegistryView(d, r);
@@ -411,7 +412,7 @@ export const clinicHandlers = [
     route((ctx) => {
       const { actor, d } = requireClinic(ctx.request, 'registries.submit');
       const r = registryOfClinic(d, actor.clinicId, param(ctx, 'id'));
-      if (r.status !== 'draft') throw conflict('Менять можно только черновик');
+      if (r.status !== 'draft') throw conflict('srv.registry.draftOnly');
       const lineId = param(ctx, 'lineId');
       if (!r.lines.some((l) => l.id === lineId)) throw notFound();
       r.lines = r.lines.filter((l) => l.id !== lineId);
@@ -435,7 +436,7 @@ export const clinicHandlers = [
       const r = registryOfClinic(d, actor.clinicId, param(ctx, 'id'));
       const line = r.lines.find((l) => l.id === param(ctx, 'lineId'));
       if (!line) throw notFound();
-      if (line.status !== 'rejected' || r.status === 'paid') throw conflict('Оспорить можно только отклонённую строку неоплаченного реестра');
+      if (line.status !== 'rejected' || r.status === 'paid') throw conflict('srv.registry.disputeRejectedUnpaid');
       line.disputeComment = (await body(ctx.request, disputeRequest)).comment;
       line.status = 'disputed';
       pushEvent(d, actor.clinicId, `Оспорена строка реестра за ${r.period}`);
@@ -472,7 +473,7 @@ export const clinicHandlers = [
       const { actor, d } = requireClinic(request, 'clinic.users.manage');
       const input = await body(request, clinicUserInviteSchema);
       if (d.clinicUsers.some((u) => u.email === input.email) || d.staff.some((s) => s.email === input.email) || d.hrUsers.some((h) => h.email === input.email)) {
-        throw new HttpError(409, 'conflict', 'Пользователь с таким email уже есть', { email: 'Email уже используется' });
+        throw new HttpError(409, 'conflict', 'srv.users.emailTaken', { fields: { email: msg('srv.users.emailInUse') } });
       }
       const row: ClinicUserRow = { id: randomId(), ...input, password: DEMO_PASSWORD, clinicId: actor.clinicId, active: true, createdAt: tzIso(Date.now()) };
       d.clinicUsers.push(row);
@@ -487,7 +488,7 @@ export const clinicHandlers = [
       const u = d.clinicUsers.find((x) => x.id === param(ctx, 'id') && x.clinicId === actor.clinicId);
       if (!u) throw notFound();
       const patch = await body(ctx.request, clinicUserPatchSchema);
-      if (u.id === actor.id && (patch.active === false || patch.role === 'clinic_registrar')) throw conflict('Нельзя деактивировать себя или снять с себя роль администратора');
+      if (u.id === actor.id && (patch.active === false || patch.role === 'clinic_registrar')) throw conflict('srv.clinicUsers.selfChange');
       if (patch.role) u.role = patch.role;
       if (patch.active !== undefined) {
         u.active = patch.active;
@@ -512,7 +513,7 @@ export function createGuarantee(
 ): GuaranteeRow {
   const v = requireVisit(d, actor.clinicId, input.visitId);
   const svc = priceListOf(d, actor.clinicId).find((p) => p.code === input.serviceCode);
-  if (!svc) throw new HttpError(422, 'validation', 'Услуги нет в прайсе договора', { serviceCode: 'Выберите услугу из прайса' });
+  if (!svc) throw new HttpError(422, 'validation', 'srv.registry.serviceNotInPrice', { fields: { serviceCode: msg('srv.registry.chooseService') } });
   const who = d.insured.find((i) => i.id === v.insuredId)!;
   // The letter goes to the assistance of the insured person on the date of the request (ASSISTANCE_SPEC §5.2).
   const assistanceId = assistanceOn(d.assignments, who.policyId, isoDay(Date.now()));
@@ -545,7 +546,7 @@ export function createGuarantee(
 }
 
 export function revokeKey(d: Db, k: IntegrationClientRow, actor: { id: string; displayName: string; role: SessionUser['role'] }): void {
-  if (k.revokedAt) throw conflict('Ключ уже отозван');
+  if (k.revokedAt) throw conflict('srv.apiKeys.alreadyRevoked');
   k.revokedAt = tzIso(Date.now());
   // Already issued tokens stop working immediately.
   d.accessTokens = d.accessTokens.filter((t) => t.clientRowId !== k.id);

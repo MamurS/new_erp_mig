@@ -15,6 +15,7 @@ import { addDays, addPendingScan, addSignature, buildPaymentSchedule, contractNu
 import { PERIODICITIES } from '@/shared/domain/endorsements';
 import { clausesOf, DOC_TEMPLATES } from '@/features/documents/templates';
 import {
+import { msg } from '@/i18n/core';
   changeRequestCreateSchema,
   contractCreateSchema,
   contractPatchSchema,
@@ -190,16 +191,16 @@ async function readScan(request: Request): Promise<{ side: Side; bytes: Uint8Arr
   try {
     form = await request.formData();
   } catch {
-    throw new HttpError(400, 'validation', 'Некорректные данные формы');
+    throw new HttpError(400, 'validation', 'srv.form.invalid');
   }
   const side = form.get('side');
-  if (side !== 'mig' && side !== 'client') throw new HttpError(422, 'validation', 'Укажите сторону', { side: 'mig или client' });
+  if (side !== 'mig' && side !== 'client') throw new HttpError(422, 'validation', 'srv.signing.sideRequired', { fields: { side: msg('srv.signing.sideHint') } });
   const file = form.get('file');
-  if (!(file instanceof File)) throw new HttpError(422, 'validation', 'Добавьте файл скана', { file: 'Добавьте файл' });
-  if (file.size === 0 || file.size > SCAN_MAX_BYTES) throw new HttpError(422, 'validation', 'Файл больше 20 МБ', { file: 'Файл больше 20 МБ' });
+  if (!(file instanceof File)) throw new HttpError(422, 'validation', 'srv.signing.addScan', { fields: { file: msg('srv.signing.addFile') } });
+  if (file.size === 0 || file.size > SCAN_MAX_BYTES) throw new HttpError(422, 'validation', 'srv.file.tooLarge20mb', { fields: { file: msg('srv.file.tooLarge20mb') } });
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = detectMime(bytes);
-  if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') throw new HttpError(422, 'validation', 'Можно загрузить только PDF, JPEG или PNG', { file: 'Неподдерживаемый формат' });
+  if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') throw new HttpError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { file: msg('srv.file.unsupported') } });
   return { side, bytes, mime };
 }
 
@@ -215,8 +216,8 @@ function signingRoutes(kind: Kind) {
   };
   const signable = (ref: DocRef, side: Side) => {
     const ok = side === 'mig' ? ['approved', 'sent', 'signing'] : ['sent', 'signing'];
-    if (!ok.includes(ref.status)) throw conflict(side === 'client' ? 'Документ ещё не отправлен клиенту' : 'Документ ещё не согласован');
-    if (ref.signing[side]) throw conflict(side === 'mig' ? 'МИГ уже подписал' : 'Клиент уже подписал');
+    if (!ok.includes(ref.status)) throw conflict(side === 'client' ? 'srv.doc.notSentToClient' : 'srv.doc.notApproved');
+    if (ref.signing[side]) throw conflict(side === 'mig' ? 'srv.doc.migSigned' : 'srv.doc.clientSigned');
   };
   const done = async (d: Db, ref: DocRef, user: SessionUser, side: Side, how: string) => {
     audit(user, 'contract_signed', { targetType: kind === 'contract' ? 'contract' : 'endorsement', targetId: ref.id, targetLabel: `${ref.number}: ${side === 'mig' ? 'МИГ' : 'клиент'}, ${how}` });
@@ -231,9 +232,9 @@ function signingRoutes(kind: Kind) {
         const input = await body(ctx.request, signSchema);
         if (input.side === 'mig') {
           // Only a MIG employee who is a signatory (StaffUser.signatory) signs for MIG.
-          if (!can(user, 'contracts.sign_mig')) throw new HttpError(403, 'forbidden', 'Подписать за МИГ может только подписант с доверенностью');
+          if (!can(user, 'contracts.sign_mig')) throw new HttpError(403, 'forbidden', 'srv.signing.signatoryOnly');
         } else if (!can(user, 'contracts.sign_client', { companyId: ref.clientId })) {
-          throw user.role === 'hr' ? notFound() : new HttpError(403, 'forbidden', 'Клиент подписывает в своём кабинете');
+          throw user.role === 'hr' ? notFound() : new HttpError(403, 'forbidden', 'srv.signing.clientInPortal');
         }
         signable(ref, input.side);
         const at = tzIso(Date.now());
@@ -250,10 +251,10 @@ function signingRoutes(kind: Kind) {
       `${base}/edo`,
       route(async (ctx) => {
         const { user, d, ref } = load(ctx);
-        if (!can(user, 'contracts.sign_mig')) throw new HttpError(403, 'forbidden', 'Отправить в ЭДО может подписант МИГ: документ уходит с его подписью');
+        if (!can(user, 'contracts.sign_mig')) throw new HttpError(403, 'forbidden', 'srv.signing.edoSignatoryOnly');
         const { provider } = await body(ctx.request, edoSendSchema);
-        if (ref.signing.client) throw conflict('Клиент уже подписал');
-        if (!['approved', 'sent', 'signing'].includes(ref.status)) throw conflict('Документ ещё не согласован');
+        if (ref.signing.client) throw conflict('srv.doc.clientSigned');
+        if (!['approved', 'sent', 'signing'].includes(ref.status)) throw conflict('srv.doc.notApproved');
         const at = tzIso(Date.now());
         let s = ref.signing;
         if (!s.mig) s = addSignature(s, 'mig', { method: 'edo', signedAt: at, signerName: user.displayName, edoProvider: provider, certificate: { serial: 'C0FFEE01', owner: user.displayName, validTo: addDays(todayIso(), 365) } });
@@ -289,7 +290,7 @@ function signingRoutes(kind: Kind) {
         const { user, d, ref } = load(ctx);
         requirePermission(user, 'contracts.verify_scan');
         const { side } = await body(ctx.request, scanVerifySchema);
-        if (!ref.signing.pendingScans?.some((p) => p.side === side)) throw conflict('Скана на проверке нет');
+        if (!ref.signing.pendingScans?.some((p) => p.side === side)) throw conflict('srv.signing.noScanPending');
         const signer = side === 'client' ? signerForClient(ref.contract) : (d.staff.find((s) => s.id === ref.contract.params.migSignatoryId)?.fullName ?? user.displayName);
         ref.setSigning(verifyScan(ref.signing, side, { id: user.id, name: user.displayName }, tzIso(Date.now()), signer));
         audit(user, 'contract_scan_verified', { targetType: kind === 'contract' ? 'contract' : 'endorsement', targetId: ref.id, targetLabel: `${ref.number}: скан ${side === 'mig' ? 'МИГ' : 'клиента'}` });
@@ -306,7 +307,7 @@ function signingRoutes(kind: Kind) {
         const s = ref.signing;
         const paper = { ...s.paperOriginal };
         if (input.migCopySentAt) {
-          if (!s.mig) throw conflict('Сначала отметьте «Подписано МИГ»');
+          if (!s.mig) throw conflict('srv.signing.migFirst');
           paper.migCopySentAt = input.migCopySentAt;
         }
         let next: Signing = { ...s, paperOriginal: paper };
@@ -335,11 +336,11 @@ function signingRoutes(kind: Kind) {
       route(async (ctx) => {
         const { user, d, ref } = load(ctx);
         if (!can(user, kind === 'contract' ? 'contracts.draft' : 'endorsements.manage')) throw forbidden();
-        if (ref.status !== 'draft') throw conflict('Отправить на согласование можно черновик');
-        if (kind === 'contract' && ref.contract.financeDiffers && !ref.contract.financeApprovedByName) throw conflict('Финансовые условия отличаются от котировки: сначала их утверждает андеррайтер');
+        if (ref.status !== 'draft') throw conflict('srv.doc.reviewDraftOnly');
+        if (kind === 'contract' && ref.contract.financeDiffers && !ref.contract.financeApprovedByName) throw conflict('srv.contract.financeNeedsApproval');
         if (kind === 'endorsement') {
           const e = d.endorsements.find((x) => x.id === ref.id)!;
-          if (endorsementView(d, e).needsAmountApproval) throw conflict('Суммы по прочим условиям утверждает андеррайтер');
+          if (endorsementView(d, e).needsAmountApproval) throw conflict('srv.endorsement.amountNeedsApproval');
         }
         const changed = ref.clauseOverrides.length > 0;
         ref.setStatus(changed ? 'legal_review' : 'approved');
@@ -356,7 +357,7 @@ function signingRoutes(kind: Kind) {
       route(async (ctx) => {
         const { user, d, ref } = load(ctx);
         requirePermission(user, 'contracts.legal_approve');
-        if (ref.status !== 'legal_review') throw conflict('Документ не на согласовании');
+        if (ref.status !== 'legal_review') throw conflict('srv.doc.notInReview');
         const { comment } = await body(ctx.request, legalApproveSchema);
         ref.setStatus('approved');
         if (kind === 'contract') {
@@ -374,7 +375,7 @@ function signingRoutes(kind: Kind) {
       route(async (ctx) => {
         const { user, d, ref } = load(ctx);
         requirePermission(user, 'contracts.legal_approve');
-        if (ref.status !== 'legal_review') throw conflict('Документ не на согласовании');
+        if (ref.status !== 'legal_review') throw conflict('srv.doc.notInReview');
         const { comment } = await body(ctx.request, legalReturnSchema);
         ref.setStatus('draft');
         if (kind === 'contract') {
@@ -391,7 +392,7 @@ function signingRoutes(kind: Kind) {
       route((ctx) => {
         const { user, d, ref } = load(ctx);
         if (!can(user, kind === 'contract' ? 'contracts.draft' : 'endorsements.manage')) throw forbidden();
-        if (ref.status !== 'approved') throw conflict('Отправить клиенту можно согласованный документ');
+        if (ref.status !== 'approved') throw conflict('srv.doc.sendApprovedOnly');
         ref.setStatus(ref.signing.mig || ref.signing.client ? 'signing' : 'sent');
         audit(user, 'contract_sent', { targetType: kind === 'contract' ? 'contract' : 'endorsement', targetId: ref.id, targetLabel: ref.number });
         if (kind === 'contract') {
@@ -541,13 +542,13 @@ export const contractHandlers = [
       const d = db();
       const deal = dealOf(d, dealId);
       const kp = dealKp(d, deal.id);
-      if (!kp || kp.status !== 'accepted') throw conflict('Договор готовится после того, как клиент принял КП');
+      if (!kp || kp.status !== 'accepted') throw conflict('srv.contract.needsAcceptedKp');
       const existing = d.contracts.find((c) => c.dealId === deal.id);
-      if (existing) throw conflict('Договор по сделке уже создан');
+      if (existing) throw conflict('srv.contract.alreadyExists');
       const client = clientRow(d, deal.clientId);
       const q = kp.quoteId ? d.quotes.find((x) => x.id === kp.quoteId) : latestQuote(d, deal.id);
       const signatory = d.staff.find((s) => s.active && s.signatory?.canSign);
-      if (!signatory) throw conflict('В МИГ нет сотрудника-подписанта');
+      if (!signatory) throw conflict('srv.contract.noSignatory');
       d.contractSeq += 1;
       const total = kp.params.premiumEmployee * kp.params.employees + kp.params.premiumFamily * kp.params.familyMembers;
       const at = tzIso(Date.now());
@@ -597,14 +598,14 @@ export const contractHandlers = [
       requirePermission(user, 'contracts.draft');
       const d = db();
       const c = contractOf(d, param(ctx, 'id'));
-      if (c.status !== 'draft') throw conflict('Изменить можно черновик. Для отправленного договора создайте новую версию');
+      if (c.status !== 'draft') throw conflict('srv.contract.draftOnly');
       const input = await body(ctx.request, contractPatchSchema);
       const changes: string[] = [];
       if (input.params) {
         const p = { ...c.params, ...input.params };
-        if (p.endDate <= p.startDate) throw new HttpError(422, 'validation', 'Дата окончания позже даты начала', { 'params.endDate': 'Позже даты начала' });
+        if (p.endDate <= p.startDate) throw new HttpError(422, 'validation', 'srv.contract.endAfterStart', { fields: { 'params.endDate': msg('srv.contract.afterStart') } });
         const signatory = d.staff.find((s) => s.id === p.migSignatoryId);
-        if (!signatory?.signatory?.canSign) throw new HttpError(422, 'validation', 'Выберите подписанта МИГ', { 'params.migSignatoryId': 'Не подписант' });
+        if (!signatory?.signatory?.canSign) throw new HttpError(422, 'validation', 'srv.contract.chooseSignatory', { fields: { 'params.migSignatoryId': msg('srv.contract.notSignatory') } });
         p.total = p.premiumEmployee * p.employees + p.premiumFamily * p.familyMembers;
         if (input.params.paymentSchedule) {
           const sum = input.params.paymentSchedule.reduce((s, x) => s + x.amount, 0);
@@ -640,7 +641,7 @@ export const contractHandlers = [
       requirePermission(user, 'quotes.calculate');
       const d = db();
       const c = contractOf(d, param(ctx, 'id'));
-      if (!c.financeDiffers) throw conflict('Финансовые условия совпадают с котировкой');
+      if (!c.financeDiffers) throw conflict('srv.contract.financeSame');
       c.financeApprovedByName = user.displayName;
       c.versions.push({ version: c.version, at: tzIso(Date.now()), byName: user.displayName, changes: 'Андеррайтер утвердил финансовые условия' });
       audit(user, 'contract_finance_approved', { targetType: 'contract', targetId: c.id, targetLabel: c.number });
@@ -654,7 +655,7 @@ export const contractHandlers = [
       requirePermission(user, 'contracts.draft');
       const d = db();
       const c = contractOf(d, param(ctx, 'id'));
-      if (!['sent', 'signing', 'approved'].includes(c.status)) throw conflict('Новую версию создают у отправленного и ещё не подписанного договора');
+      if (!['sent', 'signing', 'approved'].includes(c.status)) throw conflict('srv.contract.newVersionState');
       c.version += 1;
       c.status = 'draft';
       c.signing = { paperOriginal: { required: false } };
@@ -674,7 +675,7 @@ export const contractHandlers = [
       if (user.role === 'hr') {
         if (!can(user, 'contracts.sign_client', { companyId: c.clientId }) || !HR_VISIBLE.has(c.status)) throw notFound();
       } else requirePermission(user, 'contracts.draft');
-      if (c.status === 'active' || c.status === 'signed' || c.status === 'terminated' || c.status === 'expired') throw conflict('Список застрахованных подписанного договора меняется доп. соглашением');
+      if (c.status === 'active' || c.status === 'signed' || c.status === 'terminated' || c.status === 'expired') throw conflict('srv.contract.listViaEndorsement');
       const parsed = parsePolicyList(await ctx.request.text());
       if (parsed.errors.length)
         throw new HttpError(422, 'validation', `В файле есть ошибки (${parsed.errors.length}): ${parsed.errors.slice(0, 3).map((e) => `строка ${e.row} — ${e.message}`).join('; ')}`);
@@ -695,8 +696,8 @@ export const contractHandlers = [
       const d = db();
       const c = contractOf(d, param(ctx, 'id'));
       const { date, reason } = await body(ctx.request, terminateSchema);
-      if (date < c.params.startDate || date > c.params.endDate) throw new HttpError(422, 'validation', 'Дата в пределах срока договора', { date: 'В пределах срока договора' });
-      if (d.endorsements.some((e) => e.contractId === c.id && e.kind === 'termination' && e.status !== 'signed')) throw conflict('Соглашение о расторжении уже готовится');
+      if (date < c.params.startDate || date > c.params.endDate) throw new HttpError(422, 'validation', 'srv.contract.dateWithinTerm', { fields: { date: msg('srv.contract.withinTerm') } });
+      if (d.endorsements.some((e) => e.contractId === c.id && e.kind === 'termination' && e.status !== 'signed')) throw conflict('srv.contract.terminationPending');
       const e = createEndorsement(d, c, [], 'termination', date);
       if (c.dealId) dealEvent(d, c.dealId, user.displayName, `Подготовлено соглашение о расторжении ${e.number}: ${reason}`);
       audit(user, 'endorsement_created', { targetType: 'endorsement', targetId: e.id, targetLabel: `${e.number}: расторжение`, reason });
@@ -743,12 +744,12 @@ export const contractHandlers = [
       const { user } = requireSession(request);
       requirePermission(user, 'payments.record');
       const text = await request.text();
-      if (text.length > 1024 * 1024) throw new HttpError(413, 'validation', 'Файл больше 1 МБ');
+      if (text.length > 1024 * 1024) throw new HttpError(413, 'validation', 'srv.file.tooLarge1mb');
       const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true });
       const fields = parsed.meta.fields ?? [];
       const missing = ['doc_number', 'date', 'amount', 'inn', 'purpose'].filter((f) => !fields.includes(f));
       if (missing.length) throw new HttpError(422, 'validation', `Нет столбцов: ${missing.join(', ')}`);
-      if (parsed.data.length > 5000) throw new HttpError(422, 'validation', 'Не больше 5000 строк в выписке');
+      if (parsed.data.length > 5000) throw new HttpError(422, 'validation', 'srv.statement.over5000Rows');
       const d = db();
       const out: ImportPaymentsResult = { matched: 0, queued: 0, skipped: 0, unmatched: [], activated: 0 };
       const seen = new Set(d.statementKeys);
@@ -810,9 +811,9 @@ export const contractHandlers = [
       const d = db();
       const b = d.bankPayments.find((x) => x.id === param(ctx, 'id'));
       if (!b) throw notFound();
-      if (b.status !== 'pending') throw conflict('Платёж уже разнесён');
+      if (b.status !== 'pending') throw conflict('srv.payment.alreadyMatched');
       const input = await body(ctx.request, paymentAllocationSchema);
-      if (new Set(input.lines.map((l) => l.invoiceId)).size !== input.lines.length) throw new HttpError(422, 'validation', 'Счёт указан дважды');
+      if (new Set(input.lines.map((l) => l.invoiceId)).size !== input.lines.length) throw new HttpError(422, 'validation', 'srv.payment.invoiceTwice');
       const all = openInvoices(d);
       const lines = input.lines.map((l) => {
         const invoice = all.find((i) => i.id === l.invoiceId);
@@ -888,10 +889,10 @@ export const contractHandlers = [
       const input = await body(request, changeRequestCreateSchema);
       const d = db();
       const c = contractOf(d, input.contractId);
-      if (c.status !== 'active') throw conflict('Изменения оформляются к действующему договору');
-      if (input.effectiveDate < c.params.startDate || input.effectiveDate > c.params.endDate) throw new HttpError(422, 'validation', 'Дата в пределах срока договора', { effectiveDate: 'В пределах срока договора' });
-      if (input.type === 'change_program' && (!input.program || input.program === c.params.program)) throw new HttpError(422, 'validation', 'Выберите другую программу', { program: 'Выберите другую программу' });
-      if (input.type === 'other' && (input.amount === undefined || !input.description)) throw new HttpError(422, 'validation', 'Опишите изменение и сумму', { description: 'Опишите изменение' });
+      if (c.status !== 'active') throw conflict('srv.endorsement.activeOnly');
+      if (input.effectiveDate < c.params.startDate || input.effectiveDate > c.params.endDate) throw new HttpError(422, 'validation', 'srv.contract.dateWithinTerm', { fields: { effectiveDate: msg('srv.contract.withinTerm') } });
+      if (input.type === 'change_program' && (!input.program || input.program === c.params.program)) throw new HttpError(422, 'validation', 'srv.endorsement.otherProgram', { fields: { program: msg('srv.endorsement.otherProgram') } });
+      if (input.type === 'other' && (input.amount === undefined || !input.description)) throw new HttpError(422, 'validation', 'srv.endorsement.describeAndAmount', { fields: { description: msg('srv.endorsement.describe') } });
       const r: ChangeRequestRow = {
         id: randomId(),
         contractId: c.id,
@@ -946,7 +947,7 @@ export const contractHandlers = [
       const c = contractOf(d, input.contractId);
       let requests = pendingRequests(d, c.id);
       if (input.changeRequestIds) requests = requests.filter((r) => input.changeRequestIds!.includes(r.id));
-      if (!requests.length) throw conflict('Нет заявок на изменение для доп. соглашения');
+      if (!requests.length) throw conflict('srv.endorsement.noRequests');
       const periodicity = PERIODICITIES[dmsParam('endorsementPeriodicity')] ?? 'monthly';
       const groups = periodicity === 'per_change' ? requests.map((r) => [r]) : [requests];
       const out = groups.map((g) => {
@@ -966,7 +967,7 @@ export const contractHandlers = [
       const d = db();
       const e = d.endorsements.find((x) => x.id === param(ctx, 'id'));
       if (!e) throw notFound();
-      if (e.status !== 'draft') throw conflict('Изменить можно черновик');
+      if (e.status !== 'draft') throw conflict('srv.endorsement.draftOnly');
       const { clauseOverrides } = await body(ctx.request, endorsementPatchSchema);
       e.clauseOverrides = overridesFrom('endorsement', clauseOverrides, e.clauseOverrides, user);
       // Lines are recalculated: parameters (refund rule) may have changed since the draft was formed.

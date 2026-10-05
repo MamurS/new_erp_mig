@@ -8,6 +8,7 @@ import type { Action } from '@/shared/auth/permissions';
 import { can } from '@/shared/auth/permissions';
 import type { Appointment, Registry, SessionUser, UUID } from '@/shared/types';
 import type {
+import { msg } from '@/i18n/core';
   AssistAppointment,
   AssistCaseView,
   AssistChatMessage,
@@ -322,7 +323,7 @@ export const assistHandlers = [
     route(async (ctx) => {
       const { user, assistanceId, d } = requireAssist(ctx.request, 'assist.insured.reveal_pii');
       const { i, access } = requireInsuredOf(d, assistanceId, param(ctx, 'id'));
-      if (access !== 'full') throw new HttpError(403, 'forbidden', 'Клиент передан другому ассистансу');
+      if (access !== 'full') throw new HttpError(403, 'forbidden', 'srv.assist.clientTransferred');
       const { field, reason } = await body(ctx.request, revealSchema);
       const value = field === 'pinfl' ? i.pinfl : field === 'phone' ? formatPhoneFull(i.phone) : field === 'birthDate' ? i.birthDate.split('-').reverse().join('.') : i.email;
       audit(user, 'reveal_pii', { targetType: 'insured', targetId: i.id, targetLabel: insuredLabel(i.id), reason: `${fieldLabel(field)}: ${reason}` });
@@ -345,7 +346,7 @@ export const assistHandlers = [
     route(async (ctx) => {
       const { user, assistanceId, d } = requireAssist(ctx.request, 'assist.medical.read');
       const { i, access } = requireInsuredOf(d, assistanceId, param(ctx, 'id'));
-      if (access !== 'full') throw new HttpError(403, 'forbidden', 'Клиент передан другому ассистансу');
+      if (access !== 'full') throw new HttpError(403, 'forbidden', 'srv.assist.clientTransferred');
       const { reason } = await body(ctx.request, medicalAccessSchema);
       const grant = { id: randomToken(24), userId: user.id, insuredId: i.id, expiresAt: Date.now() + MEDICAL_TTL };
       d.grants = d.grants.filter((g) => g.expiresAt > Date.now());
@@ -362,7 +363,7 @@ export const assistHandlers = [
       const { i } = requireInsuredOf(d, assistanceId, param(ctx, 'id'));
       const grantId = ctx.request.headers.get('x-medical-grant') ?? '';
       const g = d.grants.find((x) => x.id === grantId);
-      if (!g || g.userId !== user.id || g.insuredId !== i.id || g.expiresAt < Date.now()) throw new HttpError(403, 'forbidden', 'Доступ к медкарте истёк. Укажите причину ещё раз');
+      if (!g || g.userId !== user.id || g.insuredId !== i.id || g.expiresAt < Date.now()) throw new HttpError(403, 'forbidden', 'srv.medcard.accessExpired');
       return medicalRecords(i);
     }),
   ),
@@ -475,7 +476,7 @@ export const assistHandlers = [
         const a = appointmentsOf(d, assistanceId).find((x) => x.id === param(ctx, 'id'));
         if (!a) throw notFound();
         // The clinic answers first; the assistance steps in when the clinic did not answer in time (§5.1).
-        if (!isOverdueRequest(d, a)) throw conflict('Клиника ещё может ответить: ждём её подтверждения');
+        if (!isOverdueRequest(d, a)) throw conflict('srv.assist.clinicCanAnswer');
         const who = d.insured.find((x) => x.id === a.insuredId)!;
         requireAssistanceScope(d, assistanceId, who.policyId, a.createdAt.slice(0, 10), 'write');
         if (kind === 'confirm') respondToAppointment(a, 'operator', { kind });
@@ -558,7 +559,7 @@ export const assistHandlers = [
       const c = input.caseId ? d.cases.find((x) => x.id === input.caseId && x.assistanceId === assistanceId && x.insuredId === i.id) : undefined;
       if (input.caseId && !c) throw notFound();
       const svc = priceListOf(d, clinic.id).find((p) => p.code === input.serviceCode);
-      if (!svc?.requiresGuarantee) throw new HttpError(422, 'validation', 'Для этой услуги гарантийное письмо не нужно', { serviceCode: 'Выберите услугу, которой нужно ГП' });
+      if (!svc?.requiresGuarantee) throw new HttpError(422, 'validation', 'srv.guarantee.notNeeded', { fields: { serviceCode: msg('srv.guarantee.chooseService') } });
       // The referral opens a visit in the clinic: the clinic sees the patient and the letter, as after its own check.
       const now = Date.now();
       const visit = { id: randomId(), clinicId: clinic.id, insuredId: i.id, openedById: user.id, method: 'policy' as const, openedAt: tzIso(now), expiresAt: tzIso(now + VISIT_TTL_MS) };
@@ -586,8 +587,8 @@ export const assistHandlers = [
       const { user, assistanceId, d } = requireAssist(ctx.request, 'assist.guarantees.decide');
       const g = guaranteeOf(d, assistanceId, param(ctx, 'id'));
       requireAssistanceScope(d, assistanceId, g.policyId!, g.createdAt.slice(0, 10), 'write');
-      if (g.escalated) throw conflict('Письмо передано в МИГ: решение принимает врач-эксперт МИГ');
-      if (g.status !== 'requested') throw conflict(g.status === 'info_requested' ? 'Ждём документы от клиники' : 'Решение уже принято');
+      if (g.escalated) throw conflict('srv.guarantee.escalated');
+      if (g.status !== 'requested') throw conflict(g.status === 'info_requested' ? 'srv.guarantee.awaitingDocs' : 'srv.decision.alreadyMade');
       const input = await body(ctx.request, assistGuaranteeDecisionSchema);
       const limit = authorityLimitOf(assistanceOf(d, assistanceId));
       const at = tzIso(Date.now());
@@ -658,7 +659,7 @@ export const assistHandlers = [
     route(async ({ request }) => {
       const { assistanceId, d } = requireAssist(request, 'assist.rebills.submit');
       const input = await body(request, rebillCreateSchema);
-      if (input.period > todayIso().slice(0, 7)) throw new HttpError(422, 'validation', 'Период ещё не наступил', { period: 'Период ещё не наступил' });
+      if (input.period > todayIso().slice(0, 7)) throw new HttpError(422, 'validation', 'srv.period.notStarted', { fields: { period: msg('srv.period.notStarted') } });
       return toRebillView(d, upsertDraftRebill(d, assistanceId, input.period, input.lineIds));
     }),
   ),
@@ -714,7 +715,7 @@ export const assistHandlers = [
       const { user, assistanceId, d } = requireAssist(request, 'assist.users.manage');
       const input = await body(request, assistUserInviteSchema);
       if (d.assistUsers.some((u) => u.email === input.email) || d.staff.some((s) => s.email === input.email) || d.clinicUsers.some((u) => u.email === input.email)) {
-        throw new HttpError(409, 'conflict', 'Пользователь с таким email уже есть', { email: 'Email уже используется' });
+        throw new HttpError(409, 'conflict', 'srv.users.emailTaken', { fields: { email: msg('srv.users.emailInUse') } });
       }
       const row: AssistUserRow = { id: randomId(), ...input, password: DEMO_PASSWORD, assistanceId, active: true, createdAt: tzIso(Date.now()) };
       d.assistUsers.push(row);
@@ -728,7 +729,7 @@ export const assistHandlers = [
       const { user, assistanceId, d } = requireAssist(ctx.request, 'assist.users.manage');
       const u = d.assistUsers.find((x) => x.id === param(ctx, 'id') && x.assistanceId === assistanceId);
       if (!u) throw notFound();
-      if (u.id === user.id) throw conflict('Нельзя изменить собственную учётную запись');
+      if (u.id === user.id) throw conflict('srv.assistUsers.self');
       const patch = await body(ctx.request, assistUserPatchSchema);
       if (patch.role) u.role = patch.role;
       if (patch.active !== undefined) u.active = patch.active;
@@ -796,8 +797,8 @@ export async function decideLine(
 ): Promise<void> {
   const line = r.lines.find((l) => l.id === lineId && l.payer === assistanceId);
   if (!line) throw notFound();
-  if (r.status === 'paid') throw conflict('Реестр уже оплачен');
-  if (line.status !== 'pending' && line.status !== 'disputed') throw conflict('По строке уже принято решение');
+  if (r.status === 'paid') throw conflict('srv.registry.alreadyPaid');
+  if (line.status !== 'pending' && line.status !== 'disputed') throw conflict('srv.lines.alreadyDecided');
   const mine = () => linesOf(r, assistanceId);
   const wasPending = mine().some((l) => l.status === 'pending' || l.status === 'disputed');
   if (input.decision === 'accept') {
@@ -828,9 +829,9 @@ export async function recordPayment(
 ): Promise<void> {
   const lines = input.lineIds.map((id) => r.lines.find((l) => l.id === id && l.payer === assistanceId));
   if (lines.some((l) => !l)) throw notFound();
-  if (lines.some((l) => l!.status !== 'accepted')) throw conflict('Оплатить можно только принятые строки');
-  if (lines.some((l) => l!.payment)) throw conflict('Часть строк уже оплачена');
-  if (input.paidAt > todayIso()) throw new HttpError(422, 'validation', 'Дата оплаты не может быть в будущем', { paidAt: 'Дата оплаты не может быть в будущем' });
+  if (lines.some((l) => l!.status !== 'accepted')) throw conflict('srv.registry.payAcceptedOnly');
+  if (lines.some((l) => l!.payment)) throw conflict('srv.registry.somePaid');
+  if (input.paidAt > todayIso()) throw new HttpError(422, 'validation', 'srv.payment.dateFuture', { fields: { paidAt: msg('srv.payment.dateFuture') } });
   const total = lines.reduce((s, l) => s + l!.amount, 0);
   if (input.amount !== undefined && input.amount !== total) throw new HttpError(422, 'validation', `Сумма не совпадает со строками: ${formatMoney(total)}`, { amount: `Ожидается ${formatMoney(total)}` });
   for (const l of lines) l!.payment = { paidAt: input.paidAt, amount: l!.amount, orderNumber: input.orderNumber };
@@ -843,8 +844,8 @@ export async function recordPayment(
 }
 
 export function submitRebill(d: Db, b: Parameters<typeof recomputeRebill>[1], actor: Pick<SessionUser, 'id' | 'displayName' | 'role'> & { assistanceId?: string }): void {
-  if (b.status !== 'draft') throw conflict('Счёт уже отправлен');
-  if (!b.lines.length) throw new HttpError(422, 'validation', 'В счёте нет строк: за период нет оплат клиникам');
+  if (b.status !== 'draft') throw conflict('srv.rebill.alreadySent');
+  if (!b.lines.length) throw new HttpError(422, 'validation', 'srv.rebill.empty');
   recomputeRebill(d, b);
   b.status = 'submitted';
   b.submittedAt = tzIso(Date.now());
@@ -854,8 +855,8 @@ export function submitRebill(d: Db, b: Parameters<typeof recomputeRebill>[1], ac
 export function disputeRebillLine(b: Parameters<typeof recomputeRebill>[1], lineId: string, comment: string): void {
   const line = b.lines.find((l) => l.id === lineId);
   if (!line) throw notFound();
-  if (b.status === 'paid') throw conflict('Счёт уже оплачен');
-  if (line.status !== 'rejected') throw conflict('Оспорить можно только отклонённую строку');
+  if (b.status === 'paid') throw conflict('srv.rebill.alreadyPaid');
+  if (line.status !== 'rejected') throw conflict('srv.rebill.disputeRejectedOnly');
   line.status = 'disputed';
   line.disputeComment = comment;
   b.status = rebillStatusAfterReview(b.lines);

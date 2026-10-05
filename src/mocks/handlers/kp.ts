@@ -16,6 +16,7 @@ import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
 import { dmsParam } from '../params';
 import { ensureRenewalDeal } from './lifecycle';
+import { msg } from '@/i18n/core';
 
 const DEFAULT_SUM = 200_000_000;
 const DEFAULT_PREMIUM = 5_000_000;
@@ -123,7 +124,7 @@ export const kpHandlers = [
       const d = db();
       const client = findClient(param(ctx, 'id'));
       const params = await body(ctx.request, kpParamsSchema);
-      if (params.assistanceId && !db().assistances.some((a) => a.id === params.assistanceId)) throw new HttpError(422, 'validation', 'Ассистанс не найден', { assistanceId: 'Выберите ассистанс из списка' });
+      if (params.assistanceId && !db().assistances.some((a) => a.id === params.assistanceId)) throw new HttpError(422, 'validation', 'srv.kp.assistanceNotFound', { fields: { assistanceId: msg('srv.kp.chooseAssistance') } });
       const now = Date.now();
       d.kpSeq += 1;
       const kp: KpDocument = {
@@ -160,9 +161,9 @@ export const kpHandlers = [
     route(async (ctx) => {
       const { user } = requireSession(ctx.request);
       const kp = writableKp(user, ctx, 'kp.create');
-      if (kp.status !== 'draft') throw conflict('Отправленное или отозванное КП нельзя изменить. Создайте новую версию');
+      if (kp.status !== 'draft') throw conflict('srv.kp.locked');
       const params = await body(ctx.request, kpParamsSchema);
-      if (params.assistanceId && !db().assistances.some((a) => a.id === params.assistanceId)) throw new HttpError(422, 'validation', 'Ассистанс не найден', { assistanceId: 'Выберите ассистанс из списка' });
+      if (params.assistanceId && !db().assistances.some((a) => a.id === params.assistanceId)) throw new HttpError(422, 'validation', 'srv.kp.assistanceNotFound', { fields: { assistanceId: msg('srv.kp.chooseAssistance') } });
       kp.params = params;
       kp.totalPremium = kpTotalPremium(params);
       return kp;
@@ -173,12 +174,12 @@ export const kpHandlers = [
     route((ctx) => {
       const { user } = requireSession(ctx.request);
       const kp = writableKp(user, ctx, 'kp.send');
-      if (kp.status !== 'draft') throw conflict('Отправить можно только черновик');
-      if (kp.params.validUntil < isoDay(startOfDay(Date.now()))) throw conflict('Срок действия КП истёк. Создайте новую версию');
+      if (kp.status !== 'draft') throw conflict('srv.kp.sendDraftOnly');
+      if (kp.params.validUntil < isoDay(startOfDay(Date.now()))) throw conflict('srv.kp.expired');
       // An offer of a deal goes out only on an approved quote (LIFECYCLE_SPEC §5).
       if (kp.dealId) {
         const q = db().quotes.filter((x) => x.dealId === kp.dealId).at(-1);
-        if (!q || q.status !== 'approved') throw conflict('КП можно отправить только по утверждённой котировке');
+        if (!q || q.status !== 'approved') throw conflict('srv.kp.needsApprovedQuote');
       }
       kp.status = 'sent';
       kp.sentAt = tzIso(Date.now());
@@ -193,7 +194,7 @@ export const kpHandlers = [
     route((ctx) => {
       const { user } = requireSession(ctx.request);
       const kp = writableKp(user, ctx, 'kp.send');
-      if (kp.status === 'revoked') throw conflict('КП уже отозвано');
+      if (kp.status === 'revoked') throw conflict('srv.kp.alreadyRevoked');
       kp.status = 'revoked';
       audit(user, 'kp_revoked', { targetType: 'kp', targetId: kp.id, targetLabel: kp.number });
       return kp;

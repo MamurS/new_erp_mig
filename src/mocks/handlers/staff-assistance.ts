@@ -13,6 +13,7 @@ import { assignmentSchema, assistanceContractSchema, assistanceCreateSchema, com
 import { db, type Db } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
 import {
+import { msg } from '@/i18n/core';
   assistanceName,
   assistanceOf,
   claimsFromRebill,
@@ -116,7 +117,7 @@ export const staffAssistanceHandlers = [
       const input = await body(request, assistanceCreateSchema);
       const d = db();
       if (d.assistUsers.some((u) => u.email === input.admin.email) || d.staff.some((s) => s.email === input.admin.email)) {
-        throw new HttpError(409, 'conflict', 'Пользователь с таким email уже есть', { 'admin.email': 'Email уже используется' });
+        throw new HttpError(409, 'conflict', 'srv.users.emailTaken', { fields: { 'admin.email': msg('srv.users.emailInUse') } });
       }
       const a: AssistanceCompany = {
         id: randomId(),
@@ -200,8 +201,8 @@ export const staffAssistanceHandlers = [
       const a = assistanceOf(d, param(ctx, 'id'));
       const c = d.cases.find((x) => x.id === param(ctx, 'caseId') && x.assistanceId === a.id);
       if (!c) throw notFound();
-      if (c.type !== 'complaint') throw conflict('МИГ закрывает только жалобы; остальные обращения ведёт ассистанс');
-      if (c.status === 'resolved') throw conflict('Жалоба уже закрыта');
+      if (c.type !== 'complaint') throw conflict('srv.cases.complaintsOnly');
+      if (c.status === 'resolved') throw conflict('srv.cases.complaintClosed');
       const { resolution } = await body(ctx.request, complaintResolutionSchema);
       c.status = 'resolved';
       c.resolution = `Куратор МИГ: ${resolution}`;
@@ -261,16 +262,16 @@ export const staffAssistanceHandlers = [
       const d = db();
       const p = d.policies.find((x) => x.id === param(ctx, 'id'));
       if (!p) throw notFound();
-      if (p.status === 'expired') throw conflict('Полис уже закончился');
+      if (p.status === 'expired') throw conflict('srv.assignment.policyExpired');
       const input = await body(ctx.request, assignmentSchema);
       if (input.assistanceId) assistanceOf(d, input.assistanceId);
       // Only from a date: new requests from that date go to the new assistance (§3).
       const first = p.status === 'draft' ? p.startDate : todayIso();
       if (input.from < first || input.from > p.endDate) {
-        throw new HttpError(422, 'validation', 'Дата — с сегодняшнего дня до конца полиса', { from: 'Дата — с сегодняшнего дня до конца полиса' });
+        throw new HttpError(422, 'validation', 'srv.assignment.dateRange', { fields: { from: msg('srv.assignment.dateRange') } });
       }
       const current = assistanceOn(d.assignments, p.id, input.from);
-      if (current === input.assistanceId) throw conflict('Полис уже закреплён за этим ассистансом');
+      if (current === input.assistanceId) throw conflict('srv.assignment.alreadyAssigned');
       const dayBefore = isoDay(parseIso(input.from) - DAY);
       d.assignments = d.assignments.filter((a) => a.policyId !== p.id || a.from < input.from);
       for (const a of d.assignments) if (a.policyId === p.id && (!a.to || a.to >= input.from)) a.to = dayBefore;
@@ -320,10 +321,10 @@ export const staffAssistanceHandlers = [
       requirePermission(user, 'rebills.review');
       const d = db();
       const b = rebillOf(d, param(ctx, 'id'));
-      if (b.status === 'paid') throw conflict('Счёт уже оплачен');
+      if (b.status === 'paid') throw conflict('srv.rebill.alreadyPaid');
       const line = b.lines.find((l) => l.id === param(ctx, 'lineId'));
       if (!line) throw notFound();
-      if (line.status !== 'pending' && line.status !== 'disputed') throw conflict('По строке уже принято решение');
+      if (line.status !== 'pending' && line.status !== 'disputed') throw conflict('srv.lines.alreadyDecided');
       const input = await body(ctx.request, rebillLineDecisionSchema);
       if (input.decision === 'accept') {
         line.status = 'accepted';
@@ -350,9 +351,9 @@ export const staffAssistanceHandlers = [
       requirePermission(user, 'rebills.pay');
       const d = db();
       const b = rebillOf(d, param(ctx, 'id'));
-      if (b.status !== 'accepted' && b.status !== 'partially_accepted') throw conflict('Оплатить можно только проверенный счёт');
+      if (b.status !== 'accepted' && b.status !== 'partially_accepted') throw conflict('srv.rebill.payReviewedOnly');
       // Four-eyes: the person who accepted the rebill cannot pay it (§5.5, §13.4).
-      if (!can(user, 'rebills.pay', { createdById: b.acceptedById })) throw new HttpError(409, 'conflict', 'Счёт принимал этот же сотрудник: оплачивает другой (правило четырёх глаз)');
+      if (!can(user, 'rebills.pay', { createdById: b.acceptedById })) throw new HttpError(409, 'conflict', 'srv.rebill.fourEyes');
       b.status = 'paid';
       b.paidById = user.id;
       b.paidAt = tzIso(Date.now());
@@ -394,7 +395,7 @@ export const staffAssistanceHandlers = [
       const d = db();
       const s = d.qaSamples.find((x) => x.id === param(ctx, 'id'));
       if (!s) throw notFound();
-      if (s.verdict) throw conflict('Оценка уже поставлена');
+      if (s.verdict) throw conflict('srv.quality.alreadyRated');
       const input = await body(ctx.request, qaReviewSchema);
       s.verdict = input.verdict;
       s.comment = input.comment || undefined;

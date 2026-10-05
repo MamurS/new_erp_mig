@@ -7,6 +7,7 @@ import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { useUser } from '@/shared/auth/session';
 import { rebillLineDecisionSchema } from '@/shared/schemas/forms';
+import { t, tm } from '@/i18n';
 import { formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -23,8 +24,8 @@ import { Sparkles } from 'lucide-react';
 export default function RebillReviewPage() {
   const { rebillId = '' } = useParams();
   const q = useStaffRebill(rebillId);
-  useDocumentTitle('Счёт ассистанса');
-  useTopbar([{ label: 'Счета ассистансов', to: '/staff/rebills' }, { label: q.data?.number ?? 'Счёт' }]);
+  useDocumentTitle(t('staffOps.rebill.docTitle'));
+  useTopbar([{ label: t('staffOps.rebills.title'), to: '/staff/rebills' }, { label: q.data?.number ?? t('staffOps.rebill.crumb') }]);
   const user = useUser();
   const canReview = useCan('rebills.review');
   const canPayRole = useCan('rebills.pay');
@@ -48,7 +49,7 @@ export default function RebillReviewPage() {
         const accept = async (l: RebillLine) => {
           try {
             await decide.mutateAsync({ id: r.id, lineId: l.id, body: { decision: 'accept' } });
-            toast.success('Строка принята');
+            toast.success(t('staffOps.registry.lineAccepted'));
           } catch (e) {
             toast.error(errorMessage(e));
           }
@@ -58,13 +59,13 @@ export default function RebillReviewPage() {
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h1 className="text-[22px] font-bold">
-                  {r.assistanceName}: счёт <span className="num">{r.number}</span>
+                  {t('staffOps.rebill.heading', { name: r.assistanceName })} <span className="num">{r.number}</span>
                 </h1>
                 <p className="flex items-center gap-2 text-[12px] text-muted">
                   <span data-testid="rebill-status">
                     <RebillStatus status={r.status} />
                   </span>
-                  Период {r.period}
+                  {t('staffOps.rebill.period', { period: r.period })}
                 </p>
               </div>
               {canAi && reviewing && (
@@ -74,16 +75,16 @@ export default function RebillReviewPage() {
                   onClick={() =>
                     void precheck
                       .mutateAsync(r.id)
-                      .then((x) => toast.success(`Предпроверка ИИ: проверено строк ${x.checked}, спорных ${x.flagged}`))
+                      .then((x) => toast.success(t('staffOps.rebill.precheckDone', { checked: x.checked, flagged: x.flagged })))
                       .catch((e: unknown) => toast.error(errorMessage(e)))
                   }
                 >
-                  <Sparkles className="h-4 w-4" aria-hidden /> Предпроверка ИИ
+                  <Sparkles className="h-4 w-4" aria-hidden /> {t('staffOps.rebill.precheck')}
                 </Button>
               )}
               {canPayRole && payable && (
-                <Button disabled={sameAsAcceptor} title={sameAsAcceptor ? 'Счёт принимали вы: оплачивает другой сотрудник' : undefined} onClick={() => setConfirmPay(true)}>
-                  Оплатить {formatMoney(toPay)}
+                <Button disabled={sameAsAcceptor} title={sameAsAcceptor ? t('staffOps.rebill.sameAsAcceptor') : undefined} onClick={() => setConfirmPay(true)}>
+                  {t('staffOps.registry.payAmount', { amount: formatMoney(toPay) })}
                 </Button>
               )}
             </div>
@@ -93,11 +94,11 @@ export default function RebillReviewPage() {
               actions={(l) =>
                 canReview && (reviewing || l.status === 'disputed') && (l.status === 'pending' || l.status === 'disputed') ? (
                   <span className="flex justify-end gap-1">
-                    <Button size="sm" variant="secondary" onClick={() => void accept(l)} aria-label={`Принять строку ${l.serviceName}`}>
-                      Принять
+                    <Button size="sm" variant="secondary" onClick={() => void accept(l)} aria-label={t('staffOps.registry.acceptLineAria', { name: l.serviceName })}>
+                      {t('staffOps.registry.accept')}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setRejecting(l)} aria-label={`Отклонить строку ${l.serviceName}`}>
-                      Отклонить
+                    <Button size="sm" variant="ghost" onClick={() => setRejecting(l)} aria-label={t('staffOps.registry.rejectLineAria', { name: l.serviceName })}>
+                      {t('common.reject')}
                     </Button>
                   </span>
                 ) : null
@@ -107,12 +108,12 @@ export default function RebillReviewPage() {
               <Modal
                 open
                 onOpenChange={(o) => !o && setRejecting(null)}
-                title="Отклонить строку счёта"
+                title={t('staffOps.rebill.rejectLine')}
                 description={`${rejecting.serviceName} · ${formatMoney(rejecting.amount)}`}
                 footer={
                   <>
                     <Button variant="secondary" onClick={() => setRejecting(null)}>
-                      Отмена
+                      {t('common.cancel')}
                     </Button>
                     <Button
                       variant="danger"
@@ -125,7 +126,7 @@ export default function RebillReviewPage() {
                         }
                         try {
                           await decide.mutateAsync({ id: r.id, lineId: rejecting.id, body: parsed.data });
-                          toast.success('Строка отклонена');
+                          toast.success(t('staffOps.registry.lineRejected'));
                           setRejecting(null);
                           setReason('');
                         } catch (e) {
@@ -133,19 +134,19 @@ export default function RebillReviewPage() {
                         }
                       }}
                     >
-                      Отклонить
+                      {t('common.reject')}
                     </Button>
                   </>
                 }
               >
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {rejecting.checks.map((c) => (
-                    <button key={c.code} type="button" className="rounded-btn border border-border px-2 py-1 text-[12px] hover:bg-rail" onClick={() => setReason(c.message)}>
-                      {c.message}
+                    <button key={c.code} type="button" className="rounded-btn border border-border px-2 py-1 text-[12px] hover:bg-rail" onClick={() => setReason(tm(c.message))}>
+                      {tm(c.message)}
                     </button>
                   ))}
                 </div>
-                <Field label="Причина" error={error}>
+                <Field label={t('common.reason')} error={tm(error) || undefined}>
                   {(a) => <Textarea {...a} rows={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />}
                 </Field>
               </Modal>
@@ -153,14 +154,14 @@ export default function RebillReviewPage() {
             <ConfirmDialog
               open={confirmPay}
               onOpenChange={setConfirmPay}
-              title="Оплатить счёт ассистанса?"
-              description={`${formatMoney(r.totals.accepted)} по принятым строкам и вознаграждение ${formatMoney(r.totals.fee)}. Убытки по строкам перейдут в статус «Оплачен».`}
-              confirmLabel="Оплатить"
+              title={t('staffOps.rebill.confirmTitle')}
+              description={t('staffOps.rebill.confirmText', { accepted: formatMoney(r.totals.accepted), fee: formatMoney(r.totals.fee) })}
+              confirmLabel={t('staffOps.registry.pay')}
               loading={pay.isPending}
               onConfirm={async () => {
                 try {
                   await pay.mutateAsync(r.id);
-                  toast.success('Счёт оплачен');
+                  toast.success(t('staffOps.rebill.paid'));
                   setConfirmPay(false);
                 } catch (e) {
                   toast.error(errorMessage(e));

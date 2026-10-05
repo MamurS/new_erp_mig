@@ -7,6 +7,7 @@ import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { db, type InsuredRow, type PolicyChangeRow } from '../db';
 import { requestChange } from '../policy-core';
 import {
+import { msg } from '@/i18n/core';
   API,
   audit,
   body,
@@ -54,7 +55,7 @@ function requestAdd(user: SessionUser & { companyId: string }, input: ReturnType
   const d = db();
   const client = clientOfHr(user);
   if (d.insured.some((i) => i.pinfl === input.pinfl && i.clientId === client.id && i.status === 'active')) {
-    throw new HttpError(409, 'conflict', 'Сотрудник с таким ПИНФЛ уже застрахован', { pinfl: 'Уже есть в списке' });
+    throw new HttpError(409, 'conflict', 'srv.hr.pinflInsured', { fields: { pinfl: msg('srv.hr.alreadyListed') } });
   }
   return requestChange(d, user, client, 'add', {
     effectiveDate: input.startDate,
@@ -190,7 +191,7 @@ export const hrHandlers = [
       const user = requireHr(ctx.request);
       const i = ownEmployee(user, param(ctx, 'id'));
       const { excludeFrom } = await body(ctx.request, hrExcludeSchema);
-      if (i.status === 'excluded') throw new HttpError(409, 'conflict', 'Сотрудник уже исключён');
+      if (i.status === 'excluded') throw new HttpError(409, 'conflict', 'srv.hr.alreadyExcluded');
       const d = db();
       const row = requestChange(d, user, clientOfHr(user), 'exclude', { effectiveDate: excludeFrom, fullName: i.fullName, position: i.position, familyMembers: i.familyMembersCount, insured: i });
       audit(user, 'policy_change_requested', { targetType: 'policy', targetId: row.policyId, targetLabel: `${row.policyNumber}: исключение ${insuredLabel(i.id)}` });
@@ -202,9 +203,9 @@ export const hrHandlers = [
     route(async ({ request, url }) => {
       const user = requireHr(request);
       const text = await request.text();
-      if (text.length > CSV_MAX_BYTES) throw new HttpError(413, 'validation', 'Файл больше 2 МБ');
+      if (text.length > CSV_MAX_BYTES) throw new HttpError(413, 'validation', 'srv.file.tooLarge2mb');
       const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true });
-      if (parsed.data.length > CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'В файле больше 1000 строк');
+      if (parsed.data.length > CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'srv.hr.over1000Rows');
       const header = parsed.meta.fields ?? [];
       const required = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'startDate'];
       const missing = required.filter((h) => !header.includes(h));

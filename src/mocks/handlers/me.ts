@@ -18,6 +18,7 @@ import { nextClaimNumber } from './claims';
 import { mockConfig } from '../config';
 import { recognizeReceipt } from '../receipts';
 import { handlerOf, refreshFlags, sha256Hex } from '../settlement-core';
+import { msg } from '@/i18n/core';
 
 function requireInsured(request: Request): { user: SessionUser; me: InsuredRow } {
   const { user } = requireSession(request);
@@ -37,16 +38,16 @@ async function readForm(request: Request): Promise<FormData> {
   try {
     return await request.formData();
   } catch {
-    throw new HttpError(400, 'validation', 'Некорректные данные формы');
+    throw new HttpError(400, 'validation', 'srv.form.invalid');
   }
 }
 
 async function readImage(file: File): Promise<{ bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'image/webp' }> {
-  if (file.size === 0 || file.size > RECEIPT_LIMITS.maxBytes) throw new HttpError(422, 'validation', 'Файл больше 10 МБ', { files: 'Файл больше 10 МБ' });
+  if (file.size === 0 || file.size > RECEIPT_LIMITS.maxBytes) throw new HttpError(422, 'validation', 'srv.file.tooLarge10mb', { fields: { files: msg('srv.file.tooLarge10mb') } });
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = detectMime(bytes);
   if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'image/webp') {
-    throw new HttpError(422, 'validation', 'Можно загрузить только фото JPEG, PNG или WEBP', { files: 'Неподдерживаемый формат' });
+    throw new HttpError(422, 'validation', 'srv.receipt.onlyImages', { fields: { files: msg('srv.file.unsupported') } });
   }
   return { bytes, mime };
 }
@@ -142,7 +143,7 @@ export const meHandlers = [
       requireInsured(request);
       const form = await readForm(request);
       const file = form.get('file');
-      if (!(file instanceof File)) throw new HttpError(422, 'validation', 'Добавьте фото чека', { file: 'Добавьте фото чека' });
+      if (!(file instanceof File)) throw new HttpError(422, 'validation', 'srv.receipt.addPhoto', { fields: { file: msg('srv.receipt.addPhoto') } });
       const { bytes } = await readImage(file);
       if (mockConfig.latency[1] > 0) await delay(1000);
       // Fake OCR from the image itself: the server repeats it on submission and never takes fiscal data from the client.
@@ -156,8 +157,8 @@ export const meHandlers = [
       const { me } = requireInsured(request);
       const form = await readForm(request);
       const files = form.getAll('files').filter((f): f is File => f instanceof File);
-      if (files.length === 0) throw new HttpError(422, 'validation', 'Добавьте фото чека', { files: 'Добавьте фото чека' });
-      if (files.length > RECEIPT_LIMITS.maxFiles) throw new HttpError(422, 'validation', 'Не больше 5 фото', { files: 'Не больше 5 фото' });
+      if (files.length === 0) throw new HttpError(422, 'validation', 'srv.receipt.addPhoto', { fields: { files: msg('srv.receipt.addPhoto') } });
+      if (files.length > RECEIPT_LIMITS.maxFiles) throw new HttpError(422, 'validation', 'srv.receipt.max5', { fields: { files: msg('srv.receipt.max5') } });
       const input = validate(myClaimSchema, {
         category: form.get('category'),
         amount: Number(form.get('amount')),
@@ -230,7 +231,7 @@ export const meHandlers = [
       const d = db();
       const a = d.appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a || a.insuredId !== me.id) throw notFound();
-      if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('Эту запись уже нельзя отменить');
+      if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('srv.appointment.cannotCancel');
       a.status = 'cancelled';
       a.proposedStartsAt = undefined;
       await emitWebhook(d, a.clinicId, 'appointment.cancelled', a.id);
@@ -245,7 +246,7 @@ export const meHandlers = [
       const d = db();
       const a = d.appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a || a.insuredId !== me.id) throw notFound();
-      if (a.status !== 'requested' || !a.proposedStartsAt) throw conflict('Клиника не предлагала другое время');
+      if (a.status !== 'requested' || !a.proposedStartsAt) throw conflict('srv.appointment.noProposal');
       a.startsAt = a.proposedStartsAt;
       a.proposedStartsAt = undefined;
       a.status = 'confirmed';

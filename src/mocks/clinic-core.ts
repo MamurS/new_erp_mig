@@ -4,6 +4,7 @@
  * so the rules (visit-only access, limits, checks) are identical (CLINIC_SPEC §1, §3).
  */
 import type {
+import { msg } from '@/i18n/core';
   Appointment,
   ClaimCategory,
   CoverageCheckResult,
@@ -78,10 +79,10 @@ export function priceListOf(d: Db, clinicId: UUID, payer: Payer = 'mig'): PriceL
 
 // ---------------------------------------------------------------- visits & coverage
 
-const tooManyChecks = () => new HttpError(429, 'rate_limited', 'Слишком много проверок. Повторите позже');
+const tooManyChecks = () => new HttpError(429, 'rate_limited', 'srv.clinic.tooManyChecks');
 const lockedChecks = () => new HttpError(429, 'rate_limited', `Слишком много неудачных проверок. Проверки заблокированы на ${dmsParam('pinflLockMinutes')} мин`);
-const staleCode = () => new HttpError(410, 'conflict', 'Код устарел, попросите пациента обновить карточку');
-const noPolicy = () => new HttpError(404, 'not_found', 'Полис не найден или ПИНФЛ не совпадает');
+const staleCode = () => new HttpError(410, 'conflict', 'srv.clinic.codeStale');
+const noPolicy = () => new HttpError(404, 'not_found', 'srv.clinic.noPolicy');
 
 export type CheckInput = { qrToken: string } | { policyNumber: string; pinfl: string };
 
@@ -194,13 +195,13 @@ export function respondToAppointment(
   by: 'clinic' | 'operator',
   action: { kind: 'confirm' } | { kind: 'reschedule'; startsAt: string } | { kind: 'decline'; reason: string },
 ): Appointment {
-  if (a.status !== 'requested') throw conflict('На эту заявку уже ответили');
+  if (a.status !== 'requested') throw conflict('srv.clinic.requestAnswered');
   const now = tzIso(Date.now());
   if (action.kind === 'confirm') {
     a.status = 'confirmed';
     a.proposedStartsAt = undefined;
   } else if (action.kind === 'reschedule') {
-    if (parseIso(action.startsAt) <= Date.now()) throw new HttpError(422, 'validation', 'Выберите время в будущем', { startsAt: 'Выберите время в будущем' });
+    if (parseIso(action.startsAt) <= Date.now()) throw new HttpError(422, 'validation', 'srv.time.chooseFuture', { fields: { startsAt: msg('srv.time.chooseFuture') } });
     a.proposedStartsAt = tzIso(parseIso(action.startsAt));
   } else {
     a.status = 'declined';
@@ -217,10 +218,10 @@ export async function createAppointment(d: Db, who: InsuredRow, input: { clinicI
   const clinic = d.clinics.find((c) => c.id === input.clinicId);
   if (!clinic || !clinic.specialties.includes(input.specialty)) throw notFound();
   const starts = parseIso(input.startsAt);
-  if (Number.isNaN(starts) || starts < Date.now()) throw conflict('Это время уже прошло. Выберите другое');
+  if (Number.isNaN(starts) || starts < Date.now()) throw conflict('srv.clinic.slotPast');
   const iso = tzIso(starts);
   if (d.appointments.some((a) => a.clinicId === clinic.id && a.startsAt === iso && a.status !== 'cancelled' && a.status !== 'declined')) {
-    throw conflict('Это время уже заняли. Выберите другое');
+    throw conflict('srv.clinic.slotTaken');
   }
   const a: Appointment = {
     id: randomId(),
@@ -378,8 +379,8 @@ export function recomputeRegistry(r: Registry): void {
 }
 
 export function submitRegistry(d: Db, r: Registry, actor: { id: UUID; displayName: string; role: Role }): void {
-  if (r.status !== 'draft') throw conflict('Реестр уже отправлен');
-  if (r.lines.length === 0) throw new HttpError(422, 'validation', 'В реестре нет строк');
+  if (r.status !== 'draft') throw conflict('srv.registry.alreadySent');
+  if (r.lines.length === 0) throw new HttpError(422, 'validation', 'srv.registry.empty');
   const problems = registryProblems(d, r);
   const bad = Object.keys(problems);
   if (bad.length) {

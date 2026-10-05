@@ -65,7 +65,7 @@ export function syncAssistance(d: Db): void {
 export function requireAssistanceScope(d: Db, assistanceId: UUID, policyId: UUID, eventDate: string, mode: 'read' | 'write' = 'read'): 'full' | 'read' {
   const s = assistanceScope(d.assignments, assistanceId, policyId, eventDate, todayIso());
   if (s === 'none') throw notFound();
-  if (mode === 'write' && s !== 'full') throw new HttpError(403, 'forbidden', 'Клиент передан другому ассистансу: доступ только на чтение');
+  if (mode === 'write' && s !== 'full') throw new HttpError(403, 'forbidden', 'srv.assist.readOnly');
   return s;
 }
 

@@ -1,10 +1,12 @@
 /* API documentation generated from the OpenAPI document (CLINIC_SPEC §4.8.5). Rendered as text only. */
+import { Fragment, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPublicJson } from '@/shared/api/client';
 import { cn } from '@/shared/lib/cn';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
 import { Panel } from '../components';
 import { usePartner } from './partner';
+import { t } from '@/i18n';
 
 interface Operation {
   summary?: string;
@@ -34,7 +36,7 @@ function curlFor(base: string, method: string, path: string, op: Operation): str
   lines.push('  -H "Authorization: Bearer $ACCESS_TOKEN"');
   const example = op.requestBody?.content?.['application/json']?.schema?.example;
   if (method === 'post' && path !== '/guarantees/{id}/documents') lines.push("  -H 'Idempotency-Key: 4f1c…'");
-  if (op.requestBody?.content?.['multipart/form-data']) lines.push("  -F 'files=@referral.pdf' -F 'comment=Направление'");
+  if (op.requestBody?.content?.['multipart/form-data']) lines.push(`  -F 'files=@referral.pdf' -F 'comment=${t('clinic.docs.sampleComment')}'`);
   else if (example !== undefined) {
     lines.push("  -H 'Content-Type: application/json'");
     lines.push(`  -d '${JSON.stringify(example)}'`);
@@ -42,7 +44,7 @@ function curlFor(base: string, method: string, path: string, op: Operation): str
   return lines.join(' \\\n');
 }
 
-const VERIFY_SAMPLES: [string, string][] = [
+const verifySamples = (): [string, string][] => [
   [
     'Python',
     `import hmac, hashlib, time
@@ -50,7 +52,7 @@ const VERIFY_SAMPLES: [string, string][] = [
 def verify(secret: str, header: str, raw_body: bytes) -> bool:
     parts = dict(p.split("=", 1) for p in header.split(","))
     t, v1 = int(parts["t"]), parts["v1"]
-    if abs(time.time() - t) > 300:          # старше 5 минут — повтор
+    if abs(time.time() - t) > 300:          # ${t('clinic.docs.replayComment')}
         return False
     expected = hmac.new(secret.encode(), f"{t}.".encode() + raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, v1)`,
@@ -79,6 +81,7 @@ static bool Verify(string secret, string header, string rawBody) {
   ],
 ];
 
+// eslint-disable-next-line mig/no-cyrillic-ui -- a sample API response body: the API returns Russian texts
 const PROBLEM_EXAMPLE = `HTTP/1.1 422 Unprocessable Content
 Content-Type: application/problem+json
 X-Request-Id: 7d0c2c4e-…
@@ -90,6 +93,11 @@ X-Request-Id: 7d0c2c4e-…
   "detail": "Реестр не прошёл проверки",
   "errors": { "lines[0]": "Цена выше прайса договора (180000)" }
 }`;
+
+/** Puts React nodes into the `{name}` placeholders of a translated sentence. */
+function rich(template: string, nodes: Record<string, ReactNode>): ReactNode[] {
+  return template.split(/\{(\w+)\}/g).map((part, i) => <Fragment key={i}>{i % 2 ? (nodes[part] ?? `{${part}}`) : part}</Fragment>);
+}
 
 function Code({ children }: { children: string }) {
   return <pre className="overflow-x-auto rounded-btn bg-[#0f172a] p-3 font-mono text-[12px] leading-relaxed text-[#e2e8f0]">{children}</pre>;
@@ -103,18 +111,30 @@ export function DocsTab() {
       {(doc) => {
         const base = doc.servers?.[0]?.url ?? '/api/integration/v1';
         const ops = Object.entries(doc.paths).flatMap(([path, methods]) => Object.entries(methods).map(([method, op]) => ({ path, method, op })));
-        const tags = [...new Set(ops.flatMap((o) => o.op.tags ?? ['Прочее']))].filter(partner.docsTag);
+        const tags = [...new Set(ops.flatMap((o) => o.op.tags ?? [t('clinic.docs.otherTag')]))].filter(partner.docsTag);
         return (
           <div className="flex flex-col gap-4" data-testid="api-docs">
             <Panel title={`${doc.info.title} · v${doc.info.version}`}>
               <div className="flex flex-col gap-2 p-4 text-[14px]">
                 <p>{doc.info.description}</p>
                 <p>
-                  Базовый адрес: <code>{base}</code>. Авторизация: OAuth 2.0 client credentials — <code>POST /oauth/token</code> с <code>client_id</code> и <code>client_secret</code>, токен действует 15 минут. Пагинация курсорная:
-                  <code> ?cursor=&amp;limit=</code>.
+                  {rich(t('clinic.docs.intro'), {
+                    base: <code>{base}</code>,
+                    token: <code>POST /oauth/token</code>,
+                    clientId: <code>client_id</code>,
+                    clientSecret: <code>client_secret</code>,
+                    pager: <code> ?cursor=&amp;limit=</code>,
+                  })}
                 </p>
                 <p>
-                  Контракт для бэкенда: <code>docs/integration/openapi.yaml</code>, JSON — <a className="text-accent-text underline" href="/docs/integration/openapi.json" download>openapi.json</a>.
+                  {rich(t('clinic.docs.contract'), {
+                    yaml: <code>docs/integration/openapi.yaml</code>,
+                    json: (
+                      <a className="text-accent-text underline" href="/docs/integration/openapi.json" download>
+                        openapi.json
+                      </a>
+                    ),
+                  })}
                 </p>
               </div>
             </Panel>
@@ -122,7 +142,7 @@ export function DocsTab() {
               <Panel key={tag} title={tag}>
                 <ul className="divide-y divide-border-soft">
                   {ops
-                    .filter((o) => (o.op.tags ?? ['Прочее']).includes(tag))
+                    .filter((o) => (o.op.tags ?? [t('clinic.docs.otherTag')]).includes(tag))
                     .map(({ path, method, op }) => (
                       <li key={`${method} ${path}`} className="flex flex-col gap-2 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
@@ -138,18 +158,18 @@ export function DocsTab() {
                         {op.description && <p className="text-[13px] text-muted">{op.description}</p>}
                         {op.parameters && op.parameters.length > 0 && (
                           <p className="text-[13px]">
-                            Параметры:{' '}
+                            {t('clinic.docs.params')}{' '}
                             {op.parameters.map((p) => (
                               <code key={`${p.in}-${p.name}`} className="mr-2">
                                 {p.name}
-                                <span className="text-muted"> ({p.in}{p.required ? ', обязательный' : ''})</span>
+                                <span className="text-muted"> ({p.in}{p.required ? t('clinic.docs.requiredSuffix') : ''})</span>
                               </code>
                             ))}
                           </p>
                         )}
                         <Code>{curlFor(base, method, path, op)}</Code>
                         <p className="text-[12px] text-muted">
-                          Ответы:{' '}
+                          {t('clinic.docs.responses')}{' '}
                           {Object.entries(op.responses ?? {})
                             .map(([code, r]) => `${code} — ${r.description ?? ''}`)
                             .join(' · ')}
@@ -159,20 +179,31 @@ export function DocsTab() {
                 </ul>
               </Panel>
             ))}
-            <Panel title="Формат ошибок">
+            <Panel title={t('clinic.docs.errorsTitle')}>
               <div className="flex flex-col gap-2 p-4 text-[14px]">
                 <p>
-                  Ошибки — <code>application/problem+json</code> (RFC 9457): <code>type</code>, <code>title</code>, <code>status</code>, <code>detail</code>, <code>errors</code>. Сообщайте в поддержку значение <code>X-Request-Id</code>.
+                  {rich(t('clinic.docs.errorsText'), {
+                    problem: <code>application/problem+json</code>,
+                    type: <code>type</code>,
+                    title: <code>title</code>,
+                    status: <code>status</code>,
+                    detail: <code>detail</code>,
+                    errors: <code>errors</code>,
+                    requestId: <code>X-Request-Id</code>,
+                  })}
                 </p>
                 <Code>{PROBLEM_EXAMPLE}</Code>
               </div>
             </Panel>
-            <Panel title="Вебхуки и проверка подписи">
+            <Panel title={t('clinic.docs.webhooksTitle')}>
               <div className="flex flex-col gap-3 p-4 text-[14px]">
                 <p>
-                  Тело события: <code>{'{ "id", "type", "createdAt", "objectId" }'}</code> — без персональных и медицинских данных. Заголовок <code>MIG-Signature: t=&#123;unix&#125;,v1=&#123;hex&#125;</code>, где v1 = HMAC-SHA256(секрет, «t.сырое_тело»). Отвечайте 2xx в течение 10 секунд; иначе повторы через 1, 5, 30 минут, 2 и 12 часов.
+                  {rich(t('clinic.docs.webhooksText'), {
+                    body: <code>{'{ "id", "type", "createdAt", "objectId" }'}</code>,
+                    header: <code>MIG-Signature: t=&#123;unix&#125;,v1=&#123;hex&#125;</code>,
+                  })}
                 </p>
-                {VERIFY_SAMPLES.map(([lang, code]) => (
+                {verifySamples().map(([lang, code]) => (
                   <div key={lang}>
                     <h3 className="mb-1 font-semibold">{lang}</h3>
                     <Code>{code}</Code>

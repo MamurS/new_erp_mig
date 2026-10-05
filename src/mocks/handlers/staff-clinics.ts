@@ -18,6 +18,7 @@ import { DEMO_PASSWORD } from '../credentials';
 import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, refreshGuarantee, toGuaranteeView, toRegistrySummary, toRegistryView } from '../clinic-core';
 import { revokeKey } from './clinic';
 import { linesOf, settleRegistry, subStatus, subTotals } from '../assistance-core';
+import { msg } from '@/i18n/core';
 
 /** The MIG part of a clinic registry: only lines paid by MIG, with their own status and totals. */
 function migSubRegistry(_d: Db, r: Registry): Registry {
@@ -115,10 +116,10 @@ export const staffClinicHandlers = [
       const d = db();
       const clinic = clinicOf(d, param(ctx, 'id'));
       if (d.clinicUsers.some((u) => u.clinicId === clinic.id && u.role === 'clinic_admin' && u.active)) {
-        throw conflict('У клиники уже есть администратор: остальных пользователей приглашает он');
+        throw conflict('srv.clinics.hasAdmin');
       }
       const input = await body(ctx.request, clinicAdminInviteSchema);
-      if (d.clinicUsers.some((u) => u.email === input.email)) throw new HttpError(409, 'conflict', 'Пользователь с таким email уже есть', { email: 'Email уже используется' });
+      if (d.clinicUsers.some((u) => u.email === input.email)) throw new HttpError(409, 'conflict', 'srv.users.emailTaken', { fields: { email: msg('srv.users.emailInUse') } });
       const row: ClinicUserRow = { id: randomId(), ...input, role: 'clinic_admin', password: DEMO_PASSWORD, clinicId: clinic.id, active: true, createdAt: tzIso(Date.now()) };
       d.clinicUsers.push(row);
       audit(user, 'role_change', { targetType: 'user', targetId: row.id, targetLabel: row.fullName });
@@ -180,13 +181,13 @@ export const staffClinicHandlers = [
       if (!can(user, 'assist.guarantees.decide', { assistanceId: g.assistanceId ?? null, escalated: g.escalated === true })) {
         throw new HttpError(403, 'forbidden', `Решение принимает ${g.assistanceName ?? 'ассистанс'}: МИГ решает только эскалации`);
       }
-      if (g.status !== 'requested') throw conflict(g.status === 'info_requested' ? 'Ждём документы от клиники' : 'Решение уже принято');
+      if (g.status !== 'requested') throw conflict(g.status === 'info_requested' ? 'srv.guarantee.awaitingDocs' : 'srv.decision.alreadyMade');
       const input = await body(ctx.request, guaranteeDecisionSchema);
       const at = tzIso(Date.now());
       g.decidedBy = 'mig';
       if (input.action === 'approve') {
         const outcome = approvalOutcome(g, input.amount, user.id, dmsParam('guaranteeDualApprovalThreshold'));
-        if (outcome === 'same_doctor') throw new HttpError(409, 'conflict', 'Второе одобрение должен дать другой врач-эксперт (правило четырёх глаз)');
+        if (outcome === 'same_doctor') throw new HttpError(409, 'conflict', 'srv.guarantee.fourEyes');
         g.approvals.push({ byId: user.id, byName: user.displayName, at });
         g.approvedAmount = input.amount;
         g.validUntil = input.validUntil;
@@ -252,11 +253,11 @@ export const staffClinicHandlers = [
       const d = db();
       const r = d.registries.find((x) => x.id === param(ctx, 'id'));
       if (!r || r.status === 'draft') throw notFound();
-      if (r.status === 'paid') throw conflict('Реестр уже оплачен');
+      if (r.status === 'paid') throw conflict('srv.registry.alreadyPaid');
       const line = r.lines.find((l) => l.id === param(ctx, 'lineId'));
       // Lines of an assistance's sub-registry are reviewed by that assistance.
       if (!line || (line.payer ?? 'mig') !== 'mig') throw notFound();
-      if (line.status !== 'pending' && line.status !== 'disputed') throw conflict('По строке уже принято решение');
+      if (line.status !== 'pending' && line.status !== 'disputed') throw conflict('srv.lines.alreadyDecided');
       const input = await body(ctx.request, registryLineDecisionSchema);
       const wasPending = r.lines.some((l) => l.status === 'pending');
       if (input.decision === 'accept') {
@@ -289,10 +290,10 @@ export const staffClinicHandlers = [
       if (!r || r.status === 'draft') throw notFound();
       const mine = linesOf(r, 'mig');
       if (!mine.length) throw notFound();
-      if (mine.some((l) => l.status === 'pending')) throw conflict('Оплатить можно только проверенный реестр');
-      if (mine.some((l) => l.status === 'disputed')) throw conflict('Сначала ответьте на оспоренные строки');
+      if (mine.some((l) => l.status === 'pending')) throw conflict('srv.registry.payReviewedOnly');
+      if (mine.some((l) => l.status === 'disputed')) throw conflict('srv.registry.answerDisputes');
       const toPay = mine.filter((l) => l.status === 'accepted' && !l.payment);
-      if (!toPay.length) throw conflict('Строки МИГ уже оплачены');
+      if (!toPay.length) throw conflict('srv.registry.migLinesPaid');
       const paidAt = tzIso(Date.now());
       const orderNumber = `ПП-МИГ-${String(Date.now()).slice(-6)}`;
       for (const l of toPay) l.payment = { paidAt: paidAt.slice(0, 10), amount: l.amount, orderNumber };
