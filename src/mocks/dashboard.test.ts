@@ -90,6 +90,31 @@ describe('dashboard by role', () => {
     expect(dash.data.kpis.map((k) => k.key)).toEqual(['quotes', 'renewals', 'finance', 'loss']);
   });
 
+  it('the «Убыточность» row leads to aggregates only: sums, categories, months — no claims, names or diagnoses', async () => {
+    const { sid } = await login(ACCOUNTS.underwriter);
+    const row = (await call<QueueItem[]>('/queue?type=loss_ratio', sid)).data[0]!;
+    const res = await call<Record<string, unknown>>(`/clients/${row.entityId}/loss-stats`, sid);
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.data).sort()).toEqual(['byCategory', 'byMonth', 'claimsAmount', 'claimsCount', 'clientId', 'clientName', 'lossRatio', 'lossRatioWarn', 'premium']);
+    const text = JSON.stringify(res.data);
+    const claims = db().claims.filter((c) => c.clientId === row.entityId);
+    expect(claims.length).toBeGreaterThan(0);
+    for (const c of claims) {
+      expect(text).not.toContain(c.number);
+      expect(text).not.toContain(c.insuredName);
+    }
+    expect(text).not.toMatch(/[A-Z]\d{2}\.\d/); // no ICD-10 codes
+    expect((res.data.byMonth as unknown[]).length).toBe(12);
+    // The client card itself no longer names a single claim to a role without claims.read.
+    const card = await call<{ activity: { text: string }[] }>(`/clients/${row.entityId}`, sid);
+    expect(card.data.activity.some((a) => /Новый убыток/.test(a.text))).toBe(false);
+    const op = await login(ACCOUNTS.operator);
+    const opCard = await call<{ activity: { text: string }[] }>(`/clients/${row.entityId}`, op.sid);
+    expect(opCard.data.activity.some((a) => /Новый убыток У-/.test(a.text))).toBe(true);
+    // Roles without clients.read get 403.
+    expect((await call(`/clients/${row.entityId}/loss-stats`, (await login(ACCOUNTS.claims_officer)).sid)).status).toBe(403);
+  });
+
   it('a pending change is never in the queue of the person who proposed it (four eyes)', async () => {
     const { sid } = await login('admin2@demo.mig.uz');
     const q = await call<QueueItem[]>('/queue?type=all', sid);

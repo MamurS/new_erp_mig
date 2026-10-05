@@ -6,7 +6,7 @@ import { acceptConsent, api, CODE, loginStaff, PASSWORD } from './helpers';
 async function switchTo(page: Page, label: string, home: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'Войти как…' }).click();
   // The label followed by the login: «Администратор» must not match «Администратор клиники».
-  await page.getByRole('menuitem', { name: new RegExp(`^${label}\\s*[a-z0-9.+-]+@`) }).click();
+  await page.getByRole('menuitem', { name: new RegExp(`^${label} — [a-z0-9.+-]+@`) }).click();
   await expect(page.getByText(`Вы вошли как «${label}»`).last()).toBeVisible();
   await expect(page).toHaveURL(home);
 }

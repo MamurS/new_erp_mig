@@ -32,8 +32,9 @@ function queueRowPath(row: QueueItem, confirmed: boolean): string {
     case 'payout':
       return row.subject === 'registry' ? `/staff/registries/${id}` : `/staff/claims/${id}`;
     case 'renewal':
-    case 'loss_ratio':
       return `/staff/clients/${id}`;
+    case 'loss_ratio':
+      return `/staff/clients/${id}/loss`;
     case 'guarantee':
     case 'escalation':
       return '/staff/guarantees';

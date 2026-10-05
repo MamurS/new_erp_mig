@@ -1,93 +1,65 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { ChevronDown, LogOut } from 'lucide-react';
+import { Outlet, useLocation } from 'react-router-dom';
+import { BarChart3, CircleHelp, FileSignature, ReceiptText, Users } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
+import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useHrOverview } from '@/shared/api/queries/hr';
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '@/shared/ui/dropdown';
-import { Avatar } from '@/shared/ui/chips';
+import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
-import { cn } from '@/shared/lib/cn';
 
 const NAV = [
-  { to: '/hr', label: 'Сотрудники', end: true },
-  { to: '/hr/documents', label: 'Счета и документы', end: false },
-  { to: '/hr/contracts', label: 'Договор и изменения', end: false },
-  { to: '/hr/stats', label: 'Статистика', end: false },
-  { to: '/hr/help', label: 'Помощь', end: false },
-] as const;
+  { path: '/hr', label: 'Сотрудники', icon: Users },
+  { path: '/hr/documents', label: 'Счета и документы', icon: ReceiptText },
+  { path: '/hr/contracts', label: 'Договор и изменения', icon: FileSignature },
+  { path: '/hr/stats', label: 'Статистика', icon: BarChart3 },
+];
+const HELP = [{ path: '/hr/help', label: 'Помощь', icon: CircleHelp }];
 
-/** HR cabinet shell: client theme, pill navigation on top, content up to 1440px (SPEC §7.2). */
+/** HR cabinet shell: the common side panel, client theme for the content up to 1440px (SPEC §7.2). */
 export default function HrLayout() {
   const user = useUser();
+  const loc = useLocation();
   const overview = useHrOverview();
   const company = overview.data?.companyName;
+  const all = [...NAV, ...HELP];
+  // «Сотрудники» covers the employee pages under /hr/employees too.
+  const current =
+    all.filter((n) => n.path !== '/hr' && (loc.pathname === n.path || loc.pathname.startsWith(`${n.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]?.path ??
+    (loc.pathname === '/hr' || loc.pathname.startsWith('/hr/employees') ? '/hr' : undefined);
+  const groups: SidebarGroup[] = [{ items: NAV }, { label: 'Поддержка', items: HELP }];
 
   return (
-    <div data-theme="client" className="flex flex-col bg-bg text-text" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))' }}>
-      <IdleWatcher />
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 md:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-btn bg-accent font-heading text-[15px] font-semibold text-white">
-              MIG
-            </span>
+    <SidebarProvider portal="hr">
+      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))' }}>
+        <AppSidebar
+          title="MIG · Компания"
+          ariaLabel="Разделы кабинета"
+          groups={groups}
+          activePath={current}
+          user={{ name: user?.displayName ?? '', role: user ? ROLE_LABEL[user.role] : 'HR', portal: company ? `Кабинет HR · ${company}` : 'Кабинет HR' }}
+          onLogout={() => void logout()}
+        />
+        <div data-theme="client" className="flex min-w-0 flex-1 flex-col bg-bg text-text">
+          <IdleWatcher />
+          <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+            <SidebarToggle />
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] text-muted">Кабинет HR</p>
               {company ? (
-                <p className="truncate font-heading text-[16px] font-semibold" data-testid="hr-company">
+                <p className="truncate font-heading text-[15px] font-semibold" data-testid="hr-company">
                   {company}
                 </p>
               ) : (
                 <Skeleton className="mt-1 h-4 w-40" />
               )}
             </div>
-          </div>
-
-          <nav aria-label="Разделы кабинета" className="order-3 w-full overflow-x-auto md:order-0 md:w-auto md:flex-1">
-            <ul className="flex gap-2">
-              {NAV.map((n) => (
-                <li key={n.to}>
-                  <NavLink
-                    to={n.to}
-                    end={n.end}
-                    className={({ isActive }) =>
-                      cn(
-                        'inline-flex h-11 items-center whitespace-nowrap rounded-full px-5 text-[15px] font-semibold transition-colors',
-                        isActive ? 'bg-accent text-white' : 'text-text hover:bg-rail',
-                      )
-                    }
-                  >
-                    {n.label}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <div className="ml-auto">
-            <Menu>
-              <MenuTrigger asChild>
-                <button type="button" className="inline-flex h-11 items-center gap-2 rounded-full pl-1 pr-3 hover:bg-rail" aria-label="Меню пользователя">
-                  <Avatar name={user?.displayName ?? ''} className="h-9 w-9 text-[13px]" />
-                  <span className="hidden max-w-[180px] truncate font-semibold sm:inline">{user?.displayName}</span>
-                  <ChevronDown className="h-4 w-4 text-muted" aria-hidden />
-                </button>
-              </MenuTrigger>
-              <MenuContent>
-                <MenuLabel>{company ?? 'Кабинет HR'}</MenuLabel>
-                <MenuItem className="min-h-11" onSelect={() => void logout()}>
-                  <LogOut className="h-4 w-4" aria-hidden />
-                  Выйти
-                </MenuItem>
-              </MenuContent>
-            </Menu>
-          </div>
+          </header>
+          <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 md:px-8 md:py-8">
+            <Outlet />
+          </main>
         </div>
-      </header>
-      <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 md:px-8 md:py-8">
-        <Outlet />
-      </main>
-    </div>
+      </div>
+    </SidebarProvider>
   );
 }

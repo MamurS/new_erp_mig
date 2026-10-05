@@ -94,6 +94,20 @@ const clientDocument: z.ZodType<T.ClientDocument> = z.object({
 });
 export const clientDocuments = z.array(clientDocument);
 
+// Strict: an unexpected field (a list of claims, a name) fails validation instead of reaching the screen.
+export const clientLossStats: z.ZodType<D.ClientLossStats> = z
+  .object({
+    clientId: uuid,
+    clientName: z.string(),
+    premium: money,
+    lossRatio: z.number().nullable(),
+    lossRatioWarn: z.number(),
+    claimsCount: z.number(),
+    claimsAmount: money,
+    byCategory: z.array(z.object({ category: z.string(), count: z.number(), amount: money }).strict()),
+    byMonth: z.array(z.object({ month: z.string(), count: z.number(), amount: money }).strict()),
+  })
+  .strict();
 export const clientDetail: z.ZodType<D.ClientDetail> = z.intersection(
   client,
   z.object({

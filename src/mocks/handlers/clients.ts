@@ -1,7 +1,8 @@
 import { http } from 'msw';
 import { clientCreateSchema, clientPatchSchema } from '@/shared/schemas/forms';
-import type { ClientDetail, ClientListResponse, PolicyDetail } from '@/shared/types/dto';
+import type { ClientDetail, ClientListResponse, ClientLossStats, PolicyDetail } from '@/shared/types/dto';
 import type { AuditEntry, Policy } from '@/shared/types';
+import { can } from '@/shared/auth/permissions';
 import { CLAIM_CATEGORY_LABEL } from '@/shared/domain/claims';
 import { formatMoney } from '@/shared/lib/format';
 import { db, hasLiveKp, type ClientRow } from '../db';
@@ -92,6 +93,47 @@ export const clientHandlers = [
     }),
   ),
   http.get(
+    `${API}/clients/:id/loss-stats`,
+    route((ctx) => {
+      const { user } = requireSession(ctx.request);
+      requirePermission(user, 'clients.read');
+      const d = db();
+      const c = findClient(param(ctx, 'id'));
+      const claims = d.claims.filter((x) => x.clientId === c.id && x.status !== 'rejected');
+      const amountOf = (x: (typeof claims)[number]) => x.amountApproved ?? x.amountClaimed;
+      const now = Date.now();
+      const byMonth: ClientLossStats['byMonth'] = [];
+      for (let k = 11; k >= 0; k--) {
+        const dt = new Date(now);
+        dt.setDate(1);
+        dt.setMonth(dt.getMonth() - k);
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        const inMonth = claims.filter((x) => x.serviceDate.startsWith(key));
+        byMonth.push({ month: key, count: inMonth.length, amount: inMonth.reduce((sum, x) => sum + amountOf(x), 0) });
+      }
+      const byCat = new Map<string, { count: number; amount: number }>();
+      for (const x of claims) {
+        const e = byCat.get(x.category) ?? { count: 0, amount: 0 };
+        e.count += 1;
+        e.amount += amountOf(x);
+        byCat.set(x.category, e);
+      }
+      // Only sums and counts: no claim numbers, insured names or diagnoses (the underwriter's view).
+      const out: ClientLossStats = {
+        clientId: c.id,
+        clientName: c.name,
+        premium: c.premium,
+        lossRatio: c.lossRatio,
+        lossRatioWarn: dmsParam('lossRatioWarn'),
+        claimsCount: claims.length,
+        claimsAmount: claims.reduce((sum, x) => sum + amountOf(x), 0),
+        byCategory: [...byCat.entries()].map(([category, v]) => ({ category: CLAIM_CATEGORY_LABEL[category as keyof typeof CLAIM_CATEGORY_LABEL] ?? category, ...v })).sort((a, b) => b.amount - a.amount),
+        byMonth,
+      };
+      return out;
+    }),
+  ),
+  http.get(
     `${API}/clients/:id`,
     route(({ request, ...ctx }) => {
       const { user } = requireSession(request);
@@ -123,7 +165,8 @@ export const clientHandlers = [
         if (k.sentAt) activity.push({ at: k.sentAt, text: `${k.number} отправлено клиенту` });
       }
       const lastClaim = [...claims].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
-      if (lastClaim) activity.push({ at: lastClaim.createdAt, text: `Новый убыток ${lastClaim.number}` });
+      // A claim number is a single claim: only roles that read claims see it.
+      if (lastClaim && can(user, 'claims.read')) activity.push({ at: lastClaim.createdAt, text: `Новый убыток ${lastClaim.number}` });
       const lastInv = d.invoices.filter((i) => i.clientId === c.id).sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1))[0];
       if (lastInv) activity.push({ at: tzIso(parseIso(lastInv.issuedAt)), text: `Выставлен счёт ${lastInv.number} на ${formatMoney(lastInv.amount)}` });
       if (policy) activity.push({ at: tzIso(parseIso(policy.startDate)), text: `Начало действия полиса ${policy.number}` });

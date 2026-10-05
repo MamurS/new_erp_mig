@@ -45,3 +45,23 @@ test('underwriter: more than one kind of work, no claims anywhere in the queue',
   await expect(table.locator('tbody tr[data-row]').first()).toContainText('Убыточность');
   expect(new Set(await table.locator('tbody tr[data-row] td:first-child').allInnerTexts())).toEqual(new Set(['Убыточность']));
 });
+
+test('underwriter: the «Убыточность» row opens aggregates only — sums, categories, months; no claims, insured or diagnoses', async ({ page }) => {
+  await loginStaff(page, 'underwriter');
+  await page.getByTestId('queue-tabs').getByRole('tab', { name: /^Убыточность/ }).click();
+  const table = page.getByRole('table', { name: 'Очередь задач' });
+  await table.locator('tbody tr[data-row]').first().getByRole('button', { name: 'Открыть' }).click();
+  await expect(page).toHaveURL(/\/staff\/clients\/[0-9a-f-]{36}\/loss$/);
+  const stats = page.getByTestId('loss-stats');
+  await expect(stats.getByRole('heading', { level: 1 })).toContainText('Убыточность:');
+  await expect(stats.getByTestId('loss-by-category')).toBeVisible();
+  await expect(stats.getByTestId('loss-by-month').locator('tbody tr')).toHaveCount(12);
+  await expect(page.getByRole('tab', { name: 'Застрахованные' })).toHaveCount(0);
+  const text = await page.getByRole('main').innerText();
+  expect(text).not.toMatch(/У-\d{4}-\d{6}/);
+  expect(text).not.toMatch(/\b[A-Z]\d{2}\.\d\b/);
+  // No names of the client's insured people on the page.
+  const clientId = /clients\/([0-9a-f-]{36})\/loss/.exec(page.url())![1]!;
+  const insured = (await api(page, 'GET', `/clients/${clientId}/insured?pageSize=50`)).data as { items?: { fullName: string }[] };
+  for (const i of insured.items ?? []) expect(text).not.toContain(i.fullName);
+});

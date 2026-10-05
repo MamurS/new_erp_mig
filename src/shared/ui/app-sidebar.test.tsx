@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ClipboardList, LayoutDashboard, Receipt, ShieldCheck } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, Receipt } from 'lucide-react';
 import { renderRoutes } from '@/test/utils';
-import { getNavCollapsed, setNavCollapsed, setPref } from '@/shared/lib/storage';
-import { AppSidebar, SidebarBurger, type SidebarGroup } from './app-sidebar';
+import { getNavPrefs, setNavPrefs, setPref } from '@/shared/lib/storage';
+import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from './app-sidebar';
 
 const GROUPS: SidebarGroup[] = [
   { label: 'Работа', items: [{ path: '/staff', label: 'Рабочий стол', icon: LayoutDashboard, count: 3 }] },
@@ -17,105 +17,157 @@ const GROUPS: SidebarGroup[] = [
   },
 ];
 
-function Shell({ onLogout = () => undefined }: { onLogout?: () => void }) {
+function Shell({ onLogout = () => undefined, onSearch }: { onLogout?: () => void; onSearch?: () => void }) {
   return (
-    <div>
-      <SidebarBurger onClick={() => undefined} controls="m" expanded={false} />
+    <SidebarProvider portal="staff">
       <AppSidebar
-        portal="staff"
-        theme="staff"
+        title="MIG"
         ariaLabel="Разделы портала"
-        brand={{ to: '/staff', label: 'MIG ДМС — рабочий стол', title: 'MIG ДМС', icon: ShieldCheck }}
         groups={GROUPS}
         activePath="/staff/claims"
-        user={{ name: 'Дмитрий Соколов', role: 'Андеррайтер' }}
+        user={{ name: 'Дмитрий Соколов', role: 'Андеррайтер', portal: 'Портал сотрудников МИГ' }}
         onLogout={onLogout}
-        mobileOpen={false}
-        onMobileOpenChange={() => undefined}
-        mobileId="m"
+        onSearch={onSearch}
       />
-      <input aria-label="Поиск" />
-    </div>
+      <header>
+        <SidebarToggle />
+        <input aria-label="Поле" />
+      </header>
+    </SidebarProvider>
   );
 }
 
-const render = (props: { onLogout?: () => void } = {}) => renderRoutes([{ path: '*', element: <Shell {...props} /> }], '/staff/claims');
-const sidebar = () => screen.getByTestId('sidebar');
-const toggle = () => within(sidebar()).getByRole('button', { name: /меню$/ });
+const render = (props: { onLogout?: () => void; onSearch?: () => void } = {}) => renderRoutes([{ path: '*', element: <Shell {...props} /> }], '/staff/claims');
+const panel = () => screen.getByTestId('sidebar');
 
 describe('AppSidebar', () => {
-  beforeEach(() => setPref('navCollapsed', {}));
-
-  it('expanded by default: labels, group titles, counters; every link has an aria-label; the active one is marked', () => {
-    render();
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'false');
-    expect(within(sidebar()).getByText('Урегулирование')).toBeInTheDocument();
-    expect(within(sidebar()).getAllByTestId('nav-count').map((n) => n.textContent)).toEqual(['3', '12']);
-    const claims = within(sidebar()).getByRole('link', { name: 'Убытки, задач: 12' });
-    expect(claims).toHaveAttribute('aria-current', 'page');
-    expect(within(sidebar()).getByRole('link', { name: 'Гарантийные письма' })).toBeInTheDocument();
-    expect(toggle()).toHaveAccessibleName('Свернуть меню');
-    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
-    expect(document.getElementById(toggle().getAttribute('aria-controls')!)).not.toBeNull();
-    expect(within(sidebar()).getByTestId('sidebar-user')).toHaveTextContent('Дмитрий Соколов');
-    expect(within(sidebar()).getByTestId('sidebar-user')).toHaveTextContent('Андеррайтер');
-  });
-
-  it('the button collapses to icons with dot counters; links keep their names; the choice is remembered per portal', async () => {
-    const user = userEvent.setup();
-    render();
-    await user.click(toggle());
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'true');
-    expect(toggle()).toHaveAccessibleName('Развернуть меню');
-    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
-    expect(within(sidebar()).queryByText('Урегулирование')).toBeNull();
-    expect(within(sidebar()).queryAllByTestId('nav-count')).toHaveLength(0);
-    expect(within(sidebar()).getAllByTestId('nav-dot')).toHaveLength(2);
-    expect(within(sidebar()).getByRole('link', { name: 'Убытки, задач: 12' })).toBeInTheDocument();
-    expect(within(sidebar()).getByRole('button', { name: 'Профиль и выход' })).toBeInTheDocument();
-    expect(getNavCollapsed('staff')).toBe(true);
-    expect(getNavCollapsed('assist')).toBe(false);
-  });
-
-  it('a collapsed item shows its name in a tooltip on keyboard focus', async () => {
-    // Radix positions tooltips with ResizeObserver, which jsdom does not have.
+  beforeEach(() => {
+    setPref('nav', {});
+    // Radix positions tooltips and menus with ResizeObserver, which jsdom does not have.
     vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
-    setNavCollapsed('staff', true);
-    render();
-    const link = within(sidebar()).getByRole('link', { name: 'Гарантийные письма' });
-    act(() => link.focus());
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Гарантийные письма');
+  });
+  afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it('Ctrl+B and ⌘+B toggle it, except while typing in a field', async () => {
-    render();
-    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'true');
-    fireEvent.keyDown(window, { key: 'B', metaKey: true });
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'false');
-    fireEvent.keyDown(screen.getByLabelText('Поиск'), { key: 'b', ctrlKey: true });
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'false');
+  it('docked by default at 288 px: title, lower-case group titles, counters as numbers, the active row marked; no content toggle', () => {
+    render({ onSearch: () => undefined });
+    expect(panel()).toHaveAttribute('data-state', 'expanded');
+    expect(panel().style.width).toBe('288px');
+    expect(within(panel()).getByTestId('sidebar-title')).toHaveTextContent('MIG');
+    expect(within(panel()).getByText('Урегулирование')).toBeInTheDocument();
+    expect(within(panel()).getAllByTestId('nav-count').map((n) => n.textContent)).toEqual(['3', '12']);
+    const claims = within(panel()).getByRole('link', { name: 'Убытки, задач: 12' });
+    expect(claims).toHaveAttribute('aria-current', 'page');
+    expect(within(panel()).getByRole('link', { name: 'Гарантийные письма' })).not.toHaveAttribute('aria-current');
+    expect(within(panel()).getByRole('button', { name: 'Поиск' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('button', { name: 'Меню пользователя' })).toHaveTextContent('Дмитрий Соколов · Андеррайтер');
+    expect(screen.queryByTestId('sidebar-toggle')).toBeNull();
   });
 
-  it('starts collapsed when the portal remembered it; «Выйти» logs out', async () => {
-    setNavCollapsed('staff', true);
-    const first = render();
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'true');
-    first.unmount();
-    setNavCollapsed('staff', false);
+  it('«Скрыть панель» hides it completely and puts the toggle into the content; the toggle brings it back; the state is remembered per portal', async () => {
+    const user = userEvent.setup();
+    render();
+    const hide = within(panel()).getByRole('button', { name: 'Скрыть панель' });
+    expect(hide).toHaveAttribute('aria-expanded', 'true');
+    await user.click(hide);
+    expect(panel()).toHaveAttribute('data-state', 'collapsed');
+    expect(panel().style.width).toBe('0px');
+    expect(panel()).toHaveAttribute('inert');
+    expect(getNavPrefs('staff').collapsed).toBe(true);
+    expect(getNavPrefs('hr').collapsed).toBe(false);
+    const toggle = screen.getByTestId('sidebar-toggle');
+    expect(toggle).toHaveAccessibleName('Показать панель');
+    expect(toggle).toHaveAttribute('aria-controls', panel().id);
+    await user.click(toggle);
+    expect(panel()).toHaveAttribute('data-state', 'expanded');
+    expect(screen.queryByTestId('sidebar-toggle')).toBeNull();
+  });
+
+  it('Ctrl+B and ⌘+B toggle it, except while typing in a field', () => {
+    render();
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(panel()).toHaveAttribute('data-state', 'collapsed');
+    fireEvent.keyDown(window, { key: 'B', metaKey: true });
+    expect(panel()).toHaveAttribute('data-state', 'expanded');
+    fireEvent.keyDown(screen.getByLabelText('Поле'), { key: 'b', ctrlKey: true });
+    expect(panel()).toHaveAttribute('data-state', 'expanded');
+  });
+
+  it('hovering the toggle previews the panel over the content; it closes 300 ms after the mouse leaves; a click pins it', () => {
+    setNavPrefs('staff', { collapsed: true });
+    vi.useFakeTimers();
+    render();
+    const toggle = screen.getByTestId('sidebar-toggle');
+    fireEvent.mouseEnter(toggle);
+    const preview = screen.getByTestId('sidebar-preview');
+    expect(within(preview).getByRole('link', { name: 'Убытки, задач: 12' })).toBeInTheDocument();
+    expect(panel()).toHaveAttribute('data-state', 'collapsed');
+    fireEvent.mouseLeave(toggle);
+    act(() => vi.advanceTimersByTime(200));
+    fireEvent.mouseEnter(preview); // the mouse moved onto the panel in time
+    act(() => vi.advanceTimersByTime(400));
+    expect(screen.getByTestId('sidebar-preview')).toBeInTheDocument();
+    fireEvent.mouseLeave(screen.getByTestId('sidebar-preview'));
+    act(() => vi.advanceTimersByTime(299));
+    expect(screen.getByTestId('sidebar-preview')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(2));
+    expect(screen.queryByTestId('sidebar-preview')).toBeNull();
+
+    fireEvent.mouseEnter(toggle);
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId('sidebar-preview')).toBeNull();
+    expect(panel()).toHaveAttribute('data-state', 'expanded');
+    expect(getNavPrefs('staff').collapsed).toBe(false);
+  });
+
+  it('the separator resizes with the keyboard (±16 px, 224–400), double click resets to 288; the width is saved', () => {
+    render();
+    const sep = within(panel()).getByRole('separator', { name: 'Ширина панели' });
+    expect(sep).toHaveAttribute('aria-orientation', 'vertical');
+    expect(sep).toHaveAttribute('aria-valuenow', '288');
+    expect(sep).toHaveAttribute('aria-valuemin', '224');
+    expect(sep).toHaveAttribute('aria-valuemax', '400');
+    expect(sep).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(sep, { key: 'ArrowRight' });
+    expect(sep).toHaveAttribute('aria-valuenow', '304');
+    expect(panel().style.width).toBe('304px');
+    expect(getNavPrefs('staff').width).toBe(304);
+    fireEvent.keyDown(sep, { key: 'ArrowLeft' });
+    fireEvent.keyDown(sep, { key: 'ArrowLeft' });
+    expect(sep).toHaveAttribute('aria-valuenow', '272');
+    fireEvent.keyDown(sep, { key: 'End' });
+    fireEvent.keyDown(sep, { key: 'ArrowRight' });
+    expect(sep).toHaveAttribute('aria-valuenow', '400');
+    fireEvent.keyDown(sep, { key: 'Home' });
+    expect(sep).toHaveAttribute('aria-valuenow', '224');
+    fireEvent.doubleClick(sep);
+    expect(sep).toHaveAttribute('aria-valuenow', '288');
+    expect(getNavPrefs('staff').width).toBe(288);
+  });
+
+  it('the user menu has «Профиль» and «Выйти»', async () => {
+    const user = userEvent.setup();
     const onLogout = vi.fn();
     render({ onLogout });
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'false');
-    await userEvent.setup().click(within(sidebar()).getByRole('button', { name: 'Выйти' }));
+    await user.click(within(panel()).getByRole('button', { name: 'Меню пользователя' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Профиль' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Профиль' });
+    expect(dialog).toHaveTextContent('Портал сотрудников МИГ');
+    await user.keyboard('{Escape}');
+    await user.click(within(panel()).getByRole('button', { name: 'Меню пользователя' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Выйти' }));
     expect(onLogout).toHaveBeenCalledOnce();
   });
 
-  it('broken storage falls back to expanded', () => {
-    setPref('navCollapsed', 'oops' as never);
-    expect(getNavCollapsed('staff')).toBe(false);
-    setPref('navCollapsed', { staff: 'yes', assist: true } as never);
-    expect(getNavCollapsed('staff')).toBe(false);
-    expect(getNavCollapsed('assist')).toBe(true);
+  it('storage: per portal, clamped width, broken values fall back to the defaults', () => {
+    setNavPrefs('clinic', { width: 999 });
+    expect(getNavPrefs('clinic')).toEqual({ collapsed: false, width: 400 });
+    setPref('nav', 'oops' as never);
+    expect(getNavPrefs('staff')).toEqual({ collapsed: false, width: 288 });
+    setPref('nav', { assist: { collapsed: 'yes', width: 'wide' }, hr: { collapsed: true, width: 100 } } as never);
+    expect(getNavPrefs('assist')).toEqual({ collapsed: false, width: 288 });
+    expect(getNavPrefs('hr')).toEqual({ collapsed: true, width: 224 });
   });
 });
