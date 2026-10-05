@@ -228,7 +228,12 @@
     position: relative;
     min-width: min-content;
   }
-  .rounded-card:has(.table-scroll) {
+  /*
+   * Nothing between the content area and a wide table may squeeze it: the card and every column that
+   * holds a table are at least as wide as the table (a flex or grid item with min-width: 0 would let
+   * the table spill over its neighbours). Grid tracks next to tables use minmax(min-content, 1fr).
+   */
+  [data-content-scroll] :is(.rounded-card, .min-w-0):has(.table-scroll) {
     min-width: min-content;
   }
   .table-scroll :is(thead > tr > th, [data-sticky-head]) {

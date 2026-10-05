@@ -229,3 +229,40 @@ test('a new page opens at the top of the content area', async ({ page }) => {
   await expect(page).toHaveURL(/\/staff\/policies/);
   await expect.poll(() => area(page).evaluate((el) => el.scrollTop)).toBe(0);
 });
+
+/*
+ * A wide table never spills over its neighbours: every block on the way from the content area to the
+ * table is at least as wide as the table, so sibling blocks (a side column, a summary) are pushed aside
+ * and the content area scrolls sideways instead. Checked on every section of the side menu.
+ */
+for (const role of ['underwriter', 'accountant', 'claims_officer', 'asst_operator', 'clinic_admin', 'hr'] as const) {
+  test(`${role}: no table overlaps a neighbouring block on any section`, async ({ page }) => {
+    test.slow();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await loginStaff(page, role);
+    const paths = await page.getByTestId('sidebar').getByRole('link').evaluateAll((as) => [...new Set(as.map((a) => (a as HTMLAnchorElement).pathname))]);
+    for (const path of paths) {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      const overlaps = await page.evaluate(() => {
+        const area = document.querySelector('[data-content-scroll]');
+        const out: string[] = [];
+        const visible = (r: DOMRect) => r.width > 0 && r.height > 0;
+        for (const table of document.querySelectorAll<HTMLElement>('[data-content-scroll] [data-table-scroll]')) {
+          for (let el: HTMLElement = table; el.parentElement && el.parentElement !== area; el = el.parentElement) {
+            const r = el.getBoundingClientRect();
+            for (const sib of el.parentElement.children) {
+              if (sib === el || !(sib instanceof HTMLElement) || ['absolute', 'fixed', 'sticky'].includes(getComputedStyle(sib).position)) continue;
+              const s = sib.getBoundingClientRect();
+              const w = Math.min(r.right, s.right) - Math.max(r.left, s.left);
+              const h = Math.min(r.bottom, s.bottom) - Math.max(r.top, s.top);
+              if (visible(r) && visible(s) && w > 1 && h > 1) out.push(`${el.tagName}.${el.className} × ${sib.tagName}.${sib.className}`.slice(0, 200));
+            }
+          }
+        }
+        return out;
+      });
+      expect(overlaps, path).toEqual([]);
+    }
+  });
+}

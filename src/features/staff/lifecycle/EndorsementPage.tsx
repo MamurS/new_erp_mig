@@ -202,7 +202,7 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
               : t('staffLc.endorsement.signed')}
         </p>
       )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(min-content,1fr)_minmax(min-content,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <Card title={t('staffLc.endorsement.calculation')} bodyClassName="p-0">
             <TableScroll>

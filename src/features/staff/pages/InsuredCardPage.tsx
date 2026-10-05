@@ -114,7 +114,7 @@ export default function InsuredCardPage() {
           <TabsTrigger value="access">{t('staff.insuredCard.tab.access')}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(min-content,1fr)_380px]">
             <div className="flex min-w-0 flex-col gap-4">
               <Card title={t('staff.insuredCard.limitsByCategory')}>
                 <LimitsBlock insuredId={p.id} />
