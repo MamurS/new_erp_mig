@@ -51,7 +51,7 @@ export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { i
       actions={
         grant ? (
           <span className="flex items-center gap-2">
-            <span className="rounded bg-warning-soft px-1.5 text-[12px] text-warning-text num" aria-live="polite" data-testid="medical-timer">
+            <span className="rounded-sm bg-warning-soft px-1.5 text-[12px] text-warning-text num" aria-live="polite" data-testid="medical-timer">
               Доступ ещё {formatCountdown(left)}
             </span>
             <Button size="sm" variant="secondary" onClick={() => setGrant(null)}>

@@ -25,7 +25,7 @@ export function MenuItem({ className, danger, ...p }: ComponentPropsWithoutRef<t
     <M.Item
       {...p}
       className={cn(
-        'flex cursor-pointer items-center gap-2 rounded-btn px-2 py-1.5 outline-none data-[disabled]:cursor-not-allowed data-[highlighted]:bg-rail data-[disabled]:opacity-50',
+        'flex cursor-pointer items-center gap-2 rounded-btn px-2 py-1.5 outline-hidden data-disabled:cursor-not-allowed data-highlighted:bg-rail data-disabled:opacity-50',
         danger && 'text-danger-text',
         className,
       )}
@@ -39,9 +39,9 @@ export function MenuCheckbox({ checked, onCheckedChange, children }: { checked: 
       checked={checked}
       onCheckedChange={onCheckedChange}
       onSelect={(e) => e.preventDefault()}
-      className="flex cursor-pointer items-center gap-2 rounded-btn px-2 py-1.5 outline-none data-[highlighted]:bg-rail"
+      className="flex cursor-pointer items-center gap-2 rounded-btn px-2 py-1.5 outline-hidden data-highlighted:bg-rail"
     >
-      <span className="flex h-4 w-4 items-center justify-center rounded border border-border">
+      <span className="flex h-4 w-4 items-center justify-center rounded-sm border border-border">
         <M.ItemIndicator>
           <Check className="h-3 w-3" />
         </M.ItemIndicator>

@@ -1,8 +1,106 @@
-@import './tokens.css';
+@import './tokens.css' layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-rail: var(--rail);
+  --color-border: var(--border);
+  --color-border-soft: var(--border-soft);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+
+  --color-info: var(--info);
+
+  --color-peach: var(--peach);
+  --color-peach-text: var(--peach-text);
+
+  --color-sky: var(--sky);
+  --color-sky-text: var(--sky-text);
+
+  --color-sun: var(--sun);
+  --color-sun-text: var(--sun-text);
+
+  --color-chip-appt: #eef0ff;
+  --color-chip-appt-text: #3730a3;
+  --color-chip-claim: #fef3c7;
+  --color-chip-claim-text: #92400e;
+  --color-chip-renewal: #ccfbf1;
+  --color-chip-renewal-text: #115e59;
+
+  --font-sans: var(--font-body), system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/*
+  These utilities read the theme tokens of tokens.css under the same names (`rounded-btn` →
+  var(--radius-btn)). `inline` puts the token straight into the utility and `reference` emits no
+  variable, so there is no self-referencing `--radius-btn: var(--radius-btn)` on :root (that cycle
+  would break the radius and the heading font in portals: modals, menus, tooltips).
+*/
+@theme inline reference {
+  --font-heading: var(--font-heading), system-ui, sans-serif;
+  --radius-btn: var(--radius-btn);
+  --radius-card: var(--radius-card);
+  --radius-hero: var(--radius-hero);
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+  /* Tailwind v4 dropped the pointer cursor on buttons; v3 had it. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@utility num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+@utility animate-panel {
+  animation: panel-in 180ms ease-out;
+}
+
+@utility animate-modal {
+  animation: modal-in 160ms ease-out;
+}
+
+@utility animate-step {
+  animation: step-in 200ms ease-out;
+}
 
 @layer base {
   html,
@@ -35,22 +133,6 @@
   }
   button:focus:not(:focus-visible) {
     outline: none;
-  }
-}
-
-@layer utilities {
-  .num {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-variant-numeric: tabular-nums;
-  }
-  .animate-panel {
-    animation: panel-in 180ms ease-out;
-  }
-  .animate-modal {
-    animation: modal-in 160ms ease-out;
-  }
-  .animate-step {
-    animation: step-in 200ms ease-out;
   }
 }
 

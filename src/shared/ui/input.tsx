@@ -2,7 +2,7 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from '@/shared/lib/cn';
 
 const base =
-  'w-full rounded-btn border border-border bg-surface px-2.5 text-text placeholder:text-muted/70 focus-visible:outline-2 focus-visible:outline-accent aria-[invalid=true]:border-danger disabled:opacity-60';
+  'w-full rounded-btn border border-border bg-surface px-2.5 text-text placeholder:text-muted/70 focus-visible:outline-2 focus-visible:outline-accent aria-invalid:border-danger disabled:opacity-60';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
   <input ref={ref} className={cn(base, 'h-8', className)} {...props} />

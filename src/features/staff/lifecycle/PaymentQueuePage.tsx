@@ -274,7 +274,7 @@ export default function PaymentQueuePage() {
     {
       key: 'purpose',
       header: 'Назначение',
-      cell: (b) => <span className="line-clamp-2 max-w-[22rem] text-[13px]">{b.purpose || '—'}</span>,
+      cell: (b) => <span className="line-clamp-2 max-w-88 text-[13px]">{b.purpose || '—'}</span>,
     },
     {
       key: 'amount',

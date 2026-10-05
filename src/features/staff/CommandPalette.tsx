@@ -52,14 +52,14 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
               onValueChange={setQ}
               maxLength={100}
               placeholder="Клиент, ИНН, номер полиса или убытка, ФИО…"
-              className="h-12 w-full border-b border-border bg-transparent px-4 outline-none"
+              className="h-12 w-full border-b border-border bg-transparent px-4 outline-hidden"
             />
             <Command.List className="max-h-[60vh] overflow-y-auto p-2">
               <Command.Empty className="px-2 py-6 text-center text-muted">
                 {term.length < 2 ? 'Введите минимум 2 символа' : 'Ничего не найдено'}
               </Command.Empty>
               {canClients && (clients.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Клиенты" className="text-[12px] text-muted [&_[cmdk-group-items]]:text-[13px] [&_[cmdk-group-items]]:text-text">
+                <Command.Group heading="Клиенты" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {clients.data!.items.map((c) => (
                     <Command.Item key={c.id} value={`c-${c.id}`} onSelect={() => go(`/staff/clients/${c.id}`)} className={itemCls}>
                       <Building2 className="h-4 w-4 text-muted" aria-hidden /> {c.name}
@@ -69,7 +69,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                 </Command.Group>
               )}
               {canPolicies && (policies.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Полисы" className="text-[12px] text-muted [&_[cmdk-group-items]]:text-[13px] [&_[cmdk-group-items]]:text-text">
+                <Command.Group heading="Полисы" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {policies.data!.items.map((p) => (
                     <Command.Item key={p.id} value={`p-${p.id}`} onSelect={() => go(`/staff/policies/${p.id}`)} className={itemCls}>
                       <FileText className="h-4 w-4 text-muted" aria-hidden /> <span className="num">{p.number}</span>
@@ -79,7 +79,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                 </Command.Group>
               )}
               {canInsured && (insured.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Застрахованные" className="text-[12px] text-muted [&_[cmdk-group-items]]:text-[13px] [&_[cmdk-group-items]]:text-text">
+                <Command.Group heading="Застрахованные" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {insured.data!.items.map((i) => (
                     <Command.Item key={i.id} value={`i-${i.id}`} onSelect={() => go(`/staff/insured/${i.id}`)} className={itemCls}>
                       <User className="h-4 w-4 text-muted" aria-hidden /> {i.fullName}
@@ -89,7 +89,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                 </Command.Group>
               )}
               {canClaims && (claims.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Убытки" className="text-[12px] text-muted [&_[cmdk-group-items]]:text-[13px] [&_[cmdk-group-items]]:text-text">
+                <Command.Group heading="Убытки" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {claims.data!.items.map((c) => (
                     <Command.Item key={c.id} value={`u-${c.id}`} onSelect={() => go(`/staff/claims/${c.id}`)} className={itemCls}>
                       <Receipt className="h-4 w-4 text-muted" aria-hidden /> <span className="num">{c.number}</span>
@@ -98,7 +98,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                   ))}
                 </Command.Group>
               )}
-              <Command.Group heading="Разделы" className="text-[12px] text-muted [&_[cmdk-group-items]]:text-[13px] [&_[cmdk-group-items]]:text-text">
+              <Command.Group heading="Разделы" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                 {sections
                   .filter((s) => !term || s.label.toLowerCase().includes(term.toLowerCase()))
                   .map((s) => (

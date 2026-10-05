@@ -42,7 +42,7 @@ function Bubble({ m }: { m: ChatMessage }) {
       </span>
       <p
         className={cn(
-          'max-w-[85%] whitespace-pre-wrap break-words rounded-card px-4 py-2.5 text-[15px]',
+          'max-w-[85%] whitespace-pre-wrap wrap-break-word rounded-card px-4 py-2.5 text-[15px]',
           mine ? 'rounded-br-md bg-accent text-white' : 'rounded-bl-md border border-border bg-surface',
         )}
       >

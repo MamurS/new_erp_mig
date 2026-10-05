@@ -125,7 +125,7 @@ function DealCardTile({ d }: { d: DealView }) {
   return (
     <Link
       to={`/staff/deals/${d.id}`}
-      className="block rounded-btn border border-border bg-surface p-2.5 text-[13px] shadow-sm hover:border-accent"
+      className="block rounded-btn border border-border bg-surface p-2.5 text-[13px] shadow-xs hover:border-accent"
       data-testid="deal-card"
       aria-label={`Сделка ${d.number}: ${d.clientName}`}
     >

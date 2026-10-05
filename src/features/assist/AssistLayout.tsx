@@ -52,7 +52,7 @@ export default function AssistLayout() {
         mobileId={mobileId}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-[var(--banner-h,0px)] z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+        <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
           <SidebarBurger onClick={() => setMenuOpen(true)} controls={mobileId} expanded={menuOpen} />
           <div className="flex min-w-0 shrink-0 items-center gap-2 border-r border-border pr-3">
             {name ? (

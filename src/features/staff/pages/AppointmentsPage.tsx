@@ -86,10 +86,10 @@ export default function AppointmentsPage() {
         <div className="flex items-center gap-2">
           <SearchInput value={search} onChange={setSearch} placeholder="ФИО или клиника" slashFocus className="w-64" />
           <div role="tablist" aria-label="Вид" className="flex rounded-btn border border-border bg-surface p-0.5">
-            <button role="tab" type="button" aria-selected={view === 'list'} onClick={() => setF({ view: null })} className={cn('flex items-center gap-1 rounded px-2 py-1', view === 'list' && 'bg-rail font-semibold')}>
+            <button role="tab" type="button" aria-selected={view === 'list'} onClick={() => setF({ view: null })} className={cn('flex items-center gap-1 rounded-sm px-2 py-1', view === 'list' && 'bg-rail font-semibold')}>
               <List className="h-3.5 w-3.5" aria-hidden /> Список
             </button>
-            <button role="tab" type="button" aria-selected={view === 'day'} onClick={() => setF({ view: 'day' })} className={cn('flex items-center gap-1 rounded px-2 py-1', view === 'day' && 'bg-rail font-semibold')}>
+            <button role="tab" type="button" aria-selected={view === 'day'} onClick={() => setF({ view: 'day' })} className={cn('flex items-center gap-1 rounded-sm px-2 py-1', view === 'day' && 'bg-rail font-semibold')}>
               <CalendarDays className="h-3.5 w-3.5" aria-hidden /> День
             </button>
           </div>

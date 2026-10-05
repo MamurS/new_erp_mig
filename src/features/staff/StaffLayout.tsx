@@ -65,7 +65,7 @@ export default function StaffLayout() {
         mobileId={mobileId}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-[var(--banner-h,0px)] z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+        <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
           <SidebarBurger onClick={() => setMenuOpen(true)} controls={mobileId} expanded={menuOpen} />
           <div className="min-w-0 flex-1">
             <Breadcrumbs items={crumbs.length ? crumbs : [{ label: 'Портал сотрудников' }]} />
@@ -78,7 +78,7 @@ export default function StaffLayout() {
           >
             <Search className="h-3.5 w-3.5" aria-hidden />
             <span className="flex-1 text-left">Поиск</span>
-            <kbd className="rounded border border-border px-1 text-[10px]">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+            <kbd className="rounded-sm border border-border px-1 text-[10px]">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
           </button>
           <button type="button" onClick={() => setPaletteOpen(true)} className="rounded-btn p-2 text-muted md:hidden" aria-label="Открыть поиск">
             <Search className="h-4 w-4" />

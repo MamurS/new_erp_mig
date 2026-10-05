@@ -114,7 +114,7 @@ export function AppSidebar(props: AppSidebarProps) {
         data-collapsed={collapsed}
         data-testid="sidebar"
         className={cn(
-          'sticky top-[var(--banner-h,0px)] hidden h-[calc(100vh-var(--banner-h,0px))] shrink-0 flex-col border-r border-border bg-rail transition-[width] duration-150 ease-out motion-reduce:transition-none lg:flex',
+          'sticky top-(--banner-h,0px) hidden h-[calc(100vh-var(--banner-h,0px))] shrink-0 flex-col border-r border-border bg-rail transition-[width] duration-150 ease-out motion-reduce:transition-none lg:flex',
           collapsed ? COLLAPSED : EXPANDED,
         )}
       >
@@ -225,7 +225,7 @@ function SidebarLink({ item, active, collapsed }: { item: SidebarItem; active: b
       className={cn(
         'relative flex h-9 items-center gap-2.5 rounded-btn text-muted hover:bg-surface hover:text-text',
         collapsed ? 'w-10 justify-center' : 'px-2',
-        active && 'bg-surface font-medium text-text shadow-sm ring-1 ring-border',
+        active && 'bg-surface font-medium text-text shadow-xs ring-1 ring-border',
       )}
     >
       <item.icon className={cn('h-[18px] w-[18px] shrink-0', active && 'text-accent')} aria-hidden />

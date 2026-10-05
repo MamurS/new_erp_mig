@@ -54,7 +54,7 @@ export function RevealField({ insuredId, field, masked, canReveal, claimNumber, 
             <span className="font-semibold num" data-testid={`revealed-${field}`}>
               {value}
             </span>
-            <span className="rounded bg-warning-soft px-1.5 text-[11px] text-warning-text num" aria-live="polite" aria-label={`Скроется через ${left} секунд`}>
+            <span className="rounded-sm bg-warning-soft px-1.5 text-[11px] text-warning-text num" aria-live="polite" aria-label={`Скроется через ${left} секунд`}>
               {formatCountdown(left)}
             </span>
             <Button

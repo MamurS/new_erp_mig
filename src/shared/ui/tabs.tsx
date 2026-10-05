@@ -4,7 +4,7 @@ import type { ComponentPropsWithoutRef } from 'react';
 
 export const Tabs = T.Root;
 export const TabsContent = (p: ComponentPropsWithoutRef<typeof T.Content>) => (
-  <T.Content {...p} className={cn('pt-4 focus-visible:outline-none', p.className)} />
+  <T.Content {...p} className={cn('pt-4 focus-visible:outline-hidden', p.className)} />
 );
 export const TabsList = (p: ComponentPropsWithoutRef<typeof T.List>) => (
   <T.List {...p} className={cn('flex gap-1 overflow-x-auto border-b border-border', p.className)} />

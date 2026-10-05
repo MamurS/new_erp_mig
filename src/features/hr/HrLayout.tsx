@@ -44,7 +44,7 @@ export default function HrLayout() {
             </div>
           </div>
 
-          <nav aria-label="Разделы кабинета" className="order-3 w-full overflow-x-auto md:order-none md:w-auto md:flex-1">
+          <nav aria-label="Разделы кабинета" className="order-3 w-full overflow-x-auto md:order-0 md:w-auto md:flex-1">
             <ul className="flex gap-2">
               {NAV.map((n) => (
                 <li key={n.to}>

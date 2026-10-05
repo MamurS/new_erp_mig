@@ -22,7 +22,7 @@ export function Checkbox({
       aria-label={ariaLabel}
       onCheckedChange={(v) => onCheckedChange(v === true)}
       className={cn(
-        'flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border bg-surface data-[state=checked]:border-accent data-[state=checked]:bg-accent',
+        'flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-border bg-surface data-[state=checked]:border-accent data-[state=checked]:bg-accent',
         className,
       )}
     >
