@@ -6,7 +6,7 @@ import type { GuaranteeView } from '@/shared/types/dto';
 import { useAnswerGuarantee, useClinicGuarantees } from '@/shared/api/queries/clinic';
 import { errorMessage, request } from '@/shared/api/client';
 import { downloadText } from '@/shared/lib/csv';
-import { formatDate, formatDateTime, formatMoney, todayISO } from '@/shared/lib/format';
+import { formatDate, formatDateTime, formatMoney, formatMoneyDoc, todayISO } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { DataTable, type Column } from '@/shared/ui/data-table';
@@ -35,7 +35,7 @@ function guaranteePdf(g: GuaranteeView): string {
       `Clinic: ${g.clinicName}`,
       `Service: ${g.serviceCode} ${g.serviceName}`,
       `ICD-10: ${g.icd10}`,
-      `Approved amount: ${formatMoney(g.approvedAmount ?? 0)}`,
+      `Approved amount: ${formatMoneyDoc(g.approvedAmount ?? 0)}`,
       `Valid until: ${g.validUntil ? formatDate(g.validUntil) : '-'}`,
       `Approved by: ${g.approvals.map((a) => a.byName).join(', ')}`,
       '',

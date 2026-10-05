@@ -2,6 +2,7 @@
  * Loss statistics of a client for the underwriter (the «Убыточность» row of the queue): only aggregates —
  * sums, the loss ratio, categories and months. No claims, insured names or diagnoses.
  */
+import { t, tm } from '@/i18n';
 import { useParams } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
 import { useClientLossStats } from '@/shared/api/queries/staff';
@@ -10,54 +11,54 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Card, PageHeader } from '@/shared/ui/page';
 import { EmptyState, QueryState } from '@/shared/ui/states';
 import { MiniKpi } from '../components/KpiCard';
+import { monthShort } from '../components/months';
 import { useTopbar } from '../topbar';
 
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 export default function LossStatsPage() {
   const { clientId } = useParams();
   const q = useClientLossStats(clientId);
-  useDocumentTitle('Убыточность клиента');
-  useTopbar([{ label: 'Клиенты', to: '/staff/clients?view=loss' }, { label: q.data?.clientName ?? 'Клиент' }, { label: 'Убыточность' }]);
+  useDocumentTitle(t('staff.loss.docTitle'));
+  useTopbar([{ label: t('staff.clients.title'), to: '/staff/clients?view=loss' }, { label: q.data?.clientName ?? t('common.client') }, { label: t('staff.clients.col.loss') }]);
 
   return (
     <QueryState query={q}>
       {(s) => (
         <div data-testid="loss-stats">
-          <PageHeader title={`Убыточность: ${s.clientName}`} subtitle="Только агрегаты за 12 месяцев: суммы, категории и месяцы. Отдельные убытки, застрахованные и диагнозы здесь не показываются." />
+          <PageHeader title={t('staff.loss.heading', { client: s.clientName })} subtitle={t('staff.loss.subtitle')} />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MiniKpi label="Премия" value={s.premium ? formatMoneyShort(s.premium) : '—'} />
-            <MiniKpi label="Убытки (выплаты и заявленное)" value={formatMoneyShort(s.claimsAmount)} />
-            <MiniKpi label="Убыточность" value={s.lossRatio === null ? '—' : formatPercent(s.lossRatio)} tone={(s.lossRatio ?? 0) >= s.lossRatioWarn ? 'warning' : 'default'} />
-            <MiniKpi label="Обращений" value={formatNumber(s.claimsCount)} />
+            <MiniKpi label={t('common.premium')} value={s.premium ? formatMoneyShort(s.premium) : '—'} />
+            <MiniKpi label={t('staff.loss.claimsAmount')} value={formatMoneyShort(s.claimsAmount)} />
+            <MiniKpi label={t('staff.clients.col.loss')} value={s.lossRatio === null ? '—' : formatPercent(s.lossRatio)} tone={(s.lossRatio ?? 0) >= s.lossRatioWarn ? 'warning' : 'default'} />
+            <MiniKpi label={t('staff.loss.requests')} value={formatNumber(s.claimsCount)} />
           </div>
-          <p className="mt-2 text-[12px] text-muted">Порог внимания — {formatPercent(s.lossRatioWarn)} (параметр ДМС «Порог убыточности»).</p>
-          <Card title="Убытки по месяцам" className="mt-4">
-            <div className="h-64" role="img" aria-label="График суммы убытков по месяцам за последние 12 месяцев">
+          <p className="mt-2 text-[12px] text-muted">{t('staff.loss.threshold', { pct: formatPercent(s.lossRatioWarn) })}</p>
+          <Card title={t('staff.clientCard.claimsByMonth')} className="mt-4">
+            <div className="h-64" role="img" aria-label={t('staff.clientCard.chartAria')}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={s.byMonth.map((m) => ({ ...m, label: MONTHS[Number(m.month.slice(5)) - 1] }))}>
+                <BarChart data={s.byMonth.map((m) => ({ ...m, label: monthShort(m.month) }))}>
                   <CartesianGrid vertical={false} stroke="#eceef1" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis tickFormatter={(v: number) => formatMoneyShort(v).replace(' UZS', '')} tickLine={false} axisLine={false} fontSize={12} width={70} />
-                  <RTooltip formatter={(v: number) => formatMoney(v)} labelFormatter={(l: string) => `Месяц: ${l}`} />
-                  <Bar dataKey="amount" name="Сумма" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                  <YAxis tickFormatter={(v: number) => formatMoneyShort(v).replace(`\u00a0${t('fmt.currency')}`, '')} tickLine={false} axisLine={false} fontSize={12} width={70} />
+                  <RTooltip formatter={(v: number) => formatMoney(v)} labelFormatter={(l: string) => t('staff.clientCard.monthTooltip', { month: l })} />
+                  <Bar dataKey="amount" name={t('common.amount')} fill="#4f46e5" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <table className="mt-3 w-full text-[13px]" data-testid="loss-by-month">
-              <caption className="sr-only">Убытки по месяцам</caption>
+              <caption className="sr-only">{t('staff.clientCard.claimsByMonth')}</caption>
               <thead>
                 <tr className="border-b border-border text-left text-[12px] text-muted">
-                  <th className="py-1.5 font-normal">Месяц</th>
-                  <th className="py-1.5 text-right font-normal">Обращений</th>
-                  <th className="py-1.5 text-right font-normal">Сумма</th>
+                  <th className="py-1.5 font-normal">{t('staff.loss.colMonth')}</th>
+                  <th className="py-1.5 text-right font-normal">{t('staff.loss.requests')}</th>
+                  <th className="py-1.5 text-right font-normal">{t('common.amount')}</th>
                 </tr>
               </thead>
               <tbody>
                 {s.byMonth.map((m) => (
                   <tr key={m.month} className="border-b border-border-soft">
                     <td className="py-1.5">
-                      {MONTHS[Number(m.month.slice(5)) - 1]} {m.month.slice(0, 4)}
+                      {t('staff.reports.monthYear', { month: monthShort(m.month), year: m.month.slice(0, 4) })}
                     </td>
                     <td className="py-1.5 text-right num">{formatNumber(m.count)}</td>
                     <td className="py-1.5 text-right num">{formatMoney(m.amount)}</td>
@@ -66,24 +67,24 @@ export default function LossStatsPage() {
               </tbody>
             </table>
           </Card>
-          <Card title="Убытки по категориям" className="mt-4" bodyClassName="p-0">
+          <Card title={t('staff.clientCard.claimsByCategory')} className="mt-4" bodyClassName="p-0">
             {s.byCategory.length === 0 ? (
-              <EmptyState title="Убытков нет" />
+              <EmptyState title={t('staff.clientCard.noClaims')} />
             ) : (
               <table className="w-full" data-testid="loss-by-category">
-                <caption className="sr-only">Убытки по категориям</caption>
+                <caption className="sr-only">{t('staff.clientCard.claimsByCategory')}</caption>
                 <thead>
                   <tr className="border-b border-border text-left text-[12px] text-muted">
-                    <th className="px-4 py-2 font-normal">Категория</th>
-                    <th className="px-4 py-2 text-right font-normal">Обращений</th>
-                    <th className="px-4 py-2 text-right font-normal">Сумма</th>
-                    <th className="px-4 py-2 text-right font-normal">Доля</th>
+                    <th className="px-4 py-2 font-normal">{t('common.category')}</th>
+                    <th className="px-4 py-2 text-right font-normal">{t('staff.loss.requests')}</th>
+                    <th className="px-4 py-2 text-right font-normal">{t('common.amount')}</th>
+                    <th className="px-4 py-2 text-right font-normal">{t('staff.loss.colShare')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {s.byCategory.map((r) => (
                     <tr key={r.category} className="h-11 border-b border-border-soft">
-                      <td className="px-4">{r.category}</td>
+                      <td className="px-4">{tm(r.category)}</td>
                       <td className="px-4 text-right num">{formatNumber(r.count)}</td>
                       <td className="px-4 text-right num">{formatMoney(r.amount)}</td>
                       <td className="px-4 text-right num">{s.claimsAmount ? formatPercent(r.amount / s.claimsAmount) : '—'}</td>

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { LimitChangeRequest } from '@/shared/types';
@@ -21,14 +22,20 @@ import { Tooltip } from '@/shared/ui/tooltip';
 import { useTopbar } from '../topbar';
 
 const STATUS = {
-  pending: { tone: 'warning', label: 'Ожидает решения' },
-  approved: { tone: 'success', label: 'Подтверждён' },
-  rejected: { tone: 'danger', label: 'Отклонён' },
+  pending: { tone: 'warning', get label() {
+      return t('staff.limitReq.status.pending');
+    } },
+  approved: { tone: 'success', get label() {
+      return t('staff.limitReq.status.approved');
+    } },
+  rejected: { tone: 'danger', get label() {
+      return t('staff.limitReq.status.rejected');
+    } },
 } as const;
 
 export default function LimitRequestsPage() {
-  useDocumentTitle('Изменения лимитов');
-  useTopbar([{ label: 'Запросы на изменение лимитов' }]);
+  useDocumentTitle(t('staff.limitReq.docTitle'));
+  useTopbar([{ label: t('staff.limitReq.title') }]);
   const user = useUser()!;
   const [f, setF] = useUrlFilters(['status'] as const);
   const list = useLimitRequests({ status: f.status });
@@ -40,21 +47,21 @@ export default function LimitRequestsPage() {
   const approve = async (r: LimitChangeRequest) => {
     try {
       await decide.mutateAsync({ id: r.id, decision: 'approve' });
-      toast.success('Изменение лимита подтверждено');
+      toast.success(t('staff.limitReq.approved'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
 
   const cols: Column<LimitChangeRequest>[] = [
-    { key: 'date', header: 'Создан', cell: (r) => formatDate(r.createdAt) },
-    { key: 'policy', header: 'Полис', cell: (r) => <Link to={`/staff/policies/${r.policyId}`} className="num text-accent-text hover:underline" onClick={(e) => e.stopPropagation()}>{r.policyNumber}</Link> },
-    { key: 'scope', header: 'Для кого', cell: (r) => (r.insuredId ? 'Застрахованный' : 'Весь полис') },
-    { key: 'cat', header: 'Категория', cell: (r) => LIMIT_CATEGORY_LABEL[r.category] },
-    { key: 'change', header: 'Изменение', align: 'right', cell: (r) => <span className="num whitespace-nowrap">{formatMoney(r.from, false)} → <b>{formatMoney(r.to)}</b></span> },
-    { key: 'why', header: 'Обоснование', cell: (r) => <span className="line-clamp-2 text-muted">{r.justification}</span> },
-    { key: 'by', header: 'Автор', cell: (r) => (r.requestedById === user.id ? <b>Вы</b> : r.requestedByName) },
-    { key: 'status', header: 'Статус', cell: (r) => <StatusDot tone={STATUS[r.status].tone}>{STATUS[r.status].label}{r.decidedByName ? ` · ${r.decidedByName}` : ''}</StatusDot> },
+    { key: 'date', header: t('staff.claimCard.created'), cell: (r) => formatDate(r.createdAt) },
+    { key: 'policy', header: t('common.policy'), cell: (r) => <Link to={`/staff/policies/${r.policyId}`} className="num text-accent-text hover:underline" onClick={(e) => e.stopPropagation()}>{r.policyNumber}</Link> },
+    { key: 'scope', header: t('staff.limitReq.colScope'), cell: (r) => (r.insuredId ? t('common.insured') : t('staff.limitReq.wholePolicy')) },
+    { key: 'cat', header: t('common.category'), cell: (r) => LIMIT_CATEGORY_LABEL[r.category] },
+    { key: 'change', header: t('staff.limitReq.colChange'), align: 'right', cell: (r) => <span className="num whitespace-nowrap">{formatMoney(r.from, false)} → <b>{formatMoney(r.to)}</b></span> },
+    { key: 'why', header: t('staff.limitReq.colJustification'), cell: (r) => <span className="line-clamp-2 text-muted">{r.justification}</span> },
+    { key: 'by', header: t('staff.docs.colAuthor'), cell: (r) => (r.requestedById === user.id ? <b>{t('staff.limitReq.you')}</b> : r.requestedByName) },
+    { key: 'status', header: t('common.status'), cell: (r) => <StatusDot tone={STATUS[r.status].tone}>{STATUS[r.status].label}{r.decidedByName ? ` · ${r.decidedByName}` : ''}</StatusDot> },
     {
       key: 'actions',
       header: '',
@@ -65,10 +72,10 @@ export default function LimitRequestsPage() {
         const buttons = (
           <span className="flex justify-end gap-1.5">
             <Button size="sm" disabled={!allowed} loading={decide.isPending && decide.variables?.id === r.id} onClick={() => void approve(r)}>
-              Подтвердить
+              {t('common.confirm')}
             </Button>
             <Button size="sm" variant="secondary" disabled={!allowed} onClick={() => setRejecting(r)}>
-              Отклонить
+              {t('common.reject')}
             </Button>
           </span>
         );
@@ -87,27 +94,27 @@ export default function LimitRequestsPage() {
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-[22px] font-bold">Запросы на изменение лимитов</h1>
+          <h1 className="text-[22px] font-bold">{t('staff.limitReq.title')}</h1>
           <p className="text-muted">
-            {user.role === 'operator' ? 'Ваши запросы. Решение принимает андеррайтер.' : 'Решение по запросу принимает сотрудник, который его не создавал.'}
+            {user.role === 'operator' ? t('staff.limitReq.operatorHint') : t('staff.limitReq.approverHint')}
           </p>
         </div>
       </div>
-      <div role="tablist" aria-label="Статус" className="mb-3 flex gap-1">
+      <div role="tablist" aria-label={t('common.status')} className="mb-3 flex gap-1">
         {[
-          { key: '', label: 'Все' },
-          { key: 'pending', label: 'Ожидают решения' },
-          { key: 'approved', label: 'Подтверждённые' },
-          { key: 'rejected', label: 'Отклонённые' },
-        ].map((t) => (
-          <button key={t.key} role="tab" type="button" aria-selected={f.status === t.key} onClick={() => setF({ status: t.key })} className={cn('rounded-btn px-2.5 py-1', f.status === t.key ? 'bg-text text-white' : 'text-muted hover:bg-rail')}>
-            {t.label}
+          { key: '', label: t('common.all') },
+          { key: 'pending', label: t('staff.limitReq.tab.pending') },
+          { key: 'approved', label: t('staff.limitReq.tab.approved') },
+          { key: 'rejected', label: t('staff.limitReq.tab.rejected') },
+        ].map((st) => (
+          <button key={st.key} role="tab" type="button" aria-selected={f.status === st.key} onClick={() => setF({ status: st.key })} className={cn('rounded-btn px-2.5 py-1', f.status === st.key ? 'bg-text text-white' : 'text-muted hover:bg-rail')}>
+            {st.label}
           </button>
         ))}
       </div>
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Запросы на изменение лимитов"
+          caption={t('staff.limitReq.title')}
           columns={cols}
           rows={list.data}
           rowKey={(r) => r.id}
@@ -115,7 +122,7 @@ export default function LimitRequestsPage() {
           error={list.error}
           onRetry={() => void list.refetch()}
           rowHeight={52}
-          empty={<EmptyState title="Запросов нет" description="Запросить изменение лимита можно из карточки застрахованного или полиса" />}
+          empty={<EmptyState title={t('staff.limitReq.empty')} description={t('staff.limitReq.emptyHint')} />}
         />
       </div>
       <ConfirmDialog
@@ -126,9 +133,9 @@ export default function LimitRequestsPage() {
             setComment('');
           }
         }}
-        title="Отклонить запрос"
-        description="Лимит останется прежним. Автор запроса увидит ваш комментарий."
-        confirmLabel="Отклонить"
+        title={t('staff.limitReq.rejectTitle')}
+        description={t('staff.limitReq.rejectText')}
+        confirmLabel={t('common.reject')}
         danger
         loading={decide.isPending}
         disabled={comment.trim().length < 3}
@@ -136,7 +143,7 @@ export default function LimitRequestsPage() {
           if (!rejecting) return;
           try {
             await decide.mutateAsync({ id: rejecting.id, decision: 'reject', comment: comment.trim() });
-            toast.success('Запрос отклонён');
+            toast.success(t('staff.limitReq.rejected'));
             setRejecting(null);
             setComment('');
           } catch (e) {
@@ -144,7 +151,7 @@ export default function LimitRequestsPage() {
           }
         }}
       >
-        <Field label="Комментарий" hint="Минимум 3 символа">
+        <Field label={t('common.comment')} hint={t('staff.limitReq.commentHint')}>
           {(a) => <Textarea {...a} value={comment} maxLength={500} onChange={(e) => setComment(e.target.value)} />}
         </Field>
       </ConfirmDialog>

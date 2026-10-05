@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ClaimDetail, ContractView, DealCard, DealView, EndorsementView, QuoteView, ReserveReport, SessionResponse } from '@/shared/types/dto';
 import type { Claim, KpDocument, MyClaim } from '@/shared/types';
+import { tm } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 import { currentReserve, refreshFlags } from './settlement-core';
@@ -402,9 +403,9 @@ describe('duplicate receipts by fiscal data', () => {
     expect(row.receiptFiscal).toEqual(rec.data.fiscal);
     const flag = row.flags!.find((x) => x.code === 'duplicate_receipt')!;
     const firstNumber = db().claims.find((c) => c.id === first.data.id)!.number;
-    expect(flag.message).toContain(firstNumber);
-    expect(flag.message).toContain('другого застрахованного');
-    expect(flag.message).toContain('изображение чека тоже совпадает');
+    expect(tm(flag.message)).toContain(firstNumber);
+    expect(tm(flag.message)).toContain('другого застрахованного');
+    expect(tm(flag.message)).toContain('изображение чека тоже совпадает');
 
     // The staff card shows the fiscal data; the insured person never sees the flags.
     const officer = await login('claims@demo.mig.uz');
@@ -424,7 +425,7 @@ describe('duplicate receipts by fiscal data', () => {
     original.receiptFiscal = { ...other.receiptFiscal };
     original.flags = [];
     const flags = refreshFlags(db(), original);
-    expect(flags.find((x) => x.code === 'duplicate_receipt')?.message).toBe(`Фискальный номер чека совпадает с чеком обращения ${other.number} другого застрахованного`);
+    expect(tm(flags.find((x) => x.code === 'duplicate_receipt')?.message)).toBe(`Фискальный номер чека совпадает с чеком обращения ${other.number} другого застрахованного`);
   });
 });
 
