@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { ContentScroll } from '@/shared/ui/content-scroll';
 /* Clinic cabinet shell (CLINIC_SPEC §4): client theme for the content, the common side panel for navigation. */
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -48,7 +48,7 @@ export default function ClinicLayout() {
 
   return (
     <SidebarProvider portal="clinic">
-      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))', '--app-top': 'calc(var(--banner-h, 0px) + var(--topbar-h))' } as CSSProperties}>
+      <div className="portal-shell flex h-[calc(100dvh-var(--banner-h,0px))] overflow-hidden">
         <AppSidebar
           title={t('shell.title.clinic')}
           ariaLabel={t('clinic.nav.aria')}
@@ -57,9 +57,9 @@ export default function ClinicLayout() {
           user={{ name: user?.displayName ?? '', role: user ? ROLE_LABEL[user.role] : t('shell.portal.clinic'), portal: clinicName ? t('clinic.layout.portalNamed', { name: clinicName }) : t('shell.portal.clinic') }}
           onLogout={() => void logout()}
         />
-        <div data-theme="client" className="flex min-w-0 flex-1 flex-col bg-bg text-text">
+        <div data-theme="client" className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg text-text">
           <IdleWatcher />
-          <header data-testid="topbar" className="sticky top-(--banner-h,0px) z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <header data-testid="topbar" className="relative z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] text-muted">{t('shell.portal.clinic')}</p>
@@ -76,9 +76,9 @@ export default function ClinicLayout() {
             </div>
             <LanguageButton className="ml-auto" />
           </header>
-          <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 md:px-8">
+          <ContentScroll className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8">
             <Outlet />
-          </main>
+          </ContentScroll>
         </div>
       </div>
     </SidebarProvider>

@@ -76,7 +76,7 @@ export function CoverageCard({ result, actions }: { result: CoverageCheckResult;
         </Chip>
       }
     >
-      <div className="grid gap-4 p-4 md:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="grid gap-4 p-4 md:grid-cols-[280px_minmax(min-content,1fr)]">
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[14px]" data-testid="coverage-policy">
           <dt className="text-muted">{t('common.program')}</dt>
           <dd className="font-semibold">{result.policy.programName}</dd>

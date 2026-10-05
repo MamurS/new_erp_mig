@@ -74,7 +74,7 @@ export default function ClaimCardPage() {
         </div>
         <TransitionButtons claim={c} onPick={setPending} />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
+      <div className="grid gap-4 xl:grid-cols-[320px_minmax(min-content,1fr)_320px]">
         <div className="flex flex-col gap-4">
           <Card title={t('staff.insuredCard.data')}>
             <dl className="divide-y divide-border-soft">

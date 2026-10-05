@@ -80,6 +80,23 @@ export function DataTable<T>(p: DataTableProps<T>) {
 
   useEffect(() => setFocusIdx(-1), [p.rows]);
 
+  // The totals row sticks right above the pinned pagination bar: its height goes into --pager-h.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pagerRef = useRef<HTMLDivElement>(null);
+  const hasPager = !!(p.onPageChange || p.footer);
+  useEffect(() => {
+    const root = rootRef.current;
+    const pager = pagerRef.current;
+    if (!root) return;
+    if (!pager || typeof ResizeObserver === 'undefined') {
+      root.style.removeProperty('--pager-h');
+      return;
+    }
+    const ro = new ResizeObserver(() => root.style.setProperty('--pager-h', `${pager.offsetHeight}px`));
+    ro.observe(pager);
+    return () => ro.disconnect();
+  }, [hasPager]);
+
   const focusRow = (idx: number) => {
     const el = bodyRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-row]')[idx];
     el?.focus();
@@ -106,7 +123,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
   const totalPages = p.total !== undefined && p.pageSize ? Math.max(1, Math.ceil(p.total / p.pageSize)) : 1;
 
   return (
-    <div className="flex min-h-0 flex-col">
+    <div ref={rootRef} className="flex min-h-0 flex-col">
       <TableScroll>
         <table className="w-full border-collapse text-left">
           <caption className="sr-only">{p.caption}</caption>
@@ -205,8 +222,8 @@ export function DataTable<T>(p: DataTableProps<T>) {
       </TableScroll>
       {p.error && !p.loading ? <ErrorState error={p.error} onRetry={p.onRetry} /> : null}
       {!p.loading && !p.error && p.rows && p.rows.length === 0 ? (p.empty ?? <EmptyState title={t('common.notFound')} description={t('shell.table.emptyHint')} />) : null}
-      {(p.onPageChange || p.footer) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-muted">
+      {hasPager && (
+        <div ref={pagerRef} data-testid="table-pager" className="table-pager flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-muted">
           <div>{p.footer}</div>
           {p.onPageChange && p.total !== undefined && p.total > 0 && (
             <nav className="flex items-center gap-2" aria-label={t('shell.table.pages')}>

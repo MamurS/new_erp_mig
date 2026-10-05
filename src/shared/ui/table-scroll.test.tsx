@@ -6,26 +6,31 @@ import { DataTable } from './data-table';
 import { TableScroll } from './table-scroll';
 
 describe('pinned table header', () => {
-  it('TableScroll marks itself scrolled only when it is not at the top', () => {
+  it('TableScroll never scrolls by itself; it marks the header pinned while the content area has scrolled past its top', () => {
     render(
-      <TableScroll data-testid="scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>A</th>
-            </tr>
-          </thead>
-        </table>
-      </TableScroll>,
+      <div data-testid="area" style={{ overflowY: 'auto' }}>
+        <TableScroll data-testid="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>A</th>
+              </tr>
+            </thead>
+          </table>
+        </TableScroll>
+      </div>,
     );
+    const area = screen.getByTestId('area');
     const el = screen.getByTestId('scroll');
     expect(el).toHaveClass('table-scroll');
     expect(el).not.toHaveAttribute('data-scrolled');
-    el.scrollTop = 120;
-    fireEvent.scroll(el);
+    const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top, toJSON: () => ({}) });
+    area.getBoundingClientRect = () => rect(52, 640);
+    el.getBoundingClientRect = () => rect(-200, 900);
+    fireEvent.scroll(area);
     expect(el).toHaveAttribute('data-scrolled');
-    el.scrollTop = 0;
-    fireEvent.scroll(el);
+    el.getBoundingClientRect = () => rect(120, 900);
+    fireEvent.scroll(area);
     expect(el).not.toHaveAttribute('data-scrolled');
   });
 
@@ -53,11 +58,13 @@ describe('pinned table header', () => {
     expect(foot).toHaveTextContent('3');
   });
 
-  it('the CSS pins header cells at top: 0 and the totals row at bottom: 0, unpinned in print, limited by --app-top', () => {
+  it('the CSS: the wrapper has no overflow or height limit; header at top: 0, totals above the pager, pager at bottom: 0; unpinned in print', () => {
     const css = readFileSync(resolve(__dirname, '../../styles/index.css'), 'utf8');
-    expect(css).toMatch(/\.table-scroll \{[^}]*overflow: auto;[^}]*max-height: calc\(100dvh - var\(--app-top, 0px\)\)/);
+    const wrapper = /\.table-scroll \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(wrapper).not.toMatch(/overflow|max-height/);
     expect(css).toMatch(/\.table-scroll :is\(thead > tr > th, \[data-sticky-head\]\) \{[^}]*position: sticky;[^}]*top: 0;/);
-    expect(css).toMatch(/\[data-sticky-foot\]\) \{[^}]*position: sticky;[^}]*bottom: 0;/);
-    expect(css).toMatch(/@media print \{[^@]*\.table-scroll \{[^}]*overflow: visible;/);
+    expect(css).toMatch(/\[data-sticky-foot\]\) \{[^}]*position: sticky;[^}]*bottom: var\(--pager-h, 0px\);/);
+    expect(css).toMatch(/\.table-pager \{[^}]*position: sticky;[^}]*bottom: 0;/);
+    expect(css).toMatch(/@media print \{[^@]*\[data-content-scroll\] \{[^}]*overflow: visible;[^@]*\.table-pager \{[^}]*position: static;/);
   });
 });

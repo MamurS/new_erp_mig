@@ -521,7 +521,7 @@ function ContractEditor({ c }: { c: ContractView }) {
         </p>
       )}
       {c.originalOverdue && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">{t('staffLc.contract.originalOverdue')}</p>}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(min-content,1fr)_minmax(min-content,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <ParamsForm c={c} editable={editable} />
           <Clauses c={c} editable={editable} />
