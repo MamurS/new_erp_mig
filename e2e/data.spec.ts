@@ -85,6 +85,8 @@ test('7. XSS strings from the seed render as text; javascript: links are not cli
 });
 
 test('8. CSP: no violations on the main pages', async ({ page }) => {
+  // Sixteen pages in three portals, each waited to network idle: ~40 s alone, more under a full parallel run.
+  test.slow();
   const violations: string[] = [];
   page.on('console', (m) => {
     if (/Content Security Policy|Refused to/i.test(m.text())) violations.push(m.text());
