@@ -33,11 +33,19 @@ describe('insured app screens', () => {
     expect(await screen.findByText(/^Добрый день, .+!$/)).toBeInTheDocument();
     expect(await screen.findByText(/^Вы застрахованы через /)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Карточка для клиники/ })).toHaveAttribute('href', '/app/card');
-    await user.click(screen.getByRole('button', { name: 'Oʻzbekcha' }));
+    // The compact language button in the header: current language, then the full names.
+    const pick = async (button: string, item: string) => {
+      await user.click(screen.getByRole('button', { name: button }));
+      await user.click(await screen.findByRole('menuitemradio', { name: new RegExp(`^${item}`) }));
+    };
+    expect(screen.getByTestId('lang-button')).toHaveTextContent('RU');
+    await pick('Язык: Русский', 'Oʻzbekcha');
     expect(await screen.findByText(/^Xayrli kun, .+!$/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'English' }));
+    expect(screen.getByTestId('lang-button')).toHaveTextContent('UZ');
+    await pick('Til: Oʻzbekcha', 'English');
     expect(await screen.findByText(/^Good afternoon, .+!$/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Русский' }));
+    await pick('Language: English', 'Русский');
+    expect(await screen.findByText(/^Добрый день, .+!$/)).toBeInTheDocument();
   });
 
   it('claims list links to a status page; a foreign id is a friendly not-found', async () => {

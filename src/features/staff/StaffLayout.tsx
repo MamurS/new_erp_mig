@@ -6,6 +6,7 @@ import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useDashboard } from '@/shared/api/queries/staff';
+import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Breadcrumbs } from '@/shared/ui/page';
 import { t } from '@/i18n';
@@ -79,6 +80,7 @@ export default function StaffLayout() {
             <button type="button" onClick={() => setPaletteOpen(true)} className="rounded-btn p-2 text-muted md:hidden" aria-label={t('staff.layout.openSearch')}>
               <Search className="h-4 w-4" />
             </button>
+            <LanguageButton />
             <span className="hidden items-center gap-1.5 rounded-btn bg-success-soft px-2 py-1 text-[12px] font-medium text-success-text lg:inline-flex" title={t('staff.layout.mfaHint')}>
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden /> MFA · VPN
             </span>

@@ -12,6 +12,7 @@ export const shell = {
   'shell.user.name': 'Имя',
   'shell.user.role': 'Роль',
   'shell.user.portal': 'Портал',
+  'shell.lang.button': 'Язык: {lang}',
   'shell.lang.label': 'Язык',
   'shell.title.staff': 'MIG',
   'shell.title.assist': 'MIG · Ассистанс',
