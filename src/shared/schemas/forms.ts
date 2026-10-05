@@ -367,7 +367,7 @@ export const dmsParamChangeSchema = z
 export const dmsParamRejectSchema = z.object({ reason: text(5, 500, msg('v.reasonMin5')) });
 
 // ---------------- contract lifecycle (LIFECYCLE_SPEC) ----------------
-const shareInput = (max: number, msg: string) => z.number({ invalid_type_error: msg('v.numberRequired') }).min(0, msg).max(max, msg);
+const shareInput = (max: number, message: string) => z.number({ invalid_type_error: msg('v.numberRequired') }).min(0, message).max(max, message);
 const moneyInput = z.number({ invalid_type_error: msg('v.amountRequired') }).int(msg('v.wholeAmount')).min(0, msg('v.notNegative')).max(100_000_000_000);
 export const authorityChangeSchema = z
   .object({
