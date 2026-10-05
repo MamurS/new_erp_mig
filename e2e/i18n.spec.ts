@@ -127,3 +127,64 @@ for (const lang of LANGS) {
     await expect(page.getByText(tr(next, 'app.home.subtitle'))).toBeVisible();
   });
 }
+
+// The compact language button in the top bar of every portal (and on the insured app's home).
+const SHORT: Record<Lang, string> = { ru: 'RU', 'uz-Latn': 'UZ', en: 'EN' };
+
+async function pickInTopBar(page: Page, from: Lang, to: Lang): Promise<void> {
+  const button = page.getByRole('button', { name: tr(from, 'shell.lang.button', { lang: NAME[from] }) });
+  await expect(button).toHaveText(new RegExp(SHORT[from]));
+  await button.click();
+  // The list shows the full names.
+  for (const l of LANGS) await expect(page.getByRole('menuitemradio', { name: new RegExp(`^${NAME[l]}`) })).toBeVisible();
+  await page.getByRole('menuitemradio', { name: new RegExp(`^${NAME[to]}`) }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', to);
+  await expect(page.getByTestId('lang-button')).toHaveText(new RegExp(SHORT[to]));
+}
+
+const PORTALS: { name: string; email: string; home: RegExp; title: Key; nav: Key }[] = [
+  { name: 'staff', email: EMAIL.underwriter, home: /\/staff$/, title: 'shell.title.staff', nav: 'staff.nav.clients' },
+  { name: 'assist', email: EMAIL.asst_operator, home: /\/assist$/, title: 'shell.title.assist', nav: 'assist.nav.cases' },
+  { name: 'clinic', email: EMAIL.clinic_admin, home: /\/clinic$/, title: 'shell.title.clinic', nav: 'clinic.nav.appointments' },
+  { name: 'hr', email: EMAIL.hr, home: /\/hr$/, title: 'shell.title.hr', nav: 'hr.nav.stats' },
+];
+
+for (const p of PORTALS) {
+  test(`${p.name}: the top bar language button switches RU → EN → UZ, the panel follows, the choice is kept`, async ({ page }) => {
+    await page.goto('/login');
+    await staffLogin(page, 'ru', p.email);
+    await expect(page).toHaveURL(p.home);
+    const header = page.locator('header').filter({ has: page.getByTestId('lang-button') });
+    await expect(header).toBeVisible();
+    const panel = page.getByTestId('sidebar');
+
+    await pickInTopBar(page, 'ru', 'en');
+    await expect(panel.getByTestId('sidebar-title')).toHaveText(tr('en', p.title));
+    await expect(panel.getByRole('link', { name: exact(tr('en', p.nav)) })).toBeVisible();
+    await pickInTopBar(page, 'en', 'uz-Latn');
+    await expect(panel.getByRole('link', { name: exact(tr('uz-Latn', p.nav)) })).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'uz-Latn');
+    await expect(page.getByTestId('lang-button')).toHaveText(/UZ/);
+    // The user menu switch is still there.
+    await panel.getByRole('button', { name: tr('uz-Latn', 'shell.user.menu') }).click();
+    await expect(page.getByRole('menuitemradio', { name: NAME.ru })).toBeVisible();
+  });
+}
+
+test('insured app: the language button on the home header switches the language', async ({ page }) => {
+  await page.goto('/app/login');
+  await page.getByLabel(tr('ru', 'app.login.phone')).fill('900000001');
+  await page.getByRole('button', { name: tr('ru', 'app.login.getCode') }).click();
+  await page.getByLabel(tr('ru', 'app.login.code.digit', { n: 1 }), { exact: true }).fill(CODE);
+  await page.getByRole('checkbox', { name: tr('ru', 'app.consent.checkbox') }).click();
+  await page.getByRole('button', { name: tr('ru', 'app.consent.continue') }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await pickInTopBar(page, 'ru', 'en');
+  await expect(page.getByText(tr('en', 'app.home.subtitle'))).toBeVisible();
+  await pickInTopBar(page, 'en', 'uz-Latn');
+  await expect(page.getByText(tr('uz-Latn', 'app.home.subtitle'))).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('lang-button')).toHaveText(/UZ/);
+});

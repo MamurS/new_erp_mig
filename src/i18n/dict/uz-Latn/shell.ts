@@ -14,6 +14,7 @@ export const shell: Translation<typeof Ru> = {
   'shell.user.name': 'Ism',
   'shell.user.role': 'Rol',
   'shell.user.portal': 'Portal',
+  'shell.lang.button': 'Til: {lang}',
   'shell.lang.label': 'Til',
   'shell.title.staff': 'MIG',
   'shell.title.assist': 'MIG · Assistans',

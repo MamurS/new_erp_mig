@@ -8,6 +8,7 @@ import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useAssistOverview } from '@/shared/api/queries/assist';
+import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Breadcrumbs } from '@/shared/ui/page';
 import { Skeleton } from '@/shared/ui/states';
@@ -60,6 +61,7 @@ export default function AssistLayout() {
             <div className="min-w-0 flex-1">
               <Breadcrumbs items={crumbs.length ? crumbs : [{ label: t('assist.nav.dashboard') }]} />
             </div>
+            <LanguageButton />
             {action}
           </header>
           <main className="min-w-0 flex-1 p-4 lg:p-5">

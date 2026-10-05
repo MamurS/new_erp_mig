@@ -12,7 +12,7 @@ import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Modal } from '@/shared/ui/dialog';
 import { Skeleton } from '@/shared/ui/states';
-import { LanguageSwitch } from '@/shared/ui/language-switch';
+import { LanguageButton } from '@/shared/ui/language-switch';
 import { CardSkeletons, ClaimStepBar, Empty, LoadError, Section, StatusPill } from '../components';
 import { LimitsList } from '../LimitsList';
 
@@ -79,7 +79,7 @@ export default function HomePage() {
           <p className="mt-1 text-muted">{t('app.home.subtitle')}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <LanguageSwitch />
+          <LanguageButton />
           <button
             type="button"
             aria-label={t('app.home.notifications')}
