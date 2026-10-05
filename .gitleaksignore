@@ -1,0 +1,3 @@
+# False positive: generic-api-key flagged the English validation message 'Enter the password' next to
+# the 'v.passwordRequired' key in an interface dictionary (UI text, not a secret).
+b1a91e9751019e1124a610a64681f7da45937965:src/i18n/dict/en/v.ts:generic-api-key:24
