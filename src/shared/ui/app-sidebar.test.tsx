@@ -95,12 +95,22 @@ describe('AppSidebar', () => {
     expect(panel()).toHaveAttribute('data-state', 'expanded');
   });
 
-  it('hovering the toggle previews the panel over the content; it closes 300 ms after the mouse leaves; a click pins it', () => {
+  it('hovering the toggle for 200 ms previews the panel over the content; it closes 300 ms after the mouse leaves; a click pins it', () => {
     setNavPrefs('staff', { collapsed: true });
     vi.useFakeTimers();
     render();
     const toggle = screen.getByTestId('sidebar-toggle');
+    // A pass over the toggle shorter than 200 ms opens nothing.
     fireEvent.mouseEnter(toggle);
+    act(() => vi.advanceTimersByTime(150));
+    fireEvent.mouseLeave(toggle);
+    act(() => vi.advanceTimersByTime(500));
+    expect(screen.queryByTestId('sidebar-preview')).toBeNull();
+
+    fireEvent.mouseEnter(toggle);
+    act(() => vi.advanceTimersByTime(199));
+    expect(screen.queryByTestId('sidebar-preview')).toBeNull();
+    act(() => vi.advanceTimersByTime(1));
     const preview = screen.getByTestId('sidebar-preview');
     expect(within(preview).getByRole('link', { name: 'Убытки, задач: 12' })).toBeInTheDocument();
     expect(panel()).toHaveAttribute('data-state', 'collapsed');
@@ -117,9 +127,50 @@ describe('AppSidebar', () => {
 
     fireEvent.mouseEnter(toggle);
     fireEvent.click(toggle);
+    act(() => vi.advanceTimersByTime(500));
     expect(screen.queryByTestId('sidebar-preview')).toBeNull();
     expect(panel()).toHaveAttribute('data-state', 'expanded');
     expect(getNavPrefs('staff').collapsed).toBe(false);
+  });
+
+  it('right after hiding, the toggle under a still pointer does not preview until the pointer leaves it and comes back', () => {
+    vi.useFakeTimers();
+    render();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Скрыть панель' }));
+    const toggle = screen.getByTestId('sidebar-toggle');
+    // The toggle appeared under the pointer: the browser reports an enter and moves over it.
+    fireEvent.mouseEnter(toggle);
+    fireEvent.pointerMove(toggle);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.queryByTestId('sidebar-preview')).toBeNull();
+    fireEvent.mouseLeave(toggle);
+    fireEvent.mouseEnter(toggle);
+    act(() => vi.advanceTimersByTime(200));
+    expect(screen.getByTestId('sidebar-preview')).toBeInTheDocument();
+    fireEvent.mouseLeave(toggle);
+    act(() => vi.advanceTimersByTime(400));
+
+    // Ctrl+B with the pointer elsewhere: the first move elsewhere ends the pause, so the next hover previews.
+    fireEvent.click(toggle);
+    expect(panel()).toHaveAttribute('data-state', 'expanded');
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(panel()).toHaveAttribute('data-state', 'collapsed');
+    fireEvent.mouseEnter(screen.getByTestId('sidebar-toggle'));
+    act(() => vi.advanceTimersByTime(300));
+    expect(screen.queryByTestId('sidebar-preview')).toBeNull();
+    fireEvent.mouseLeave(screen.getByTestId('sidebar-toggle'));
+    act(() => vi.advanceTimersByTime(300));
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    fireEvent.pointerMove(document.body); // still collapsing: the toggle may yet slide under the pointer
+    fireEvent.mouseEnter(screen.getByTestId('sidebar-toggle'));
+    act(() => vi.advanceTimersByTime(300));
+    expect(screen.queryByTestId('sidebar-preview')).toBeNull();
+    fireEvent.mouseLeave(screen.getByTestId('sidebar-toggle'));
+    fireEvent.pointerMove(document.body);
+    fireEvent.mouseEnter(screen.getByTestId('sidebar-toggle'));
+    act(() => vi.advanceTimersByTime(200));
+    expect(screen.getByTestId('sidebar-preview')).toBeInTheDocument();
   });
 
   it('the separator resizes with the keyboard (±16 px, 224–400), double click resets to 288; the width is saved', () => {
