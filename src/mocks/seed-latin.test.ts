@@ -94,6 +94,22 @@ describe('Latin seed', () => {
     expect(numbers.filter((f) => CYRILLIC.test(f.value) || !DOC_NUMBER_RE.test(f.value) || !/^[A-Za-z0-9/-]+$/.test(f.value))).toEqual([]);
   });
 
+  it('the hand-written lifecycle demo: Toshkent Agrologistika LLC, contract DMS-D-2026-000123 and its endorsements', () => {
+    const d = db();
+    const client = d.clients.find((c) => c.name === 'Toshkent Agrologistika');
+    expect(client?.legalForm).toBe('llc');
+    const contracts = d.contracts.filter((c) => c.clientId === client?.id);
+    expect(contracts.map((c) => c.number)).toContain('DMS-D-2026-000123');
+    const contract = contracts.find((c) => c.number === 'DMS-D-2026-000123')!;
+    expect(contract.clientName).toBe('Toshkent Agrologistika');
+    const endorsements = d.endorsements.filter((e) => e.contractId === contract.id);
+    expect(endorsements.length).toBeGreaterThan(0);
+    for (const e of endorsements) expect(e.number).toMatch(/^DS-\d+\/DMS-D-2026-000123$/);
+    expect(client?.requisites?.director).not.toMatch(CYRILLIC);
+    const members = d.insured.filter((i) => i.clientId === client?.id);
+    expect(members.length).toBeGreaterThan(0);
+    for (const m of members) expect(m.fullName).not.toMatch(CYRILLIC);
+  });
   it('the seed stays deterministic', () => {
     const a = fields(db());
     const b = fields(resetDb());
