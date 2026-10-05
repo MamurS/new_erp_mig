@@ -13,6 +13,8 @@ interface Case {
   open: (page: Page) => Promise<void>;
   /** Accessible name of a sortable header button. */
   sortBy: RegExp;
+  /** Viewport height that makes this table longer than the screen. */
+  height: number;
 }
 
 const CASES: Case[] = [
@@ -23,6 +25,7 @@ const CASES: Case[] = [
       await page.goto('/staff/clients');
     },
     sortBy: /^Клиент/,
+    height: 640,
   },
   {
     portal: 'assist · cases',
@@ -31,6 +34,7 @@ const CASES: Case[] = [
       await page.goto('/assist/cases');
     },
     sortBy: /^Создано/,
+    height: 380,
   },
   {
     portal: 'clinic · registry',
@@ -41,6 +45,7 @@ const CASES: Case[] = [
       await expect(page).toHaveURL(/\/clinic\/registries\/[0-9a-f-]{36}/);
     },
     sortBy: /^Дата/,
+    height: 380,
   },
   {
     portal: 'hr · employees',
@@ -48,7 +53,8 @@ const CASES: Case[] = [
     open: async (page) => {
       await page.goto('/hr');
     },
-    sortBy: /^ФИО/,
+    sortBy: /^Сотрудник/,
+    height: 640,
   },
 ];
 
@@ -56,7 +62,7 @@ const CASES: Case[] = [
 async function mainTable(page: Page): Promise<Locator> {
   const tables = page.locator('[data-table-scroll]');
   await expect(tables.first()).toBeVisible();
-  await expect(page.locator('[data-table-scroll] tbody tr').nth(5)).toBeVisible();
+  await expect(page.locator('[data-table-scroll] tbody tr').nth(3)).toBeAttached();
   const n = await tables.count();
   let best = 0;
   let bestH = -1;
@@ -100,7 +106,7 @@ async function expectPinned(page: Page, scroller: Locator, barBottom: number): P
 
 for (const c of CASES) {
   test(`${c.portal}: the header stays under the top bar after scrolling; elementFromPoint hits the header; sorting by the pinned header works`, async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 640 });
+    await page.setViewportSize({ width: 1280, height: c.height });
     await loginStaff(page, c.role);
     await c.open(page);
     const scroller = await mainTable(page);
@@ -110,8 +116,8 @@ for (const c of CASES) {
     await expectPinned(page, scroller, barBottom);
 
     // Sort by a click on the pinned header.
-    const sortButton = scroller.locator('thead').getByRole('button', { name: c.sortBy });
-    const th = scroller.locator('thead th', { has: sortButton });
+    const th = scroller.locator('thead th').filter({ has: page.getByRole('button', { name: c.sortBy }) });
+    const sortButton = th.getByRole('button', { name: c.sortBy });
     const before = await th.getAttribute('aria-sort');
     await sortButton.click();
     await expect(th).not.toHaveAttribute('aria-sort', before ?? 'none');

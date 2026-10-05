@@ -55,6 +55,8 @@ export interface DataTableProps<T> {
   footer?: ReactNode;
   rowHeight?: number;
   hiddenColumns?: string[];
+  /** Totals row at the bottom, by column key; pinned to the bottom of the table's scroll container. */
+  totals?: Partial<Record<string, ReactNode>>;
   caption: string;
   density?: 'staff' | 'client';
 }
@@ -176,6 +178,17 @@ export function DataTable<T>(p: DataTableProps<T>) {
                   );
                 })}
           </tbody>
+          {p.totals && p.rows && p.rows.length > 0 && (
+            <tfoot data-testid="table-totals">
+              <tr>
+                {cols.map((c) => (
+                  <td key={c.key} className={cn('h-9 whitespace-nowrap px-3 font-semibold', c.align === 'right' && 'text-right', c.className)}>
+                    {p.totals?.[c.key] ?? null}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </TableScroll>
       {p.error && !p.loading ? <ErrorState error={p.error} onRetry={p.onRetry} /> : null}
