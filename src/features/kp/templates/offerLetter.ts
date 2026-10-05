@@ -6,8 +6,9 @@
  */
 import type { KpLang, KpParams, KpVariant } from '@/shared/types';
 import { kpTotalPremium } from '@/shared/domain/kp';
-import { clientDisplayName, escapeHtml, formatKpDate, formatKpMoney, groupDigits, PAYMENT_TERMS_LABEL } from '../format';
+import { escapeHtml, formatKpDate, formatKpMoney, groupDigits, PAYMENT_TERMS_LABEL } from '../format';
 import type { KpRenderContext } from '../render';
+import { formatLegalName } from '@/shared/config/legalForms';
 
 const INK = '#1B1F24';
 /** The black cover edition replaces the brochure graphite with black on every page. */
@@ -120,7 +121,7 @@ export function offerLetterPage(params: KpParams, ctx: KpRenderContext): string 
   <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 22px 56px 0;">
     <div style="background: ${SAND}; border-radius: 0 24px 0 0; padding: 18px 22px; display: flex; flex-direction: column; gap: 6px;">
       ${label(t.to)}
-      <div style="font-size: 19px; font-weight: 600; line-height: 1.3; color: ${GRAPHITE}; overflow-wrap: anywhere;">${e(clientDisplayName(ctx.clientLegalForm, ctx.clientName, lang))}</div>
+      <div style="font-size: 19px; font-weight: 600; line-height: 1.3; color: ${GRAPHITE}; overflow-wrap: anywhere;">${e(formatLegalName(ctx.clientName, ctx.clientLegalForm, lang))}</div>
       <div style="font-size: 14px; color: ${MUTED};">${e(t.inn)} ${e(ctx.clientInn)}</div>
     </div>
     <div style="background: #FFFFFF; border: 1px solid ${LINE}; border-radius: 0 24px 0 0; padding: 18px 22px; display: flex; flex-direction: column; gap: 10px;">

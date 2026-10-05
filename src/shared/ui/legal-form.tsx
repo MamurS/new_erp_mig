@@ -50,3 +50,16 @@ export function legalFormColumn<T>(
     },
   };
 }
+
+/** `<option>`s of a legal form `<Select>`: the code as the value, «ООО — Общество с …» as the text. */
+export function LegalFormOptions() {
+  return (
+    <>
+      {LEGAL_FORMS.map((c) => (
+        <option key={c} value={c} title={legalFormFull(c)}>
+          {legalFormShort(c) === legalFormFull(c) ? legalFormShort(c) : `${legalFormShort(c)} — ${legalFormFull(c)}`}
+        </option>
+      ))}
+    </>
+  );
+}

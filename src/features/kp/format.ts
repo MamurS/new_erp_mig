@@ -2,7 +2,7 @@
  * Pure formatting helpers for commercial offer (KP) documents. No DOM: the backend repeats them.
  * Every value that ends up in HTML goes through escapeHtml(), including already formatted numbers.
  */
-import type { Client, ISODate, KpLang, KpPaymentTerms } from '@/shared/types';
+import type { ISODate, KpLang, KpPaymentTerms } from '@/shared/types';
 import { escapeHtml } from '@/features/documents/html';
 
 export { escapeHtml };
@@ -32,15 +32,3 @@ export const PAYMENT_TERMS_LABEL: Record<KpLang, Record<KpPaymentTerms, string>>
   ru: { single: 'Единовременно', quarterly: 'Поквартально', monthly: 'Помесячно' },
   en: { single: 'Single payment', quarterly: 'Quarterly', monthly: 'Monthly' },
 };
-
-const LEGAL_FORM_EN: Record<Client['legalForm'], string> = {
-  ООО: 'LLC',
-  АО: 'JSC',
-  'СП ООО': 'JV LLC',
-  ЧП: 'PE',
-};
-
-/** `ООО «Name»` (ru) or `LLC “Name”` (en). Returns plain text; escape before use in HTML. */
-export function clientDisplayName(legalForm: Client['legalForm'], name: string, lang: KpLang): string {
-  return lang === 'ru' ? `${legalForm} «${name}»` : `${LEGAL_FORM_EN[legalForm]} “${name}”`;
-}
