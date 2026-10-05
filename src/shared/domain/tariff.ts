@@ -2,6 +2,7 @@
  * Demo tariff and quote calculation (LIFECYCLE_SPEC §5). Base rates, age coefficients and the group
  * discount are DMS parameters; the functions take their current values and are pure.
  */
+import { msg } from '@/i18n';
 import type { AgeBand, CensusRelation, DmsParamKey, DmsParamValues, ISODate, Money, ProgramCode, Quote, StaffAuthority } from '@/shared/types';
 import { TARIFF_BASE_KEY } from '@/shared/config/dmsParameters';
 
@@ -100,8 +101,8 @@ export function calculateQuote(input: QuoteInput, params: Readonly<DmsParamValue
 /** Why a quote needs approval by someone with more authority; null when the author may approve it alone. */
 export function quoteAuthorityProblem(q: Pick<Quote, 'discountFromTariffPct' | 'total'>, authority: StaffAuthority | undefined): string | null {
   const maxDiscount = authority?.quoteDiscountMaxPct ?? 0;
-  if (q.discountFromTariffPct > maxDiscount + 1e-9) return `Скидка ${pct(q.discountFromTariffPct)} выше ваших полномочий (${pct(maxDiscount)})`;
-  if (authority?.quotePremiumMax !== undefined && q.total > authority.quotePremiumMax) return 'Премия выше ваших полномочий';
+  if (q.discountFromTariffPct > maxDiscount + 1e-9) return msg('dom.quote.discountAboveAuthority', { pct: pct(q.discountFromTariffPct), max: pct(maxDiscount) });
+  if (authority?.quotePremiumMax !== undefined && q.total > authority.quotePremiumMax) return msg('dom.quote.premiumAboveAuthority');
   return null;
 }
 

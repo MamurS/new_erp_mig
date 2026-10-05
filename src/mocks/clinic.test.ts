@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ZodTypeAny } from 'zod';
 import type { CardToken, SessionResponse } from '@/shared/types/dto';
 import * as I from '@/shared/integration/schemas';
+import { translate, type I18nKey } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 
@@ -83,9 +84,10 @@ describe('patient check and visits', () => {
     expect(text).not.toMatch(/limit"|used"|pinfl|\d{14}/i);
     expect((r.data as { person: { fullName: string } }).person.fullName).toBe('Каримов Азиз Бахромович');
     // the same code again, and the scanned MIG-DMS form of the raw token
-    const again = await call<{ message: string }>('/clinic/check', { method: 'POST', sid: reg, json: { qrToken: card.shortCode } });
+    const again = await call<{ key: I18nKey }>('/clinic/check', { method: 'POST', sid: reg, json: { qrToken: card.shortCode } });
     expect(again.status).toBe(410);
-    expect(again.data.message).toBe('Код устарел, попросите пациента обновить карточку');
+    expect(again.data.key).toBe('srv.clinic.codeStale');
+    expect(translate('ru', again.data.key)).toBe('Код устарел, попросите пациента обновить карточку');
     const raw = await call('/clinic/check', { method: 'POST', sid: reg, json: { qrToken: `MIG-DMS:${card.token}` } });
     expect(raw.status).toBe(410);
     expect(db().audit.some((e) => e.action === 'clinic_check_failed')).toBe(true);
@@ -106,7 +108,7 @@ describe('patient check and visits', () => {
     const d = db();
     const demo = d.insured.find((i) => i.fullName === 'Каримов Азиз Бахромович')!;
     const policy = d.policies.find((p) => p.id === demo.policyId)!;
-    const good = await call<{ message: string }>('/clinic/check', { method: 'POST', sid: reg, json: { policyNumber: policy.number, pinfl: demo.pinfl } });
+    const good = await call<{ key: I18nKey }>('/clinic/check', { method: 'POST', sid: reg, json: { policyNumber: policy.number, pinfl: demo.pinfl } });
     expect(good.status).toBe(429);
   });
 

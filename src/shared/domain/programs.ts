@@ -1,5 +1,6 @@
 /* Insurance programs and their limits (SPEC §5), shared by the UI and the mock server. */
 import type { LimitCategory, Money, Program, ProgramCode } from '@/shared/types';
+import { PROGRAM_LABEL } from './labels';
 
 const BASE: Record<LimitCategory, Money> = {
   outpatient: 15_000_000,
@@ -8,12 +9,6 @@ const BASE: Record<LimitCategory, Money> = {
   inpatient: 40_000_000,
 };
 const FACTOR: Record<ProgramCode, number> = { basic: 0.4, standard: 0.7, standard_plus: 1, premium: 2 };
-const NAME: Record<ProgramCode, string> = {
-  basic: 'Базовая',
-  standard: 'Стандарт',
-  standard_plus: 'Стандарт+',
-  premium: 'Премиум',
-};
 
 function scale(code: ProgramCode): Record<LimitCategory, Money> {
   const f = FACTOR[code];
@@ -25,9 +20,20 @@ function scale(code: ProgramCode): Record<LimitCategory, Money> {
   };
 }
 
+/** `name` is read in the current language (labels.program.*). */
+function program(code: ProgramCode): Program {
+  return {
+    code,
+    get name() {
+      return PROGRAM_LABEL[code];
+    },
+    limits: scale(code),
+  };
+}
+
 export const PROGRAMS: Record<ProgramCode, Program> = {
-  basic: { code: 'basic', name: NAME.basic, limits: scale('basic') },
-  standard: { code: 'standard', name: NAME.standard, limits: scale('standard') },
-  standard_plus: { code: 'standard_plus', name: NAME.standard_plus, limits: scale('standard_plus') },
-  premium: { code: 'premium', name: NAME.premium, limits: scale('premium') },
+  basic: program('basic'),
+  standard: program('standard'),
+  standard_plus: program('standard_plus'),
+  premium: program('premium'),
 };

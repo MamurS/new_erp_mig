@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Invoice } from '@/shared/types';
 import type { BankPaymentView, ImportPaymentsResult, SessionResponse } from '@/shared/types/dto';
+import { tm } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 
@@ -172,7 +173,7 @@ describe('payment matching (1C statement)', () => {
       { method: 'POST', sid: acc, json: { lines: [{ invoiceId: inv.id, amount: 5_000_000 }] } },
     );
     expect(noComment.status).toBe(422);
-    expect(noComment.data.fields?.comment).toMatch(/другой ИНН/);
+    expect(tm(noComment.data.fields?.comment)).toMatch(/другой ИНН/);
     const ok = await call<BankPaymentView>(`/payments/queue/${third.id}/allocate`, {
       method: 'POST',
       sid: acc,

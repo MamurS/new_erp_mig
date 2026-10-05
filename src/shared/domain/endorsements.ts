@@ -2,6 +2,7 @@
  * Premium for the rest of the contract term (LIFECYCLE_SPEC §11): adding a person, excluding one
  * under three refund rules, changing the program. Every line carries a human formula.
  */
+import { defineLabels, msg } from '@/i18n';
 import type { ChangeRequestType, ISODate, Money } from '@/shared/types';
 import { daysInclusive } from './policies';
 
@@ -41,13 +42,13 @@ export function excludeLine(annual: Money, effective: ISODate, start: ISODate, e
   const days = remainingDays(effective, start, end);
   const term = daysInclusive(start, end);
   const proRata = Math.round((annual * days) / term);
-  if (rule === 'none') return { days, amount: 0, formula: 'Без возврата (правило возврата: none)' };
+  if (rule === 'none') return { days, amount: 0, formula: msg('dom.endorsement.noRefund') };
   if (rule === 'pro_rata') return { days, amount: -proRata, formula: `−(${g(annual)} × ${days} / ${term}) = −${g(proRata)}` };
   const refund = Math.max(0, proRata - claimsPaid);
   return {
     days,
     amount: -refund,
-    formula: `−max(0, ${g(annual)} × ${days} / ${term} − выплаты ${g(claimsPaid)}) = −${g(refund)}`,
+    formula: msg('dom.endorsement.minusClaims', { annual: g(annual), days, term, claims: g(claimsPaid), refund: g(refund) }),
   };
 }
 

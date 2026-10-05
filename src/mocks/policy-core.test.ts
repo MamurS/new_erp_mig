@@ -2,6 +2,7 @@
 /* Limits and rules of the initial list of insured persons (POLICY_SPEC §4, §10). */
 import { describe, expect, it } from 'vitest';
 import { POLICY_CSV_MAX_ROWS } from '@/shared/domain/policies';
+import { tm, translate } from '@/i18n/core';
 import { HttpError } from './http';
 import { parsePolicyList } from './policy-core';
 
@@ -22,7 +23,7 @@ describe('initial list of insured persons', () => {
     const r = parsePolicyList([HEADER, row(1, '2'), row(2), row(1), row(3, '11')].join('\n'));
     expect(r.total).toBe(4);
     expect(r.rows.map((x) => x.familyMembers)).toEqual([2, 0]);
-    expect(r.errors).toEqual([
+    expect(r.errors.map((e) => ({ ...e, message: tm(e.message) }))).toEqual([
       { row: 4, field: 'pinfl', message: 'ПИНФЛ повторяется в файле' },
       { row: 5, field: 'familyMembers', message: 'Число от 0 до 10' },
     ]);
@@ -39,6 +40,7 @@ describe('initial list of insured persons', () => {
     expect(failure(() => parsePolicyList(big)).status).toBe(413);
     const noColumns = failure(() => parsePolicyList('fullName,phone\nТестов Тест,901112233'));
     expect(noColumns.status).toBe(422);
-    expect(noColumns.message).toMatch(/нет колонок: birthDate, pinfl, position/);
+    expect(noColumns.key).toBe('srv.hr.missingColumns');
+    expect(translate('ru', noColumns.key, noColumns.params)).toMatch(/нет колонок: birthDate, pinfl, position/);
   });
 });

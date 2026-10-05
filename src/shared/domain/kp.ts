@@ -1,5 +1,6 @@
 /* Commercial offer (KP) business rules shared by the UI and the mock server. */
-import type { KpParams, Money } from '@/shared/types';
+import { defineLabels } from '@/i18n';
+import type { KpParams, KpStatus, Money } from '@/shared/types';
 
 /** Current version of each brochure (kept equal to templates/*.ts by a unit test). */
 export const KP_TEMPLATE_VERSION = { gold: 'GOLD 09/26' } as const;
@@ -11,6 +12,7 @@ export function kpTotalPremium(p: Pick<KpParams, 'employees' | 'premiumEmployee'
 }
 
 export function kpNumber(year: number, seq: number): string {
+  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
   return `КП-${year}-${String(seq).padStart(6, '0')}`;
 }
 
@@ -28,7 +30,7 @@ export function kpDocumentTitle(number: string, clientName: string): string {
   return `${clean(number)} — ${clean(clientName)}`.slice(0, 150).trim();
 }
 
-export const KP_STATUS_LABEL: Record<KpStatus, string> = { draft: 'Черновик', sent: 'Отправлено', revoked: 'Отозвано', accepted: 'Принято клиентом', declined: 'Отклонено клиентом' };
+export const KP_STATUS_LABEL = defineLabels<KpStatus>('labels.kpStatus', ['draft', 'sent', 'revoked', 'accepted', 'declined']);
 /** Chip kind per status (see src/shared/ui/chips.tsx). */
 export const KP_STATUS_CHIP = { draft: 'neutral', sent: 'success', revoked: 'danger', accepted: 'success', declined: 'warning' } as const;
 export const KP_TEMPLATE_NAME = { gold: 'GOLD' } as const;

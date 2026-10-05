@@ -1,4 +1,5 @@
 /* LIFECYCLE_SPEC §17 unit tests: tariff and quote, authority routing, endorsement formulas, activation, signing, reserves, fraud flags. */
+import { tm } from '@/i18n';
 import { describe, expect, it } from 'vitest';
 import type { ReserveChange, Signing } from '@/shared/types';
 import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
@@ -44,9 +45,9 @@ describe('demo tariff and quote', () => {
 
   it('routes a quote by authority: above the discount or premium → someone else with more authority', () => {
     const q = { discountFromTariffPct: 0.15, total: 1_000_000_000, createdById: 'a' };
-    expect(quoteAuthorityProblem(q, { quoteDiscountMaxPct: 0.1 })).toMatch(/Скидка/);
+    expect(tm(quoteAuthorityProblem(q, { quoteDiscountMaxPct: 0.1 }))).toMatch(/Скидка/);
     expect(quoteAuthorityProblem(q, { quoteDiscountMaxPct: 0.25 })).toBeNull();
-    expect(quoteAuthorityProblem({ ...q, discountFromTariffPct: 0 }, { quoteDiscountMaxPct: 0.1, quotePremiumMax: 500_000_000 })).toMatch(/Премия/);
+    expect(tm(quoteAuthorityProblem({ ...q, discountFromTariffPct: 0 }, { quoteDiscountMaxPct: 0.1, quotePremiumMax: 500_000_000 }))).toMatch(/Премия/);
     expect(canApproveQuote({ id: 'b', role: 'underwriter', authority: { quoteDiscountMaxPct: 0.25 } }, q)).toBe(true);
     expect(canApproveQuote({ id: 'a', role: 'underwriter', authority: { quoteDiscountMaxPct: 0.25 } }, q)).toBe(false); // own quote
     expect(canApproveQuote({ id: 'c', role: 'underwriter', authority: { quoteDiscountMaxPct: 0.1 } }, q)).toBe(false);
@@ -165,11 +166,11 @@ describe('claims settlement', () => {
   });
   it('refusal and partial approval need a known clause and a reason', () => {
     const known = (r: string) => r === 'contract:4.3';
-    expect(decisionProblem('reject', 0, 100, undefined, 'Не покрывается', known)).toMatch(/пункт/);
-    expect(decisionProblem('reject', 0, 100, 'contract:99', 'Не покрывается', known)).toMatch(/пункт/);
-    expect(decisionProblem('reject', 0, 100, 'contract:4.3', '', known)).toMatch(/причину/);
+    expect(tm(decisionProblem('reject', 0, 100, undefined, 'Не покрывается', known))).toMatch(/пункт/);
+    expect(tm(decisionProblem('reject', 0, 100, 'contract:99', 'Не покрывается', known))).toMatch(/пункт/);
+    expect(tm(decisionProblem('reject', 0, 100, 'contract:4.3', '', known))).toMatch(/причину/);
     expect(decisionProblem('reject', 0, 100, 'contract:4.3', 'Не покрывается', known)).toBeNull();
-    expect(decisionProblem('partial', 100, 100, 'contract:4.3', 'Сверх лимита', known)).toMatch(/меньше заявленной/);
+    expect(tm(decisionProblem('partial', 100, 100, 'contract:4.3', 'Сверх лимита', known))).toMatch(/меньше заявленной/);
     expect(decisionProblem('approve', 100, 100, undefined, '', known)).toBeNull();
   });
   it('reserve: claimed or GP amount at start, decision amount after, zero after payment or refusal; on a date from history', () => {
@@ -202,7 +203,7 @@ describe('claims settlement', () => {
     const fiscal = { fiscalNumber: '412345678901', issuedAt: '2026-09-15T14:05', amount: 250_000, sellerInn: '201234567' };
     const mine = { ...base.claim, source: 'app' as const, receiptFiscal: fiscal };
     const theirs = { id: 'c0', number: 'У-2026-000100', insuredId: 'i9', amountClaimed: 120_000, serviceDate: '2026-09-15', providerName: 'Другая подпись', source: 'app' as const };
-    const message = (ctx: FlagContext) => detectFlags(ctx).find((f) => f.code === 'duplicate_receipt')?.message;
+    const message = (ctx: FlagContext) => tm(detectFlags(ctx).find((f) => f.code === 'duplicate_receipt')?.message);
     it('the same fiscal number of another person is a duplicate, whatever the claimed amount', () => {
       expect(message({ ...base, claim: mine, others: [{ ...theirs, receiptFiscal: { ...fiscal } }] })).toBe('Фискальный номер чека совпадает с чеком обращения У-2026-000100 другого застрахованного');
     });

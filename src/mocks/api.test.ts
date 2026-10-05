@@ -3,6 +3,7 @@
  * The mock server behaves like the backend: sessions, permissions, masking, audit, business rules.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { translate, type I18nKey } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 import type { SessionResponse } from '@/shared/types/dto';
@@ -55,7 +56,8 @@ describe('mock auth', () => {
     for (let i = 0; i < 5; i++) {
       const r = await call('/auth/login', { method: 'POST', json: { email: 'operator@demo.mig.uz', password: 'nope' } });
       expect(r.status).toBe(401);
-      expect(r.data.message).toBe('Неверный email или пароль');
+      expect(r.data.key).toBe('srv.auth.invalidCreds');
+      expect(translate('ru', r.data.key as I18nKey)).toBe('Неверный email или пароль');
     }
     const locked = await call('/auth/login', { method: 'POST', json: { email: 'operator@demo.mig.uz', password: 'Demo-2026!' } });
     expect(locked.status).toBe(429);
