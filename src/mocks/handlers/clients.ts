@@ -124,6 +124,7 @@ export const clientHandlers = [
       const out: ClientLossStats = {
         clientId: c.id,
         clientName: c.name,
+        clientLegalForm: c.legalForm,
         premium: c.premium,
         lossRatio: c.lossRatio,
         lossRatioWarn: dmsParam('lossRatioWarn'),

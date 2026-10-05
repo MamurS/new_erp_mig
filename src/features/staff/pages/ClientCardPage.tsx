@@ -12,6 +12,7 @@ import { AUDIT_ACTION_LABEL, CLIENT_STATUS_LABEL, POLICY_STATUS_LABEL, PROGRAM_L
 import { formatDate, formatDateTime, formatMoney, formatMoneyShort, formatNumber, formatPercent } from '@/shared/lib/format';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Avatar, Chip, StatusDot } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Card } from '@/shared/ui/page';
@@ -59,8 +60,9 @@ export default function ClientCardPage() {
         <div className="flex items-center gap-3">
           <Avatar name={c.name} square className="h-11 w-11 text-[14px]" />
           <div>
-            <h1 className="text-[22px] font-bold leading-tight">
-              {t('staff.clientCard.heading', { form: c.legalForm, name: c.name })}
+            <h1 className="flex flex-wrap items-center gap-2 text-[22px] font-bold leading-tight">
+              {c.name}
+              <LegalFormChip code={c.legalForm} />
             </h1>
             <p className="flex flex-wrap items-center gap-2 text-muted">
               {t('staff.clientCard.inn')}

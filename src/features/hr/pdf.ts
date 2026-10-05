@@ -30,6 +30,9 @@ export function toPdfAscii(input: string): string {
       out += '-';
     } else if (/[«»“”]/.test(ch)) {
       out += '"';
+    } else if (/[\u02bb\u02bc\u2018\u2019]/.test(ch)) {
+      // Uzbek oʻ / gʻ and the tutuq belgisi of Latin names
+      out += "'";
     } else if (/[\x20-\x7e]/.test(ch)) {
       out += ch;
     } else {

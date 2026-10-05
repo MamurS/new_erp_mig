@@ -108,6 +108,7 @@ export const hrHandlers = [
       const manager = d.staff.find((s) => s.id === client.managerId);
       const out: HrOverview = {
         companyName: client.name,
+        companyLegalForm: client.legalForm,
         insuredCount: employees.length,
         notInApp: employees.filter((i) => i.appStatus !== 'active').length,
         nextInvoice,

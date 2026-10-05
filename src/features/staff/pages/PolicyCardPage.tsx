@@ -14,6 +14,7 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { StatusDot } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Card, Kv } from '@/shared/ui/page';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { kpNewPath } from '@/features/kp/paths';
@@ -49,6 +50,7 @@ export default function PolicyCardPage() {
             <Link to={`/staff/clients/${p.clientId}`} className="hover:underline">
               {p.clientName}
             </Link>
+            <LegalFormChip code={p.clientLegalForm} />
             · <StatusDot tone={POLICY_TONE[p.status]}>{POLICY_STATUS_LABEL[p.status]}</StatusDot>
           </p>
         </div>

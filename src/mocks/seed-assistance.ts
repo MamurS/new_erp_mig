@@ -18,7 +18,8 @@ import type {
 import { feeFor, payerOn, CASE_SLA_MINUTES } from '@/shared/domain/assistance';
 import { formatMoney } from '@/shared/lib/format';
 import { claimsFromRebill } from './assistance-core';
-import { guaranteeNumber, registryTotals } from '@/shared/domain/clinics';
+import { registryTotals } from '@/shared/domain/clinics';
+import { docNumber } from '@/shared/domain/numbering';
 import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_INSURED_PHONE, DEMO_PASSWORD } from './credentials';
 import type { AssistanceCaseRow, AssistUserRow, Db, GuaranteeRow, IntegrationClientRow, WebhookEndpointRow } from './db';
 import { int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
@@ -31,9 +32,9 @@ function hex(rng: Rng, n: number): string {
 }
 
 const COMPANIES: Omit<AssistanceCompany, 'id' | 'contract'>[] = [
-  { name: 'Шифо Ассистанс Групп', phone24x7: '+998 71 205 00 01', integrationMode: 'hybrid' },
-  { name: 'МедЮрт Сервис 24', phone24x7: '+998 71 207 24 24', integrationMode: 'api' },
-  { name: 'Турон Кеа Ассистанс', phone24x7: '+998 71 209 33 33', integrationMode: 'portal' },
+  { name: 'Shifo Assistans Group', legalForm: 'llc', phone24x7: '+998 71 205 00 01', integrationMode: 'hybrid' },
+  { name: 'MedYurt Servis 24', legalForm: 'jv_llc', phone24x7: '+998 71 207 24 24', integrationMode: 'api' },
+  { name: 'Turon Care Assistans', legalForm: 'private_enterprise', phone24x7: '+998 71 209 33 33', integrationMode: 'portal' },
 ];
 
 export function seedAssistance(d: Db, opts: { now: number }): void {
@@ -63,7 +64,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     ...c,
     id: id(),
     contract: {
-      number: `ДА-${year}-00${k + 1}`,
+      number: docNumber('assistContract', { year, n: k + 1 }),
       validFrom: `${year - 1}-01-01`,
       validTo: `${year + 1}-12-31`,
       feeModel: fees[k]![0],
@@ -107,8 +108,8 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
   const assistUsers: AssistUserRow[] = [
     ...DEMO_ASSIST_USERS.map((u) => ({ id: id(), ...u, password: DEMO_PASSWORD, assistanceId: A1.id, active: true, createdAt: tzIso(now - 200 * DAY) })),
     { id: id(), ...DEMO_ASSIST2_OPERATOR, password: DEMO_PASSWORD, assistanceId: A2.id, active: true, createdAt: tzIso(now - 200 * DAY) },
-    { id: id(), role: 'asst_admin', email: 'admin@demo-assist2.uz', fullName: 'Бобур Каримов', password: DEMO_PASSWORD, assistanceId: A2.id, active: true, createdAt: tzIso(now - 300 * DAY) },
-    { id: id(), role: 'asst_admin', email: 'admin@demo-assist3.uz', fullName: 'Лола Саидова', password: DEMO_PASSWORD, assistanceId: A3.id, active: true, createdAt: tzIso(now - 300 * DAY) },
+    { id: id(), role: 'asst_admin', email: 'admin@demo-assist2.uz', fullName: 'Karimov Bobur Nodirovich', password: DEMO_PASSWORD, assistanceId: A2.id, active: true, createdAt: tzIso(now - 300 * DAY) },
+    { id: id(), role: 'asst_admin', email: 'admin@demo-assist3.uz', fullName: 'Saidova Lola Zafarovna', password: DEMO_PASSWORD, assistanceId: A3.id, active: true, createdAt: tzIso(now - 300 * DAY) },
   ];
   const a1doctor = assistUsers.find((u) => u.role === 'asst_doctor')!;
   const a1operator = assistUsers.find((u) => u.role === 'asst_operator')!;
@@ -176,7 +177,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     const price = priceOf(A1.id, svc.code)?.price ?? svc.price;
     const g: GuaranteeRow = {
       id: id(),
-      number: guaranteeNumber(year, ++d.guaranteeSeq),
+      number: docNumber('guarantee', { year, n: ++d.guaranteeSeq }),
       clinicId: demoClinicId,
       visitId: v.id,
       insuredId: who.id,
@@ -236,7 +237,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
       amount: price,
       status: 'accepted',
       payer: A1.id,
-      payment: { paidAt: isoDay(monthStart(2) + int(rng, 5, 20) * DAY), amount: price, orderNumber: `ПП-${int(rng, 10000, 99999)}` },
+      payment: { paidAt: isoDay(monthStart(2) + int(rng, 5, 20) * DAY), amount: price, orderNumber: docNumber('paymentOrder', { n: int(rng, 10000, 99999) }) },
     });
   }
   if (olderLines.length) {
@@ -283,9 +284,9 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     for (const l of r.lines) {
       if (l.payer === A1.id && l.status === 'accepted') {
         const at = Math.min(now - DAY, monthStart(payMonth) + int(rng, 3, 20) * DAY);
-        l.payment = { paidAt: isoDay(Math.max(at, monthStart(payMonth))), amount: l.amount, orderNumber: `ПП-${int(rng, 10000, 99999)}` };
+        l.payment = { paidAt: isoDay(Math.max(at, monthStart(payMonth))), amount: l.amount, orderNumber: docNumber('paymentOrder', { n: int(rng, 10000, 99999) }) };
       }
-      if (l.payer === 'mig' && l.status === 'accepted' && r.status === 'paid') l.payment = { paidAt: (r.paidAt ?? tzIso(now)).slice(0, 10), amount: l.amount, orderNumber: `ПП-${int(rng, 10000, 99999)}` };
+      if (l.payer === 'mig' && l.status === 'accepted' && r.status === 'paid') l.payment = { paidAt: (r.paidAt ?? tzIso(now)).slice(0, 10), amount: l.amount, orderNumber: docNumber('paymentOrder', { n: int(rng, 10000, 99999) }) };
     }
   };
   payLines(2, 1);
@@ -311,7 +312,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     const rejected = lines.filter((l) => l.status === 'rejected').reduce((s, l) => s + l.amount, 0);
     return {
       id: id(),
-      number: `СЧА-${periodOf(month)}-${suffix}`,
+      number: docNumber('assistInvoice', { period: periodOf(month), code: suffix }),
       assistanceId: A1.id,
       period: periodOf(month),
       lines,
@@ -365,7 +366,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
   const addCase = (assistanceId: string, who: typeof demoInsured, type: AssistanceCaseType, status: AssistanceCaseStatus, atMs: number): void => {
     cases.push({
       id: id(),
-      number: `ОБР-${new Date(atMs).getFullYear()}-0${++caseSeq}`,
+      number: docNumber('case', { year: new Date(atMs).getFullYear(), n: ++caseSeq }),
       assistanceId,
       insuredId: who.id,
       insuredName: who.fullName,
@@ -424,8 +425,8 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     createdAt: tzIso(now - 90 * DAY),
     lastUsedAt: tzIso(now - 2 * 3600_000),
   });
-  const k1 = key(A1.id, 'CRM «Шифо»');
-  const k2 = key(A2.id, 'Система МедЮрт');
+  const k1 = key(A1.id, 'CRM «Shifo»');
+  const k2 = key(A2.id, 'Система MedYurt');
   d.integrationClients.push(k1, k2);
   const templates = ['/assistance/roster', '/assistance/guarantees', '/assistance/guarantees/{id}/decide', '/assistance/registries', '/assistance/cases'];
   for (const [k, n] of [[k1, 24], [k2, 30]] as const) {

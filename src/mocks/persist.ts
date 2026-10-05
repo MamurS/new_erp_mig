@@ -7,14 +7,24 @@ import type { Db } from './db';
 
 const DB_KEY = 'mig.mock.db';
 const SESS_KEY = 'mig.mock.sessions';
+/**
+ * Version of the seed and of the stored shape. Bump it when the seed changes in a way a saved state
+ * must not survive (2: Latin names, legal form codes, ASCII document numbers): a stored database with
+ * another or no version is discarded and the fresh seed is used.
+ */
+export const MOCK_DB_VERSION = 2;
 
-type Snapshot = Omit<Db, 'sessions'>;
+type Snapshot = Omit<Db, 'sessions'> & { schemaVersion?: number };
 
 export function loadSnapshot(): Db | null {
   try {
     const raw = sessionStorage.getItem(DB_KEY);
     if (!raw) return null;
-    const db = JSON.parse(raw) as Snapshot;
+    const { schemaVersion, ...db } = JSON.parse(raw) as Snapshot;
+    if (schemaVersion !== MOCK_DB_VERSION) {
+      clearSnapshot();
+      return null;
+    }
     const sessions = JSON.parse(sessionStorage.getItem(SESS_KEY) ?? '[]') as Db['sessions'];
     // A snapshot from an older build lacks newer tables: start from a fresh seed instead.
     if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries) || !Array.isArray(db.policyChanges) || !Array.isArray(db.rebills) || !db.dmsParams || !Array.isArray(db.deals) || !db.ai || !Array.isArray(db.bankPayments) || !Array.isArray(db.statementKeys)) return null;
@@ -31,7 +41,7 @@ function writeDb(get: () => Db): void {
   try {
     const { sessions: _s, ...rest } = get();
     const files = rest.files.map(({ bytes: _b, ...f }) => f);
-    sessionStorage.setItem(DB_KEY, JSON.stringify({ ...rest, files }));
+    sessionStorage.setItem(DB_KEY, JSON.stringify({ ...rest, files, schemaVersion: MOCK_DB_VERSION }));
   } catch {
     /* quota exceeded: state stays in memory only */
   }

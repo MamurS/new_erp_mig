@@ -63,9 +63,9 @@ test('1. Registrar checks the app code, requests a guarantee letter, the doctor 
   await dialog.getByLabel('Код МКБ-10').fill('G43.9');
   await dialog.getByLabel('Комментарий врача').fill('Мигрень, показано МРТ');
   await dialog.getByRole('button', { name: 'Отправить запрос' }).click();
-  const toast = page.getByText(/Гарантийное письмо ГП-\d{4}-\d{6} запрошено/);
+  const toast = page.getByText(/Гарантийное письмо GP-\d{4}-\d{6} запрошено/);
   await expect(toast).toBeVisible();
-  const number = /ГП-\d{4}-\d{6}/.exec(await toast.innerText())![0];
+  const number = /GP-\d{4}-\d{6}/.exec(await toast.innerText())![0];
   await expect(page).toHaveURL(/\/clinic\/guarantees$/);
 
   // The demo patient is served by an assistance: its doctor decides within the authority (ASSISTANCE_SPEC §9.1).
@@ -155,7 +155,7 @@ test('3. CSV registry: upload, submit; the payer\'s assistance rejects, the clin
   await page.goto(`/assist/registries/${registryId}`);
   await page.getByRole('button', { name: /^Оплатить все принятые/ }).click();
   const pay = page.getByRole('dialog', { name: 'Отметить оплату клинике' });
-  await pay.getByLabel('Номер платёжного поручения').fill('ПП-10452');
+  await pay.getByLabel('Номер платёжного поручения').fill('PP-10452');
   await pay.getByRole('button', { name: 'Отметить оплату' }).click();
   await expect(page.getByTestId('registry-status')).toContainText('Оплачен');
 
@@ -254,11 +254,11 @@ test('7. A card code works once: the second check fails', async ({ page }) => {
 test('8. The 11th failed policy + PINFL check is blocked', async ({ page }) => {
   await loginStaff(page, 'clinic_registrar');
   for (let k = 0; k < 10; k++) {
-    const r = await api(page, 'POST', '/clinic/check', { policyNumber: 'ДМС-2026-999999', pinfl: String(30000000000000 + k) });
+    const r = await api(page, 'POST', '/clinic/check', { policyNumber: 'DMS-2026-999999', pinfl: String(30000000000000 + k) });
     expect(r.status).toBe(404);
   }
   await page.goto('/clinic/check');
-  await page.getByLabel('Номер полиса').fill('ДМС-2026-999999');
+  await page.getByLabel('Номер полиса').fill('DMS-2026-999999');
   await page.getByLabel('ПИНФЛ').fill('31234567890123');
   await page.getByRole('button', { name: 'Проверить полис' }).click();
   await expect(page.getByTestId('check-error')).toContainText('заблокированы на 15 мин');

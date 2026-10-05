@@ -8,7 +8,8 @@ import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims
 import { FOUR_EYES_LIMIT_HINT } from '@/shared/domain/limits';
 import { exportFileName, toCsv } from '@/shared/lib/csv';
 import { db } from '../db';
-import { API, audit, body, conflict, forbidden, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route } from '../http';
+import { API, audit, body, byLegalForm, byLegalName, conflict, filterLegalForm, forbidden, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
+import { legalFormShort } from '@/shared/config/legalForms';
 import { hashString, mulberry32, randomId } from '../rng';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
@@ -35,7 +36,7 @@ export function clinicSlots(clinic: Clinic, date: string, now = Date.now()): Slo
 function reportLossRatio(): LossRatioRow[] {
   return db()
     .clients.filter((c) => c.lossRatio !== null && c.status !== 'expired')
-    .map((c) => ({ clientId: c.id, clientName: c.name, lossRatio: c.lossRatio ?? 0 }))
+    .map((c) => ({ clientId: c.id, clientName: c.name, clientLegalForm: c.legalForm, lossRatio: c.lossRatio ?? 0 }))
     .sort((a, b) => b.lossRatio - a.lossRatio);
 }
 
@@ -88,7 +89,18 @@ export const staffMiscHandlers = [
       if (term) list = list.filter((c) => c.name.toLowerCase().includes(term) || c.district.toLowerCase().includes(term));
       const spec = url.searchParams.get('specialty') as Specialty | null;
       if (spec && SPECIALTIES.has(spec)) list = list.filter((c) => c.specialties.includes(spec));
-      return [...list].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+      list = filterLegalForm(list, url, (c) => c.legalForm);
+      return sortBy(
+        list,
+        url,
+        {
+          name: byLegalName((c) => c.name),
+          legalForm: byLegalForm((c) => c.legalForm),
+          district: (c) => c.district,
+          contractUntil: (c) => c.contractUntil,
+        },
+        'name:asc',
+      );
     }),
   ),
   http.get(
@@ -243,10 +255,10 @@ export const staffMiscHandlers = [
       } else if (type === 'clients') {
         requirePermission(user, 'clients.read');
         csv = toCsv(
-          ['Клиент', 'ИНН', 'Статус', 'Программа', 'Застрахованных', 'Премия, UZS', 'Убыточность', 'Продление', 'Менеджер'],
+          ['Клиент', 'Форма', 'ИНН', 'Статус', 'Программа', 'Застрахованных', 'Премия, UZS', 'Убыточность', 'Продление', 'Менеджер'],
           d.clients.map((c) => {
             const x = toClient(d, c);
-            return [`${x.legalForm} «${x.name}»`, x.inn, x.status, x.program ? PROGRAM_LABEL[x.program] : '', x.insuredCount, x.premium, x.lossRatio ?? '', x.renewalDate ?? '', x.managerName];
+            return [x.name, legalFormShort(x.legalForm, 'ru'), x.inn, x.status, x.program ? PROGRAM_LABEL[x.program] : '', x.insuredCount, x.premium, x.lossRatio ?? '', x.renewalDate ?? '', x.managerName];
           }),
         );
       } else if (type === 'claims_financial') {

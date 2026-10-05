@@ -118,7 +118,7 @@ describe('dashboard by role', () => {
   it('a pending change is never in the queue of the person who proposed it (four eyes)', async () => {
     const { sid } = await login('admin2@demo.mig.uz');
     const q = await call<QueueItem[]>('/queue?type=all', sid);
-    const mine = new Set(db().dmsParams.changes.filter((c) => c.proposedByName === 'Сардор Назаров').map((c) => c.id));
+    const mine = new Set(db().dmsParams.changes.filter((c) => c.proposedByName === 'Nazarov Sardor Ravshanovich').map((c) => c.id));
     expect(q.data.some((i) => mine.has(i.entityId))).toBe(false);
   });
 

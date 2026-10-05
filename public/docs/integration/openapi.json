@@ -1866,7 +1866,8 @@
                     "properties": {
                       "policyNumber": {
                         "type": "string",
-                        "pattern": "^ДМС-\\d{4}-\\d{6}$"
+                        "maxLength": 60,
+                        "pattern": "^[A-Za-z0-9/-]+$"
                       },
                       "pinfl": {
                         "type": "string",
@@ -2922,7 +2923,8 @@
                         },
                         "guaranteeNumber": {
                           "type": "string",
-                          "pattern": "^ГП-\\d{4}-\\d{6}$"
+                          "maxLength": 60,
+                          "pattern": "^[A-Za-z0-9/-]+$"
                         }
                       },
                       "required": [
@@ -4560,7 +4562,7 @@
                   ],
                   "paidAt": "2026-09-25",
                   "amount": 171000,
-                  "paymentOrderNumber": "ПП-10452"
+                  "paymentOrderNumber": "PP-10452"
                 }
               }
             }

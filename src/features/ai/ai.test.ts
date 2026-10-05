@@ -18,9 +18,9 @@ const mock = createMockProvider();
 describe('redactForAi', () => {
   it('removes names, PINFL, phones, policy, contract and certificate numbers and emails', () => {
     const src =
-      'Пациент Каримов Азиз Рустамович, ПИНФЛ 31503901234567, тел. +998 90 123 45 67, полис ДМС-2026-000123, договор ДМС-Д-2026-000045, сертификат СЕРТ-2026-000045-0001, почта a.karimov@mail.uz: МРТ колена';
+      'Пациент Каримов Азиз Рустамович, ПИНФЛ 31503901234567, тел. +998 90 123 45 67, полис DMS-2026-000123, договор DMS-D-2026-000045, сертификат SERT-2026-000045-0001, почта a.karimov@mail.uz: МРТ колена';
     const r = redactForAi(src);
-    for (const secret of ['Каримов', '31503901234567', '123 45 67', 'ДМС-2026-000123', 'ДМС-Д-2026-000045', 'СЕРТ-2026-000045-0001', 'a.karimov@mail.uz']) expect(r.text).not.toContain(secret);
+    for (const secret of ['Каримов', '31503901234567', '123 45 67', 'DMS-2026-000123', 'DMS-D-2026-000045', 'SERT-2026-000045-0001', 'a.karimov@mail.uz']) expect(r.text).not.toContain(secret);
     expect(r.text).toContain('МРТ колена');
     expect(r.text).toMatch(/\[ФИО-1\].*\[ПИНФЛ-1\].*\[ТЕЛЕФОН-1\].*\[ПОЛИС-1\].*\[ДОГОВОР-1\].*\[СЕРТИФИКАТ-1\].*\[EMAIL-1\]/s);
     expect(r.labels['[ПИНФЛ-1]']).toBe('31503901234567');

@@ -31,7 +31,7 @@ import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, p
 import type { ClaimRow, Db, InsuredRow } from './db';
 import { conflict, HttpError, notFound } from './http';
 import { randomId } from './rng';
-import { dmsParam } from './params';
+import { dmsParam, nextDocNumber } from './params';
 import { DAY, isoDay, parseIso, tzIso } from './time';
 import { limitsFor } from './views';
 
@@ -293,7 +293,7 @@ export function upsertDraftRebill(d: Db, assistanceId: UUID, period: string, lin
   const lines = picked.map(({ r, l }) => toRebillLine(d, r, l));
   const b: Rebill = existing ?? {
     id: randomId(),
-    number: `СЧА-${period}-${a.name.replace(/[^А-ЯЁA-Z]/g, '').slice(0, 3) || 'A'}`,
+    number: nextDocNumber('assistInvoice', { period, code: a.name.replace(/[^A-Z]/g, '').slice(0, 3) || 'A' }),
     assistanceId,
     period,
     lines: [],

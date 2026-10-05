@@ -13,7 +13,9 @@ import { formatMoney, formatPercent } from '@/shared/lib/format';
 import { db, hasLiveKp, type Db } from '../db';
 import { isOverdueRequest } from '../clinic-core';
 import { assistanceName, currentAssistance, linesOf, subTotals } from '../assistance-core';
-import { API, forbidden, requireSession, route } from '../http';
+import { API, byLegalForm, byLegalName, filterLegalForm, forbidden, requireSession, route, sortBy } from '../http';
+import { assistanceLegalFormOf, clientLegalFormOf, clinicLegalFormOf } from '../views';
+import type { LegalFormCode } from '@/shared/config/legalForms';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { dmsParam } from '../params';
 import { canApproveDecision } from '@/shared/domain/settlement';
@@ -487,10 +489,59 @@ const ROLE_QUEUE: Partial<Record<SessionUser['role'], Builder[]>> = {
 /** Groups kept for old links: «Ассистансы» shows bills, SLA breaches and complaints together. */
 const GROUPS: Record<string, QueueType[]> = { assistance: ['rebill', 'assistance_sla', 'complaint'] };
 
+/** Legal form of the row's `who` when it is a legal entity: a client, a clinic, an assistance or a payer. */
+function whoLegalForm(d: Db, i: QueueItem): LegalFormCode | undefined {
+  const contractClient = (contractId: string | undefined) => clientLegalFormOf(d, d.contracts.find((c) => c.id === contractId)?.clientId);
+  const endorsementClient = (id: string) => contractClient(d.endorsements.find((e) => e.id === id)?.contractId);
+  const dealClient = (id: string) => clientLegalFormOf(d, d.deals.find((x) => x.id === id)?.clientId);
+  switch (i.type) {
+    case 'renewal':
+    case 'loss_ratio':
+    case 'policy_change':
+      return clientLegalFormOf(d, i.entityId);
+    case 'lead':
+    case 'kp':
+    case 'deal':
+      return dealClient(i.entityId);
+    case 'quote':
+      return dealClient(d.quotes.find((x) => x.id === i.entityId)?.dealId ?? '');
+    case 'contract':
+      return contractClient(i.entityId);
+    case 'endorsement':
+      return endorsementClient(i.entityId);
+    case 'scan':
+      return i.subject === 'endorsement' ? endorsementClient(i.entityId) : contractClient(i.entityId);
+    case 'invoice':
+      return clientLegalFormOf(d, d.invoices.find((x) => x.id === i.entityId)?.clientId);
+    case 'assistance_sla':
+      return assistanceLegalFormOf(d, i.entityId);
+    case 'rebill':
+      return assistanceLegalFormOf(d, d.rebills.find((x) => x.id === i.entityId)?.assistanceId);
+    case 'qa_sample':
+      return assistanceLegalFormOf(d, d.qaSamples.find((x) => x.id === i.entityId)?.assistanceId);
+    case 'integration_error':
+      return clinicLegalFormOf(d, i.entityId);
+    case 'payout':
+      return i.subject === 'registry' ? clinicLegalFormOf(d, d.registries.find((x) => x.id === i.entityId)?.clinicId) : undefined;
+    case 'bank_payment': {
+      const b = d.bankPayments.find((x) => x.id === i.entityId);
+      return b ? (d.clients.find((c) => c.inn === b.payerInn)?.legalForm ?? b.payerLegalForm) : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
 export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all' | 'assistance', now: number): QueueItem[] {
   const builders = ROLE_QUEUE[user.role] ?? [];
   // Every item passes the permission matrix: a builder can never leak a type the role may not see.
-  const all = builders.flatMap((b) => b(d, user, now)).filter((i) => canSeeQueueType(user, i.type));
+  const all = builders
+    .flatMap((b) => b(d, user, now))
+    .filter((i) => canSeeQueueType(user, i.type))
+    .map((i) => {
+      const legalForm = whoLegalForm(d, i);
+      return legalForm ? { ...i, legalForm } : i;
+    });
   const pick = type === 'all' ? all : all.filter((i) => (GROUPS[type] ?? [type]).includes(i.type));
   return pick.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
 }
@@ -527,7 +578,8 @@ export const dashboardHandlers = [
       requireStaff(user);
       const t = url.searchParams.get('type');
       const type = ([...QUEUE_TYPES, 'assistance'] as const).find((x) => x === t) ?? 'all';
-      return queueFor(db(), user, type, Date.now()).slice(0, 50);
+      const items = filterLegalForm(queueFor(db(), user, type, Date.now()), url, (i) => i.legalForm);
+      return sortBy(items, url, { who: byLegalName((i) => i.who), legalForm: byLegalForm((i) => i.legalForm), dueAt: (i) => i.dueAt }).slice(0, 50);
     }),
   ),
   http.get(

@@ -32,13 +32,13 @@ export function recognizeReceipt(imageHash: string, now = Date.now()): Recognize
   const seed = hashString(imageHash);
   const rng = mulberry32(seed);
   const providerName = pick(rng, [
-    'Аптека «Шифо Фарм»',
-    'Аптека «Нур Дори»',
-    'Медцентр «Саломат Плюс»',
-    'Клиника «Мадад Мед»',
+    'Shifo Farm Dorixonasi',
+    'Nur Dori Dorixonasi',
+    'Salomat Plus Tibbiyot Markazi',
+    'Madad Med Klinikasi',
   ]);
   // A pharmacy receipt mixes medicines with vitamins and cosmetics; a clinic one has services.
-  const pool = providerName.startsWith('Аптека')
+  const pool = providerName.endsWith('Dorixonasi')
     ? [
         pick(rng, ['Нурофен 200 мг', 'Амоксиклав 875 мг', 'Називин капли в нос', 'Смекта']),
         pick(rng, ['Парацетамол 500 мг', 'Но-шпа 40 мг', 'Лоратадин 10 мг']),

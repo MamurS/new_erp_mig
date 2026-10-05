@@ -3,6 +3,7 @@
  * the paper original, and the moment the contract comes into force. Pure functions.
  */
 import { defineLabels } from '@/i18n';
+import { DEFAULT_NUMBERING, docNumber, parseDocNumber, type NumberingTemplates } from './numbering';
 import type {
   ActivationRule,
   ContractStatus,
@@ -134,26 +135,28 @@ export function activationDate(
   return null;
 }
 
-export function contractNumber(year: number, seq: number): string {
-  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
-  return `ДМС-Д-${year}-${String(seq).padStart(6, '0')}`;
+/** 'DMS-D-2026-000123' with the default template. */
+export function contractNumber(year: number, seq: number, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
+  return docNumber('contract', { year, n: seq }, templates);
 }
 
-export function dealNumber(year: number, seq: number): string {
-  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
-  return `СД-${year}-${String(seq).padStart(6, '0')}`;
+/** 'SD-2026-000045' with the default template. */
+export function dealNumber(year: number, seq: number, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
+  return docNumber('deal', { year, n: seq }, templates);
 }
 
-/** 'СЕРТ-2026-000123-0001': contract sequence and the person's index in it. */
-export function certificateNumber(contractNo: string, index: number): string {
-  const m = /^ДМС-Д-(\d{4})-(\d{6})$/.exec(contractNo);
-  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
-  return `СЕРТ-${m?.[1] ?? '0000'}-${m?.[2] ?? '000000'}-${String(index).padStart(4, '0')}`;
+/**
+ * 'SERT-2026-000123-0001': year and sequence of the contract (read back with the contract template
+ * in force) and the person's index in it.
+ */
+export function certificateNumber(contractNo: string, index: number, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
+  const c = parseDocNumber(templates.contract ?? DEFAULT_NUMBERING.contract, contractNo);
+  return docNumber('certificate', { year: c?.year ?? Number(/\d{4}/.exec(contractNo)?.[0] ?? 0), n: c?.n ?? Number(/(\d+)$/.exec(contractNo)?.[1] ?? 0), m: index }, templates);
 }
 
-export function endorsementNumber(n: number, contractNo: string): string {
-  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
-  return `ДС-${n} к ${contractNo}`;
+/** 'DS-3/DMS-D-2026-000123': n-th endorsement to the contract. */
+export function endorsementNumber(n: number, contractNo: string, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
+  return docNumber('endorsement', { n, ref: contractNo }, templates);
 }
 
 /** Which side still has to act and how, for the signing panel. */

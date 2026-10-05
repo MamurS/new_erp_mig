@@ -207,7 +207,6 @@ export const staff = {
   'staff.month.nov': 'ноя',
   'staff.month.dec': 'дек',
   'staff.clientCard.docTitle': 'Карточка клиента',
-  'staff.clientCard.heading': '{form} «{name}»',
   'staff.clientCard.inn': 'ИНН ',
   'staff.clientCard.manager': ' · менеджер {name}',
   'staff.clientCard.issuePolicy': 'Оформить полис',

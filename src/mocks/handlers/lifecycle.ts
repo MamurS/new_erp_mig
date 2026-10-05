@@ -32,7 +32,7 @@ import { DAY, isoDay, tzIso } from '../time';
 import { toClient } from '../views';
 import { PROGRAMS } from '../programs';
 import { DEMO_PASSWORD } from '../credentials';
-import { dmsParam, paramValues } from '../params';
+import { dmsParam, numbering, paramValues } from '../params';
 import { clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView, todayIso } from '../lifecycle-core';
 
 function requireMig(request: Request): SessionUser {
@@ -142,7 +142,7 @@ export function ensureRenewalDeal(d: Db, kp: KpDocument, actor: SessionUser): vo
   const now = tzIso(Date.now());
   const deal: Deal = {
     id: randomId(),
-    number: dealNumber(new Date().getFullYear(), d.dealSeq),
+    number: dealNumber(new Date().getFullYear(), d.dealSeq, numbering()),
     clientId: client.id,
     type: 'renewal',
     stage: 'kp_sent',
@@ -287,7 +287,7 @@ export const lifecycleHandlers = [
       d.dealSeq += 1;
       const deal: Deal = {
         id: randomId(),
-        number: dealNumber(new Date().getFullYear(), d.dealSeq),
+        number: dealNumber(new Date().getFullYear(), d.dealSeq, numbering()),
         clientId: client.id,
         type: 'new',
         stage: 'lead',
@@ -560,7 +560,7 @@ export const lifecycleHandlers = [
       const now = Date.now();
       const kp: KpDocument = {
         id: randomId(),
-        number: kpNumber(new Date(now).getFullYear(), d.kpSeq),
+        number: kpNumber(new Date(now).getFullYear(), d.kpSeq, numbering()),
         clientId: client.id,
         clientName: client.name,
         clientLegalForm: client.legalForm,

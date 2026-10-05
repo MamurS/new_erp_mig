@@ -1,6 +1,7 @@
 /* Commercial offer (KP) business rules shared by the UI and the mock server. */
 import { defineLabels } from '@/i18n';
 import type { KpParams, KpStatus, Money } from '@/shared/types';
+import { DEFAULT_NUMBERING, docNumber, type NumberingTemplates } from './numbering';
 
 /** Current version of each brochure (kept equal to templates/*.ts by a unit test). */
 export const KP_TEMPLATE_VERSION = { gold: 'GOLD 09/26' } as const;
@@ -11,13 +12,13 @@ export function kpTotalPremium(p: Pick<KpParams, 'employees' | 'premiumEmployee'
   return p.employees * p.premiumEmployee + p.familyMembers * p.premiumFamily;
 }
 
-export function kpNumber(year: number, seq: number): string {
-  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
-  return `КП-${year}-${String(seq).padStart(6, '0')}`;
+/** 'KP-2026-000123' with the default template. */
+export function kpNumber(year: number, seq: number, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
+  return docNumber('kp', { year, n: seq }, templates);
 }
 
 /**
- * Document title (iframe `<title>` and default PDF name): `КП-2026-000123 — {client}`.
+ * Document title (iframe `<title>` and default PDF name): `KP-2026-000123 — {client}`.
  * File-system special and control characters are removed.
  */
 export function kpDocumentTitle(number: string, clientName: string): string {

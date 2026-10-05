@@ -9,7 +9,8 @@ import type { ContractStatus } from '@/shared/types';
 import { formatDate, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Chip } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
 import { useTopbar } from '../topbar';
@@ -18,11 +19,18 @@ export default function ContractsPage() {
   useDocumentTitle(t('staffLc.contracts.title'));
   useTopbar([{ label: t('staffLc.contracts.title') }]);
   const navigate = useNavigate();
-  const [f, setF] = useUrlFilters(['status'] as const);
-  const q = useContracts(f.status ? { status: f.status } : {});
+  const [f, setF] = useUrlFilters(['status', 'form', 'sort'] as const);
+  const forms = parseLegalForms(f.form);
+  const sort = parseSort(f.sort);
+  const q = useContracts({
+    ...(f.status ? { status: f.status } : {}),
+    ...(forms.length ? { form: forms.join(',') } : {}),
+    ...(sort ? { sort: `${sort.key}:${sort.dir}` } : {}),
+  });
   const columns: Column<ContractView>[] = [
-    { key: 'num', header: t('common.contract'), cell: (c) => <span className="num font-medium">{c.number}</span> },
-    { key: 'client', header: t('common.client'), cell: (c) => c.clientName },
+    { key: 'num', header: t('common.contract'), sortKey: 'number', cell: (c) => <span className="num font-medium">{c.number}</span> },
+    { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (c) => c.client.name },
+    legalFormColumn<ContractView>((c) => c.client.legalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'status', header: t('common.status'), cell: (c) => <Chip kind={CONTRACT_STATUS_CHIP[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Chip> },
     { key: 'ver', header: t('staffLc.contracts.version'), align: 'right', cell: (c) => <span className="num">{c.version}</span> },
     { key: 'program', header: t('common.program'), cell: (c) => PROGRAM_LABEL[c.params.program] },
@@ -44,7 +52,7 @@ export default function ContractsPage() {
         </Select>
       </div>
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption={t('staffLc.contracts.title')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(c) => c.id} onRowClick={(c) => navigate(`/staff/contracts/${c.id}`)} empty={t('staffLc.contracts.empty')} />
+        <DataTable caption={t('staffLc.contracts.title')} columns={columns} rows={q.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(c) => c.id} onRowClick={(c) => navigate(`/staff/contracts/${c.id}`)} empty={t('staffLc.contracts.empty')} />
       </div>
     </>
   );

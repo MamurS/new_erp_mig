@@ -101,6 +101,7 @@ export const clientLossStats: z.ZodType<D.ClientLossStats> = z
   .object({
     clientId: uuid,
     clientName: z.string(),
+    clientLegalForm: z.enum(LEGAL_FORMS),
     premium: money,
     lossRatio: z.number().nullable(),
     lossRatioWarn: z.number(),

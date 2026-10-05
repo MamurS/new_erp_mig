@@ -217,7 +217,7 @@ test('1. New client end to end: lead → census → quote above authority → KP
   expect(contract.status).toBe('active');
   const certs = (await api(page, 'GET', `/policies/${contract.policyId}/certificates`)).data as { certificateNumber: string; fullName: string }[];
   expect(certs).toHaveLength(2);
-  expect(certs[0]!.certificateNumber).toMatch(/^СЕРТ-\d{4}-\d{6}-0001$/);
+  expect(certs[0]!.certificateNumber).toMatch(/^SERT-\d{4}-\d{6}-0001$/);
 
   // The insured person logs in with the phone from Appendix 2 and sees the certificate
   await page.evaluate(() => sessionStorage.removeItem('mig.session'));

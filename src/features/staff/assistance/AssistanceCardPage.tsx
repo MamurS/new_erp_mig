@@ -16,6 +16,7 @@ import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
+import { LegalFormChip, legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable } from '@/shared/ui/data-table';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { Modal } from '@/shared/ui/dialog';
@@ -298,6 +299,7 @@ export default function AssistanceCardPage() {
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <h1 className="text-[22px] font-bold">{c.assistance.name}</h1>
+            <LegalFormChip code={c.assistance.legalForm} />
             <Chip kind="accent">{INTEGRATION_MODE_LABEL[c.assistance.integrationMode]}</Chip>
             <span className="text-muted">
               {t('staffOps.assistCard.summary', { number: c.assistance.contract.number, insured: formatNumber(c.insuredCount), clients: c.clients.length })}
@@ -343,6 +345,7 @@ export default function AssistanceCardPage() {
                   caption={t('staffOps.assistCard.clientsCaption')}
                   columns={[
                     { key: 'name', header: t('common.client'), cell: (x) => <span className="font-medium">{x.name}</span> },
+                    legalFormColumn<AssistanceCardView['clients'][number]>((x) => x.legalForm),
                     { key: 'policy', header: t('common.policy'), cell: (x) => <span className="num">{x.policyNumber}</span> },
                     { key: 'from', header: t('staffOps.assistCard.col.since'), cell: (x) => <span className="num">{formatDate(x.from)}</span> },
                     { key: 'count', header: t('staffOps.assistances.col.insured'), align: 'right', cell: (x) => <span className="num">{x.insuredCount}</span> },

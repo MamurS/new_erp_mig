@@ -55,13 +55,13 @@ describe('KP API', () => {
     expect(data.params.familyMembers).toBe(active.reduce((s, i) => s + i.familyMembersCount, 0));
     expect(data.params).toMatchObject({ templateId: 'gold', lang: 'ru', variant: 'grey' });
     expect(data.params.coverageStart > policy.endDate).toBe(true);
-    expect(data.letter).toMatchObject({ clientName: 'Ташкент Агрологистика', createdByEmail: 'underwriter@demo.mig.uz', policyId: policy.id });
+    expect(data.letter).toMatchObject({ clientName: 'Toshkent Agrologistika', createdByEmail: 'underwriter@demo.mig.uz', policyId: policy.id });
   });
 
   it('underwriter creates a draft with number, template version, total and audit', async () => {
     const sid = await login('underwriter@demo.mig.uz');
     const kp = await createDraft(sid);
-    expect(kp.number).toMatch(/^КП-\d{4}-\d{6}$/);
+    expect(kp.number).toMatch(/^KP-\d{4}-\d{6}$/);
     expect(kp.status).toBe('draft');
     expect(kp.templateVersion).toBe('GOLD 09/26');
     const p = kp.params;

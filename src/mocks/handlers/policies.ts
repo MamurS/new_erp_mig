@@ -8,7 +8,7 @@ import { policyChangeDecisionSchema, policyIssueSchema } from '@/shared/schemas/
 import { db, type ChangeRequestRow, type HrUserRow } from '../db';
 import { certificateNumber } from '@/shared/domain/contracts';
 import { COVERAGE_START_RULES, PERIODICITIES } from '@/shared/domain/endorsements';
-import { dmsParam } from '../params';
+import { dmsParam, numbering } from '../params';
 import { createEndorsement } from '../lifecycle-core';
 import { API, audit, body, conflict, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { DEMO_PASSWORD } from '../credentials';
@@ -143,7 +143,7 @@ export const policyHandlers = [
               r!.insuredId = person.id;
               if (contract) {
                 person.contractId = contract.id;
-                person.certificateNumber = certificateNumber(contract.number, d.insured.filter((i) => i.contractId === contract.id).length);
+                person.certificateNumber = certificateNumber(contract.number, d.insured.filter((i) => i.contractId === contract.id).length, numbering());
               }
             } else {
               const person = d.insured.find((i) => i.id === r!.insuredId)!;

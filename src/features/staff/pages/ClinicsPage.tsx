@@ -19,7 +19,8 @@ import { formatDate, daysUntil } from '@/shared/lib/format';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip, StatusDot } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { LegalFormOptions, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Select } from '@/shared/ui/input';
 import { SearchInput } from '@/shared/ui/search-input';
 import { EmptyState } from '@/shared/ui/states';
@@ -38,7 +39,7 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateClinic();
   const form = useForm<ClinicForm, unknown, z.output<typeof clinicCreateSchema>>({
     resolver: zodResolver(clinicCreateSchema),
-    defaultValues: { name: '', address: '', district: '', specialties: [], integrationMode: 'portal' },
+    defaultValues: { legalForm: 'llc', name: '', address: '', district: '', specialties: [], integrationMode: 'portal' },
   });
   const e = form.formState.errors;
   const submit = form.handleSubmit(async (v) => {
@@ -68,9 +69,18 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={(ev) => void submit(ev)} noValidate>
-        <Field label={t('common.name')} error={tm(e.name?.message)} className="sm:col-span-2">
-          {(a) => <Input {...a} maxLength={120} {...form.register('name')} />}
-        </Field>
+        <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[200px_1fr]">
+          <Field label={t('shell.legalForm.column')} error={tm(e.legalForm?.message)}>
+            {(a) => (
+              <Select {...a} {...form.register('legalForm')}>
+                <LegalFormOptions />
+              </Select>
+            )}
+          </Field>
+          <Field label={t('common.name')} error={tm(e.name?.message)}>
+            {(a) => <Input {...a} maxLength={120} {...form.register('name')} />}
+          </Field>
+        </div>
         <Field label={t('staff.clinics.address')} error={tm(e.address?.message)}>
           {(a) => <Input {...a} maxLength={200} {...form.register('address')} />}
         </Field>
@@ -112,10 +122,12 @@ function CreateClinicDialog({ onClose }: { onClose: () => void }) {
 export default function ClinicsPage() {
   useDocumentTitle(t('staff.clinics.title'));
   useTopbar([{ label: t('staff.clinics.title') }]);
-  const [f, setF] = useUrlFilters(['specialty'] as const);
+  const [f, setF] = useUrlFilters(['specialty', 'form', 'sort'] as const);
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());
-  const list = useClinics({ q, specialty: f.specialty });
+  const forms = parseLegalForms(f.form);
+  const sort = parseSort(f.sort || 'name:asc');
+  const list = useClinics({ q, specialty: f.specialty, form: formatLegalForms(forms), sort: formatSort(sort) });
   const navigate = useNavigate();
   const canCreate = useCan('clinics.manage');
   const [creating, setCreating] = useState(false);
@@ -123,6 +135,7 @@ export default function ClinicsPage() {
     {
       key: 'name',
       header: t('common.name'),
+      sortKey: 'name',
       cell: (c) => (
         <span>
           <span className="block font-medium">{c.name}</span>
@@ -130,7 +143,8 @@ export default function ClinicsPage() {
         </span>
       ),
     },
-    { key: 'district', header: t('staff.clinics.district'), cell: (c) => c.district },
+    legalFormColumn<Clinic>((c) => c.legalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
+    { key: 'district', header: t('staff.clinics.district'), sortKey: 'district', cell: (c) => c.district },
     {
       key: 'spec',
       header: t('staff.clinics.specialties'),
@@ -148,6 +162,7 @@ export default function ClinicsPage() {
     {
       key: 'contract',
       header: t('staff.clinics.colContract'),
+      sortKey: 'contractUntil',
       cell: (c) => <span className={daysUntil(c.contractUntil) <= 60 ? 'font-medium text-warning-text' : undefined}>{formatDate(c.contractUntil)}</span>,
     },
   ];
@@ -173,13 +188,15 @@ export default function ClinicsPage() {
           caption={t('staff.clinics.title')}
           columns={cols}
           rows={list.data}
+          sort={sort}
+          onSortChange={(s) => setF({ sort: formatSort(s) })}
           rowKey={(c) => c.id}
           onRowClick={(c) => navigate(`/staff/clinics/${c.id}`)}
           loading={list.isLoading}
           error={list.error}
           onRetry={() => void list.refetch()}
           footer={list.data && <span>{tp('staff.clinics.footer', list.data.length)}</span>}
-          empty={<EmptyState title={t('staff.clinics.notFound')} action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ specialty: '' }); }}>{t('staff.clients.resetFilters')}</Button>} />}
+          empty={<EmptyState title={t('staff.clinics.notFound')} action={<Button variant="secondary" onClick={() => { setSearch(''); setF({ specialty: '', form: '' }); }}>{t('staff.clients.resetFilters')}</Button>} />}
         />
       </div>
       {creating && <CreateClinicDialog onClose={() => setCreating(false)} />}

@@ -15,6 +15,7 @@ import { isOverdue } from './dashboard';
 import { findInsured } from './insured';
 import { renderReceiptPng } from '../receipt';
 import { currentReserve, refreshFlags } from '../settlement-core';
+import { nextDocNumber } from '../params';
 
 function findClaim(id: string): ClaimRow {
   const c = db().claims.find((x) => x.id === id);
@@ -25,7 +26,7 @@ function findClaim(id: string): ClaimRow {
 let seq = 9000;
 export function nextClaimNumber(): string {
   seq += 1;
-  return `У-${new Date().getFullYear()}-${String(seq).padStart(6, '0')}`;
+  return nextDocNumber('claim', { year: new Date().getFullYear(), n: seq });
 }
 
 export const claimHandlers = [

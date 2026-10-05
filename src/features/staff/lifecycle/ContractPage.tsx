@@ -26,6 +26,7 @@ import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Card, Kv, PageHeader } from '@/shared/ui/page';
 import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
@@ -440,8 +441,9 @@ function ContractEditor({ c }: { c: ContractView }) {
         subtitle={
           <span>
             <Link to={`/staff/clients/${c.clientId}`} className="text-accent-text hover:underline">
-              {c.clientName}
+              {c.client.name}
             </Link>{' '}
+            <LegalFormChip code={c.client.legalForm} />{' '}
             {t('staffLc.contract.dealSep')}{' '}
             <Link to={`/staff/deals/${c.dealId}`} className="num text-accent-text hover:underline">
               {c.dealNumber}

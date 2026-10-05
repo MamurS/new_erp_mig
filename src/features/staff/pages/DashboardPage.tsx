@@ -8,11 +8,12 @@ import { errorMessage } from '@/shared/api/client';
 import { useUser } from '@/shared/auth/session';
 import { AUDIT_ACTION_LABEL } from '@/shared/domain/labels';
 import { daysUntil, formatDate, formatDateTime, formatRelativeDays, formatTime } from '@/shared/lib/format';
-import { useDocumentTitle } from '@/shared/lib/hooks';
+import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Chip, StatusDot } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
+import { formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Card } from '@/shared/ui/page';
 import { EmptyState, ErrorState, Skeleton, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
@@ -96,7 +97,13 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const dashboard = useDashboard();
   const [tab, setTab] = useState<QueueType | 'all'>('all');
-  const queue = useQueue(tab);
+  const [f, setF] = useUrlFilters(['form', 'sort'] as const);
+  const forms = parseLegalForms(f.form);
+  const sort = parseSort(f.sort);
+  const queue = useQueue(tab, {
+    ...(forms.length ? { form: forms.join(',') } : {}),
+    ...(sort ? { sort: `${sort.key}:${sort.dir}` } : {}),
+  });
   const confirm = useConfirmAppointment();
   const [done, setDone] = useState<Map<string, QueueItem>>(new Map());
   const [showAll, setShowAll] = useState(false);
@@ -108,8 +115,9 @@ export default function DashboardPage() {
     for (const r of done.values()) {
       if (!base.some((b) => b.id === r.id) && (tab === 'all' || tab === r.type)) base.push(r);
     }
-    return base.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
-  }, [queue.data, done, tab]);
+    // The server sorts when a column sort is chosen; by default the queue goes by deadline.
+    return f.sort ? base : base.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
+  }, [queue.data, done, tab, f.sort]);
 
   const onAction = async (row: QueueItem) => {
     if (row.action === 'confirm') {
@@ -131,12 +139,14 @@ export default function DashboardPage() {
 
   const columns: Column<QueueItem>[] = [
     { key: 'type', header: t('common.type'), cell: (r) => <Chip kind={QUEUE_TYPE_META[r.type].chip}>{QUEUE_TYPE_META[r.type].label}</Chip>, className: 'w-[150px]' },
-    { key: 'who', header: t('staff.dashboard.colWho'), cell: (r) => <span className="font-medium">{r.who}</span> },
+    { key: 'who', header: t('staff.dashboard.colWho'), sortKey: 'who', cell: (r) => <span className="font-medium">{r.who}</span> },
+    legalFormColumn<QueueItem>((r) => r.legalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'details', header: t('staff.dashboard.colDetails'), cell: (r) => <span className="text-muted">{tm(r.details)}</span> },
     { key: 'status', header: t('common.status'), cell: (r) => <StatusDot tone={r.statusTone}>{tm(r.status)}</StatusDot> },
     {
       key: 'due',
       header: t('staff.dashboard.colDue'),
+      sortKey: 'dueAt',
       cell: (r) => {
         const d = daysUntil(r.dueAt);
         return (
@@ -214,6 +224,8 @@ export default function DashboardPage() {
             caption={t('staff.dashboard.queueCaption')}
             columns={columns}
             rows={queue.data ? (showAll ? rows : rows.slice(0, 15)) : undefined}
+            sort={sort}
+            onSortChange={(s) => setF({ sort: formatSort(s) })}
             rowKey={(r) => `${r.type}-${r.id}`}
             loading={queue.isLoading}
             error={queue.error}

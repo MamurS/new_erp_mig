@@ -204,6 +204,7 @@ export const clinicUserPatchSchema = z
   .refine((v) => v.role !== undefined || v.active !== undefined, msg('v.nothingToChange'));
 export const clinicAdminInviteSchema = z.object({ email: emailInput, fullName: text(3, 120) });
 export const clinicCreateSchema = z.object({
+  legalForm: z.enum(LEGAL_FORMS).default('llc'),
   name: text(3, 120),
   address: text(5, 200),
   district: text(2, 60),
@@ -330,6 +331,7 @@ export const assistanceContractSchema = z
     if (v.feeModel !== 'percent_of_claims' && (v.feeValue < 1 || !Number.isInteger(v.feeValue))) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['feeValue'], message: msg('v.feeWholeUzs') });
   });
 export const assistanceCreateSchema = z.object({
+  legalForm: z.enum(LEGAL_FORMS).default('llc'),
   name: text(3, 120),
   phone24x7: text(5, 30),
   integrationMode: z.enum(['portal', 'api', 'hybrid']),

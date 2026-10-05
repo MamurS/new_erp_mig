@@ -60,7 +60,7 @@ const CENSUS = ['gender,birthYear,relation,fullName,pinfl', ...Array.from({ leng
 const LIST = ['fullName,birthDate,pinfl,phone,position,familyMembers', 'Новый Сотрудник Первый,15.03.1990,31503900000101,+998935550101,Инженер,1', 'Новая Сотрудница Вторая,01.07.1988,40107880000102,+998935550102,Бухгалтер,0'].join('\n');
 
 const lead = {
-  legalForm: 'ООО',
+  legalForm: 'llc',
   name: 'Тестовый Лид Сервис',
   inn: '301234567',
   requisites: { bank: 'АКБ «Тест»', account: '20208000100000000001', mfo: '00001', director: 'Директоров Директор Директорович', directorBasis: 'Устав' },
@@ -143,7 +143,7 @@ describe('full path of a new client (§17 e2e 1 on the API)', () => {
     const policy = db().policies.find((p) => p.contractId === contract.id)!;
     expect(policy.status).toBe('active');
     const people = db().insured.filter((i) => i.policyId === policy.id);
-    expect(people.map((p) => p.certificateNumber)).toEqual([expect.stringMatching(/^СЕРТ-\d{4}-\d{6}-0001$/), expect.stringMatching(/-0002$/)]);
+    expect(people.map((p) => p.certificateNumber)).toEqual([expect.stringMatching(/^SERT-\d{4}-\d{6}-0001$/), expect.stringMatching(/-0002$/)]);
     expect(db().smsOutbox.filter((s) => people.some((p) => p.id === s.insuredId))).toHaveLength(2);
     const certs = await call<{ certificateNumber: string }[]>(`/policies/${policy.id}/certificates`, { sid: hr });
     expect(certs.data).toHaveLength(2);
@@ -197,7 +197,7 @@ describe('signing methods (§8)', () => {
     expect(['signed', 'active']).toContain(v.data.status);
     const got = await call<ContractView>(`/contracts/${contract.id}/originals`, { method: 'POST', sid: sales, json: { clientOriginalReceivedAt: today() } });
     expect(got.data.signing.paperOriginal.clientOriginalReceivedAt).toBe(today());
-    expect(got.data.signing.paperOriginal.receivedByName).toBe('Азиз Каримов');
+    expect(got.data.signing.paperOriginal.receivedByName).toBe('Karimov Aziz Shuhratovich');
   });
 
   it('EDO: sending signs for MIG, the client signature arrives from the operator, the contract is signed', async () => {
@@ -288,7 +288,7 @@ describe('claims settlement (§13)', () => {
     const head = await login('claims-head@demo.mig.uz');
     const done = await call<ClaimDetail>(`/claims/${c.id}/decision/approve`, { method: 'POST', sid: head });
     expect(done.data.status).toBe('rejected');
-    expect(done.data.decision?.approvedByName).toBe('Лола Саидова');
+    expect(done.data.decision?.approvedByName).toBe('Saidova Lola Akmalovna');
     expect(currentReserve(db().claims.find((x) => x.id === c.id)!)).toBe(0);
     // The insured person sees the reason in plain words with the clause, and appeals.
     const owner = db().insured.find((i) => i.id === c.insuredId)!;
@@ -320,7 +320,7 @@ describe('claims settlement (§13)', () => {
     expect(decided.data.reserve).toBe(part);
     const changed = await call<ClaimDetail>(`/claims/${c.id}/reserve`, { method: 'PATCH', sid: officer, json: { amount: part + 1000, reason: 'Ожидается доплата' } });
     expect(changed.data.reserve).toBe(part + 1000);
-    expect(changed.data.reserveHistory?.at(-1)).toMatchObject({ byName: 'Бобур Хасанов', to: part + 1000 });
+    expect(changed.data.reserveHistory?.at(-1)).toMatchObject({ byName: 'Hasanov Bobur Ilhomovich', to: part + 1000 });
   });
 
   it('the reserve report on a date equals the sum of open reserves', async () => {

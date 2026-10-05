@@ -19,6 +19,7 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Field, Input } from '@/shared/ui/input';
+import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Card, Kv } from '@/shared/ui/page';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
@@ -196,7 +197,7 @@ export default function PolicyIssuePage() {
       <div>
         <h1 className="text-[22px] font-bold">{t('staffLc.issue.title')}</h1>
         <p className="text-muted">
-          {c.legalForm} «{c.name}» · {t('staffLc.deals.inn')} <span className="num">{c.inn}</span>
+          {c.name} <LegalFormChip code={c.legalForm} /> · {t('staffLc.deals.inn')} <span className="num">{c.inn}</span>
         </p>
       </div>
       <Steps step={step} />

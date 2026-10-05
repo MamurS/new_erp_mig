@@ -12,13 +12,14 @@ export interface RedactResult {
 // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
 const NAME_KIND = 'ФИО';
 
+/** Document numbers in the demo templates (src/shared/domain/numbering.ts); the Cyrillic prefixes of older data too. */
 const RULES: { kind: string; re: RegExp }[] = [
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
-  { kind: 'СЕРТИФИКАТ', re: /СЕРТ-\d{4}-\d{6}-\d{4}/giu },
+  { kind: 'СЕРТИФИКАТ', re: /(?:SERT|СЕРТ)-\d{4}-\d{6}-\d{4}/giu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
-  { kind: 'ДОГОВОР', re: /ДМС-Д-\d{4}-\d{6}/giu },
+  { kind: 'ДОГОВОР', re: /(?:DMS-D|ДМС-Д)-\d{4}-\d{6}/giu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
-  { kind: 'ПОЛИС', re: /ДМС-\d{4}-\d{6}/giu },
+  { kind: 'ПОЛИС', re: /(?:DMS|ДМС)-\d{4}-\d{6}/giu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI
   { kind: 'ПИНФЛ', re: /(?<!\d)\d{14}(?!\d)/gu },
   // eslint-disable-next-line mig/no-cyrillic-ui -- redaction label sent to the AI provider, not shown in the UI

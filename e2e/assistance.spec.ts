@@ -238,7 +238,7 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer r
   await as(page, 'asstBilling');
   await page.goto(`/assist/registries/${reg.id}`);
   await page.getByRole('button', { name: /^Оплатить все принятые/ }).click();
-  await page.getByRole('dialog').getByLabel('Номер платёжного поручения').fill('ПП-20931');
+  await page.getByRole('dialog').getByLabel('Номер платёжного поручения').fill('PP-20931');
   await page.getByRole('dialog').getByRole('button', { name: 'Отметить оплату' }).click();
   await expect(page.getByTestId('line-paid').first()).toBeVisible();
 
@@ -275,13 +275,13 @@ test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer r
   await as(page, 'asstBilling');
   await page.goto(`/assist/rebills/${rebillId}`);
   await page.getByRole('button', { name: /^Оспорить строку/ }).click();
-  await page.getByRole('dialog').getByLabel('Возражение').fill('Платёжное поручение ПП-20931 приложено');
+  await page.getByRole('dialog').getByLabel('Возражение').fill('Платёжное поручение PP-20931 приложено');
   await page.getByRole('dialog').getByRole('button', { name: 'Оспорить' }).click();
   await expect(page.getByTestId('rebill-status')).toContainText('На проверке');
 
   await as(page, 'claims');
   await page.goto(`/staff/rebills/${rebillId}`);
-  await expect(page.getByText('Ассистанс: Платёжное поручение ПП-20931 приложено')).toBeVisible();
+  await expect(page.getByText('Ассистанс: Платёжное поручение PP-20931 приложено')).toBeVisible();
   await page.getByRole('button', { name: /^Принять строку/ }).click();
   await expect(page.getByTestId('rebill-status')).toHaveText('Принят');
 
@@ -399,7 +399,7 @@ test('9. Operator requests a letter from a guarantee case; the curator closes a 
   await dlg.getByLabel('Код МКБ-10').fill('G43.9');
   await dlg.getByRole('button', { name: 'Запросить ГП' }).click();
   await expect(page).toHaveURL(/\/assist\/guarantees\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole('heading', { name: /Гарантийное письмо ГП-\d{4}-\d{6}/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Гарантийное письмо GP-\d{4}-\d{6}/ })).toBeVisible();
 
   await as(page, 'operator');
   const assistances = (await api(page, 'GET', '/assistance')).data as { id: string; name: string }[];

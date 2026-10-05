@@ -24,7 +24,7 @@ import type {
   Specialty,
 } from '@/shared/types';
 import { chance, digits, hashString, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
-import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from './db';
+import { replaceDb, type ChatRow, type ClaimRow, type ClientRow, type Db, type FileRow, type HrUserRow, type InsuredDocRow, type InsuredRow, type StaffRow } from './db';
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './credentials';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
@@ -846,6 +846,9 @@ export function createSeed(opts: SeedOptions = {}): Db {
     endorsements: [],
     smsOutbox: [],
   };
+  // Core helpers used below read the DMS parameters (number templates) through db(): let them see the
+  // database being seeded instead of starting another seed.
+  replaceDb(out);
   seedAssistance(out, { now });
   seedLifecycle(out, { now });
   return out;

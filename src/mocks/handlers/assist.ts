@@ -28,7 +28,7 @@ import type {
 } from '@/shared/types/dto';
 import { isAssistRole } from '@/shared/domain/labels';
 import { assistanceScope, CASE_SLA_MINUTES, CASE_TYPE_LABEL } from '@/shared/domain/assistance';
-import { dmsParam } from '../params';
+import { dmsParam, nextDocNumber } from '../params';
 import { registryStatusAfterReview } from '@/shared/domain/clinics';
 import { SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { formatMoney } from '@/shared/lib/format';
@@ -134,6 +134,7 @@ function toSubSummary(d: Db, r: Registry, payer: UUID): SubRegistrySummary {
     id: r.id,
     clinicId: r.clinicId,
     clinicName: clinicOf(d, r.clinicId).name,
+    clinicLegalForm: clinicOf(d, r.clinicId).legalForm,
     period: r.period,
     status: subStatus(r, lines),
     source: r.source,
@@ -176,6 +177,7 @@ export function toRebillView(d: Db, b: RebillView | Parameters<typeof recomputeR
   return {
     ...b,
     assistanceName: assistanceOf(d, b.assistanceId).name,
+    assistanceLegalForm: assistanceOf(d, b.assistanceId).legalForm,
     ...(b.submittedAt ? { reviewDueAt: addWorkdays(b.submittedAt, dmsParam('rebillReviewWorkdays')) } : {}),
     ...(b.acceptedById ? { acceptedByName: name(b.acceptedById) } : {}),
     ...(b.paidById ? { paidByName: name(b.paidById) } : {}),
@@ -262,7 +264,7 @@ export const assistHandlers = [
         }
       }
       const out: AssistOverview = {
-        assistance: { id: a.id, name: a.name, phone24x7: a.phone24x7, integrationMode: a.integrationMode },
+        assistance: { id: a.id, name: a.name, legalForm: a.legalForm, phone24x7: a.phone24x7, integrationMode: a.integrationMode },
         authorityLimit: authorityLimitOf(a),
         queue: queue.sort((x, y) => ((x.dueAt ?? '9') < (y.dueAt ?? '9') ? -1 : 1)),
         counters: {
@@ -403,7 +405,7 @@ export const assistHandlers = [
       d.caseSeq += 1;
       const c: AssistanceCaseRow = {
         id: randomId(),
-        number: `ОБР-${new Date(now).getFullYear()}-${String(d.caseSeq).padStart(6, '0')}`,
+        number: nextDocNumber('case', { year: new Date(now).getFullYear(), n: d.caseSeq }),
         assistanceId,
         insuredId: i.id,
         insuredName: i.fullName,
@@ -692,6 +694,7 @@ export const assistHandlers = [
       const out: AssistClinic[] = d.clinics.map((c) => ({
         clinicId: c.id,
         clinicName: c.name,
+        clinicLegalForm: c.legalForm,
         city: c.district,
         specialties: c.specialties,
         ownPrices: d.clinicContracts.some((x) => x.clinicId === c.id && x.payer === assistanceId),

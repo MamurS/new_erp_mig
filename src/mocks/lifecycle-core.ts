@@ -34,7 +34,7 @@ import { ROLE_LABEL } from '@/shared/domain/labels';
 import type { ChangeRequestRow, ClientRow, Db, InsuredRow } from './db';
 import { createInsured, nextPolicyNumber, refreshPolicyTotals } from './policy-core';
 import { notifyAssistance, syncAssistance } from './assistance-core';
-import { dmsParam } from './params';
+import { dmsParam, nextDocNumber, numbering } from './params';
 import { conflict, notFound } from './http';
 import { randomId } from './rng';
 import { isoDay, parseIso, tzIso } from './time';
@@ -126,7 +126,7 @@ export function positionOf(role: StaffUser['role']): string {
 
 export function nextInvoiceNumber(d: Db): string {
   const year = new Date().getFullYear();
-  return `СЧ-${year}-${String(d.invoices.length + 2001).padStart(6, '0')}`;
+  return nextDocNumber('invoice', { year, n: d.invoices.length + 2001 });
 }
 
 /** Status of an invoice by its payments and due date. */
@@ -254,7 +254,7 @@ export async function activateContract(d: Db, c: Contract, on: string): Promise<
   const list = d.contractInsured.find((x) => x.contractId === c.id)?.rows ?? [];
   list.forEach((r, k) => {
     const person = createInsured(d, client, policy, r, c.params.startDate, 'invited');
-    person.certificateNumber = certificateNumber(c.number, k + 1);
+    person.certificateNumber = certificateNumber(c.number, k + 1, numbering());
     person.contractId = c.id;
     d.smsOutbox.unshift({ at: tzIso(Date.now()), insuredId: person.id, text: `Вы застрахованы по ДМС. Сертификат ${person.certificateNumber}. Скачайте приложение MIG ДМС.` });
   });
@@ -326,7 +326,7 @@ export function endorsementSummary(e: Endorsement): EndorsementSummary {
 }
 
 export function nextEndorsementNumber(d: Db, c: Contract): string {
-  return endorsementNumber(d.endorsements.filter((e) => e.contractId === c.id).length + 1, c.number);
+  return endorsementNumber(d.endorsements.filter((e) => e.contractId === c.id).length + 1, c.number, numbering());
 }
 
 export function createEndorsement(d: Db, c: Contract, requests: ChangeRequestRow[], kind: 'changes' | 'termination', terminationDate?: string): Endorsement {
@@ -381,7 +381,7 @@ export async function applyEndorsement(d: Db, e: Endorsement, signedOn: string):
     d.invoices.unshift(inv);
     e.invoiceId = inv.id;
   } else if (e.total < 0) {
-    e.refundDocument = `ВЗ-${e.number.replace(/\s.*$/, '')}-${c.number.slice(-6)}`;
+    e.refundDocument = nextDocNumber('refund', { ref: e.number, n: d.endorsements.filter((x) => x.refundDocument).length + 1 });
   }
   d.documents.unshift({ id: randomId(), clientId: c.clientId, title: `Дополнительное соглашение ${e.number}`, kind: 'endorsement', createdAt: signedOn });
   for (const r of d.changeRequests.filter((x) => e.changeRequestIds.includes(x.id))) {
@@ -390,7 +390,7 @@ export async function applyEndorsement(d: Db, e: Endorsement, signedOn: string):
       // Coverage from the signing of the endorsement (parameter coverageStartRule).
       const person = createInsured(d, client, policy, r.newPerson, signedOn, 'invited');
       person.contractId = c.id;
-      person.certificateNumber = certificateNumber(c.number, d.insured.filter((i) => i.contractId === c.id).length);
+      person.certificateNumber = certificateNumber(c.number, d.insured.filter((i) => i.contractId === c.id).length, numbering());
       r.insuredId = person.id;
       await notifyAssistance(d, policy.assistanceId ?? null, 'insured.added', person.id);
     }

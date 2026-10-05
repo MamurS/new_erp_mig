@@ -33,12 +33,12 @@ import {
 } from '@/shared/schemas/forms';
 import { detectMime } from '@/shared/lib/image';
 import { db, type ChangeRequestRow, type Db } from '../db';
-import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
+import { API, audit, body, byLegalForm, byLegalName, conflict, type Ctx, filterLegalForm, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { tzIso } from '../time';
 import { toClient } from '../views';
 import { parsePolicyList } from '../policy-core';
-import { dmsParam } from '../params';
+import { dmsParam, numbering } from '../params';
 import { assistanceName } from '../assistance-core';
 import {
   afterSigning,
@@ -410,7 +410,8 @@ function invoiceView(d: Db, i: ReturnType<typeof refreshInvoice>): InvoiceView {
   const client = d.clients.find((c) => c.id === i.clientId);
   return {
     ...i,
-    clientName: client ? `${client.legalForm} «${client.name}»` : '—',
+    clientName: client?.name ?? '—',
+    clientLegalForm: client?.legalForm,
     clientInn: client?.inn,
     contractNumber: i.contractId ? d.contracts.find((c) => c.id === i.contractId)?.number : undefined,
     endorsementNumber: i.endorsementId ? d.endorsements.find((e) => e.id === i.endorsementId)?.number : undefined,
@@ -456,15 +457,18 @@ function bankPaymentView(d: Db, b: BankPayment): BankPaymentView {
   const m = b.status === 'pending' ? matchPayment({ amount: remaining, payerInn: b.payerInn, purpose: b.purpose }, all) : undefined;
   // A queued payment is never allocated automatically: an exact match found later is offered as a candidate.
   const cands = !m ? [] : m.kind === 'manual' ? m.candidates : [{ invoiceId: m.invoiceId, why: m.by }];
+  // The payer as known by its INN (a client), else as written in the statement.
+  const payer = d.clients.find((c) => c.inn === b.payerInn);
   return {
     ...b,
+    ...(payer ? { payerName: payer.name, payerLegalForm: payer.legalForm } : {}),
     remaining,
     candidates: cands.flatMap((c) => {
       const inv = all.find((i) => i.id === c.invoiceId);
       const row = d.invoices.find((i) => i.id === c.invoiceId);
       if (!inv || !row) return [];
       const view = invoiceView(d, row);
-      return [{ invoiceId: inv.id, number: inv.number, clientName: view.clientName, clientInn: inv.clientInn, contractNumber: view.endorsementNumber ?? view.contractNumber, remaining: remainingOf(inv), dueDate: inv.dueDate, why: c.why }];
+      return [{ invoiceId: inv.id, number: inv.number, clientName: view.clientName, clientLegalForm: view.clientLegalForm, clientInn: inv.clientInn, contractNumber: view.endorsementNumber ?? view.contractNumber, remaining: remainingOf(inv), dueDate: inv.dueDate, why: c.why }];
     }),
   };
 }
@@ -500,7 +504,8 @@ function changeRequestView(d: Db, r: ChangeRequestRow): ChangeRequestView {
   return {
     ...toChangeRequest(r),
     contractNumber: c.number,
-    clientName: client ? `${client.legalForm} «${client.name}»` : '—',
+    clientName: client?.name ?? '—',
+    clientLegalForm: client?.legalForm,
     endorsementNumber: r.endorsementId ? d.endorsements.find((e) => e.id === r.endorsementId)?.number : undefined,
   };
 }
@@ -522,7 +527,19 @@ export const contractHandlers = [
       if (status) list = list.filter((c) => status.split(',').includes(c.status));
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((c) => c.clientId === clientId);
-      return list.map((c) => forViewer(user, contractView(d, c)));
+      const views = filterLegalForm(
+        list.map((c) => forViewer(user, contractView(d, c))),
+        url,
+        (c) => c.client.legalForm,
+      );
+      return sortBy(views, url, {
+        number: (c) => c.number,
+        clientName: byLegalName((c) => c.client.name),
+        legalForm: byLegalForm((c) => c.client.legalForm),
+        status: (c) => c.status,
+        startDate: (c) => c.params.startDate,
+        total: (c) => c.params.total,
+      });
     }),
   ),
   http.get(
@@ -557,7 +574,7 @@ export const contractHandlers = [
       const at = tzIso(Date.now());
       const c: Contract = {
         id: randomId(),
-        number: contractNumber(new Date().getFullYear(), d.contractSeq),
+        number: contractNumber(new Date().getFullYear(), d.contractSeq, numbering()),
         dealId: deal.id,
         clientId: client.id,
         clientName: client.name,
@@ -724,7 +741,19 @@ export const contractHandlers = [
       if (contractId) list = list.filter((i) => i.contractId === contractId);
       const status = url.searchParams.get('status');
       if (status) list = list.filter((i) => status.split(',').includes(i.status));
-      return list.map((i) => invoiceView(d, i));
+      const views = filterLegalForm(
+        list.map((i) => invoiceView(d, i)),
+        url,
+        (i) => i.clientLegalForm,
+      );
+      return sortBy(views, url, {
+        number: (i) => i.number,
+        clientName: byLegalName((i) => i.clientName),
+        legalForm: byLegalForm((i) => i.clientLegalForm),
+        amount: (i) => i.amount,
+        dueDate: (i) => i.dueDate,
+        status: (i) => i.status,
+      });
     }),
   ),
   http.post(
@@ -805,7 +834,18 @@ export const contractHandlers = [
       requirePermission(user, 'payments.record');
       const d = db();
       const status = url.searchParams.get('status') === 'allocated' ? 'allocated' : 'pending';
-      return d.bankPayments.filter((b) => b.status === status).map((b) => bankPaymentView(d, b));
+      const views = filterLegalForm(
+        d.bankPayments.filter((b) => b.status === status).map((b) => bankPaymentView(d, b)),
+        url,
+        (b) => b.payerLegalForm,
+      );
+      return sortBy(views, url, {
+        date: (b) => b.date,
+        payerName: byLegalName((b) => b.payerName ?? b.payerInn),
+        legalForm: byLegalForm((b) => b.payerLegalForm),
+        amount: (b) => b.amount,
+        remaining: (b) => b.remaining,
+      });
     }),
   ),
   http.post(
@@ -886,7 +926,11 @@ export const contractHandlers = [
       if (contractId) list = list.filter((r) => r.contractId === contractId);
       const status = url.searchParams.get('status');
       if (status) list = list.filter((r) => status.split(',').includes(r.status));
-      return list.map((r) => changeRequestView(d, r));
+      return filterLegalForm(
+        list.map((r) => changeRequestView(d, r)),
+        url,
+        (r) => r.clientLegalForm,
+      );
     }),
   ),
   http.post(
@@ -931,7 +975,19 @@ export const contractHandlers = [
       } else if (!isStaffRole(user.role) || !can(user, 'contracts.read')) throw forbidden();
       const contractId = url.searchParams.get('contractId');
       if (contractId) list = list.filter((e) => e.contractId === contractId);
-      return list.map((e) => forViewer(user, endorsementView(d, e)));
+      const views = filterLegalForm(
+        list.map((e) => forViewer(user, endorsementView(d, e))),
+        url,
+        (e) => e.clientLegalForm,
+      );
+      return sortBy(views, url, {
+        number: (e) => e.number,
+        clientName: byLegalName((e) => e.clientName),
+        legalForm: byLegalForm((e) => e.clientLegalForm),
+        total: (e) => e.total,
+        status: (e) => e.status,
+        createdAt: (e) => e.createdAt,
+      });
     }),
   ),
   http.get(

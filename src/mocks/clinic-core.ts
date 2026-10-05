@@ -35,7 +35,7 @@ import {
 } from '@/shared/domain/clinics';
 import { signWebhook } from '@/shared/integration/webhook';
 import { db, type ClaimRow, type Db, type InsuredRow, type GuaranteeRow, type WebhookDeliveryRow, type WebhookEndpointRow } from './db';
-import { dmsParam } from './params';
+import { dmsParam, maxDocSeq, nextDocNumber } from './params';
 import { audit, conflict, HttpError, insuredLabel, notFound } from './http';
 import { PROGRAMS } from './programs';
 import { randomId } from './rng';
@@ -147,7 +147,7 @@ export function checkPatient(input: CheckInput, actor: ClinicActor, channel: 'po
     method = channel === 'api' ? 'api' : 'qr';
   } else {
     if (mine.length >= dmsParam('pinflChecksPerHour')) throw tooManyChecks();
-    const policy = d.policies.find((p) => p.number === input.policyNumber);
+    const policy = d.policies.find((p) => p.number.toUpperCase() === input.policyNumber.toUpperCase());
     const person = policy && d.insured.find((i) => i.policyId === policy.id && i.pinfl === input.pinfl && i.status === 'active');
     if (!person) return fail('Полис и ПИНФЛ не совпали', noPolicy(), true);
     d.checkAttempts.push({ userId: actor.id, at: now, ok: true });
@@ -270,6 +270,7 @@ export function toGuaranteeView(d: Db, g: GuaranteeRow): GuaranteeView {
   return {
     ...rest,
     clinicName: d.clinics.find((c) => c.id === g.clinicId)?.name ?? '—',
+    clinicLegalForm: d.clinics.find((c) => c.id === g.clinicId)?.legalForm,
     approvalsNeeded: g.status === 'requested' ? Math.max(0, required - g.approvals.length) : 0,
   };
 }
@@ -366,6 +367,7 @@ export function toRegistrySummary(d: Db, r: Registry): RegistrySummary {
   return {
     ...rest,
     clinicName: clinicOf(d, r.clinicId).name,
+    clinicLegalForm: clinicOf(d, r.clinicId).legalForm,
     lineCount: lines.length,
     pendingCount: lines.filter((l) => l.status === 'pending').length,
     disputedCount: lines.filter((l) => l.status === 'disputed').length,
@@ -410,8 +412,8 @@ export const CATEGORY_TO_CLAIM_OF_SERVICE: Record<ServiceCategory, ClaimCategory
 
 export function nextClaimNumber(d: Db): string {
   const year = new Date().getFullYear();
-  const max = d.claims.reduce((m, c) => Math.max(m, Number(/-(\d+)$/.exec(c.number)?.[1] ?? 0)), 0);
-  return `У-${year}-${String(max + 1).padStart(6, '0')}`;
+  const max = maxDocSeq('claim', d.claims.map((c) => c.number));
+  return nextDocNumber('claim', { year, n: max + 1 });
 }
 
 /** An accepted registry line becomes a claim with the `clinic_invoice` source (CLINIC_SPEC §7). */

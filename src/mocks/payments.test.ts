@@ -55,7 +55,7 @@ function invoice(clientId: string, contractId: string, amount: number, dueInDays
   const inv: Invoice = {
     id: crypto.randomUUID(),
     clientId,
-    number: `СЧ-2026-${String(900 + seq).padStart(6, '0')}`,
+    number: `SCh-2026-${String(900 + seq).padStart(6, '0')}`,
     amount,
     issuedAt: today(),
     dueDate: new Date(Date.now() + dueInDays * 86_400_000).toISOString().slice(0, 10),
