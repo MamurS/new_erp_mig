@@ -7,6 +7,7 @@ import { defineLabels, t } from '@/i18n';
 import { useEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { flushSync } from 'react-dom';
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, FlaskConical, RotateCcw, Search } from 'lucide-react';
@@ -156,9 +157,9 @@ function LoginAsMenu({ busy, onPick }: { busy: boolean; onPick: (a: Account) => 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const list = useRef<HTMLDivElement>(null);
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   const groups = GROUPS.map((g) => ({ ...g, title: GROUP_TITLE[g.id] }))
-    .map((g) => ({ ...g, accounts: g.accounts.filter((a) => !q || `${g.title} ${accountLabel(a)} ${a.login}`.toLowerCase().includes(q)) }))
+    .map((g) => ({ ...g, accounts: g.accounts.filter((a) => matchesSearch(q, g.title, accountLabel(a), a.login)) }))
     .filter((g) => g.accounts.length > 0);
   const items = () => Array.from(list.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
   const move = (from: HTMLElement | null, step: number) => {

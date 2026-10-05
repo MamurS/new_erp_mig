@@ -123,8 +123,9 @@ export default tseslint.config(
       // Developer documentation and sample payloads of the clinic integration API.
       'src/shared/integration/openapi.ts',
       'src/shared/integration/sandbox.ts',
-      // Reference data: the medical services catalogue.
+      // Reference data: the medical services catalogue, legal forms with their labels in three languages.
       'src/features/coverage/catalog.ts',
+      'src/shared/config/legalForms.ts',
     ],
     plugins: { mig: migPlugin },
     rules: { 'mig/no-cyrillic-ui': 'error' },

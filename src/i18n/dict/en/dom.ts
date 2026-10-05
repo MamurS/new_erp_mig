@@ -74,4 +74,6 @@ export const dom: Translation<typeof Ru> = {
   'dom.limits.fourEyes': 'Confirmation by another employee is required',
   'dom.quote.discountAboveAuthority': 'A {pct} discount exceeds your authority limit ({max})',
   'dom.quote.premiumAboveAuthority': 'The premium exceeds your authority limit',
+  'dom.numbering.chars': 'Latin letters, digits, “-” and “/” and placeholders in braces only',
+  'dom.numbering.missing': 'The template lacks a required placeholder: {required}',
 };

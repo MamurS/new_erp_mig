@@ -45,4 +45,8 @@ export const shell: Translation<typeof Ru> = {
   'shell.sidePanel.label': 'Tafsilotlar',
   'shell.sidePanel.close': 'Panelni yopish',
   'shell.toast.close': 'Bildirishnomani yopish',
+  'shell.table.filterBy': 'Filtr: {label}',
+  'shell.table.clearFilter': 'Filtrni tozalash',
+  'shell.legalForm.column': 'Shakl',
+  'shell.legalForm.aria': 'Tashkiliy-huquqiy shakl: {form}',
 };

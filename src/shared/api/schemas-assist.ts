@@ -1,5 +1,6 @@
 /* Response schemas of the assistance portal (/api/assist/...) and of the MIG assistance screens. */
 import { z } from 'zod';
+import { LEGAL_FORMS } from '@/shared/config/legalForms';
 import type * as D from '@/shared/types/dto';
 import type * as T from '@/shared/types';
 import * as I from '@/shared/integration/schemas';
@@ -26,6 +27,7 @@ const brief = z.object({ id: uuid, name: z.string(), phone24x7: z.string(), inte
 export const assistanceBrief: z.ZodType<D.AssistanceBrief> = brief;
 export const myAssistance: z.ZodType<{ assistance: D.AssistanceBrief | null }> = z.object({ assistance: brief.nullable() });
 export const assistanceCompany: z.ZodType<T.AssistanceCompany> = brief.extend({
+  legalForm: z.enum(LEGAL_FORMS),
   contract: z.object({
     number: z.string(),
     validFrom: isoDate,

@@ -1,3 +1,4 @@
+import type { LegalFormCode } from '@/shared/config/legalForms';
 export type UUID = string;
 export type ISODate = string;      // '2026-09-29'
 export type ISODateTime = string;  // '2026-09-29T14:21:00+05:00'
@@ -41,8 +42,8 @@ export type ClientStatus = 'lead' | 'draft' | 'negotiation' | 'active' | 'renewa
 
 export interface Client {
   id: UUID;
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API contract
-  legalForm: 'ООО' | 'АО' | 'СП ООО' | 'ЧП';
+  /** Code of the legal form (src/shared/config/legalForms.ts); `name` is the official Latin name without it. */
+  legalForm: LegalFormCode;
   name: string;
   inn: string;                             // 9 цифр, не ПДн
   status: ClientStatus;
@@ -316,7 +317,9 @@ export interface Appointment {
 
 export interface Clinic {
   id: UUID;
+  /** Official Latin name without the legal form and without quotes. */
   name: string;
+  legalForm: LegalFormCode;
   address: string;
   district: string;
   specialties: Specialty[];
@@ -707,7 +710,9 @@ export interface AssistanceKpi {
 
 export interface AssistanceCompany {
   id: UUID;
+  /** Official Latin name without the legal form and without quotes. */
   name: string;
+  legalForm: LegalFormCode;
   phone24x7: string;                       // показывается застрахованным
   integrationMode: IntegrationModeOf;
   contract: {
@@ -1072,7 +1077,9 @@ export interface BankPayment {
   date: ISODate;
   amount: Money;
   payerInn: string;
+  /** Payer as known by its INN (a client), else as written in the statement. */
   payerName?: string;
+  payerLegalForm?: LegalFormCode;
   purpose: string;
   reason: PaymentQueueReason;
   importedAt: ISODateTime;

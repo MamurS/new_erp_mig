@@ -1,3 +1,4 @@
+import { LEGAL_FORMS } from '@/shared/config/legalForms';
 /*
  * Form schemas. The same schemas validate request bodies in the mock server (CLAUDE.md rule 8).
  * Every string is trimmed and length-limited; inputs are normalised (phones, dates, digits).
@@ -135,8 +136,7 @@ export const makeKpParamsSchema = (today: () => string = () => todayISO()) =>
     });
 export const kpParamsSchema = makeKpParamsSchema();
 export const clientCreateSchema = z.object({
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
-  legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
+  legalForm: z.enum(LEGAL_FORMS),
   name: text(2, 120),
   inn: z
     .string()
@@ -403,8 +403,7 @@ export const requisitesSchema = z.object({
   address: z.string().trim().max(200, msg('v.tooLong', { max: 200 })).optional(),
 });
 export const leadCreateSchema = z.object({
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
-  legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
+  legalForm: z.enum(LEGAL_FORMS),
   name: text(2, 120),
   inn: innInput,
   requisites: requisitesSchema,

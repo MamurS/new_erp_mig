@@ -6,7 +6,7 @@ import { can } from '@/shared/auth/permissions';
 import { CLAIM_CATEGORY_LABEL } from '@/shared/domain/claims';
 import { formatMoney } from '@/shared/lib/format';
 import { db, hasLiveKp, type ClientRow } from '../db';
-import { API, body, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
+import { API, body, byLegalForm, byLegalName, filterLegalForm, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { parseIso, tzIso } from '../time';
 import { toClient, toInsuredListItem } from '../views';
@@ -37,6 +37,7 @@ export const clientHandlers = [
       if (program) list = list.filter((c) => c.program && program.split(',').includes(c.program));
       const managerId = url.searchParams.get('managerId');
       if (managerId) list = list.filter((c) => c.managerId === managerId);
+      list = filterLegalForm(list, url, (c) => c.legalForm);
       const view = url.searchParams.get('view');
       if (view === 'mine') list = list.filter((c) => c.managerId === user.id);
       if (view === 'q4') {
@@ -53,7 +54,8 @@ export const clientHandlers = [
         mapped,
         url,
         {
-          name: (c) => c.name,
+          name: byLegalName((c) => c.name),
+          legalForm: byLegalForm((c) => c.legalForm),
           program: (c) => c.program ?? '',
           insuredCount: (c) => c.insuredCount,
           premium: (c) => c.premium,

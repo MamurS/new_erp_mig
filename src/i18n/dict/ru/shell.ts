@@ -43,4 +43,8 @@ export const shell = {
   'shell.sidePanel.label': 'Детали',
   'shell.sidePanel.close': 'Закрыть панель',
   'shell.toast.close': 'Закрыть уведомление',
+  'shell.table.filterBy': 'Фильтр: {label}',
+  'shell.table.clearFilter': 'Сбросить фильтр',
+  'shell.legalForm.column': 'Форма',
+  'shell.legalForm.aria': 'Организационно-правовая форма: {form}',
 } satisfies Record<string, string>;

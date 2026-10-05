@@ -1,3 +1,4 @@
+import { LEGAL_FORMS } from '@/shared/config/legalForms';
 /* Runtime validation of API responses at the client boundary (SPEC §9.1). */
 import { z } from 'zod';
 import { QUEUE_TYPES } from '@/shared/domain/queue';
@@ -56,8 +57,7 @@ export const program: z.ZodType<T.Program> = z.object({ code: programCode, name:
 
 export const client: z.ZodType<T.Client> = z.object({
   id: uuid,
-  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
-  legalForm: z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']),
+  legalForm: z.enum(LEGAL_FORMS),
   name: z.string(),
   inn: z.string(),
   status: z.enum(['lead', 'draft', 'negotiation', 'active', 'renewal', 'expired']),
@@ -371,6 +371,7 @@ export const appointments = z.array(appointment);
 export const clinic: z.ZodType<T.Clinic> = z.object({
   id: uuid,
   name: z.string(),
+  legalForm: z.enum(LEGAL_FORMS),
   address: z.string(),
   district: z.string(),
   specialties: z.array(specialty),
@@ -676,8 +677,7 @@ export const idResult = z.object({ id: uuid });
 export const inviteResult = z.object({ invited: z.number() });
 
 // ---- commercial offers ----
-// eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API
-const legalForm = z.enum(['ООО', 'АО', 'СП ООО', 'ЧП']);
+const legalForm = z.enum(LEGAL_FORMS);
 export const kpParams: z.ZodType<T.KpParams> = z.object({
   templateId: z.literal('gold'),
   lang: z.enum(['ru', 'en']),
