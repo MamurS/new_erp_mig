@@ -14,6 +14,7 @@ export {
   intlLocale,
   msg,
   setLocale,
+  subscribeLocale,
   t,
   tKey,
   tm,

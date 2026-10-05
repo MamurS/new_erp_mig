@@ -45,8 +45,37 @@ export function getLocale(): Locale {
   return current;
 }
 
+const supported = new Map<string, boolean>();
+const SAMPLE = new Date(Date.UTC(2026, 0, 15, 12));
+/**
+ * Whether this browser's Intl really has data for the locale. Some Chromium builds list Uzbek as
+ * supported but format it with the root data (`2026-01-15`, `yesterday`): compare with the root locale.
+ */
+export function intlSupports(tag: string, api: 'date' | 'relative' = 'date'): boolean {
+  const k = `${api}:${tag}`;
+  let v = supported.get(k);
+  if (v === undefined && tag.startsWith('en')) v = true; // the root data is English
+  if (v === undefined) {
+    if (api === 'date') {
+      // Root data formats a numeric date as ISO (2026-01-15) and groups numbers with commas.
+      const d = new Intl.DateTimeFormat(tag, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(SAMPLE);
+      v = Intl.DateTimeFormat.supportedLocalesOf([tag]).length > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(d);
+    } else {
+      const f = (l: string) => new Intl.RelativeTimeFormat(l, { numeric: 'auto' }).format(-1, 'day');
+      v = Intl.RelativeTimeFormat.supportedLocalesOf([tag]).length > 0 && f(tag) !== f('und');
+    }
+    supported.set(k, v);
+  }
+  return v;
+}
+
+/**
+ * Locale tag for Intl dates and numbers. Without Uzbek data in the browser, Uzbek interface uses the
+ * Russian patterns (dd.mm.yyyy, space-grouped numbers), which are also the ones used in Uzbekistan.
+ */
 export function intlLocale(locale: Locale = current): string {
-  return INTL_LOCALE[locale];
+  const tag = INTL_LOCALE[locale];
+  return locale === 'uz-Latn' && !intlSupports(tag) ? INTL_LOCALE.ru : tag;
 }
 
 export function setLocale(locale: Locale): void {

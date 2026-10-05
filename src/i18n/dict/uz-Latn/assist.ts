@@ -151,7 +151,7 @@ export const assist: Translation<typeof Ru> = {
   'assist.registry.markPaid': 'Toʻlovni belgilash',
   'assist.registry.paidAt': 'Toʻlov sanasi',
   'assist.registry.orderNumber': 'Toʻlov topshiriqnomasi raqami',
-  'assist.registry.orderPlaceholder': 'TT-10452',
+  'assist.registry.orderPlaceholder': 'ToT-10452',
   'assist.registry.docTitle': 'Klinika reyestri',
   'assist.registry.crumb': 'Reyestr',
   'assist.registry.lineAccepted': 'Qator qabul qilindi: limitdan yechildi',

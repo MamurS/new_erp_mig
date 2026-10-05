@@ -1,5 +1,6 @@
 import type { ISODate, ISODateTime, Money } from '@/shared/types';
-import { intlLocale, t } from '@/i18n/core';
+import { getLocale, intlLocale, intlSupports, t, tp } from '@/i18n/core';
+import { INTL_LOCALE } from '@/i18n/locales';
 
 export const TZ = 'Asia/Tashkent';
 const DAY_MS = 86_400_000;
@@ -95,14 +96,6 @@ export function formatDateTime(value: ISODateTime | Date): string {
   );
 }
 
-/** `сентябрь 2026` — month and year in the interface language. */
-export function formatMonth(value: ISODate | Date): string {
-  return cached(
-    `m:${intlLocale()}`,
-    () => new Intl.DateTimeFormat(intlLocale(), { timeZone: TZ, month: 'long', year: 'numeric' }),
-  ).format(toDate(value));
-}
-
 /** Documents keep their own fixed formats, whatever the interface language: `29.09.2026`. */
 export function formatDateDoc(value: ISODate | ISODateTime | Date): string {
   const p = tashkentParts(toDate(value));
@@ -134,11 +127,19 @@ export function daysUntil(value: ISODate | ISODateTime, now: Date = new Date()):
 
 /** «через 16 дн.», «сегодня», «вчера» — Intl.RelativeTimeFormat in the interface language. */
 export function formatRelativeDays(value: ISODate | ISODateTime, now: Date = new Date()): string {
+  const days = daysUntil(value, now);
+  // Without Intl data for the language (Uzbek in some Chromium builds) the words come from the dictionary.
+  if (!intlSupports(INTL_LOCALE[getLocale()], 'relative')) {
+    if (days === 0) return t('fmt.rel.today');
+    if (days === 1) return t('fmt.rel.tomorrow');
+    if (days === -1) return t('fmt.rel.yesterday');
+    return days > 0 ? tp('fmt.rel.in', days) : tp('fmt.rel.ago', -days);
+  }
   const f = cached(
     `r:${intlLocale()}`,
     () => new Intl.RelativeTimeFormat(intlLocale(), { numeric: 'auto', style: 'short' }),
   );
-  return f.format(daysUntil(value, now), 'day').replace(/[\u202f\u00a0]/g, ' ');
+  return f.format(days, 'day').replace(/[\u202f\u00a0]/g, ' ');
 }
 
 /** Adds days to an ISO date. */
