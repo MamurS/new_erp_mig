@@ -1,16 +1,14 @@
-import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LogOut, Search, ShieldCheck } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
+import { Search, ShieldCheck } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
-import { cn } from '@/shared/lib/cn';
-import { Avatar } from '@/shared/ui/chips';
+import { useDashboard } from '@/shared/api/queries/staff';
+import { AppSidebar, SidebarBurger, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Breadcrumbs } from '@/shared/ui/page';
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '@/shared/ui/dropdown';
-import { Tooltip } from '@/shared/ui/tooltip';
-import { STAFF_SECTIONS } from './nav';
+import { QUEUE_NAV, STAFF_NAV_GROUPS, STAFF_SECTIONS } from './nav';
 import { CommandPalette } from './CommandPalette';
 import { useTopbarState } from './topbar';
 
@@ -18,7 +16,10 @@ export default function StaffLayout() {
   const user = useUser();
   const loc = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const mobileId = useId();
   const { crumbs, action } = useTopbarState();
+  const dashboard = useDashboard();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -33,60 +34,39 @@ export default function StaffLayout() {
 
   if (!user) return null;
   const sections = STAFF_SECTIONS.filter((s) => s.inNav && (s.roles as string[]).includes(user.role));
-  // The longest matching section wins: «Резервы» lives under «Отчёты».
-  const current = sections.filter((s) => (s.path === '/staff' ? loc.pathname === '/staff' : loc.pathname.startsWith(s.path))).sort((a, b) => b.path.length - a.path.length)[0]?.path;
+  // The longest matching section wins: «Резервы» lives under «Отчёты», «Ручная разноска» under «Счета».
+  const current = sections.filter((s) => (s.path === '/staff' ? loc.pathname === '/staff' : loc.pathname === s.path || loc.pathname.startsWith(`${s.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]?.path;
+  const counts = new Map<string, number>();
+  for (const t of dashboard.data?.queueTypes ?? []) {
+    const path = QUEUE_NAV[t.type];
+    if (path) counts.set(path, (counts.get(path) ?? 0) + t.count);
+  }
+  if (dashboard.data) counts.set('/staff', dashboard.data.queueCount);
+  // Only groups with at least one section the role may open.
+  const groups: SidebarGroup[] = STAFF_NAV_GROUPS.map((g) => ({
+    label: g,
+    items: sections.filter((s) => s.group === g).map((s) => ({ path: s.path, label: s.label, icon: s.icon, count: counts.get(s.path) })),
+  })).filter((g) => g.items.length > 0);
   const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
 
   return (
     <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]">
-      <nav
-        aria-label="Разделы портала"
-        className="sticky top-[var(--banner-h,0px)] flex h-[calc(100vh-var(--banner-h,0px))] w-[60px] shrink-0 flex-col items-center gap-1 border-r border-border bg-rail py-3"
-      >
-        <NavLink to="/staff" end aria-label="MIG ДМС — рабочий стол" className="mb-3 flex h-9 w-9 items-center justify-center rounded-btn bg-accent text-white">
-          <ShieldCheck className="h-5 w-5" aria-hidden />
-        </NavLink>
-        {sections.map((s) => {
-          const active = s.path === current;
-          return (
-            <Tooltip key={s.path} content={s.label} side="right">
-              <NavLink
-                to={s.path}
-                end={s.path === '/staff'}
-                aria-label={s.label}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-btn text-muted hover:bg-surface hover:text-text',
-                  active && 'bg-surface text-accent shadow-sm ring-1 ring-border',
-                )}
-              >
-                <s.icon className="h-[18px] w-[18px]" aria-hidden />
-              </NavLink>
-            </Tooltip>
-          );
-        })}
-        <div className="mt-auto">
-          <Menu>
-            <MenuTrigger asChild>
-              <button type="button" aria-label="Профиль и выход" className="rounded-full">
-                <Avatar name={user.displayName} className="h-9 w-9" />
-              </button>
-            </MenuTrigger>
-            <MenuContent align="start">
-              <MenuLabel>
-                <span className="block font-semibold text-text">{user.displayName}</span>
-                {ROLE_LABEL[user.role]}
-              </MenuLabel>
-              <MenuSeparator />
-              <MenuItem onSelect={() => void logout()}>
-                <LogOut className="h-4 w-4" aria-hidden /> Выйти
-              </MenuItem>
-            </MenuContent>
-          </Menu>
-        </div>
-      </nav>
+      <AppSidebar
+        portal="staff"
+        theme="staff"
+        ariaLabel="Разделы портала"
+        brand={{ to: '/staff', label: 'MIG ДМС — рабочий стол', title: 'MIG ДМС', subtitle: 'Портал сотрудников', icon: ShieldCheck }}
+        groups={groups}
+        activePath={current}
+        user={{ name: user.displayName, role: ROLE_LABEL[user.role] }}
+        onLogout={() => void logout()}
+        mobileOpen={menuOpen}
+        onMobileOpenChange={setMenuOpen}
+        mobileId={mobileId}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-[var(--banner-h,0px)] z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+        <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <SidebarBurger onClick={() => setMenuOpen(true)} controls={mobileId} expanded={menuOpen} />
           <div className="min-w-0 flex-1">
             <Breadcrumbs items={crumbs.length ? crumbs : [{ label: 'Портал сотрудников' }]} />
           </div>
@@ -98,7 +78,7 @@ export default function StaffLayout() {
           >
             <Search className="h-3.5 w-3.5" aria-hidden />
             <span className="flex-1 text-left">Поиск</span>
-            <kbd className="rounded border border-border px-1 text-[10px]">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+            <kbd className="rounded-sm border border-border px-1 text-[10px]">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
           </button>
           <button type="button" onClick={() => setPaletteOpen(true)} className="rounded-btn p-2 text-muted md:hidden" aria-label="Открыть поиск">
             <Search className="h-4 w-4" />

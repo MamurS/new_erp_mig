@@ -196,7 +196,7 @@ export default function ClaimStatusPage() {
                   <span
                     aria-hidden
                     className={cn(
-                      'relative z-[1] mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2',
+                      'relative z-1 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2',
                       s.done ? 'border-accent bg-accent text-white' : 'border-border bg-surface',
                     )}
                   >

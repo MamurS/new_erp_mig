@@ -125,7 +125,7 @@ export default function ClaimCardPage() {
           <ol className="flex flex-col gap-3 border-l border-border pl-3">
             {[...c.history].reverse().map((h, i) => (
               <li key={i} className="relative">
-                <span className={cn('absolute -left-[17px] top-1 h-2 w-2 rounded-full', i === 0 ? 'bg-accent' : 'bg-border')} aria-hidden />
+                <span className={cn('absolute left-[-17px] top-1 h-2 w-2 rounded-full', i === 0 ? 'bg-accent' : 'bg-border')} aria-hidden />
                 <div className="font-medium">
                   {h.from ? `${CLAIM_STATUS_LABEL[h.from]} → ` : ''}
                   {CLAIM_STATUS_LABEL[h.to]}
@@ -226,7 +226,7 @@ function AttachmentThumb({ a }: { a: Attachment }) {
   return (
     <li>
       <button type="button" onClick={() => setOpen(true)} className="flex w-full flex-col gap-1 rounded-btn border border-border p-1.5 text-left hover:bg-rail" aria-label={`Открыть вложение ${a.fileName}`}>
-        <span className="flex h-24 items-center justify-center overflow-hidden rounded bg-rail">
+        <span className="flex h-24 items-center justify-center overflow-hidden rounded-sm bg-rail">
           {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <FileImage className={cn('h-6 w-6', error ? 'text-danger' : 'text-muted')} aria-hidden />}
         </span>
         <span className="truncate text-[12px]">{a.fileName}</span>

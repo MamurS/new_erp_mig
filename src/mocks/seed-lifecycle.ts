@@ -118,7 +118,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       updatedAt: at(daysAgo),
     };
     d.quotes.push(q);
-    event(deal.id, daysAgo, underwriter.fullName, status === 'pending_approval' ? `Котировка на согласовании: скидка ${Math.round(q.discountFromTariffPct * 100)}%` : `Котировка утверждена: ${PROGRAMS[program].name}`);
+    event(deal.id, daysAgo, underwriter.fullName, status === 'pending_approval' ? `Котировка на согласовании: скидка ${Math.round(q.discountFromTariffPct * 100)}%` : status === 'draft' ? `Черновик котировки: ${PROGRAMS[program].name}` : `Котировка утверждена: ${PROGRAMS[program].name}`);
     return q;
   };
   const withKp = (deal: Deal, client: ClientRow, q: Quote, c: Census, status: KpDocument['status'], daysAgo: number): KpDocument => {
@@ -206,7 +206,14 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   };
 
   // ---- 2 leads ----
-  LEADS.forEach((l, k) => newDeal(newClient(l, 'lead', 80 + k * 70, 6 - k * 3), 'lead', 6 - k * 3));
+  // The first lead has had no activity for a while (the manager's queue); the second is being quoted.
+  newDeal(newClient(LEADS[0]!, 'lead', 80, 12), 'lead', 12);
+  {
+    const client = newClient(LEADS[1]!, 'lead', 150, 6);
+    const deal = newDeal(client, 'quote', 6);
+    const c = withCensus(deal, 148, 4);
+    withQuote(deal, c, 'basic', [], 'draft', 1);
+  }
 
   // ---- deal 1: the quote waits for approval (discount above the underwriter's 10%) ----
   {
@@ -449,6 +456,29 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const r3 = request('add_insured', recent[1].id, recent[1].insuredFrom, 'pending', `Включение: ${short(recent[1].fullName)} (${recent[1].position})`);
     endorsement(2, [r2, r3], 'signing', 3);
   }
+  // ДС-3: an individual change («прочее») with a changed clause — the lawyer reviews it, the underwriter approves the amount.
+  {
+    const r4: ChangeRequestRow = {
+      id: id(),
+      contractId: demoContract.id,
+      type: 'other',
+      effectiveDate: isoDay(now - 2 * DAY),
+      payload: { amount: 1_200_000, description: 'Расширение покрытия: стоматология для руководителей' },
+      requestedBy: { id: sales.id, role: 'sales_manager', name: sales.fullName },
+      status: 'included',
+      createdAt: at(4),
+      description: 'Расширение покрытия: стоматология для руководителей',
+    };
+    d.changeRequests.push(r4);
+    const e3 = endorsement(3, [], 'legal_review', 2);
+    e3.changeRequestIds = [r4.id];
+    e3.lines = [{ changeRequestId: r4.id, description: r4.description!, days: 0, amount: 1_200_000, formula: 'Сумма по согласованию (утверждает андеррайтер)' }];
+    e3.total = 1_200_000;
+    e3.signing = { paperOriginal: { required: false } };
+    const clause = DOC_TEMPLATES.endorsement.sections.flatMap((s) => s.clauses)[0];
+    if (clause) e3.clauseOverrides = [{ clauseId: clause.id, original: clause.text, text: `${clause.text} Изменение распространяется только на руководителей подразделений.`, byId: sales.id, byName: sales.fullName, at: at(2) }];
+    r4.endorsementId = e3.id;
+  }
   // Requests of this month not yet in an endorsement.
   const leaver2 = leavers[9];
   if (leaver2 && recent[2]) {
@@ -571,5 +601,16 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       params: { maxPerMonth: DMS_DEFAULTS.fraudMaxClaimsPerMonth, priceExcessShare: DMS_DEFAULTS.fraudPriceExcessShare, daysBeforeExclusion: DMS_DEFAULTS.fraudDaysBeforeExclusion },
     });
     c.flags = found.map((f) => ({ id: id(), ...f }));
+  }
+
+  // Changes proposed by the second administrator: the first one confirms them (four eyes).
+  const admin2 = d.staff.find((x) => x.email === 'admin2@demo.mig.uz');
+  const uw2 = d.staff.find((x) => x.role === 'underwriter' && x.email !== underwriter.email && x.email !== head.email);
+  if (admin2) {
+    d.dmsParams.changes.push({ id: id(), key: 'limitLowShare', from: DMS_DEFAULTS.limitLowShare, to: 0.25, reason: 'Предупреждать о лимите на исходе раньше', status: 'pending', proposedById: admin2.id, proposedByName: admin2.fullName, proposedAt: at(1) });
+    if (uw2) {
+      const from = { authority: uw2.authority ?? {} };
+      d.authorityChanges.push({ id: id(), staffId: uw2.id, staffName: uw2.fullName, from, to: { authority: { ...from.authority, quoteDiscountMaxPct: 0.12 } }, reason: 'Расширение полномочий после аттестации', status: 'pending', proposedById: admin2.id, proposedByName: admin2.fullName, proposedAt: at(1) });
+    }
   }
 }

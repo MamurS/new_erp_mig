@@ -36,7 +36,8 @@ test('parameters: admin proposes, underwriter confirms, operator only reads, aud
   const pending = page.getByTestId('pending-params');
   await expect(pending).toContainText('Доля контрольной выборки: 5% → 8%');
   await expect(pending.getByText('Нужен второй сотрудник')).toBeVisible();
-  await expect(pending.getByRole('button', { name: /^Подтвердить/ })).toHaveCount(0);
+  // The seed also has a change proposed by the second administrator; the author's own one has no «Подтвердить».
+  await expect(pending.getByRole('button', { name: 'Подтвердить: Доля контрольной выборки' })).toHaveCount(0);
   await expect(row.getByTestId('param-value')).toHaveText('5%');
   await expect(row.getByText('на подтверждении')).toBeVisible();
 

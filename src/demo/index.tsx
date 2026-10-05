@@ -67,7 +67,7 @@ function DemoBanner() {
   return (
     <div
       data-theme="staff"
-      className="sticky top-0 z-[45] flex h-9 items-center justify-between gap-2 border-b border-warning/40 bg-warning-soft px-3 text-[12px] text-warning-text"
+      className="sticky top-0 z-45 flex h-9 items-center justify-between gap-2 border-b border-warning/40 bg-warning-soft px-3 text-[12px] text-warning-text"
       role="region"
       aria-label="Демо-режим"
     >

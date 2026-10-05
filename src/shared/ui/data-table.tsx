@@ -161,7 +161,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
                       style={{ height: rowH }}
                       className={cn(
                         'border-b border-border-soft',
-                        interactive && 'cursor-pointer hover:bg-rail/60 focus-visible:bg-accent-soft focus-visible:outline-none',
+                        interactive && 'cursor-pointer hover:bg-rail/60 focus-visible:bg-accent-soft focus-visible:outline-hidden',
                         p.activeKey === key && 'bg-accent-soft',
                       )}
                     >

@@ -12,7 +12,7 @@ export function Tooltip({ content, children, side = 'top' }: { content: ReactNod
         <T.Content
           side={side}
           sideOffset={6}
-          className="z-[60] max-w-xs rounded-btn bg-text px-2 py-1 text-[12px] text-white shadow"
+          className="z-60 max-w-xs rounded-btn bg-text px-2 py-1 text-[12px] text-white shadow-sm"
         >
           {content}
           <T.Arrow className="fill-text" />

@@ -45,7 +45,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
         className="h-8 w-full rounded-btn border border-border bg-surface pl-7 pr-2 placeholder:text-muted/70"
       />
       {slashFocus && (
-        <kbd className="pointer-events-none absolute right-2 rounded border border-border px-1 text-[10px] text-muted">/</kbd>
+        <kbd className="pointer-events-none absolute right-2 rounded-sm border border-border px-1 text-[10px] text-muted">/</kbd>
       )}
     </label>
   );

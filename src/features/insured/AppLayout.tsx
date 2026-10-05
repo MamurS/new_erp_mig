@@ -21,7 +21,7 @@ export default function AppLayout() {
       </main>
       <nav
         aria-label={t('nav.label')}
-        className="fixed bottom-0 left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+        className="fixed bottom-0 left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm"
       >
         <ul className="grid grid-cols-4">
           {TABS.map(({ to, label, icon: Icon, end }) => (

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, ROLES, HOME } from './helpers';
+import { login, ROLES, HOME, logoutFromSidebar } from './helpers';
 
 test.describe('1. Login with every role, MFA, logout', () => {
   for (const role of ROLES) {
@@ -14,13 +14,13 @@ test.describe('1. Login with every role, MFA, logout', () => {
         await page.evaluate(() => document.fonts.ready.then(() => undefined));
         await page.getByRole('button', { name: 'Выйти', exact: true }).click();
         await expect(page).toHaveURL(/\/app\/login/);
-      } else if (role === 'hr' || role === 'clinic_registrar' || role === 'clinic_admin' || role.startsWith('asst_')) {
+      } else if (role === 'hr' || role === 'clinic_registrar' || role === 'clinic_admin') {
         await page.getByRole('button', { name: 'Меню пользователя' }).click();
         await page.getByRole('menuitem', { name: 'Выйти' }).click();
         await expect(page).toHaveURL(/\/login/);
       } else {
-        await page.getByRole('button', { name: 'Профиль и выход' }).click();
-        await page.getByRole('menuitem', { name: 'Выйти' }).click();
+        // Staff and assistance portals: «Выйти» in the side navigation.
+        await logoutFromSidebar(page);
         await expect(page).toHaveURL(/\/login/);
       }
       // Session is gone: protected pages redirect to login again.
@@ -42,8 +42,7 @@ test.describe('1. Login with every role, MFA, logout', () => {
     const b = await context.newPage();
     await login(a, 'operator');
     await login(b, 'operator');
-    await a.getByRole('button', { name: 'Профиль и выход' }).click();
-    await a.getByRole('menuitem', { name: 'Выйти' }).click();
+    await logoutFromSidebar(a);
     await expect(a).toHaveURL(/\/login/);
     await expect(b).toHaveURL(/\/login/);
     await expect(b.getByText('Вы вышли в другой вкладке')).toBeVisible();

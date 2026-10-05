@@ -30,7 +30,7 @@ export default function HomePage() {
       <PageTitle title="Главная" />
       <Link
         to="/clinic/check"
-        className="mb-5 flex items-center gap-4 rounded-card bg-accent p-5 text-white shadow-sm hover:opacity-95"
+        className="mb-5 flex items-center gap-4 rounded-card bg-accent p-5 text-white shadow-xs hover:opacity-95"
         aria-label="Проверить пациента"
       >
         <ScanLine className="h-10 w-10" aria-hidden />
