@@ -21,15 +21,15 @@ export function LimitsList({ limits }: { limits: LimitUsage[] }) {
         return (
           <li key={l.category} className={cn('rounded-card border p-4', near ? 'border-peach bg-peach/40' : 'border-border bg-surface')}>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="font-bold">{t(`category.${l.category}`)}</span>
-              <span className="text-[13px] text-muted">{t('limit.of', { amount: formatMoney(l.limit) })}</span>
+              <span className="font-bold">{t(`app.category.${l.category}`)}</span>
+              <span className="text-[13px] text-muted">{t('app.limit.of', { amount: formatMoney(l.limit) })}</span>
             </div>
             <p className="mt-1 font-heading text-[18px] font-semibold">
-              {l.used === 0 && reserved === 0 ? t('limit.unused') : t('limit.left', { amount: formatMoney(left) })}
+              {l.used === 0 && reserved === 0 ? t('app.limit.unused') : t('app.limit.left', { amount: formatMoney(left) })}
             </p>
             {reserved > 0 && (
               <p className="text-[13px] text-muted" data-testid={`limit-reserved-${l.category}`}>
-                {t('limit.reserved', { amount: formatMoney(reserved) })}
+                {t('app.limit.reserved', { amount: formatMoney(reserved) })}
               </p>
             )}
             <div
@@ -38,11 +38,11 @@ export function LimitsList({ limits }: { limits: LimitUsage[] }) {
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={pct}
-              aria-label={t(`category.${l.category}`)}
+              aria-label={t(`app.category.${l.category}`)}
             >
               <div className={cn('h-full rounded-full', near ? 'bg-peach-text' : 'bg-accent')} style={{ width: `${pct}%` }} />
             </div>
-            {near && <p className="mt-2 text-[13px] font-semibold text-peach-text">{t('limit.almostOut')}</p>}
+            {near && <p className="mt-2 text-[13px] font-semibold text-peach-text">{t('app.limit.almostOut')}</p>}
           </li>
         );
       })}

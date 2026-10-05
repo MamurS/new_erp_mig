@@ -19,12 +19,13 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { CaseStatus, SlaBadge } from '../components';
 import { BookDialog, RequestGuaranteeDialog } from './InsuredCardPage';
+import { t, tm } from '@/i18n';
 
 export default function CasePage() {
   const { caseId = '' } = useParams();
   const q = useAssistCase(caseId);
-  useDocumentTitle('Обращение');
-  useTopbar([{ label: 'Обращения', to: '/assist/cases' }, { label: q.data?.number ?? 'Обращение' }]);
+  useDocumentTitle(t('assist.case.docTitle'));
+  useTopbar([{ label: t('assist.cases.title'), to: '/assist/cases' }, { label: q.data?.number ?? t('assist.case.docTitle') }]);
   const update = useUpdateCase();
   const canBook = useCan('assist.appointments.manage');
   const [status, setStatus] = useState<AssistanceCase['status'] | ''>('');
@@ -40,13 +41,13 @@ export default function CasePage() {
         const save = async () => {
           const parsed = caseUpdateSchema.safeParse({ status: status || c.status, resolution: resolution || undefined });
           if (!parsed.success) {
-            setError(parsed.error.issues[0]?.message);
+            setError(tm(parsed.error.issues[0]?.message));
             return;
           }
           setError(undefined);
           try {
             await update.mutateAsync({ id: c.id, ...parsed.data });
-            toast.success('Обращение обновлено');
+            toast.success(t('assist.case.updated'));
             setStatus('');
             setResolution('');
           } catch (e) {
@@ -57,25 +58,23 @@ export default function CasePage() {
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="flex flex-col gap-4 lg:col-span-2">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-[22px] font-bold">
-                  Обращение <span className="num">{c.number}</span>
-                </h1>
+                <h1 className="text-[22px] font-bold">{t('assist.case.heading', { number: c.number })}</h1>
                 <CaseStatus status={c.status} />
                 <SlaBadge dueAt={c.slaDueAt} done={c.status === 'resolved'} />
                 {readOnly && (
                   <Chip kind="warning">
-                    <Lock className="h-3 w-3" aria-hidden /> Клиент передан другому ассистансу: только чтение
+                    <Lock className="h-3 w-3" aria-hidden /> {t('assist.case.transferred')}
                   </Chip>
                 )}
               </div>
-              <Card title="Суть">
+              <Card title={t('assist.cases.essence')}>
                 <p className="whitespace-pre-wrap">{c.description}</p>
-                {c.resolution && <p className="mt-3 rounded-btn bg-success-soft px-3 py-2 text-success-text">Решение: {c.resolution}</p>}
+                {c.resolution && <p className="mt-3 rounded-btn bg-success-soft px-3 py-2 text-success-text">{t('assist.case.resolution', { text: c.resolution })}</p>}
               </Card>
               {!readOnly && c.status !== 'resolved' && (
-                <Card title="Работа с обращением">
+                <Card title={t('assist.case.work')}>
                   <div className="flex flex-col gap-3">
-                    <Field label="Статус">
+                    <Field label={t('common.status')}>
                       {(a) => (
                         <Select {...a} value={status || c.status} onChange={(e) => setStatus(e.target.value as AssistanceCase['status'])}>
                           {Object.entries(CASE_STATUS_LABEL).map(([k, v]) => (
@@ -86,21 +85,21 @@ export default function CasePage() {
                         </Select>
                       )}
                     </Field>
-                    <Field label="Решение" error={error} hint="Обязательно при закрытии обращения">
+                    <Field label={t('common.decision')} error={error} hint={t('assist.case.resolutionHint')}>
                       {(a) => <Textarea {...a} rows={3} maxLength={1000} value={resolution} onChange={(e) => setResolution(e.target.value)} />}
                     </Field>
                     <div className="flex flex-wrap gap-2">
                       <Button loading={update.isPending} onClick={() => void save()}>
-                        Сохранить
+                        {t('common.save')}
                       </Button>
                       {c.type === 'guarantee' && !c.links.guaranteeId && (
                         <Button variant="secondary" onClick={() => setRequesting(true)}>
-                          Запросить ГП
+                          {t('assist.case.requestGuarantee')}
                         </Button>
                       )}
                       {canBook && c.type === 'appointment' && !c.links.appointmentId && (
                         <Button variant="secondary" onClick={() => setBooking(true)}>
-                          Записать к врачу
+                          {t('assist.case.book')}
                         </Button>
                       )}
                     </div>
@@ -108,27 +107,27 @@ export default function CasePage() {
                 </Card>
               )}
             </div>
-            <Card title="Детали">
+            <Card title={t('assist.case.details')}>
               <dl className="divide-y divide-border-soft">
-                <Kv label="Тип">{CASE_TYPE_LABEL[c.type]}</Kv>
-                <Kv label="Канал">{CASE_CHANNEL_LABEL[c.channel]}</Kv>
-                <Kv label="Застрахованный">
+                <Kv label={t('common.type')}>{CASE_TYPE_LABEL[c.type]}</Kv>
+                <Kv label={t('assist.cases.channel')}>{CASE_CHANNEL_LABEL[c.channel]}</Kv>
+                <Kv label={t('common.insured')}>
                   <Link className="text-accent-text hover:underline" to={`/assist/insured/${c.insuredId}`}>
                     {c.insuredName}
                   </Link>
                 </Kv>
-                <Kv label="Создано">
+                <Kv label={t('common.created')}>
                   <span className="num">{formatDateTime(c.createdAt)}</span>
                 </Kv>
-                <Kv label="SLA до">
+                <Kv label={t('assist.case.slaUntil')}>
                   <span className="num">{formatDateTime(c.slaDueAt)}</span>
                 </Kv>
-                {c.links.appointmentId && <Kv label="Запись">создана, ждёт клинику</Kv>}
-                {c.links.claimId && <Kv label="Убыток">создан по счёту ассистанса</Kv>}
+                {c.links.appointmentId && <Kv label={t('assist.case.appointment')}>{t('assist.case.appointmentCreated')}</Kv>}
+                {c.links.claimId && <Kv label={t('assist.case.claim')}>{t('assist.case.claimCreated')}</Kv>}
                 {c.links.guaranteeId && (
-                  <Kv label="ГП">
+                  <Kv label={t('assist.case.guarantee')}>
                     <Link className="text-accent-text hover:underline" to={`/assist/guarantees/${c.links.guaranteeId}`}>
-                      открыть
+                      {t('assist.case.open')}
                     </Link>
                   </Kv>
                 )}

@@ -17,7 +17,7 @@ import type { CodeState } from './PhoneLoginPage';
 
 export default function CodePage() {
   const { t } = useI18n();
-  useDocumentTitle(t('login.code.title'));
+  useDocumentTitle(t('app.login.code.title'));
   const loc = useLocation();
   const navigate = useNavigate();
   const state = loc.state as CodeState | null;
@@ -42,7 +42,7 @@ export default function CodePage() {
       if (!res.user.consentGivenAt) navigate(`/app/consent?next=${encodeURIComponent(target)}`, { replace: true });
       else navigate(target, { replace: true });
     } catch (e) {
-      setError(errorMessage(e) || t('login.code.invalid'));
+      setError(errorMessage(e) || t('app.login.code.invalid'));
       setCode('');
     }
   };
@@ -53,14 +53,14 @@ export default function CodePage() {
       const r = await resend.mutateAsync({ phone: state.phone });
       setChallengeId(r.challengeId);
       setResendAt(Date.now() + r.resendInSec * 1000);
-      toast.success(t('login.code.resent'));
+      toast.success(t('app.login.code.resent'));
     } catch (e) {
       setError(errorMessage(e));
     }
   };
 
   return (
-    <AuthShell title={t('login.code.title')} subtitle={t('login.code.sentTo', { phone: formatPhone(state.phone) })}>
+    <AuthShell title={t('app.login.code.title')} subtitle={t('app.login.code.sentTo', { phone: formatPhone(state.phone) })}>
       {error && <AuthNotice tone="danger">{error}</AuthNotice>}
       <form
         onSubmit={(e) => {
@@ -70,23 +70,23 @@ export default function CodePage() {
         className="flex flex-col gap-5"
       >
         <div className="flex justify-center">
-          <OtpInput value={code} onChange={setCode} onComplete={(v) => void submit(v)} invalid={!!error} large autoFocus groupLabel={t('login.code.group')} digitLabel={(n) => t('login.code.digit', { n })} />
+          <OtpInput value={code} onChange={setCode} onComplete={(v) => void submit(v)} invalid={!!error} large autoFocus groupLabel={t('app.login.code.group')} digitLabel={(n) => t('app.login.code.digit', { n })} />
         </div>
         <Button type="submit" loading={verify.isPending} disabled={code.length !== 6} className={BIG}>
-          {t('login.code.submit')}
+          {t('app.login.code.submit')}
         </Button>
         <div className="flex flex-col items-center gap-1 text-[14px]">
           {left > 0 ? (
             <p className="flex min-h-[44px] items-center text-muted" aria-live="polite">
-              {t('login.code.resendIn', { sec: left })}
+              {t('app.login.code.resendIn', { sec: left })}
             </p>
           ) : (
             <Button variant="link" loading={resend.isPending} onClick={() => void doResend()} className="min-h-[44px] text-[15px] font-semibold">
-              {t('login.code.resend')}
+              {t('app.login.code.resend')}
             </Button>
           )}
           <Button variant="link" onClick={() => navigate('/app/login', { replace: true })} className="min-h-[44px] text-[15px] font-semibold">
-            {t('login.code.changePhone')}
+            {t('app.login.code.changePhone')}
           </Button>
         </div>
       </form>

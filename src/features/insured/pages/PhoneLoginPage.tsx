@@ -23,7 +23,7 @@ export interface CodeState {
 
 export default function PhoneLoginPage() {
   const { t } = useI18n();
-  useDocumentTitle(t('login.title'));
+  useDocumentTitle(t('app.login.title'));
   const session = useSession();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -46,7 +46,7 @@ export default function PhoneLoginPage() {
     setServerError(null);
     const parsed = phoneLoginSchema.safeParse({ phone });
     if (!parsed.success) {
-      setFieldError(t('login.phoneError'));
+      setFieldError(t('app.login.phoneError'));
       inputRef.current?.focus();
       return;
     }
@@ -61,7 +61,7 @@ export default function PhoneLoginPage() {
   };
 
   return (
-    <AuthShell title={t('login.title')} subtitle={t('login.subtitle')}>
+    <AuthShell title={t('app.login.title')} subtitle={t('app.login.subtitle')}>
       {notice && <AuthNotice>{notice}</AuthNotice>}
       {serverError && <AuthNotice tone="danger">{serverError}</AuthNotice>}
       <form
@@ -72,7 +72,7 @@ export default function PhoneLoginPage() {
         }}
         className="flex flex-col gap-5"
       >
-        <Field label={t('login.phone')} error={fieldError ?? undefined}>
+        <Field label={t('app.login.phone')} error={fieldError ?? undefined}>
           {(a) => (
             <MaskedInput
               {...a}
@@ -82,14 +82,14 @@ export default function PhoneLoginPage() {
               value={phone}
               onChange={setPhone}
               onBlur={() => {
-                if (phone.replace(/\D/g, '').length > 3 && !phoneLoginSchema.safeParse({ phone }).success) setFieldError(t('login.phoneError'));
+                if (phone.replace(/\D/g, '').length > 3 && !phoneLoginSchema.safeParse({ phone }).success) setFieldError(t('app.login.phoneError'));
               }}
               className="h-14 text-[20px] font-semibold tracking-wide"
             />
           )}
         </Field>
         <Button type="submit" loading={login.isPending} className={`${BIG} h-14 text-[16px]`}>
-          {t('login.getCode')}
+          {t('app.login.getCode')}
         </Button>
       </form>
       {demo && (

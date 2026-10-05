@@ -1,4 +1,5 @@
 /* Данные для оценки (LIFECYCLE_SPEC §4): anonymous census — gender, birth year and relation only. */
+import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Download } from 'lucide-react';
@@ -28,14 +29,14 @@ export default function CensusPage() {
   const upload = useUploadCensus();
   const canUpload = useCan('census.upload');
   const [result, setResult] = useState<{ errors: { row: number; message: string }[]; dropped: string[] } | null>(null);
-  useDocumentTitle('Данные для оценки');
-  useTopbar([{ label: 'Сделки', to: '/staff/deals' }, { label: q.data?.number ?? 'Сделка', to: `/staff/deals/${dealId}` }, { label: 'Данные для оценки' }]);
+  useDocumentTitle(t('staffLc.census.title'));
+  useTopbar([{ label: t('staffLc.deals.title'), to: '/staff/deals' }, { label: q.data?.number ?? t('staffLc.deal.fallback'), to: `/staff/deals/${dealId}` }, { label: t('staffLc.census.title') }]);
 
   const onText = async (csv: string) => {
     try {
       const r = await upload.mutateAsync({ dealId, csv });
       setResult({ errors: r.errors, dropped: r.dropped });
-      toast.success(`Загружено строк: ${r.census.rows.length}`);
+      toast.success(t('staffLc.census.uploaded', { n: r.census.rows.length }));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -49,37 +50,36 @@ export default function CensusPage() {
         return (
           <>
             <PageHeader
-              title="Данные для оценки"
-              subtitle={`${deal.clientName} · сделка ${deal.number}`}
+              title={t('staffLc.census.title')}
+              subtitle={t('staffLc.census.subtitle', { client: deal.clientName, number: deal.number })}
               actions={
                 <Button variant="secondary" onClick={() => navigate(`/staff/deals/${deal.id}`)}>
-                  К сделке
+                  {t('staffLc.census.toDeal')}
                 </Button>
               }
             />
-            <Card title="Файл">
+            <Card title={t('staffLc.census.file')}>
               <p className="text-[13px] text-muted">
-                CSV в UTF-8 до 1 МБ, колонки: <code>{CENSUS_COLUMNS.join(', ')}</code>. Пол — <code>m</code> или <code>f</code>, тип — <code>employee</code>, <code>spouse</code> или <code>child</code>. Имена, ПИНФЛ и
-                телефоны на этом этапе не принимаются: такие столбцы отбрасываются.
+                {t('staffLc.census.fileHelp', { columns: CENSUS_COLUMNS.join(', ') })}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button variant="secondary" size="sm" onClick={() => downloadText(censusTemplateCsv(), 'census-template.csv')}>
-                  <Download className="h-3.5 w-3.5" aria-hidden /> Скачать шаблон
+                  <Download className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.census.downloadTemplate')}
                 </Button>
-                {canUpload && !closed && <CsvFileButton label={deal.census ? 'Загрузить заново' : 'Загрузить CSV'} ariaLabel="Файл с данными для оценки" busy={upload.isPending} maxBytes={CENSUS_MAX_BYTES} onText={(t) => void onText(t)} />}
+                {canUpload && !closed && <CsvFileButton label={deal.census ? t('staffLc.census.reupload') : t('staffLc.census.uploadCsv')} ariaLabel={t('staffLc.census.fileAria')} busy={upload.isPending} maxBytes={CENSUS_MAX_BYTES} onText={(text) => void onText(text)} />}
               </div>
               {result && result.dropped.length > 0 && (
                 <p role="alert" className="mt-3 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="census-dropped">
-                  Столбцы с персональными данными отброшены и не сохранены: {result.dropped.join(', ')}
+                  {t('staffLc.census.dropped', { columns: result.dropped.join(', ') })}
                 </p>
               )}
               {result && result.errors.length > 0 && (
                 <div className="mt-3 rounded-btn bg-danger-soft px-3 py-2 text-[13px] text-danger-text">
-                  <p className="font-medium">Строки с ошибками пропущены: {result.errors.length}</p>
+                  <p className="font-medium">{t('staffLc.census.errorRows', { n: result.errors.length })}</p>
                   <ul className="mt-1 list-disc pl-5">
                     {result.errors.slice(0, 10).map((e) => (
                       <li key={`${e.row}-${e.message}`}>
-                        Строка {e.row}: {e.message}
+                        {t('staffLc.census.rowError', { row: e.row, message: tm(e.message) })}
                       </li>
                     ))}
                   </ul>
@@ -88,35 +88,35 @@ export default function CensusPage() {
             </Card>
             {stats && deal.census ? (
               <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_300px]">
-                <Card title="Распределение по возрастным группам">
-                  <div className="h-72" role="img" aria-label="Число сотрудников и членов семей по возрастным группам">
+                <Card title={t('staffLc.census.byAge')}>
+                  <div className="h-72" role="img" aria-label={t('staffLc.census.chartAria')}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={stats.bands.map((b) => ({ name: AGE_BAND_LABEL[b.band], Сотрудники: b.employees, 'Члены семей': b.family }))}>
+                      <BarChart data={stats.bands.map((b) => ({ name: AGE_BAND_LABEL[b.band], employees: b.employees, family: b.family }))}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="name" fontSize={12} />
                         <YAxis allowDecimals={false} fontSize={12} />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="Сотрудники" stackId="a" fill={ACCENT} />
-                        <Bar dataKey="Члены семей" stackId="a" fill={SOFT} />
+                        <Bar dataKey="employees" name={t('staffLc.census.employees')} stackId="a" fill={ACCENT} />
+                        <Bar dataKey="family" name={t('staffLc.census.family')} stackId="a" fill={SOFT} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </Card>
-                <Card title="Сводка">
+                <Card title={t('staffLc.census.summary')}>
                   <dl className="grid gap-2 text-[13px]" data-testid="census-stats">
-                    <div className="flex justify-between"><dt className="text-muted">Всего</dt><dd className="num font-semibold">{formatNumber(stats.total)}</dd></div>
-                    <div className="flex justify-between"><dt className="text-muted">Сотрудников</dt><dd className="num">{formatNumber(stats.employees)}</dd></div>
-                    <div className="flex justify-between"><dt className="text-muted">Членов семей</dt><dd className="num">{formatNumber(stats.family)}</dd></div>
-                    <div className="flex justify-between"><dt className="text-muted">Мужчин</dt><dd className="num">{formatPercent(stats.maleShare)}</dd></div>
-                    <div className="flex justify-between"><dt className="text-muted">Женщин</dt><dd className="num">{formatPercent(stats.femaleShare)}</dd></div>
-                    <div className="flex justify-between"><dt className="text-muted">Средний возраст</dt><dd className="num">{String(stats.averageAge).replace('.', ',')}</dd></div>
+                    <div className="flex justify-between"><dt className="text-muted">{t('staffLc.census.total')}</dt><dd className="num font-semibold">{formatNumber(stats.total)}</dd></div>
+                    <div className="flex justify-between"><dt className="text-muted">{t('staffLc.census.employeesCount')}</dt><dd className="num">{formatNumber(stats.employees)}</dd></div>
+                    <div className="flex justify-between"><dt className="text-muted">{t('staffLc.census.familyCount')}</dt><dd className="num">{formatNumber(stats.family)}</dd></div>
+                    <div className="flex justify-between"><dt className="text-muted">{t('staffLc.census.male')}</dt><dd className="num">{formatPercent(stats.maleShare)}</dd></div>
+                    <div className="flex justify-between"><dt className="text-muted">{t('staffLc.census.female')}</dt><dd className="num">{formatPercent(stats.femaleShare)}</dd></div>
+                    <div className="flex justify-between"><dt className="text-muted">{t('staffLc.census.avgAge')}</dt><dd className="num">{String(stats.averageAge).replace('.', ',')}</dd></div>
                   </dl>
-                  <p className="mt-3 text-[12px] text-muted">Загружено {formatDateTime(deal.census.uploadedAt)}. Возраст считается на дату начала страхования.</p>
+                  <p className="mt-3 text-[12px] text-muted">{t('staffLc.census.uploadedAt', { at: formatDateTime(deal.census.uploadedAt) })}</p>
                 </Card>
               </div>
             ) : (
-              <p className="mt-4 text-[13px] text-muted">Данные ещё не загружены.</p>
+              <p className="mt-4 text-[13px] text-muted">{t('staffLc.census.noData')}</p>
             )}
           </>
         );

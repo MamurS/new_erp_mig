@@ -1,3 +1,4 @@
+import { t, tm } from '@/i18n';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -45,7 +46,7 @@ export function LimitRequestDialog({
   const onSubmit = form.handleSubmit(async (v) => {
     try {
       await create.mutateAsync(v);
-      toast.success('Запрос на изменение лимита отправлен андеррайтеру');
+      toast.success(t('staff.limitDialog.sent'));
       onOpenChange(false);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -56,21 +57,21 @@ export function LimitRequestDialog({
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Запросить изменение лимита"
-      description="Запрос подтверждает другой сотрудник (правило четырёх глаз)."
+      title={t('staff.limitDialog.title')}
+      description={t('staff.limitDialog.description')}
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void onSubmit()} loading={create.isPending}>
-            Запросить изменение лимита
+            {t('staff.limitDialog.title')}
           </Button>
         </>
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
-        <Field label="Категория" hint={current !== undefined ? `Текущий лимит: ${formatMoney(current)}` : undefined}>
+        <Field label={t('staff.limitDialog.category')} hint={current !== undefined ? t('staff.limitDialog.currentLimit', { amount: formatMoney(current) }) : undefined}>
           {(a) => (
             <Select {...a} {...form.register('category')}>
               {(Object.keys(LIMIT_CATEGORY_LABEL) as LimitCategory[]).map((c) => (
@@ -81,7 +82,7 @@ export function LimitRequestDialog({
             </Select>
           )}
         </Field>
-        <Field label="Новый лимит, UZS" error={form.formState.errors.to?.message}>
+        <Field label={t('staff.limitDialog.newLimit')} error={tm(form.formState.errors.to?.message)}>
           {(a) => (
             <Controller
               control={form.control}
@@ -92,7 +93,7 @@ export function LimitRequestDialog({
             />
           )}
         </Field>
-        <Field label="Обоснование" error={form.formState.errors.justification?.message}>
+        <Field label={t('staff.limitDialog.justification')} error={tm(form.formState.errors.justification?.message)}>
           {(a) => <Textarea {...a} maxLength={1000} {...form.register('justification')} />}
         </Field>
       </form>

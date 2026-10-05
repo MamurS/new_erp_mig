@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { Download } from 'lucide-react';
 import { useExport, type ExportType } from '@/shared/api/queries/staff';
 import { errorMessage } from '@/shared/api/client';
@@ -16,7 +17,7 @@ const FILE_KIND: Record<ExportType, string> = {
   premium_by_month: 'premium-by-month',
 };
 
-export function ExportButton({ type, label = 'Экспорт в CSV' }: { type: ExportType; label?: string }) {
+export function ExportButton({ type, label = t('staff.export.label') }: { type: ExportType; label?: string }) {
   const allowed = useCan('exports.create');
   const exp = useExport();
   if (!allowed) return null;
@@ -28,7 +29,7 @@ export function ExportButton({ type, label = 'Экспорт в CSV' }: { type: 
         try {
           const csv = await exp.mutateAsync(type);
           downloadText(csv.replace(/^\ufeff/, ''), exportFileName(FILE_KIND[type]));
-          toast.success('Выгрузка готова. Запись добавлена в журнал аудита');
+          toast.success(t('staff.export.done'));
         } catch (e) {
           toast.error(errorMessage(e));
         }

@@ -4,6 +4,7 @@ import { Copy } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Modal } from '@/shared/ui/dialog';
 import { toast } from '@/shared/ui/toast';
+import { t } from '@/i18n';
 
 export function SecretReveal({ title, items, onClose }: { title: string; items: { label: string; value: string; testId: string }[]; onClose: () => void }) {
   const [copied, setCopied] = useState<string | null>(null);
@@ -11,9 +12,9 @@ export function SecretReveal({ title, items, onClose }: { title: string; items: 
     try {
       await navigator.clipboard.writeText(value);
       setCopied(label);
-      toast.success('Скопировано');
+      toast.success(t('common.copied'));
     } catch {
-      toast.error('Не удалось скопировать: выделите текст и скопируйте вручную');
+      toast.error(t('clinic.secret.copyFailed'));
     }
   };
   return (
@@ -22,10 +23,10 @@ export function SecretReveal({ title, items, onClose }: { title: string; items: 
       onOpenChange={(o) => !o && onClose()}
       title={title}
       wide
-      footer={<Button onClick={onClose}>Я сохранил секрет</Button>}
+      footer={<Button onClick={onClose}>{t('clinic.secret.saved')}</Button>}
     >
       <p role="alert" className="mb-3 rounded-btn bg-warning-soft px-3 py-2 font-semibold text-warning-text">
-        Сохраните секрет сейчас, потом его нельзя будет посмотреть
+        {t('clinic.secret.warning')}
       </p>
       <dl className="flex flex-col gap-3">
         {items.map((it) => (
@@ -35,8 +36,8 @@ export function SecretReveal({ title, items, onClose }: { title: string; items: 
               <code className="break-all rounded-btn bg-rail px-2 py-1 font-mono text-[13px]" data-testid={it.testId}>
                 {it.value}
               </code>
-              <Button size="sm" variant="secondary" onClick={() => void copy(it.label, it.value)} aria-label={`Копировать: ${it.label}`}>
-                <Copy className="h-3.5 w-3.5" aria-hidden /> {copied === it.label ? 'Скопировано' : 'Копировать'}
+              <Button size="sm" variant="secondary" onClick={() => void copy(it.label, it.value)} aria-label={t('clinic.secret.copyAria', { label: it.label })}>
+                <Copy className="h-3.5 w-3.5" aria-hidden /> {copied === it.label ? t('common.copied') : t('common.copy')}
               </Button>
             </dd>
           </div>

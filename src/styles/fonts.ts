@@ -19,3 +19,17 @@ import '@fontsource/nunito/cyrillic-700.css';
 import '@fontsource/nunito/latin-700.css';
 import '@fontsource/nunito/cyrillic-800.css';
 import '@fontsource/nunito/latin-800.css';
+
+// Golos Text, Rubik and JetBrains Mono lack ʻ (U+02BB), used in Uzbek Latin oʻ and gʻ. Nunito has
+// both ʻ and ʼ (U+02BC): it serves just these two characters, first in every font stack.
+import uzMarksUrl from '@fontsource/nunito/files/nunito-latin-400-normal.woff2?url';
+
+export const UZ_MARKS_FAMILY = 'MIG Uz Marks';
+if (typeof document !== 'undefined' && 'fonts' in document && typeof FontFace === 'function') {
+  const face = new FontFace(UZ_MARKS_FAMILY, `url(${uzMarksUrl}) format('woff2')`, {
+    unicodeRange: 'U+02BB-02BC',
+    weight: '100 900',
+    display: 'swap',
+  });
+  document.fonts.add(face);
+}

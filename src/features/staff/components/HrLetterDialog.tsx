@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useState } from 'react';
 import { useHrLetter } from '@/shared/api/queries/staff';
 import { errorMessage } from '@/shared/api/client';
@@ -8,18 +9,18 @@ import { toast } from '@/shared/ui/toast';
 
 export function HrLetterDialog({ open, onOpenChange, clientId, clientName }: { open: boolean; onOpenChange: (v: boolean) => void; clientId: string; clientName: string }) {
   const letter = useHrLetter();
-  const [subject, setSubject] = useState('Продление полиса ДМС');
-  const [text, setText] = useState(`Добрый день! Напоминаем, что срок действия полиса ДМС вашей компании скоро заканчивается. Подготовим предложение на продление — ответьте на это письмо, пожалуйста.`);
+  const [subject, setSubject] = useState(() => t('staff.hrLetter.defaultSubject'));
+  const [text, setText] = useState(() => t('staff.hrLetter.defaultText'));
   return (
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Письмо HR"
-      description={`Письмо уйдёт контакту HR компании «${clientName}» с адреса dms@mig.example.`}
+      title={t('staff.hrLetter.title')}
+      description={t('staff.hrLetter.description', { client: clientName })}
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             loading={letter.isPending}
@@ -27,21 +28,21 @@ export function HrLetterDialog({ open, onOpenChange, clientId, clientName }: { o
             onClick={async () => {
               try {
                 await letter.mutateAsync({ clientId, subject: subject.trim(), text: text.trim() });
-                toast.success('Письмо HR отправлено');
+                toast.success(t('staff.hrLetter.sent'));
                 onOpenChange(false);
               } catch (e) {
                 toast.error(errorMessage(e));
               }
             }}
           >
-            Отправить письмо
+            {t('staff.hrLetter.submit')}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Тема">{(a) => <Input {...a} value={subject} maxLength={120} onChange={(e) => setSubject(e.target.value)} />}</Field>
-        <Field label="Текст">{(a) => <Textarea {...a} value={text} maxLength={2000} rows={6} onChange={(e) => setText(e.target.value)} />}</Field>
+        <Field label={t('staff.hrLetter.subject')}>{(a) => <Input {...a} value={subject} maxLength={120} onChange={(e) => setSubject(e.target.value)} />}</Field>
+        <Field label={t('staff.hrLetter.text')}>{(a) => <Textarea {...a} value={text} maxLength={2000} rows={6} onChange={(e) => setText(e.target.value)} />}</Field>
       </div>
     </Modal>
   );

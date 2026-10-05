@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { AlertTriangle } from 'lucide-react';
 import type { LimitUsage } from '@/shared/types';
 import { LIMIT_CATEGORY_LABEL } from '@/shared/domain/labels';
@@ -15,8 +16,7 @@ export function LimitBars({ limits }: { limits: LimitUsage[] }) {
         <div role="status" className="flex items-start gap-2 rounded-btn bg-warning-soft px-3 py-2 text-warning-text">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            Лимит почти израсходован: {near.map((l) => LIMIT_CATEGORY_LABEL[l.category]).join(', ')}. Уточните у клиента, нужна ли доплата или
-            изменение лимита.
+            {t('staff.limits.nearWarning', { categories: near.map((l) => LIMIT_CATEGORY_LABEL[l.category]).join(', ') })}
           </span>
         </div>
       )}
@@ -30,11 +30,11 @@ export function LimitBars({ limits }: { limits: LimitUsage[] }) {
                 {formatMoney(l.used, false)} / {formatMoney(l.limit)}
               </span>
             </div>
-            <ProgressBar value={l.used} max={l.limit} warn={warn} label={`Лимит «${LIMIT_CATEGORY_LABEL[l.category]}»`} />
+            <ProgressBar value={l.used} max={l.limit} warn={warn} label={t('staff.limits.barLabel', { category: LIMIT_CATEGORY_LABEL[l.category] })} />
             {(l.reserved ?? 0) > 0 && (
               <div className="mt-0.5 flex justify-between gap-2 text-[12px] text-muted" data-testid={`reserved-${l.category}`}>
-                <span>Резерв по одобренным ГП</span>
-                <span className="num">{formatMoney(l.reserved ?? 0)} · остаток {formatMoney(Math.max(0, l.limit - l.used - (l.reserved ?? 0)))}</span>
+                <span>{t('staff.limits.reservedGl')}</span>
+                <span className="num">{t('staff.limits.reservedRest', { reserved: formatMoney(l.reserved ?? 0), rest: formatMoney(Math.max(0, l.limit - l.used - (l.reserved ?? 0))) })}</span>
               </div>
             )}
           </div>

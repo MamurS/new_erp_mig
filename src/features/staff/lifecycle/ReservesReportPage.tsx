@@ -1,4 +1,5 @@
 /* Отчёт по резервам (LIFECYCLE_SPEC §13): reserves of open claims on a date by client, assistance and category. */
+import { defineLabels, t } from '@/i18n';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import type { ReserveReportRow } from '@/shared/types/dto';
@@ -16,19 +17,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
-const GROUPS = { byClient: 'По клиентам', byAssistance: 'По ассистансам', byCategory: 'По видам помощи' } as const;
-type Group = keyof typeof GROUPS;
+const GROUP_IDS = ['byClient', 'byAssistance', 'byCategory'] as const;
+type Group = (typeof GROUP_IDS)[number];
+const GROUPS = defineLabels('staffLc.reserves.group', GROUP_IDS);
 
 function Rows({ rows, total }: { rows: ReserveReportRow[]; total: number }) {
   return (
     <table className="w-full text-[13px]">
-      <caption className="sr-only">Резервы</caption>
+      <caption className="sr-only">{t('staffLc.reserves.short')}</caption>
       <thead>
         <tr className="border-b border-border text-left text-[12px] text-muted">
-          <th className="px-4 py-2 font-medium">Группа</th>
-          <th className="px-2 py-2 text-right font-medium">Убытков</th>
-          <th className="px-2 py-2 text-right font-medium">Резерв</th>
-          <th className="px-4 py-2 text-right font-medium">Доля</th>
+          <th className="px-4 py-2 font-medium">{t('staffLc.reserves.colGroup')}</th>
+          <th className="px-2 py-2 text-right font-medium">{t('staffLc.reserves.colClaims')}</th>
+          <th className="px-2 py-2 text-right font-medium">{t('staffLc.reserves.colReserve')}</th>
+          <th className="px-4 py-2 text-right font-medium">{t('staffLc.reserves.colShare')}</th>
         </tr>
       </thead>
       <tbody>
@@ -46,8 +48,8 @@ function Rows({ rows, total }: { rows: ReserveReportRow[]; total: number }) {
 }
 
 export default function ReservesReportPage() {
-  useDocumentTitle('Резервы');
-  useTopbar([{ label: 'Резервы' }]);
+  useDocumentTitle(t('staffLc.reserves.short'));
+  useTopbar([{ label: t('staffLc.reserves.short') }]);
   const [date, setDate] = useState(todayISO());
   const [group, setGroup] = useState<Group>('byClient');
   const q = useReserveReport(date);
@@ -71,8 +73,8 @@ export default function ReservesReportPage() {
   return (
     <>
       <PageHeader
-        title="Резервы убытков"
-        subtitle="Резерв заявленных, но не урегулированных убытков на дату. IBNR (произошедшие, но не заявленные) — вне рамок прототипа"
+        title={t('staffLc.reserves.title')}
+        subtitle={t('staffLc.reserves.subtitle')}
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={exportCsv} disabled={!q.data}>
@@ -80,27 +82,27 @@ export default function ReservesReportPage() {
             </Button>
             {canRegister && (
               <Button variant="secondary" size="sm" onClick={() => void register()}>
-                <Download className="h-3.5 w-3.5" aria-hidden /> Реестр убытков
+                <Download className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.reserves.claimsRegister')}
               </Button>
             )}
           </>
         }
       />
       <div className="mb-3 max-w-[200px]">
-        <Field label="На дату">{(a) => <Input {...a} type="date" value={date} max={todayISO()} onChange={(e) => e.target.value && setDate(e.target.value)} />}</Field>
+        <Field label={t('staffLc.reserves.onDate')}>{(a) => <Input {...a} type="date" value={date} max={todayISO()} onChange={(e) => e.target.value && setDate(e.target.value)} />}</Field>
       </div>
       <QueryState query={q}>
         {(r) => (
           <>
             <div className="mb-4 grid gap-3 sm:grid-cols-2">
               <Card>
-                <p className="text-[12px] text-muted">Резерв на дату</p>
+                <p className="text-[12px] text-muted">{t('staffLc.reserves.totalOnDate')}</p>
                 <p className="num text-[22px] font-bold" data-testid="reserve-total">
                   {formatMoney(r.total)}
                 </p>
               </Card>
               <Card>
-                <p className="text-[12px] text-muted">Открытых убытков</p>
+                <p className="text-[12px] text-muted">{t('staffLc.reserves.openClaims')}</p>
                 <p className="num text-[22px] font-bold">{formatNumber(r.claims)}</p>
               </Card>
             </div>

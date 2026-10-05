@@ -486,8 +486,11 @@ export interface Page<T> {
 
 export interface ApiError {
   code: 'unauthorized' | 'forbidden' | 'not_found' | 'validation' | 'conflict' | 'rate_limited' | 'server';
-  message: string;                         // безопасный текст для показа пользователю
-  fields?: Record<string, string>;         // ошибки валидации по полям
+  /** Message key from src/i18n (`srv.*`, `errors.*`): the text is chosen by the client in its language. */
+  key: string;
+  params?: Record<string, string | number>;
+  /** Field errors: packed message keys (`key` or `key|{json params}`), see msg() in src/i18n/core.ts. */
+  fields?: Record<string, string>;
 }
 
 // ---------- Коммерческое предложение (KP_SPEC §4) ----------

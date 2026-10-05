@@ -8,11 +8,12 @@ import { formatDate } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Skeleton } from '@/shared/ui/states';
-import { BIG, LangSwitch, LoadError, ScreenHeader, Section } from '../components';
+import { LanguageSwitch } from '@/shared/ui/language-switch';
+import { BIG, LoadError, ScreenHeader, Section } from '../components';
 
 export default function ProfilePage() {
   const { t } = useI18n();
-  useDocumentTitle(t('profile.title'));
+  useDocumentTitle(t('app.profile.title'));
   const me = useMe();
   const [busy, setBusy] = useState<'one' | 'all' | null>(null);
 
@@ -24,17 +25,17 @@ export default function ProfilePage() {
 
   const rows: [string, string | undefined, boolean?][] = me.data
     ? [
-        [t('profile.fullName'), me.data.fullName],
-        [t('profile.company'), me.data.companyName],
-        [t('profile.phone'), me.data.phoneMasked, true],
-        [t('profile.pinfl'), me.data.pinflMasked, true],
-        [t('profile.card'), me.data.payoutCardMasked, true],
+        [t('app.profile.fullName'), me.data.fullName],
+        [t('app.profile.company'), me.data.companyName],
+        [t('app.profile.phone'), me.data.phoneMasked, true],
+        [t('app.profile.pinfl'), me.data.pinflMasked, true],
+        [t('app.profile.card'), me.data.payoutCardMasked, true],
       ]
     : [];
 
   return (
     <div>
-      <ScreenHeader title={t('profile.title')} />
+      <ScreenHeader title={t('app.profile.title')} />
       {me.isLoading ? (
         <Skeleton className="h-[290px] w-full rounded-card" />
       ) : me.isError || !me.data ? (
@@ -48,9 +49,9 @@ export default function ProfilePage() {
             </div>
           ))}
           <div className="flex items-center justify-between gap-3 py-3">
-            <dt className="text-muted">{t('profile.consent')}</dt>
+            <dt className="text-muted">{t('app.profile.consent')}</dt>
             <dd className="text-right font-bold">
-              {me.data.consentGivenAt ? t('profile.consentGiven', { date: formatDate(me.data.consentGivenAt) }) : t('profile.consentMissing')}
+              {me.data.consentGivenAt ? t('app.profile.consentGiven', { date: formatDate(me.data.consentGivenAt) }) : t('app.profile.consentMissing')}
             </dd>
           </div>
         </dl>
@@ -58,22 +59,22 @@ export default function ProfilePage() {
 
       <Link to="/app/certificate" className="mt-4 flex min-h-[54px] items-center gap-3 rounded-card border border-border bg-surface px-4 font-bold hover:bg-rail">
         <FileBadge className="h-5 w-5 text-accent" aria-hidden />
-        <span className="flex-1">{t('profile.certificate')}</span>
+        <span className="flex-1">{t('app.profile.certificate')}</span>
         <ChevronRight className="h-5 w-5 text-muted" aria-hidden />
       </Link>
 
-      <Section title={t('lang.label')}>
-        <LangSwitch />
+      <Section title={t('app.lang.label')}>
+        <LanguageSwitch />
       </Section>
 
       <div className="mt-8 flex flex-col gap-3">
         <Button variant="secondary" loading={busy === 'one'} disabled={busy !== null} onClick={() => void doLogout('one')} className={BIG}>
           <LogOut className="h-5 w-5" aria-hidden />
-          {t('profile.logout')}
+          {t('app.profile.logout')}
         </Button>
         <Button variant="ghost" loading={busy === 'all'} disabled={busy !== null} onClick={() => void doLogout('all')} className={`${BIG} text-danger-text`}>
           <MonitorSmartphone className="h-5 w-5" aria-hidden />
-          {t('profile.logoutAll')}
+          {t('app.profile.logoutAll')}
         </Button>
       </div>
     </div>

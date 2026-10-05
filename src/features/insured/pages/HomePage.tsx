@@ -12,15 +12,16 @@ import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Modal } from '@/shared/ui/dialog';
 import { Skeleton } from '@/shared/ui/states';
-import { CardSkeletons, ClaimStepBar, Empty, LangSwitch, LoadError, Section, StatusPill } from '../components';
+import { LanguageSwitch } from '@/shared/ui/language-switch';
+import { CardSkeletons, ClaimStepBar, Empty, LoadError, Section, StatusPill } from '../components';
 import { LimitsList } from '../LimitsList';
 
 const TILES: { to: string; label: I18nKey; icon: LucideIcon; tone: string }[] = [
-  { to: '/app/booking', label: 'tile.booking', icon: CalendarPlus, tone: 'bg-sky text-sky-text' },
-  { to: '/app/claims/new', label: 'tile.refund', icon: Receipt, tone: 'bg-peach text-peach-text' },
-  { to: '/app/clinics', label: 'tile.clinics', icon: MapPin, tone: 'bg-sun text-sun-text' },
-  { to: '/app/chat', label: 'tile.chat', icon: MessageCircle, tone: 'bg-accent-soft text-accent-text' },
-  { to: '/app/coverage', label: 'tile.coverage', icon: ShieldQuestion, tone: 'bg-rail text-text' },
+  { to: '/app/booking', label: 'app.tile.booking', icon: CalendarPlus, tone: 'bg-sky text-sky-text' },
+  { to: '/app/claims/new', label: 'app.tile.refund', icon: Receipt, tone: 'bg-peach text-peach-text' },
+  { to: '/app/clinics', label: 'app.tile.clinics', icon: MapPin, tone: 'bg-sun text-sun-text' },
+  { to: '/app/chat', label: 'app.tile.chat', icon: MessageCircle, tone: 'bg-accent-soft text-accent-text' },
+  { to: '/app/coverage', label: 'app.tile.coverage', icon: ShieldQuestion, tone: 'bg-rail text-text' },
 ];
 
 const CATEGORIES: LimitCategory[] = ['outpatient', 'dental', 'medicines', 'inpatient'];
@@ -32,21 +33,21 @@ function AssistanceCard() {
   const a = q.data?.assistance;
   if (!a) return null;
   return (
-    <section className="mt-4 flex items-center gap-3 rounded-card border border-border bg-surface p-4" aria-label={t('home.assistance')} data-testid="assistance-card">
+    <section className="mt-4 flex items-center gap-3 rounded-card border border-border bg-surface p-4" aria-label={t('app.home.assistance')} data-testid="assistance-card">
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-text">
         <Headphones className="h-5 w-5" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] text-muted">{t('home.assistance')}</p>
+        <p className="text-[13px] text-muted">{t('app.home.assistance')}</p>
         <p className="truncate font-bold" data-testid="assistance-name">
           {a.name}
         </p>
-        <p className="text-[12px] text-muted">{t('home.assistanceHint')}</p>
+        <p className="text-[12px] text-muted">{t('app.home.assistanceHint')}</p>
       </div>
       <Button asChild className="h-11 shrink-0 rounded-btn px-4 font-semibold">
         <a href={safeUrl(`tel:${a.phone24x7.replace(/[^\d+]/g, '')}`)}>
           <Phone className="h-4 w-4" aria-hidden />
-          {t('home.call')}
+          {t('app.home.call')}
         </a>
       </Button>
     </section>
@@ -55,7 +56,7 @@ function AssistanceCard() {
 
 export default function HomePage() {
   const { t } = useI18n();
-  useDocumentTitle(t('nav.home'));
+  useDocumentTitle(t('app.nav.home'));
   const me = useMe();
   const policy = useMePolicy();
   const limits = useMeLimits();
@@ -72,16 +73,16 @@ export default function HomePage() {
             <Skeleton className="h-8 w-48" />
           ) : (
             <h1 className="font-heading text-[24px] font-semibold leading-tight">
-              {t('home.greeting', { name: me.data?.firstName ?? '' })}
+              {t('app.home.greeting', { name: me.data?.firstName ?? '' })}
             </h1>
           )}
-          <p className="mt-1 text-muted">{t('home.subtitle')}</p>
+          <p className="mt-1 text-muted">{t('app.home.subtitle')}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <LangSwitch />
+          <LanguageSwitch />
           <button
             type="button"
-            aria-label={t('home.notifications')}
+            aria-label={t('app.home.notifications')}
             onClick={() => setBellOpen(true)}
             className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface hover:bg-rail"
           >
@@ -104,15 +105,15 @@ export default function HomePage() {
           <LoadError error={policy.error} onRetry={() => void policy.refetch()} />
         ) : (
           <div className="relative">
-            <p className="text-[14px] font-semibold text-accent-text">{t('home.insuredVia', { company: policy.data.companyName })}</p>
-            <p className="mt-1 font-heading text-[22px] font-semibold">{t('home.program', { name: policy.data.programName })}</p>
+            <p className="text-[14px] font-semibold text-accent-text">{t('app.home.insuredVia', { company: policy.data.companyName })}</p>
+            <p className="mt-1 font-heading text-[22px] font-semibold">{t('app.home.program', { name: policy.data.programName })}</p>
             <p className="mt-0.5 text-[14px] text-muted">
-              {t('home.term', { from: formatDate(policy.data.startDate), to: formatDate(policy.data.endDate) })}
+              {t('app.home.term', { from: formatDate(policy.data.startDate), to: formatDate(policy.data.endDate) })}
             </p>
             <Button asChild className="mt-4 h-12 w-full rounded-btn text-[15px] font-semibold">
               <Link to="/app/card">
                 <QrCode className="h-5 w-5" aria-hidden />
-                {t('home.cardButton')}
+                {t('app.home.cardButton')}
               </Link>
             </Button>
           </div>
@@ -139,11 +140,11 @@ export default function HomePage() {
 
       {/* Latest claim */}
       <Section
-        title={t('home.claims')}
+        title={t('app.home.claims')}
         action={
           claims.data && claims.data.length > 0 ? (
             <Link to="/app/claims" className="flex min-h-[44px] items-center gap-0.5 px-1 font-semibold text-accent-text">
-              {t('home.allClaims')}
+              {t('app.home.allClaims')}
               <ChevronRight className="h-4 w-4" aria-hidden />
             </Link>
           ) : null
@@ -166,10 +167,10 @@ export default function HomePage() {
           </Link>
         ) : (
           <Empty
-            title={t('home.noClaims')}
+            title={t('app.home.noClaims')}
             action={
               <Button asChild className="h-12 rounded-btn px-5 text-[15px] font-semibold">
-                <Link to="/app/claims/new">{t('tile.refund')}</Link>
+                <Link to="/app/claims/new">{t('app.tile.refund')}</Link>
               </Button>
             }
           />
@@ -178,10 +179,10 @@ export default function HomePage() {
 
       {/* Limits */}
       <Section
-        title={t('home.limits')}
+        title={t('app.home.limits')}
         action={
           <button type="button" onClick={() => setCoverOpen(true)} className="min-h-[44px] px-1 text-[14px] font-semibold text-accent-text underline-offset-2 hover:underline">
-            {t('home.whatCovered')}
+            {t('app.home.whatCovered')}
           </button>
         }
       >
@@ -194,28 +195,28 @@ export default function HomePage() {
         )}
       </Section>
 
-      <Modal open={bellOpen} onOpenChange={setBellOpen} title={t('home.notifications')}>
-        <p className="py-4 text-center text-muted">{t('home.noNotifications')}</p>
+      <Modal open={bellOpen} onOpenChange={setBellOpen} title={t('app.home.notifications')}>
+        <p className="py-4 text-center text-muted">{t('app.home.noNotifications')}</p>
         <Button variant="secondary" onClick={() => setBellOpen(false)} className="h-12 w-full rounded-btn text-[15px]">
-          {t('common.close')}
+          {t('app.common.close')}
         </Button>
       </Modal>
 
-      <Modal open={coverOpen} onOpenChange={setCoverOpen} title={t('program.title', { name: policy.data?.programName ?? '' })}>
-        <p className="leading-relaxed">{t('program.desc')}</p>
+      <Modal open={coverOpen} onOpenChange={setCoverOpen} title={t('app.program.title', { name: policy.data?.programName ?? '' })}>
+        <p className="leading-relaxed">{t('app.program.desc')}</p>
         {policy.data && (
           <dl className="mt-3 divide-y divide-border-soft rounded-card border border-border px-4">
             {CATEGORIES.map((c) => (
               <div key={c} className="flex justify-between gap-3 py-2.5">
-                <dt className="text-muted">{t(`category.${c}`)}</dt>
+                <dt className="text-muted">{t(`app.category.${c}`)}</dt>
                 <dd className="font-bold">{formatMoney(policy.data.limits[c])}</dd>
               </div>
             ))}
           </dl>
         )}
-        <p className="mt-3 text-[14px] text-muted">{t('program.notCovered')}</p>
+        <p className="mt-3 text-[14px] text-muted">{t('app.program.notCovered')}</p>
         <Button variant="secondary" onClick={() => setCoverOpen(false)} className="mt-4 h-12 w-full rounded-btn text-[15px]">
-          {t('common.close')}
+          {t('app.common.close')}
         </Button>
       </Modal>
     </div>

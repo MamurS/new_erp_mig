@@ -9,23 +9,24 @@ import { cn } from '@/shared/lib/cn';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { useDmsParam } from '@/shared/api/queries/params';
+import { defineLabels, t } from '@/i18n';
 
 /** Re-renders every 30 seconds so SLA countdowns stay fresh. */
 function useNow(): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
   }, []);
   return now;
 }
 
 function leftText(ms: number): string {
   const min = Math.round(Math.abs(ms) / 60_000);
-  if (min < 60) return `${min} мин`;
+  if (min < 60) return t('assist.sla.min', { min });
   const h = Math.floor(min / 60);
-  if (h < 48) return `${h} ч ${min % 60} мин`;
-  return `${Math.floor(h / 24)} дн`;
+  if (h < 48) return t('assist.sla.hoursMin', { h, min: min % 60 });
+  return t('assist.sla.days', { d: Math.floor(h / 24) });
 }
 
 /** Time left before the SLA deadline; orange when close, red when breached (§6). */
@@ -43,7 +44,7 @@ export function SlaBadge({ dueAt, done }: { dueAt: string; done?: boolean }) {
       )}
     >
       {state === 'overdue' ? <AlertTriangle className="h-3 w-3" aria-hidden /> : <Clock className="h-3 w-3" aria-hidden />}
-      {state === 'overdue' ? `просрочено на ${leftText(left)}` : `осталось ${leftText(left)}`}
+      {state === 'overdue' ? t('assist.sla.overdue', { left: leftText(left) }) : t('assist.sla.left', { left: leftText(left) })}
     </span>
   );
 }
@@ -57,11 +58,11 @@ export function KpiGrid({ kpi, className }: { kpi: AssistanceKpi; className?: st
   const responseNorm = useDmsParam('clinicResponseMinutes');
   const lossWarn = useDmsParam('lossRatioWarn');
   const items: [string, string, boolean][] = [
-    ['Ответ по записи, в среднем', `${kpi.appointmentResponseMinutesAvg} мин`, kpi.appointmentResponseMinutesAvg > responseNorm],
-    ['ГП решены в срок', formatPercent(kpi.guaranteesOnTimeShare), kpi.guaranteesOnTimeShare < 0.9],
-    ['Согласие контроля качества', formatPercent(kpi.qaAgreementShare), kpi.qaAgreementShare < 0.9],
-    ['Жалоб на 1000 застрахованных', String(kpi.complaintsPer1000).replace('.', ','), kpi.complaintsPer1000 > 5],
-    ['Убыточность портфеля', kpi.lossRatio === null ? '—' : formatPercent(kpi.lossRatio), (kpi.lossRatio ?? 0) >= lossWarn],
+    [t('assist.kpi.responseAvg'), t('assist.kpi.minutes', { n: kpi.appointmentResponseMinutesAvg }), kpi.appointmentResponseMinutesAvg > responseNorm],
+    [t('assist.kpi.guaranteesOnTime'), formatPercent(kpi.guaranteesOnTimeShare), kpi.guaranteesOnTimeShare < 0.9],
+    [t('assist.kpi.qaAgreement'), formatPercent(kpi.qaAgreementShare), kpi.qaAgreementShare < 0.9],
+    [t('assist.kpi.complaints'), String(kpi.complaintsPer1000).replace('.', ','), kpi.complaintsPer1000 > 5],
+    [t('assist.kpi.lossRatio'), kpi.lossRatio === null ? '—' : formatPercent(kpi.lossRatio), (kpi.lossRatio ?? 0) >= lossWarn],
   ];
   return (
     <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-5', className)} data-testid="kpi">
@@ -93,34 +94,34 @@ export function RebillSummaryBlock({ r }: { r: RebillView }) {
   return (
     <div className="mb-4 flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Stat label="Оплачено клиникам" value={formatMoney(r.totals.claims)} />
-        <Stat label="Вознаграждение" value={formatMoney(r.totals.fee)} />
-        <Stat label="Итого к возмещению" value={formatMoney(r.totals.total)} />
-        <Stat label="Принято строк на" value={formatMoney(r.totals.accepted)} />
-        <Stat label="Отклонено строк на" value={formatMoney(r.totals.rejected)} tone={r.totals.rejected ? 'warning' : undefined} />
+        <Stat label={t('assist.rebill.paidToClinics')} value={formatMoney(r.totals.claims)} />
+        <Stat label={t('assist.rebill.fee')} value={formatMoney(r.totals.fee)} />
+        <Stat label={t('assist.rebill.totalToReimburse')} value={formatMoney(r.totals.total)} />
+        <Stat label={t('assist.rebill.acceptedFor')} value={formatMoney(r.totals.accepted)} />
+        <Stat label={t('assist.rebill.rejectedFor')} value={formatMoney(r.totals.rejected)} tone={r.totals.rejected ? 'warning' : undefined} />
       </div>
       <p className="rounded-btn bg-rail px-3 py-2 text-[13px]" data-testid="fee-formula">
         <span className="text-muted">{FEE_MODEL_LABEL[r.fee.model]}: </span>
         <span className="num font-medium">{r.fee.formula}</span>
       </p>
       <p className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted">
-        {r.submittedAt && <span>Отправлен {formatDateTime(r.submittedAt)}</span>}
-        {r.reviewDueAt && r.status !== 'paid' && <span>Проверка МИГ до {formatDate(r.reviewDueAt)} (10 рабочих дней)</span>}
-        {r.acceptedByName && <span>Принял: {r.acceptedByName}</span>}
-        {r.paidAt && <span>Оплачен {formatDateTime(r.paidAt)}{r.paidByName ? ` · ${r.paidByName}` : ''}</span>}
+        {r.submittedAt && <span>{t('assist.rebill.submittedAt', { date: formatDateTime(r.submittedAt) })}</span>}
+        {r.reviewDueAt && r.status !== 'paid' && <span>{t('assist.rebill.reviewDue', { date: formatDate(r.reviewDueAt) })}</span>}
+        {r.acceptedByName && <span>{t('assist.rebill.acceptedBy', { name: r.acceptedByName })}</span>}
+        {r.paidAt && <span>{t('assist.rebill.paidAt', { date: formatDateTime(r.paidAt) })}{r.paidByName ? ` · ${r.paidByName}` : ''}</span>}
       </p>
     </div>
   );
 }
 
 const LINE_CHIP = { pending: 'sky', accepted: 'success', rejected: 'danger', disputed: 'warning' } as const;
-const LINE_LABEL = { pending: 'Ждёт проверки', accepted: 'Принята', rejected: 'Отклонена', disputed: 'Оспорена' } as const;
+const LINE_LABEL = defineLabels('assist.line', ['pending', 'accepted', 'rejected', 'disputed'] as const);
 
 export function CheckFlags({ checks }: { checks: RebillLine['checks'] }) {
   if (!checks.length) {
     return (
       <span className="inline-flex items-center gap-1 text-[12px] text-success-text">
-        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Проверки пройдены
+        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> {t('assist.line.checksPassed')}
       </span>
     );
   }
@@ -141,20 +142,20 @@ export function CheckFlags({ checks }: { checks: RebillLine['checks'] }) {
 /** Lines of a rebill with the automatic checks; `actions` renders buttons of the viewer's side. */
 export function RebillLinesTable({ lines, actions }: { lines: RebillLine[]; actions?: (l: RebillLine) => ReactNode }) {
   const columns: Column<RebillLine>[] = [
-    { key: 'date', header: 'Дата услуги', cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
-    { key: 'clinic', header: 'Клиника', cell: (l) => l.clinicName },
-    { key: 'who', header: 'Пациент', cell: (l) => l.insuredName },
-    { key: 'svc', header: 'Услуга', cell: (l) => l.serviceName },
-    { key: 'amount', header: 'Сумма', align: 'right', cell: (l) => <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span> },
-    { key: 'checks', header: 'Проверки МИГ', cell: (l) => <CheckFlags checks={l.checks} /> },
+    { key: 'date', header: t('assist.line.serviceDate'), cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
+    { key: 'clinic', header: t('common.clinic'), cell: (l) => l.clinicName },
+    { key: 'who', header: t('common.patient'), cell: (l) => l.insuredName },
+    { key: 'svc', header: t('common.service'), cell: (l) => l.serviceName },
+    { key: 'amount', header: t('common.amount'), align: 'right', cell: (l) => <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span> },
+    { key: 'checks', header: t('assist.line.migChecks'), cell: (l) => <CheckFlags checks={l.checks} /> },
     {
       key: 'status',
-      header: 'Статус',
+      header: t('common.status'),
       cell: (l) => (
         <span className="flex flex-col gap-0.5">
           <Chip kind={LINE_CHIP[l.status]}>{LINE_LABEL[l.status]}</Chip>
-          {l.rejectionReason && <span className="text-[12px] text-muted">МИГ: {l.rejectionReason}</span>}
-          {l.disputeComment && <span className="text-[12px] text-warning-text">Ассистанс: {l.disputeComment}</span>}
+          {l.rejectionReason && <span className="text-[12px] text-muted">{t('assist.line.migReason', { text: l.rejectionReason })}</span>}
+          {l.disputeComment && <span className="text-[12px] text-warning-text">{t('assist.line.assistReason', { text: l.disputeComment })}</span>}
         </span>
       ),
     },
@@ -162,7 +163,7 @@ export function RebillLinesTable({ lines, actions }: { lines: RebillLine[]; acti
   ];
   return (
     <div className="rounded-card border border-border bg-surface">
-      <DataTable caption="Строки счёта" columns={columns} rows={lines} rowKey={(l) => l.id} empty="В счёте нет строк" />
+      <DataTable caption={t('assist.line.caption')} columns={columns} rows={lines} rowKey={(l) => l.id} empty={t('assist.line.empty')} />
     </div>
   );
 }

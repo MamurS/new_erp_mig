@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { Lock, Stethoscope } from 'lucide-react';
 import { useMedicalAccess, useMedicalRecords } from '@/shared/api/queries/staff';
@@ -27,19 +28,19 @@ export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { i
 
   useEffect(() => {
     if (!grant) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setGrant(null);
-      toast.info('Доступ к медкарте истёк');
+      toast.info(t('staff.medical.expired'));
     }, grant.until - Date.now());
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [grant]);
 
   if (!allowed) {
     return (
-      <Card title="Медицинская карта">
+      <Card title={t('staff.medical.title')}>
         <div className="flex items-start gap-3 text-muted">
           <Lock className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-          <p>Закрыто для вашей роли. Открыть может врач-эксперт с указанием причины</p>
+          <p>{t('staff.medical.closedForRole')}</p>
         </div>
       </Card>
     );
@@ -47,15 +48,15 @@ export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { i
 
   return (
     <Card
-      title="Медицинская карта"
+      title={t('staff.medical.title')}
       actions={
         grant ? (
           <span className="flex items-center gap-2">
             <span className="rounded-sm bg-warning-soft px-1.5 text-[12px] text-warning-text num" aria-live="polite" data-testid="medical-timer">
-              Доступ ещё {formatCountdown(left)}
+              {t('staff.medical.timeLeft', { time: formatCountdown(left) })}
             </span>
             <Button size="sm" variant="secondary" onClick={() => setGrant(null)}>
-              Закрыть медкарту
+              {t('staff.medical.close')}
             </Button>
           </span>
         ) : null
@@ -64,9 +65,9 @@ export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { i
     >
       {!grant ? (
         <div className="flex flex-col items-start gap-2">
-          <p className="text-muted">Доступ выдаётся на 15 минут по причине и записывается в журнал аудита.</p>
+          <p className="text-muted">{t('staff.medical.hint')}</p>
           <Button onClick={() => setOpen(true)}>
-            <Stethoscope className="h-3.5 w-3.5" aria-hidden /> Открыть медкарту
+            <Stethoscope className="h-3.5 w-3.5" aria-hidden /> {t('staff.medical.open')}
           </Button>
         </div>
       ) : records.isLoading ? (
@@ -74,17 +75,17 @@ export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { i
       ) : records.isError ? (
         <ErrorState error={records.error} onRetry={() => void records.refetch()} />
       ) : records.data!.length === 0 ? (
-        <EmptyState title="Записей нет" />
+        <EmptyState title={t('staff.medical.empty')} />
       ) : (
         <table className="w-full">
-          <caption className="sr-only">Медицинские записи</caption>
+          <caption className="sr-only">{t('staff.medical.caption')}</caption>
           <thead>
             <tr className="border-b border-border text-left text-[12px] text-muted">
-              <th className="px-4 py-2 font-normal">Дата</th>
-              <th className="px-4 py-2 font-normal">Клиника</th>
-              <th className="px-4 py-2 font-normal">Врач</th>
-              <th className="px-4 py-2 font-normal">МКБ-10</th>
-              <th className="px-4 py-2 font-normal">Заключение</th>
+              <th className="px-4 py-2 font-normal">{t('common.date')}</th>
+              <th className="px-4 py-2 font-normal">{t('common.clinic')}</th>
+              <th className="px-4 py-2 font-normal">{t('staff.medical.colDoctor')}</th>
+              <th className="px-4 py-2 font-normal">{t('staff.medical.colIcd')}</th>
+              <th className="px-4 py-2 font-normal">{t('staff.medical.colSummary')}</th>
             </tr>
           </thead>
           <tbody>
@@ -127,7 +128,7 @@ function MedicalReasonModal({
   const [reason, setReason] = useState('');
   const [touched, setTouched] = useState(false);
   const access = useMedicalAccess(apiBase);
-  const error = reason.trim().length < 10 ? 'Опишите причину: минимум 10 символов' : undefined;
+  const error = reason.trim().length < 10 ? t('staff.medical.reasonMin') : undefined;
   useEffect(() => {
     if (open) {
       setReason('');
@@ -141,7 +142,7 @@ function MedicalReasonModal({
       const g = await access.mutateAsync({ insuredId, reason: reason.trim() });
       onGranted(g.grantId, Math.min(Date.parse(g.expiresAt), Date.now() + 15 * 60_000));
       onOpenChange(false);
-      toast.success('Медкарта открыта на 15 минут');
+      toast.success(t('staff.medical.opened'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -150,27 +151,27 @@ function MedicalReasonModal({
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Доступ к медкарте"
-      description="Укажите причину. Доступ действует 15 минут и записывается в журнал аудита."
+      title={t('staff.medical.accessTitle')}
+      description={t('staff.medical.accessText')}
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={access.isPending} onClick={() => void submit()}>
-            Открыть медкарту
+            {t('staff.medical.open')}
           </Button>
         </>
       }
     >
       <div className="mb-2 flex flex-wrap gap-1.5">
-        {['Медэкспертиза по убытку', 'Проверка обоснованности лечения'].map((q) => (
+        {[t('staff.medical.quickClaim'), t('staff.medical.quickTreatment')].map((q) => (
           <button key={q} type="button" onClick={() => setReason(q)} className="rounded-btn border border-border px-2 py-1 text-[12px] hover:bg-rail">
             {q}
           </button>
         ))}
       </div>
-      <Field label="Причина" error={touched ? error : undefined}>
+      <Field label={t('staff.medical.reason')} error={touched ? error : undefined}>
         {(a) => <Textarea {...a} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} onBlur={() => setTouched(true)} />}
       </Field>
     </Modal>

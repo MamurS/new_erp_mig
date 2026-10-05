@@ -29,6 +29,8 @@ import { clampNavWidth, getNavPrefs, NAV_WIDTH, setNavPrefs, type NavPortal } fr
 import { Modal } from './dialog';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from './dropdown';
 import { Tooltip } from './tooltip';
+import { LanguageMenuItems } from './language-switch';
+import { t } from '@/i18n';
 
 export interface SidebarItem {
   path: string;
@@ -47,7 +49,7 @@ export interface SidebarGroup {
 }
 
 export interface AppSidebarProps {
-  /** «MIG», «MIG · Ассистанс», «MIG · Клиника», «MIG · Компания». */
+  /** shell.title.* in the current language. */
   title: string;
   ariaLabel: string;
   groups: SidebarGroup[];
@@ -228,7 +230,7 @@ export function SidebarToggle() {
   const s = useSidebar();
   const shown = !s.desktop || s.collapsed;
   if (!shown) return null;
-  const label = 'Показать панель';
+  const label = t('shell.panel.show');
   return (
     <Tooltip content={<TipWithKey label={label} keys={shortcut('B')} />} side="bottom">
       <button
@@ -270,7 +272,7 @@ export function AppSidebar(props: AppSidebarProps) {
         data-testid="sidebar"
         data-state={docked ? 'expanded' : 'collapsed'}
         inert={!docked}
-        style={{ width: docked ? s.width : 0, fontFamily: "'Golos Text', system-ui, sans-serif" }}
+        style={{ width: docked ? s.width : 0, fontFamily: "'MIG Uz Marks', 'Golos Text', system-ui, sans-serif" }}
         className={cn(
           'sticky top-(--banner-h,0px) hidden h-[calc(100vh-var(--banner-h,0px))] shrink-0 overflow-hidden bg-(--sb-bg) text-(--sb-text) lg:block',
           docked && 'border-r border-(--sb-border)',
@@ -289,7 +291,7 @@ export function AppSidebar(props: AppSidebarProps) {
           aria-label={props.ariaLabel}
           onMouseEnter={s.keepPreview}
           onMouseLeave={s.closePreviewSoon}
-          style={{ width: s.width, fontFamily: "'Golos Text', system-ui, sans-serif" }}
+          style={{ width: s.width, fontFamily: "'MIG Uz Marks', 'Golos Text', system-ui, sans-serif" }}
           className="fixed bottom-0 left-0 top-(--banner-h,0px) z-40 flex flex-col overflow-hidden rounded-r-xl border-r border-(--sb-border) bg-(--sb-bg) text-(--sb-text) shadow-2xl motion-safe:animate-[sb-in_150ms_ease-out]"
         >
           <SidebarBody {...props} mode="preview" />
@@ -304,7 +306,7 @@ export function AppSidebar(props: AppSidebarProps) {
             data-testid="sidebar-mobile"
             style={{
               width: Math.min(s.width, NAV_WIDTH.default),
-              fontFamily: "'Golos Text', system-ui, sans-serif",
+              fontFamily: "'MIG Uz Marks', 'Golos Text', system-ui, sans-serif",
             }}
             className="fixed inset-y-0 left-0 z-50 flex max-w-[85vw] flex-col border-r border-(--sb-border) bg-(--sb-bg) text-(--sb-text) shadow-xl motion-safe:animate-[sb-in_150ms_ease-out]"
           >
@@ -338,7 +340,7 @@ function SidebarBody({
         {/* In the preview the pin button sits exactly where the content's toggle is: the same click pins the panel. */}
         {mode === 'preview' && (
           <IconButton
-            label="Закрепить панель"
+            label={t('shell.panel.pin')}
             keys={shortcut('B')}
             icon={PanelLeft}
             onClick={s.toggle}
@@ -354,12 +356,12 @@ function SidebarBody({
         </span>
         {mode === 'drawer' && (
           <D.Close asChild>
-            <IconButton label="Скрыть панель" keys={undefined} icon={PanelLeft} />
+            <IconButton label={t('shell.panel.hide')} keys={undefined} icon={PanelLeft} />
           </D.Close>
         )}
         {mode === 'docked' && (
           <IconButton
-            label="Скрыть панель"
+            label={t('shell.panel.hide')}
             keys={shortcut('B')}
             icon={PanelLeft}
             onClick={s.toggle}
@@ -367,7 +369,7 @@ function SidebarBody({
             expanded
           />
         )}
-        {onSearch && <IconButton label="Поиск" keys={shortcut('K')} icon={Search} onClick={onSearch} />}
+        {onSearch && <IconButton label={t('shell.panel.search')} keys={shortcut('K')} icon={Search} onClick={onSearch} />}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3">
         {groups.map((g, k) => (
@@ -445,7 +447,7 @@ function SidebarLink({ item, active }: { item: SidebarItem; active: boolean }) {
     <NavLink
       to={item.path}
       end={item.end ?? true}
-      aria-label={count > 0 ? `${item.label}, задач: ${count}` : item.label}
+      aria-label={count > 0 ? t('shell.panel.withCount', { label: item.label, n: count }) : item.label}
       aria-current={active ? 'page' : undefined}
       data-active={active || undefined}
       className={cn(
@@ -471,7 +473,7 @@ function ResizeHandle({ onDragging }: { onDragging: (v: boolean) => void }) {
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Ширина панели"
+      aria-label={t('shell.panel.width')}
       aria-valuenow={s.width}
       aria-valuemin={NAV_WIDTH.min}
       aria-valuemax={NAV_WIDTH.max}
@@ -539,7 +541,7 @@ function UserBlock({ user, onLogout }: { user: AppSidebarProps['user']; onLogout
         <MenuTrigger asChild>
           <button
             type="button"
-            aria-label="Меню пользователя"
+            aria-label={t('shell.user.menu')}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[14px] hover:bg-(--sb-hover)"
           >
             <span
@@ -561,20 +563,23 @@ function UserBlock({ user, onLogout }: { user: AppSidebarProps['user']; onLogout
           </MenuLabel>
           <MenuSeparator />
           <MenuItem onSelect={() => setProfile(true)}>
-            <UserRound className="h-4 w-4" aria-hidden /> Профиль
+            <UserRound className="h-4 w-4" aria-hidden /> {t('shell.user.profile')}
           </MenuItem>
+          <MenuSeparator />
+          <LanguageMenuItems />
+          <MenuSeparator />
           <MenuItem onSelect={onLogout}>
-            <LogOut className="h-4 w-4" aria-hidden /> Выйти
+            <LogOut className="h-4 w-4" aria-hidden /> {t('shell.user.logout')}
           </MenuItem>
         </MenuContent>
       </Menu>
-      <Modal open={profile} onOpenChange={setProfile} title="Профиль">
+      <Modal open={profile} onOpenChange={setProfile} title={t('shell.user.profile')}>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[14px]">
-          <dt className="text-muted">Имя</dt>
+          <dt className="text-muted">{t('shell.user.name')}</dt>
           <dd>{user.name}</dd>
-          <dt className="text-muted">Роль</dt>
+          <dt className="text-muted">{t('shell.user.role')}</dt>
           <dd>{user.role}</dd>
-          <dt className="text-muted">Портал</dt>
+          <dt className="text-muted">{t('shell.user.portal')}</dt>
           <dd>{user.portal}</dd>
         </dl>
       </Modal>

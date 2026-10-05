@@ -9,29 +9,24 @@ import { LogsTab } from './LogsTab';
 import { DocsTab } from './DocsTab';
 import { SandboxTab } from './SandboxTab';
 import { usePartner } from './partner';
+import { t, defineLabels } from '@/i18n';
 
-const TABS = [
-  ['overview', 'Обзор'],
-  ['keys', 'Ключи API'],
-  ['webhooks', 'Вебхуки'],
-  ['logs', 'Журнал запросов'],
-  ['docs', 'Документация'],
-  ['sandbox', 'Песочница'],
-] as const;
+const TABS = ['overview', 'keys', 'webhooks', 'logs', 'docs', 'sandbox'] as const;
+const TAB_LABEL = defineLabels('clinic.integration.tab', TABS);
 const KEYS = ['tab'] as const;
 
 export default function IntegrationPage() {
-  useDocumentTitle('Интеграция');
+  useDocumentTitle(t('clinic.nav.integration'));
   const [f, setF] = useUrlFilters(KEYS);
-  const tab = TABS.some(([k]) => k === f.tab) ? f.tab : 'overview';
+  const tab = TABS.some((k) => k === f.tab) ? f.tab : 'overview';
   return (
     <>
-      <PageTitle title="Интеграция" subtitle={`Подключение ${usePartner().systemName} к МИГ по API`} />
+      <PageTitle title={t('clinic.nav.integration')} subtitle={t('clinic.integration.subtitle', { system: usePartner().systemName })} />
       <Tabs value={tab} onValueChange={(v) => setF({ tab: v === 'overview' ? null : v })}>
         <TabsList>
-          {TABS.map(([k, label]) => (
+          {TABS.map((k) => (
             <TabsTrigger key={k} value={k}>
-              {label}
+              {TAB_LABEL[k]}
             </TabsTrigger>
           ))}
         </TabsList>

@@ -1,35 +1,52 @@
 import type { ISODate, ISODateTime, Money } from '@/shared/types';
+import { intlLocale, t } from '@/i18n/core';
 
 export const TZ = 'Asia/Tashkent';
 const DAY_MS = 86_400_000;
-
-const moneyFmt = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
 
 /** Normalises the narrow no-break space Intl uses to a regular no-break space. */
 function spaces(s: string): string {
   return s.replace(/[\u202f\u00a0]/g, '\u00a0');
 }
 
-/** `12 500 000 UZS` */
+const cache = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat | Intl.RelativeTimeFormat>();
+function cached<T extends Intl.NumberFormat | Intl.DateTimeFormat | Intl.RelativeTimeFormat>(key: string, make: () => T): T {
+  let f = cache.get(key) as T | undefined;
+  if (!f) {
+    f = make();
+    cache.set(key, f);
+  }
+  return f;
+}
+const numberFmt = (digits: number) =>
+  cached(`n:${intlLocale()}:${digits}`, () => new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: digits }));
+
+/** `12 500 000 сум` (ru), `12 500 000 soʻm` (uz-Latn), `12,500,000 UZS` (en). */
 export function formatMoney(value: Money, withCurrency = true): string {
-  const n = spaces(moneyFmt.format(Math.round(value)));
-  return withCurrency ? `${n}\u00a0UZS` : n;
+  const n = spaces(numberFmt(0).format(Math.round(value)));
+  return withCurrency ? `${n}\u00a0${t('fmt.currency')}` : n;
 }
 
-/** Compact money for KPIs: `12,5 млн UZS`. */
+/** Compact money for KPIs: `12,5 млн сум`. */
 export function formatMoneyShort(value: Money): string {
   const abs = Math.abs(value);
-  if (abs >= 1e9) return `${spaces((value / 1e9).toLocaleString('ru-RU', { maximumFractionDigits: 1 }))}\u00a0млрд UZS`;
-  if (abs >= 1e6) return `${spaces((value / 1e6).toLocaleString('ru-RU', { maximumFractionDigits: 1 }))}\u00a0млн UZS`;
+  const v = (x: number) => spaces(numberFmt(1).format(x));
+  const nb = (s: string) => spaces(s).replace(/ /g, '\u00a0');
+  if (abs >= 1e9) return nb(`${t('fmt.billion', { v: v(value / 1e9) })} ${t('fmt.currency')}`);
+  if (abs >= 1e6) return nb(`${t('fmt.million', { v: v(value / 1e6) })} ${t('fmt.currency')}`);
   return formatMoney(value);
 }
 
 export function formatNumber(value: number): string {
-  return spaces(moneyFmt.format(value));
+  return spaces(numberFmt(0).format(value));
 }
 
 export function formatPercent(ratio: number, digits = 0): string {
-  return `${(ratio * 100).toFixed(digits)}%`;
+  const f = cached(
+    `p:${intlLocale()}:${digits}`,
+    () => new Intl.NumberFormat(intlLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits }),
+  );
+  return `${f.format(ratio * 100)}%`;
 }
 
 /** Calendar parts of a moment in Asia/Tashkent. */
@@ -58,21 +75,44 @@ function toDate(value: ISODate | ISODateTime | Date): Date {
   return new Date(value);
 }
 
-/** `29.09.2026` */
+const dateOpts: Intl.DateTimeFormatOptions = { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' };
+const timeOpts: Intl.DateTimeFormatOptions = { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+
+/** `29.09.2026` (ru), `29/09/2026` (uz-Latn, en). */
 export function formatDate(value: ISODate | ISODateTime | Date): string {
-  const p = tashkentParts(toDate(value));
-  return `${pad(p.d)}.${pad(p.m)}.${p.y}`;
+  return cached(`d:${intlLocale()}`, () => new Intl.DateTimeFormat(intlLocale(), dateOpts)).format(toDate(value));
 }
 
 /** `14:21` */
 export function formatTime(value: ISODateTime | Date): string {
-  const p = tashkentParts(toDate(value));
-  return `${pad(p.hh)}:${pad(p.mm)}`;
+  return cached(`t:${intlLocale()}`, () => new Intl.DateTimeFormat(intlLocale(), timeOpts)).format(toDate(value));
 }
 
 /** `29.09.2026, 14:21` */
 export function formatDateTime(value: ISODateTime | Date): string {
-  return `${formatDate(value)}, ${formatTime(value)}`;
+  return cached(`dt:${intlLocale()}`, () => new Intl.DateTimeFormat(intlLocale(), { ...dateOpts, ...timeOpts })).format(
+    toDate(value),
+  );
+}
+
+/** `сентябрь 2026` — month and year in the interface language. */
+export function formatMonth(value: ISODate | Date): string {
+  return cached(
+    `m:${intlLocale()}`,
+    () => new Intl.DateTimeFormat(intlLocale(), { timeZone: TZ, month: 'long', year: 'numeric' }),
+  ).format(toDate(value));
+}
+
+/** Documents keep their own fixed formats, whatever the interface language: `29.09.2026`. */
+export function formatDateDoc(value: ISODate | ISODateTime | Date): string {
+  const p = tashkentParts(toDate(value));
+  return `${pad(p.d)}.${pad(p.m)}.${p.y}`;
+}
+
+/** Documents: `12 500 000 UZS`. */
+export function formatMoneyDoc(value: Money, withCurrency = true): string {
+  const n = spaces(new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Math.round(value)));
+  return withCurrency ? `${n}\u00a0UZS` : n;
 }
 
 /** Today in Tashkent as ISO date. */
@@ -92,12 +132,13 @@ export function daysUntil(value: ISODate | ISODateTime, now: Date = new Date()):
   return Math.round((b - a) / DAY_MS);
 }
 
-/** «через 16 дн», «сегодня», «−1 дн» */
+/** «через 16 дн.», «сегодня», «вчера» — Intl.RelativeTimeFormat in the interface language. */
 export function formatRelativeDays(value: ISODate | ISODateTime, now: Date = new Date()): string {
-  const days = daysUntil(value, now);
-  if (days === 0) return 'сегодня';
-  if (days > 0) return `через ${days} дн`;
-  return `−${Math.abs(days)} дн`;
+  const f = cached(
+    `r:${intlLocale()}`,
+    () => new Intl.RelativeTimeFormat(intlLocale(), { numeric: 'auto', style: 'short' }),
+  );
+  return f.format(daysUntil(value, now), 'day').replace(/[\u202f\u00a0]/g, ' ');
 }
 
 /** Adds days to an ISO date. */
@@ -134,7 +175,7 @@ export function formatCountdown(totalSec: number): string {
 }
 
 export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} Б`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
-  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} МБ`;
+  if (bytes < 1024) return t('fmt.bytes', { v: bytes });
+  if (bytes < 1024 * 1024) return t('fmt.kb', { v: Math.round(bytes / 1024) });
+  return t('fmt.mb', { v: spaces(numberFmt(1).format(bytes / 1024 / 1024)) });
 }

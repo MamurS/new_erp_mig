@@ -16,7 +16,7 @@ const CONSENT_VERSION = '1.0';
 
 export default function ConsentPage() {
   const { t } = useI18n();
-  useDocumentTitle(t('consent.title'));
+  useDocumentTitle(t('app.consent.title'));
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const consent = useConsent();
@@ -28,7 +28,7 @@ export default function ConsentPage() {
     try {
       const res = await consent.mutateAsync(CONSENT_VERSION);
       updateUser({ consentGivenAt: res.consentGivenAt });
-      toast.success(t('consent.saved'));
+      toast.success(t('app.consent.saved'));
       const target = targetAfterLogin(params.get('next'), '/app');
       navigate(target.startsWith('/app/consent') ? '/app' : target, { replace: true });
     } catch (e) {
@@ -37,20 +37,20 @@ export default function ConsentPage() {
   };
 
   return (
-    <AuthShell title={t('consent.title')}>
+    <AuthShell title={t('app.consent.title')}>
       {error && <AuthNotice tone="danger">{error}</AuthNotice>}
       <div className="flex flex-col gap-3 rounded-card border border-border bg-surface p-5 text-[15px] leading-relaxed">
-        <p>{t('consent.text1')}</p>
-        <p>{t('consent.text2')}</p>
-        <p className="text-[13px] text-muted">{t('consent.text3')}</p>
+        <p>{t('app.consent.text1')}</p>
+        <p>{t('app.consent.text2')}</p>
+        <p className="text-[13px] text-muted">{t('app.consent.text3')}</p>
       </div>
       <label htmlFor="consent-check" className="mt-5 flex min-h-[44px] cursor-pointer items-center gap-3 text-[15px] font-semibold">
         <Checkbox id="consent-check" checked={agreed} onCheckedChange={setAgreed} className="h-6 w-6" />
-        {t('consent.checkbox')}
+        {t('app.consent.checkbox')}
       </label>
       <div className="mt-auto pt-6">
         <Button disabled={!agreed} loading={consent.isPending} onClick={() => void submit()} className={BIG}>
-          {t('consent.continue')}
+          {t('app.consent.continue')}
         </Button>
       </div>
     </AuthShell>

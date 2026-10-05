@@ -1,4 +1,5 @@
 /* Карточка сделки (LIFECYCLE_SPEC §3): stage steps, the panel of the current stage, documents and events. */
+import { defineLabels, t, tm } from '@/i18n';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, FileText } from 'lucide-react';
@@ -21,7 +22,7 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { ReasonDialog, Stepper } from './common';
 
-const QUOTE_STATUS_LABEL = { draft: 'Черновик', pending_approval: 'На согласовании', approved: 'Утверждена', rejected: 'Отклонена' } as const;
+const QUOTE_STATUS_LABEL = defineLabels('staffLc.quoteStatus', ['draft', 'pending_approval', 'approved', 'rejected'] as const);
 const QUOTE_STATUS_CHIP = { draft: 'neutral', pending_approval: 'warning', approved: 'success', rejected: 'danger' } as const;
 
 function useAction() {
@@ -51,20 +52,20 @@ function StagePanel({ deal }: { deal: DealCard }) {
   const closed = deal.stage === 'lost' || deal.stage === 'active';
 
   const block = (title: string, text: ReactNode, actions?: ReactNode) => (
-    <Card title={`Сейчас: ${title}`}>
+    <Card title={t('staffLc.deal.now', { title })}>
       <div className="text-[13px] text-muted">{text}</div>
       {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
     </Card>
   );
 
-  if (deal.stage === 'lost') return block('сделка проиграна', `Причина: ${deal.lostReason ?? '—'}`);
+  if (deal.stage === 'lost') return block(t('staffLc.deal.lostTitle'), t('staffLc.deal.lostReason', { reason: deal.lostReason ?? '—' }));
   if (deal.stage === 'active')
     return block(
-      'договор действует',
-      'Полис выпущен, застрахованные получили сертификаты.',
+      t('staffLc.deal.activeTitle'),
+      t('staffLc.deal.activeText'),
       deal.contract && (
         <Button size="sm" variant="secondary" onClick={() => navigate(`/staff/contracts/${deal.contract!.id}`)}>
-          Открыть договор
+          {t('staffLc.deal.openContract')}
         </Button>
       ),
     );
@@ -73,7 +74,7 @@ function StagePanel({ deal }: { deal: DealCard }) {
     canQuote && !closed ? (
       deal.quote ? (
         <Button size="sm" onClick={() => navigate(`/staff/quotes/${deal.quote!.id}`)}>
-          Открыть котировку
+          {t('staffLc.deal.openQuote')}
         </Button>
       ) : (
         <Button
@@ -84,10 +85,10 @@ function StagePanel({ deal }: { deal: DealCard }) {
             void run(async () => {
               const q = await createQuote.mutateAsync({ dealId: deal.id, program: 'standard', adjustments: [] });
               navigate(`/staff/quotes/${q.id}`);
-            }, 'Котировка создана')
+            }, t('staffLc.deal.quoteCreated'))
           }
         >
-          Рассчитать котировку
+          {t('staffLc.deal.calcQuote')}
         </Button>
       )
     ) : null;
@@ -96,14 +97,14 @@ function StagePanel({ deal }: { deal: DealCard }) {
     case 'lead':
     case 'census':
       return block(
-        deal.census ? 'данные для оценки загружены' : 'нужны данные для оценки',
+        deal.census ? t('staffLc.deal.censusLoaded') : t('staffLc.deal.censusNeeded'),
         deal.census
-          ? `Загружено ${deal.census.rows.length} человек ${formatDate(deal.census.uploadedAt)}. Следующий шаг — котировка андеррайтера.`
-          : 'Попросите у клиента пол, год рождения и тип (сотрудник, супруг, ребёнок) по каждому человеку. Имена и ПИНФЛ на этом этапе не нужны.',
+          ? t('staffLc.deal.censusLoadedText', { n: deal.census.rows.length, date: formatDate(deal.census.uploadedAt) })
+          : t('staffLc.deal.censusNeededText'),
         <>
           {(canCensus || canManage) && (
             <Button size="sm" variant={deal.census ? 'secondary' : 'primary'} onClick={() => navigate(`/staff/deals/${deal.id}/census`)}>
-              {deal.census ? 'Данные для оценки' : 'Загрузить данные для оценки'}
+              {deal.census ? t('staffLc.census.title') : t('staffLc.deal.uploadCensus')}
             </Button>
           )}
           {quoteButton}
@@ -113,18 +114,18 @@ function StagePanel({ deal }: { deal: DealCard }) {
       const q = deal.quote;
       const approved = q?.status === 'approved';
       return block(
-        q ? `котировка — ${QUOTE_STATUS_LABEL[q.status].toLowerCase()}` : 'котировка',
-        approved ? 'Котировка утверждена. КП отправляется только по утверждённой котировке, его параметры берутся из неё.' : 'КП можно отправить только по утверждённой котировке.',
+        q ? t('staffLc.deal.quoteWithStatus', { status: QUOTE_STATUS_LABEL[q.status].toLowerCase() }) : t('staffLc.deal.quoteLower'),
+        approved ? t('staffLc.deal.quoteApprovedText') : t('staffLc.deal.quoteNotApprovedText'),
         <>
           {quoteButton}
           {!canQuote && q && (
             <Button size="sm" variant="secondary" onClick={() => navigate(`/staff/quotes/${q.id}`)}>
-              Котировка
+              {t('staffLc.deal.quote')}
             </Button>
           )}
           {canManage && (
-            <Button size="sm" disabled={!approved} loading={sendKp.isPending} onClick={() => void run(() => sendKp.mutateAsync(deal.id), 'КП отправлено клиенту')}>
-              Отправить КП
+            <Button size="sm" disabled={!approved} loading={sendKp.isPending} onClick={() => void run(() => sendKp.mutateAsync(deal.id), t('staffLc.deal.kpSent'))}>
+              {t('staffLc.deal.sendKp')}
             </Button>
           )}
         </>,
@@ -134,21 +135,21 @@ function StagePanel({ deal }: { deal: DealCard }) {
       return (
         <>
           {block(
-            'КП у клиента',
-            'Клиент принимает или отклоняет КП в кабинете HR. Если клиент ответил письмом, отметьте решение вручную.',
+            t('staffLc.deal.kpAtClient'),
+            t('staffLc.deal.kpAtClientText'),
             <>
               {deal.kp && (
                 <Button size="sm" variant="secondary" onClick={() => navigate(`/staff/kp/${deal.kp!.id}`)}>
-                  Открыть КП
+                  {t('staffLc.deal.openKp')}
                 </Button>
               )}
               {canKpManual && deal.kp && (
                 <>
-                  <Button size="sm" loading={respond.isPending} onClick={() => void run(() => respond.mutateAsync({ kpId: deal.kp!.id, decision: 'accept' }), 'Отмечено: клиент принял КП')}>
-                    Клиент принял
+                  <Button size="sm" loading={respond.isPending} onClick={() => void run(() => respond.mutateAsync({ kpId: deal.kp!.id, decision: 'accept' }), t('staffLc.deal.kpAcceptedToast'))}>
+                    {t('staffLc.deal.clientAccepted')}
                   </Button>
                   <Button size="sm" variant="secondary" onClick={() => setDecline(true)}>
-                    Клиент отклонил
+                    {t('staffLc.deal.clientDeclined')}
                   </Button>
                 </>
               )}
@@ -158,12 +159,12 @@ function StagePanel({ deal }: { deal: DealCard }) {
             <ReasonDialog
               open={decline}
               onClose={() => setDecline(false)}
-              title="Клиент отклонил КП"
-              description="Сделка останется на этапе КП: можно пересчитать котировку или отметить сделку проигранной."
-              label="Причина отказа"
+              title={t('staffLc.deal.declineTitle')}
+              description={t('staffLc.deal.declineDesc')}
+              label={t('staffLc.deal.declineReason')}
               field="reason"
               schema={kpDeclineSchema}
-              confirmLabel="Отметить отказ"
+              confirmLabel={t('staffLc.deal.declineConfirm')}
               danger
               onSubmit={(reason) => respond.mutateAsync({ kpId: deal.kp!.id, decision: 'decline', reason })}
             />
@@ -172,8 +173,8 @@ function StagePanel({ deal }: { deal: DealCard }) {
       );
     case 'kp_accepted':
       return block(
-        'КП принято',
-        'Подготовьте договор: параметры возьмутся из утверждённой котировки и реквизитов клиента.',
+        t('staffLc.deal.kpAccepted'),
+        t('staffLc.deal.kpAcceptedText'),
         canDraft && (
           <Button
             size="sm"
@@ -182,20 +183,20 @@ function StagePanel({ deal }: { deal: DealCard }) {
               void run(async () => {
                 const c = await createContract.mutateAsync(deal.id);
                 navigate(`/staff/contracts/${c.id}`);
-              }, 'Договор создан')
+              }, t('staffLc.deal.contractCreated'))
             }
           >
-            Подготовить договор
+            {t('staffLc.deal.prepareContract')}
           </Button>
         ),
       );
     default:
       return block(
         DEAL_STAGE_LABEL[deal.stage].toLowerCase(),
-        deal.stage === 'awaiting_payment' ? 'Договор подписан. Полис выпускается по правилу вступления в силу: обычно после первой оплаты.' : 'Работа идёт в карточке договора.',
+        deal.stage === 'awaiting_payment' ? t('staffLc.deal.awaitingPaymentText') : t('staffLc.deal.inContractText'),
         deal.contract && (
           <Button size="sm" onClick={() => navigate(`/staff/contracts/${deal.contract!.id}`)}>
-            Открыть договор
+            {t('staffLc.deal.openContract')}
           </Button>
         ),
       );
@@ -212,31 +213,31 @@ function DealInfo({ deal }: { deal: DealCard }) {
   const save = async (body: { expectedStart?: string; underwriterId?: string }) => {
     try {
       await patch.mutateAsync({ id: deal.id, ...body });
-      toast.success('Сохранено');
+      toast.success(t('staffLc.deal.saved'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
   return (
-    <Card title="Сделка">
+    <Card title={t('staffLc.deal.fallback')}>
       <dl className="text-[13px]">
-        <Kv label="Клиент">
+        <Kv label={t('common.client')}>
           <Link className="text-accent-text underline-offset-2 hover:underline" to={`/staff/clients/${deal.clientId}`}>
             {deal.clientName}
           </Link>
         </Kv>
-        <Kv label="Тип">{deal.type === 'renewal' ? 'Продление' : 'Новый клиент'}</Kv>
-        <Kv label="Менеджер">{deal.ownerName}</Kv>
-        <Kv label="Численность, примерно">{deal.client.estimatedHeadcount ?? '—'}</Kv>
-        <Kv label="Текущий страховщик">{deal.client.currentInsurer ?? '—'}</Kv>
-        <Kv label="Премия">{deal.premium ? <span className="num">{formatMoney(deal.premium)}</span> : '—'}</Kv>
+        <Kv label={t('common.type')}>{deal.type === 'renewal' ? t('staffLc.deals.typeRenewal') : t('staffLc.deals.typeNew')}</Kv>
+        <Kv label={t('common.manager')}>{deal.ownerName}</Kv>
+        <Kv label={t('staffLc.deals.headcount')}>{deal.client.estimatedHeadcount ?? '—'}</Kv>
+        <Kv label={t('staffLc.deals.currentInsurer')}>{deal.client.currentInsurer ?? '—'}</Kv>
+        <Kv label={t('common.premium')}>{deal.premium ? <span className="num">{formatMoney(deal.premium)}</span> : '—'}</Kv>
       </dl>
       {canManage && !closed ? (
         <div className="mt-3 grid gap-3 border-t border-border-soft pt-3">
-          <Field label="Андеррайтер">
+          <Field label={t('staffLc.deal.underwriter')}>
             {(a) => (
               <Select {...a} value={deal.underwriterId ?? ''} onChange={(e) => e.target.value && void save({ underwriterId: e.target.value })}>
-                <option value="">Не назначен</option>
+                <option value="">{t('staffLc.deal.notAssigned')}</option>
                 {underwriters.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.fullName}
@@ -245,12 +246,12 @@ function DealInfo({ deal }: { deal: DealCard }) {
               </Select>
             )}
           </Field>
-          <Field label="Желаемое начало">
+          <Field label={t('staffLc.deal.expectedStart')}>
             {(a) => (
               <div className="flex gap-2">
-                <Input {...a} value={start} maxLength={10} placeholder="ДД.ММ.ГГГГ" onChange={(e) => setStart(e.target.value)} />
+                <Input {...a} value={start} maxLength={10} placeholder={t('staffLc.deal.datePlaceholder')} onChange={(e) => setStart(e.target.value)} />
                 <Button size="sm" variant="secondary" disabled={!start} onClick={() => void save({ expectedStart: start })}>
-                  Сохранить
+                  {t('common.save')}
                 </Button>
               </div>
             )}
@@ -258,8 +259,8 @@ function DealInfo({ deal }: { deal: DealCard }) {
         </div>
       ) : (
         <dl className="text-[13px]">
-          <Kv label="Андеррайтер">{deal.underwriterName ?? '—'}</Kv>
-          <Kv label="Желаемое начало">{deal.expectedStart ? formatDate(deal.expectedStart) : '—'}</Kv>
+          <Kv label={t('staffLc.deal.underwriter')}>{deal.underwriterName ?? '—'}</Kv>
+          <Kv label={t('staffLc.deal.expectedStart')}>{deal.expectedStart ? formatDate(deal.expectedStart) : '—'}</Kv>
         </dl>
       )}
     </Card>
@@ -268,22 +269,22 @@ function DealInfo({ deal }: { deal: DealCard }) {
 
 function Documents({ deal }: { deal: DealCard }) {
   const rows: { label: string; to?: string; chip?: ReactNode; meta?: string }[] = [];
-  if (deal.census) rows.push({ label: `Данные для оценки: ${deal.census.rows.length} человек`, to: `/staff/deals/${deal.id}/census`, meta: formatDate(deal.census.uploadedAt) });
+  if (deal.census) rows.push({ label: t('staffLc.deal.docCensus', { n: deal.census.rows.length }), to: `/staff/deals/${deal.id}/census`, meta: formatDate(deal.census.uploadedAt) });
   if (deal.quote)
     rows.push({
-      label: `Котировка: ${PROGRAM_LABEL[deal.quote.program]}, ${formatMoney(deal.quote.total)}`,
+      label: t('staffLc.deal.docQuote', { program: PROGRAM_LABEL[deal.quote.program], total: formatMoney(deal.quote.total) }),
       to: `/staff/quotes/${deal.quote.id}`,
       chip: <Chip kind={QUOTE_STATUS_CHIP[deal.quote.status]}>{QUOTE_STATUS_LABEL[deal.quote.status]}</Chip>,
     });
-  if (deal.kp) rows.push({ label: `КП ${deal.kp.number}`, to: `/staff/kp/${deal.kp.id}`, chip: <Chip kind={KP_STATUS_CHIP[deal.kp.status]}>{KP_STATUS_LABEL[deal.kp.status]}</Chip> });
+  if (deal.kp) rows.push({ label: t('staffLc.deal.docKp', { number: deal.kp.number }), to: `/staff/kp/${deal.kp.id}`, chip: <Chip kind={KP_STATUS_CHIP[deal.kp.status]}>{KP_STATUS_LABEL[deal.kp.status]}</Chip> });
   if (deal.contract)
     rows.push({
-      label: `Договор ${deal.contract.number}, версия ${deal.contract.version}`,
+      label: t('staffLc.deal.docContract', { number: deal.contract.number, version: deal.contract.version }),
       to: `/staff/contracts/${deal.contract.id}`,
       chip: <Chip kind={CONTRACT_STATUS_CHIP[deal.contract.status]}>{CONTRACT_STATUS_LABEL[deal.contract.status]}</Chip>,
     });
   return (
-    <Card title="Документы сделки" bodyClassName="p-0">
+    <Card title={t('staffLc.deal.documents')} bodyClassName="p-0">
       {rows.length ? (
         <ul className="divide-y divide-border-soft text-[13px]">
           {rows.map((r) => (
@@ -303,7 +304,7 @@ function Documents({ deal }: { deal: DealCard }) {
           ))}
         </ul>
       ) : (
-        <p className="px-4 py-3 text-[13px] text-muted">Документов пока нет</p>
+        <p className="px-4 py-3 text-[13px] text-muted">{t('staffLc.deal.noDocuments')}</p>
       )}
     </Card>
   );
@@ -315,8 +316,8 @@ export default function DealCardPage() {
   const lost = useDealLost();
   const canManage = useCan('deals.manage');
   const [lostOpen, setLostOpen] = useState(false);
-  useDocumentTitle(q.data ? `Сделка ${q.data.number}` : 'Сделка');
-  useTopbar([{ label: 'Сделки', to: '/staff/deals' }, { label: q.data?.number ?? 'Сделка' }]);
+  useDocumentTitle(q.data ? t('staffLc.deal.titleNumber', { number: q.data.number }) : t('staffLc.deal.fallback'));
+  useTopbar([{ label: t('staffLc.deals.title'), to: '/staff/deals' }, { label: q.data?.number ?? t('staffLc.deal.fallback') }]);
 
   return (
     <QueryState query={q}>
@@ -326,16 +327,16 @@ export default function DealCardPage() {
             title={
               <span className="flex flex-wrap items-center gap-2">
                 {deal.clientName}
-                {deal.type === 'renewal' && <Chip kind="renewal">продление</Chip>}
+                {deal.type === 'renewal' && <Chip kind="renewal">{t('staffLc.deals.renewalChip')}</Chip>}
               </span>
             }
-            subtitle={<span className="num">Сделка {deal.number} · создана {formatDate(deal.createdAt)}</span>}
+            subtitle={<span className="num">{t('staffLc.deal.subtitle', { number: deal.number, date: formatDate(deal.createdAt) })}</span>}
             actions={
               canManage &&
               deal.stage !== 'lost' &&
               deal.stage !== 'active' && (
                 <Button variant="secondary" onClick={() => setLostOpen(true)}>
-                  Сделка проиграна
+                  {t('staffLc.deal.markLost')}
                 </Button>
               )
             }
@@ -346,18 +347,18 @@ export default function DealCardPage() {
           {deal.reminders.map((r) => (
             <p key={r} role="status" className="mb-3 flex items-center gap-2 rounded-card border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
               <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
-              {r}
+              {tm(r)}
             </p>
           ))}
           <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
             <div className="flex min-w-0 flex-col gap-4">
               <StagePanel deal={deal} />
               <Documents deal={deal} />
-              <Card title="События" bodyClassName="p-0">
+              <Card title={t('staffLc.deal.events')} bodyClassName="p-0">
                 <ol className="divide-y divide-border-soft text-[13px]" data-testid="deal-events">
                   {[...deal.events].reverse().map((e) => (
                     <li key={e.id} className="px-4 py-2.5">
-                      <p>{e.text}</p>
+                      <p>{tm(e.text)}</p>
                       <p className="mt-0.5 text-[12px] text-muted">
                         <span className="num">{formatDateTime(e.at)}</span> · {e.actorName}
                       </p>
@@ -371,12 +372,12 @@ export default function DealCardPage() {
           <ReasonDialog
             open={lostOpen}
             onClose={() => setLostOpen(false)}
-            title="Сделка проиграна"
-            description="Сделка закроется на текущем этапе. Причина попадёт в ленту событий и в журнал аудита."
-            label="Причина"
+            title={t('staffLc.deal.markLost')}
+            description={t('staffLc.deal.lostDesc')}
+            label={t('common.reason')}
             field="reason"
             schema={dealLostSchema}
-            confirmLabel="Закрыть сделку"
+            confirmLabel={t('staffLc.deal.closeDeal')}
             danger
             onSubmit={(reason) => lost.mutateAsync({ id: deal.id, reason })}
           />

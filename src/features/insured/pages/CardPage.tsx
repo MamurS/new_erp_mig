@@ -10,7 +10,7 @@ import { qrPayload } from '../lib';
 
 export default function CardPage() {
   const { t } = useI18n();
-  useDocumentTitle(t('card.title'));
+  useDocumentTitle(t('app.card.title'));
   const token = useCardToken();
   const me = useMe();
   const policy = useMePolicy();
@@ -40,25 +40,25 @@ export default function CardPage() {
 
   return (
     <div>
-      <ScreenHeader title={t('card.title')} back="/app" />
+      <ScreenHeader title={t('app.card.title')} back="/app" />
       <section className="flex flex-col items-center rounded-hero border border-border bg-surface p-5 text-center">
         {token.isError ? (
           <LoadError error={token.error} onRetry={() => void token.refetch()} />
         ) : qr && token.data ? (
-          <img src={qr} alt={t('card.qrAlt')} width={280} height={280} className="h-[280px] w-[280px] max-w-full" data-testid="card-qr" />
+          <img src={qr} alt={t('app.card.qrAlt')} width={280} height={280} className="h-[280px] w-[280px] max-w-full" data-testid="card-qr" />
         ) : (
           <Skeleton className="h-[280px] w-[280px] max-w-full rounded-card" />
         )}
         {token.data?.shortCode && (
           <div className="mt-3">
-            <p className="text-[12px] text-muted">{t('card.shortCode')}</p>
+            <p className="text-[12px] text-muted">{t('app.card.shortCode')}</p>
             <p className="num font-heading text-[28px] font-bold tracking-[0.12em]" data-testid="card-short-code">
               {token.data.shortCode}
             </p>
           </div>
         )}
         <p className="mt-2 text-[14px] font-semibold text-muted" aria-live="off">
-          {t('card.refresh', { sec: left })}
+          {t('app.card.refresh', { sec: left })}
         </p>
         <div className="mt-4 w-full border-t border-border-soft pt-4">
           {me.isLoading ? (
@@ -69,16 +69,16 @@ export default function CardPage() {
           {policy.data && (
             <dl className="mt-3 grid grid-cols-2 gap-3 text-left">
               <div className="rounded-btn bg-rail px-3 py-2">
-                <dt className="text-[12px] text-muted">{t('card.policy')}</dt>
+                <dt className="text-[12px] text-muted">{t('app.card.policy')}</dt>
                 <dd className="font-bold num text-[14px]">{policy.data.number}</dd>
               </div>
               <div className="rounded-btn bg-rail px-3 py-2">
-                <dt className="text-[12px] text-muted">{t('card.program')}</dt>
+                <dt className="text-[12px] text-muted">{t('app.card.program')}</dt>
                 <dd className="font-bold">{policy.data.programName}</dd>
               </div>
               {policy.data.certificateNumber && (
                 <div className="col-span-2 rounded-btn bg-rail px-3 py-2">
-                  <dt className="text-[12px] text-muted">{t('card.certificate')}</dt>
+                  <dt className="text-[12px] text-muted">{t('app.card.certificate')}</dt>
                   <dd className="num text-[14px] font-bold" data-testid="card-certificate">
                     {policy.data.certificateNumber}
                   </dd>
@@ -99,7 +99,7 @@ export default function CardPage() {
           )}
         </div>
       </section>
-      <p className="mt-4 rounded-card bg-sky px-4 py-3 text-center font-semibold text-sky-text">{t('card.hint')}</p>
+      <p className="mt-4 rounded-card bg-sky px-4 py-3 text-center font-semibold text-sky-text">{t('app.card.hint')}</p>
     </div>
   );
 }

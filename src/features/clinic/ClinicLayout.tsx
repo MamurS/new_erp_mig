@@ -9,6 +9,7 @@ import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useClinicOverview } from '@/shared/api/queries/clinic';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
+import { t } from '@/i18n';
 
 interface ClinicNav {
   to: string;
@@ -19,14 +20,14 @@ interface ClinicNav {
 }
 
 const NAV: ClinicNav[] = [
-  { to: '/clinic', label: 'Главная', icon: House, group: 'work' },
-  { to: '/clinic/check', label: 'Проверка пациента', icon: ScanLine, group: 'work' },
-  { to: '/clinic/appointments', label: 'Записи', icon: CalendarClock, group: 'work' },
-  { to: '/clinic/guarantees', label: 'Гарантийные письма', icon: FileCheck, group: 'work' },
-  { to: '/clinic/registries', label: 'Реестры', icon: ClipboardList, group: 'work', action: 'registries.submit' },
-  { to: '/clinic/documents', label: 'Документы', icon: FolderOpen, group: 'work' },
-  { to: '/clinic/users', label: 'Пользователи', icon: Users, group: 'admin', action: 'clinic.users.manage' },
-  { to: '/clinic/integration', label: 'Интеграция', icon: PlugZap, group: 'admin', action: 'clinic.integration.manage' },
+  { to: '/clinic', get label() { return t('clinic.nav.home'); }, icon: House, group: 'work' },
+  { to: '/clinic/check', get label() { return t('clinic.nav.check'); }, icon: ScanLine, group: 'work' },
+  { to: '/clinic/appointments', get label() { return t('clinic.nav.appointments'); }, icon: CalendarClock, group: 'work' },
+  { to: '/clinic/guarantees', get label() { return t('clinic.nav.guarantees'); }, icon: FileCheck, group: 'work' },
+  { to: '/clinic/registries', get label() { return t('clinic.nav.registries'); }, icon: ClipboardList, group: 'work', action: 'registries.submit' },
+  { to: '/clinic/documents', get label() { return t('common.documents'); }, icon: FolderOpen, group: 'work' },
+  { to: '/clinic/users', get label() { return t('clinic.nav.users'); }, icon: Users, group: 'admin', action: 'clinic.users.manage' },
+  { to: '/clinic/integration', get label() { return t('clinic.nav.integration'); }, icon: PlugZap, group: 'admin', action: 'clinic.integration.manage' },
 ];
 
 export default function ClinicLayout() {
@@ -39,18 +40,18 @@ export default function ClinicLayout() {
   const toItem = (n: ClinicNav) => ({ path: n.to, label: n.label, icon: n.icon });
   const groups: SidebarGroup[] = [
     { items: allowed.filter((n) => n.group === 'work').map(toItem) },
-    { label: 'Администрирование', items: allowed.filter((n) => n.group === 'admin').map(toItem) },
+    { label: t('clinic.nav.admin'), items: allowed.filter((n) => n.group === 'admin').map(toItem) },
   ].filter((g) => g.items.length > 0);
 
   return (
     <SidebarProvider portal="clinic">
       <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))' }}>
         <AppSidebar
-          title="MIG · Клиника"
-          ariaLabel="Разделы кабинета клиники"
+          title={t('shell.title.clinic')}
+          ariaLabel={t('clinic.nav.aria')}
           groups={groups}
           activePath={current}
-          user={{ name: user?.displayName ?? '', role: user ? ROLE_LABEL[user.role] : 'Кабинет клиники', portal: clinicName ? `Кабинет клиники · ${clinicName}` : 'Кабинет клиники' }}
+          user={{ name: user?.displayName ?? '', role: user ? ROLE_LABEL[user.role] : t('shell.portal.clinic'), portal: clinicName ? t('clinic.layout.portalNamed', { name: clinicName }) : t('shell.portal.clinic') }}
           onLogout={() => void logout()}
         />
         <div data-theme="client" className="flex min-w-0 flex-1 flex-col bg-bg text-text">
@@ -58,7 +59,7 @@ export default function ClinicLayout() {
           <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="min-w-0 leading-tight">
-              <p className="text-[12px] text-muted">Кабинет клиники</p>
+              <p className="text-[12px] text-muted">{t('shell.portal.clinic')}</p>
               {clinicName ? (
                 <p className="truncate font-heading text-[15px] font-semibold" data-testid="clinic-name">
                   {clinicName}

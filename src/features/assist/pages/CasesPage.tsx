@@ -11,37 +11,38 @@ import { FilterChip } from '@/shared/ui/filter-chip';
 import { PageHeader } from '@/shared/ui/page';
 import { useTopbar } from '@/features/staff/topbar';
 import { CaseStatus, SlaBadge } from '../components';
+import { t } from '@/i18n';
 
 const KEYS = ['status', 'type'] as const;
 
 export default function CasesPage() {
-  useDocumentTitle('Обращения');
-  useTopbar([{ label: 'Обращения' }]);
+  useDocumentTitle(t('assist.cases.title'));
+  useTopbar([{ label: t('assist.cases.title') }]);
   const navigate = useNavigate();
   const [f, setF] = useUrlFilters(KEYS);
   const q = useAssistCases({ ...(f.status ? { status: f.status } : {}), ...(f.type ? { type: f.type } : {}) });
   const columns: Column<AssistCaseView>[] = [
-    { key: 'number', header: 'Номер', cell: (c) => <span className="num font-medium">{c.number}</span> },
-    { key: 'type', header: 'Тип', cell: (c) => (c.type === 'complaint' || c.type === 'emergency' ? <Chip kind="danger">{CASE_TYPE_LABEL[c.type]}</Chip> : CASE_TYPE_LABEL[c.type]) },
-    { key: 'who', header: 'Застрахованный', cell: (c) => c.insuredName },
-    { key: 'text', header: 'Суть', cell: (c) => <span className="line-clamp-1 text-muted">{c.description}</span> },
-    { key: 'channel', header: 'Канал', cell: (c) => CASE_CHANNEL_LABEL[c.channel] },
-    { key: 'created', header: 'Создано', cell: (c) => <span className="num whitespace-nowrap">{formatDateTime(c.createdAt)}</span> },
-    { key: 'status', header: 'Статус', cell: (c) => (c.access === 'read' ? <Chip kind="neutral">Только чтение</Chip> : <CaseStatus status={c.status} />) },
+    { key: 'number', header: t('common.number'), cell: (c) => <span className="num font-medium">{c.number}</span> },
+    { key: 'type', header: t('common.type'), cell: (c) => (c.type === 'complaint' || c.type === 'emergency' ? <Chip kind="danger">{CASE_TYPE_LABEL[c.type]}</Chip> : CASE_TYPE_LABEL[c.type]) },
+    { key: 'who', header: t('common.insured'), cell: (c) => c.insuredName },
+    { key: 'text', header: t('assist.cases.essence'), cell: (c) => <span className="line-clamp-1 text-muted">{c.description}</span> },
+    { key: 'channel', header: t('assist.cases.channel'), cell: (c) => CASE_CHANNEL_LABEL[c.channel] },
+    { key: 'created', header: t('common.created'), cell: (c) => <span className="num whitespace-nowrap">{formatDateTime(c.createdAt)}</span> },
+    { key: 'status', header: t('common.status'), cell: (c) => (c.access === 'read' ? <Chip kind="neutral">{t('assist.cases.readOnly')}</Chip> : <CaseStatus status={c.status} />) },
     { key: 'sla', header: 'SLA', cell: (c) => <SlaBadge dueAt={c.slaDueAt} done={c.status === 'resolved' || c.access === 'read'} /> },
   ];
   return (
     <>
-      <PageHeader title="Обращения" subtitle="Новое обращение создаётся из карточки застрахованного после поиска" />
+      <PageHeader title={t('assist.cases.title')} subtitle={t('assist.cases.subtitle')} />
       <div className="mb-3 flex flex-wrap gap-2">
         <FilterChip
-          label="Статус"
+          label={t('common.status')}
           options={Object.entries(CASE_STATUS_LABEL).map(([value, label]) => ({ value, label }))}
           selected={f.status ? f.status.split(',') : []}
           onChange={(v) => setF({ status: v.length ? v.join(',') : null })}
         />
         <FilterChip
-          label="Тип"
+          label={t('common.type')}
           options={Object.entries(CASE_TYPE_LABEL).map(([value, label]) => ({ value, label }))}
           selected={f.type ? [f.type] : []}
           onChange={(v) => setF({ type: v[v.length - 1] ?? null })}
@@ -49,7 +50,7 @@ export default function CasesPage() {
       </div>
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Обращения колл-центра"
+          caption={t('assist.cases.caption')}
           columns={columns}
           rows={q.data}
           loading={q.isLoading}
@@ -58,7 +59,7 @@ export default function CasesPage() {
           rowKey={(c) => c.id}
           onRowClick={(c) => navigate(`/assist/cases/${c.id}`)}
           onRowOpen={(c) => navigate(`/assist/cases/${c.id}`)}
-          empty="Обращений нет"
+          empty={t('assist.cases.empty')}
         />
       </div>
     </>

@@ -7,6 +7,7 @@ import type { SessionUser } from '@/shared/types';
 import { can } from '@/shared/auth/permissions';
 import { useClaims, useClients, useInsuredList, usePolicies } from '@/shared/api/queries/staff';
 import { useDebounced } from '@/shared/lib/hooks';
+import { t } from '@/i18n';
 import { INSURED_CARD_ROLES, STAFF_SECTIONS } from './nav';
 
 const itemCls =
@@ -44,22 +45,22 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
           data-theme="staff"
           className="animate-modal fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-24px)] max-w-xl -translate-x-1/2 overflow-hidden rounded-card border border-border bg-surface shadow-2xl"
         >
-          <D.Title className="sr-only">Командная палитра</D.Title>
-          <D.Description className="sr-only">Поиск по клиентам, полисам, застрахованным, убыткам и разделам</D.Description>
-          <Command shouldFilter={false} label="Командная палитра" loop>
+          <D.Title className="sr-only">{t('staff.palette.title')}</D.Title>
+          <D.Description className="sr-only">{t('staff.palette.description')}</D.Description>
+          <Command shouldFilter={false} label={t('staff.palette.title')} loop>
             <Command.Input
               value={q}
               onValueChange={setQ}
               maxLength={100}
-              placeholder="Клиент, ИНН, номер полиса или убытка, ФИО…"
+              placeholder={t('staff.palette.placeholder')}
               className="h-12 w-full border-b border-border bg-transparent px-4 outline-hidden"
             />
             <Command.List className="max-h-[60vh] overflow-y-auto p-2">
               <Command.Empty className="px-2 py-6 text-center text-muted">
-                {term.length < 2 ? 'Введите минимум 2 символа' : 'Ничего не найдено'}
+                {term.length < 2 ? t('staff.palette.minChars') : t('common.notFound')}
               </Command.Empty>
               {canClients && (clients.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Клиенты" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                <Command.Group heading={t('staff.palette.clients')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {clients.data!.items.map((c) => (
                     <Command.Item key={c.id} value={`c-${c.id}`} onSelect={() => go(`/staff/clients/${c.id}`)} className={itemCls}>
                       <Building2 className="h-4 w-4 text-muted" aria-hidden /> {c.name}
@@ -69,7 +70,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                 </Command.Group>
               )}
               {canPolicies && (policies.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Полисы" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                <Command.Group heading={t('staff.palette.policies')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {policies.data!.items.map((p) => (
                     <Command.Item key={p.id} value={`p-${p.id}`} onSelect={() => go(`/staff/policies/${p.id}`)} className={itemCls}>
                       <FileText className="h-4 w-4 text-muted" aria-hidden /> <span className="num">{p.number}</span>
@@ -79,7 +80,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                 </Command.Group>
               )}
               {canInsured && (insured.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Застрахованные" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                <Command.Group heading={t('staff.palette.insured')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {insured.data!.items.map((i) => (
                     <Command.Item key={i.id} value={`i-${i.id}`} onSelect={() => go(`/staff/insured/${i.id}`)} className={itemCls}>
                       <User className="h-4 w-4 text-muted" aria-hidden /> {i.fullName}
@@ -89,7 +90,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                 </Command.Group>
               )}
               {canClaims && (claims.data?.items.length ?? 0) > 0 && (
-                <Command.Group heading="Убытки" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                <Command.Group heading={t('staff.palette.claims')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {claims.data!.items.map((c) => (
                     <Command.Item key={c.id} value={`u-${c.id}`} onSelect={() => go(`/staff/claims/${c.id}`)} className={itemCls}>
                       <Receipt className="h-4 w-4 text-muted" aria-hidden /> <span className="num">{c.number}</span>
@@ -98,7 +99,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                   ))}
                 </Command.Group>
               )}
-              <Command.Group heading="Разделы" className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+              <Command.Group heading={t('staff.palette.sections')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                 {sections
                   .filter((s) => !term || s.label.toLowerCase().includes(term.toLowerCase()))
                   .map((s) => (

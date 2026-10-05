@@ -9,13 +9,14 @@ import { PageHeader, Card } from '@/shared/ui/page';
 import { EmptyState, QueryState } from '@/shared/ui/states';
 import { useTopbar } from '@/features/staff/topbar';
 import { KpiGrid, SlaBadge, Stat } from '../components';
+import { defineLabels, t } from '@/i18n';
 
 const KIND_ICON = { appointment: CalendarClock, case: Headphones, guarantee: FileCheck, registry: ClipboardList, escalation: Send, rebill: Receipt } as const;
-const KIND_LABEL = { appointment: 'Запись', case: 'Обращение', guarantee: 'ГП', registry: 'Реестр', escalation: 'В МИГ', rebill: 'Счёт МИГ' } as const;
+const KIND_LABEL = defineLabels('assist.kind', ['appointment', 'case', 'guarantee', 'registry', 'escalation', 'rebill'] as const);
 
 export default function DashboardPage() {
-  useDocumentTitle('Рабочий стол ассистанса');
-  useTopbar([{ label: 'Рабочий стол' }]);
+  useDocumentTitle(t('assist.dashboard.docTitle'));
+  useTopbar([{ label: t('assist.nav.dashboard') }]);
   const user = useUser();
   const q = useAssistOverview();
   return (
@@ -23,23 +24,23 @@ export default function DashboardPage() {
       {(o) => (
         <div className="flex flex-col gap-4">
           <PageHeader
-            title={`Здравствуйте, ${user?.displayName.split(' ')[0] ?? ''}`}
+            title={t('assist.dashboard.hello', { name: user?.displayName.split(' ')[0] ?? '' })}
             subtitle={
               <>
-                {o.assistance.name} · линия 24/7 <span className="num">{o.assistance.phone24x7}</span> · полномочия по ГП до {formatMoney(o.authorityLimit)}
+                {o.assistance.name} · {t('assist.dashboard.line247')} <span className="num">{o.assistance.phone24x7}</span> · {t('assist.dashboard.authority', { amount: formatMoney(o.authorityLimit) })}
               </>
             }
           />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <Stat label="Открытые обращения" value={o.counters.openCases} />
-            <Stat label="Нарушения SLA" value={o.counters.slaBreaches} tone={o.counters.slaBreaches ? 'danger' : undefined} />
-            <Stat label="ГП на решение" value={o.counters.guaranteesPending} tone={o.counters.guaranteesPending ? 'warning' : undefined} />
-            <Stat label="Строк реестров к проверке" value={o.counters.linesPending} />
-            <Stat label="Счета МИГ на проверке" value={o.counters.rebillsInReview} />
+            <Stat label={t('assist.dashboard.openCases')} value={o.counters.openCases} />
+            <Stat label={t('assist.dashboard.slaBreaches')} value={o.counters.slaBreaches} tone={o.counters.slaBreaches ? 'danger' : undefined} />
+            <Stat label={t('assist.dashboard.guaranteesPending')} value={o.counters.guaranteesPending} tone={o.counters.guaranteesPending ? 'warning' : undefined} />
+            <Stat label={t('assist.dashboard.linesPending')} value={o.counters.linesPending} />
+            <Stat label={t('assist.dashboard.rebillsInReview')} value={o.counters.rebillsInReview} />
           </div>
-          <Card title="Очередь" bodyClassName="p-0">
+          <Card title={t('assist.dashboard.queue')} bodyClassName="p-0">
             {o.queue.length === 0 ? (
-              <EmptyState title="Очередь пуста" description="Новые обращения, записи, ГП и строки реестров появятся здесь" />
+              <EmptyState title={t('assist.dashboard.queueEmpty')} description={t('assist.dashboard.queueEmptyHint')} />
             ) : (
               <ul className="divide-y divide-border-soft" data-testid="assist-queue">
                 {o.queue.map((item) => {
@@ -62,7 +63,7 @@ export default function DashboardPage() {
             )}
           </Card>
           <div>
-            <h2 className="mb-2 text-[14px] font-bold">KPI за месяц</h2>
+            <h2 className="mb-2 text-[14px] font-bold">{t('assist.dashboard.kpiMonth')}</h2>
             <KpiGrid kpi={o.kpi} />
           </div>
         </div>

@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import { Button } from '@/shared/ui/button';
+import { t } from '@/i18n';
 
 export function QrScanner({ onCode, onClose }: { onCode: (text: string) => void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
@@ -46,7 +47,7 @@ export function QrScanner({ onCode, onClose }: { onCode: (text: string) => void;
         }
         raf = requestAnimationFrame(tick);
       } catch {
-        setError('Нет доступа к камере. Разрешите доступ в браузере или введите код вручную');
+        setError(t('clinic.qr.noCamera'));
       }
     })();
 
@@ -64,10 +65,10 @@ export function QrScanner({ onCode, onClose }: { onCode: (text: string) => void;
           {error}
         </p>
       ) : (
-        <video ref={video} className="aspect-video w-full max-w-md rounded-card bg-black object-cover" muted playsInline aria-label="Изображение с камеры" />
+        <video ref={video} className="aspect-video w-full max-w-md rounded-card bg-black object-cover" muted playsInline aria-label={t('clinic.qr.video')} />
       )}
       <Button variant="secondary" className="w-fit" onClick={onClose}>
-        Закрыть камеру
+        {t('clinic.qr.close')}
       </Button>
     </div>
   );

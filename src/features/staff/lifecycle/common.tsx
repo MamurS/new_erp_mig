@@ -1,4 +1,5 @@
 /* Small pieces shared by the lifecycle screens: a reason dialog and a stage stepper. */
+import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { Check, FileUp } from 'lucide-react';
 import type { ZodType, ZodTypeDef } from 'zod';
@@ -57,7 +58,7 @@ export function ReasonDialog<K extends string>({
   };
   return (
     <ConfirmDialog open={open} onOpenChange={(o) => !o && onClose()} title={title} description={description} confirmLabel={confirmLabel} danger={danger} loading={busy} onConfirm={() => void confirm()}>
-      <Field label={label} error={error}>
+      <Field label={label} error={error && tm(error)}>
         {(a) => <Textarea {...a} rows={3} maxLength={500} value={text} onChange={(e) => setText(e.target.value)} />}
       </Field>
     </ConfirmDialog>
@@ -68,7 +69,7 @@ export function ReasonDialog<K extends string>({
 export function Stepper<S extends string>({ steps, current, labels, failed }: { steps: readonly S[]; current: S; labels: Record<S, string>; failed?: boolean }) {
   const idx = steps.indexOf(current);
   return (
-    <ol className="flex flex-wrap gap-x-1 gap-y-2" aria-label="Этапы">
+    <ol className="flex flex-wrap gap-x-1 gap-y-2" aria-label={t('staffLc.common.steps')}>
       {steps.map((s, i) => {
         const done = idx >= 0 && i < idx;
         const now = i === idx;
@@ -98,7 +99,7 @@ export function Stepper<S extends string>({ steps, current, labels, failed }: { 
 export function CsvFileButton({ label, ariaLabel, busy, maxBytes, onText }: { label: string; ariaLabel: string; busy?: boolean; maxBytes: number; onText: (text: string) => void }) {
   return (
     <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-btn border border-border bg-surface px-3 text-[13px] font-medium hover:bg-rail">
-      <FileUp className="h-3.5 w-3.5" aria-hidden /> {busy ? 'Загружаем…' : label}
+      <FileUp className="h-3.5 w-3.5" aria-hidden /> {busy ? t('staffLc.common.uploading') : label}
       <input
         type="file"
         accept=".csv,text/csv"
@@ -109,7 +110,7 @@ export function CsvFileButton({ label, ariaLabel, busy, maxBytes, onText }: { la
           e.target.value = '';
           if (!f) return;
           if (f.size > maxBytes) {
-            toast.error(`Файл больше ${Math.round(maxBytes / 1024 / 1024)} МБ`);
+            toast.error(t('staffLc.common.fileTooBig', { mb: Math.round(maxBytes / 1024 / 1024) }));
             return;
           }
           void f.text().then(onText);

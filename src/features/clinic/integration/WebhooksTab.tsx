@@ -19,9 +19,11 @@ import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { Panel } from '../components';
 import { SecretReveal } from './SecretReveal';
+import { t, tm, defineLabels } from '@/i18n';
 
 type HookForm = z.input<typeof webhookCreateRequest>;
-const STATUS = { delivered: ['success', 'Доставлен'], retrying: ['warning', 'Повтор'], failed: ['danger', 'Не доставлен'] } as const;
+const STATUS_CHIP = { delivered: 'success', retrying: 'warning', failed: 'danger' } as const;
+const STATUS_LABEL = defineLabels('clinic.integration.delivery', ['delivered', 'retrying', 'failed'] as const);
 
 function CreateWebhookDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (secret: string) => void }) {
   const partner = usePartner();
@@ -40,25 +42,25 @@ function CreateWebhookDialog({ onClose, onCreated }: { onClose: () => void; onCr
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title="Новый вебхук"
-      description="МИГ отправляет тонкие события: только id события, тип, время и id объекта. Подробности МИС запрашивает через API"
+      title={t('clinic.webhooks.newTitle')}
+      description={t('clinic.webhooks.newDescription')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={create.isPending} onClick={() => void submit()}>
-            Создать вебхук
+            {t('clinic.webhooks.create')}
           </Button>
         </>
       }
     >
       <form className="flex flex-col gap-3" onSubmit={(ev) => void submit(ev)} noValidate>
-        <Field label="Адрес получателя" error={e.url?.message} hint="Только https://, без localhost, .local и адресов внутренних сетей">
+        <Field label={t('clinic.webhooks.url')} error={tm(e.url?.message)} hint={t('clinic.webhooks.urlHint')}>
           {(a) => <Input {...a} autoComplete="off" maxLength={2048} {...form.register('url')} />}
         </Field>
         <fieldset>
-          <legend className="mb-1 text-[12px] font-medium text-muted">События</legend>
+          <legend className="mb-1 text-[12px] font-medium text-muted">{t('clinic.webhooks.events')}</legend>
           <div className="grid gap-1.5 sm:grid-cols-2">
             {(partner.events as WebhookEvent[]).map((ev) => (
               <label key={ev} className="flex items-center gap-2">
@@ -71,7 +73,7 @@ function CreateWebhookDialog({ onClose, onCreated }: { onClose: () => void; onCr
           </div>
           {e.events?.message && (
             <p role="alert" className="mt-1 text-[12px] text-danger-text">
-              {e.events.message}
+              {tm(e.events.message)}
             </p>
           )}
         </fieldset>
@@ -99,19 +101,19 @@ export function WebhooksTab() {
   };
 
   const columns: Column<WebhookDelivery>[] = [
-    { key: 'event', header: 'Событие', cell: (d) => <code className="text-[12px]">{d.event}</code> },
-    { key: 'at', header: 'Время', cell: (d) => <span className="num text-muted">{formatDateTime(d.lastAttemptAt)}</span> },
-    { key: 'code', header: 'Код ответа', cell: (d) => <span className="num">{d.responseCode ?? '—'}</span> },
-    { key: 'attempts', header: 'Попытки', align: 'right', cell: (d) => <span className="num">{d.attempts}</span> },
-    { key: 'status', header: 'Статус', cell: (d) => <Chip kind={STATUS[d.status][0]}>{STATUS[d.status][1]}</Chip> },
+    { key: 'event', header: t('clinic.webhooks.event'), cell: (d) => <code className="text-[12px]">{d.event}</code> },
+    { key: 'at', header: t('common.time'), cell: (d) => <span className="num text-muted">{formatDateTime(d.lastAttemptAt)}</span> },
+    { key: 'code', header: t('clinic.webhooks.code'), cell: (d) => <span className="num">{d.responseCode ?? '—'}</span> },
+    { key: 'attempts', header: t('clinic.webhooks.attempts'), align: 'right', cell: (d) => <span className="num">{d.attempts}</span> },
+    { key: 'status', header: t('common.status'), cell: (d) => <Chip kind={STATUS_CHIP[d.status]}>{STATUS_LABEL[d.status]}</Chip> },
     {
       key: 'retry',
       header: '',
       align: 'right',
       cell: (d) =>
         d.status === 'delivered' ? null : (
-          <Button size="sm" variant="secondary" loading={retry.isPending && retry.variables === d.id} onClick={() => void run(retry.mutateAsync(d.id), 'Повторная доставка выполнена')}>
-            Повторить
+          <Button size="sm" variant="secondary" loading={retry.isPending && retry.variables === d.id} onClick={() => void run(retry.mutateAsync(d.id), t('clinic.webhooks.retried'))}>
+            {t('common.retry')}
           </Button>
         ),
     },
@@ -119,9 +121,9 @@ export function WebhooksTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title="Адреса" actions={<Button onClick={() => setCreating(true)}>Добавить вебхук</Button>}>
+      <Panel title={t('clinic.webhooks.addresses')} actions={<Button onClick={() => setCreating(true)}>{t('clinic.webhooks.add')}</Button>}>
         {(hooks.data ?? []).length === 0 ? (
-          <p className="p-4 text-muted">{hooks.isLoading ? 'Загрузка…' : 'Вебхуков пока нет'}</p>
+          <p className="p-4 text-muted">{hooks.isLoading ? t('common.loading') : t('clinic.webhooks.empty')}</p>
         ) : (
           <ul className="divide-y divide-border-soft">
             {(hooks.data ?? []).map((h) => (
@@ -129,30 +131,31 @@ export function WebhooksTab() {
                 <span className="min-w-0">
                   <code className="break-all text-[13px]">{h.url}</code>
                   <span className="block text-[12px] text-muted">
-                    Секрет подписи ••••{h.secretLast4} · событий: {h.events.length} · создан {formatDateTime(h.createdAt)}
+                    {t('clinic.webhooks.meta', { last4: h.secretLast4, n: h.events.length, at: formatDateTime(h.createdAt) })}
                   </span>
                 </span>
-                <Button size="sm" variant="secondary" loading={test.isPending && test.variables === h.id} onClick={() => void run(test.mutateAsync(h.id), 'Тестовое событие отправлено')}>
-                  Отправить тестовое событие
+                <Button size="sm" variant="secondary" loading={test.isPending && test.variables === h.id} onClick={() => void run(test.mutateAsync(h.id), t('clinic.webhooks.testSent'))}>
+                  {t('clinic.webhooks.test')}
                 </Button>
               </li>
             ))}
           </ul>
         )}
         <p className="border-t border-border-soft px-4 py-2 text-[12px] text-muted">
-          Подпись: заголовок <code>MIG-Signature: t=…,v1=…</code>, v1 = HMAC-SHA256(секрет, «t.тело»). Отклоняйте события старше 5 минут. Повторы: через 1, 5, 30 минут, 2 и 12 часов.
+          {t('clinic.webhooks.signatureBefore')} <code>MIG-Signature: t=…,v1=…</code>
+          {t('clinic.webhooks.signatureAfter')}
         </p>
       </Panel>
-      <Panel title="Журнал доставок">
+      <Panel title={t('clinic.webhooks.deliveries')}>
         <DataTable
-          caption="Журнал доставок вебхуков"
+          caption={t('clinic.webhooks.deliveriesCaption')}
           columns={columns}
           rows={deliveries.data}
           rowKey={(d) => d.id}
           loading={deliveries.isLoading}
           error={deliveries.error}
           onRetry={() => void deliveries.refetch()}
-          empty={<EmptyState title="Доставок пока не было" />}
+          empty={<EmptyState title={t('clinic.webhooks.deliveriesEmpty')} />}
         />
       </Panel>
       {creating && (
@@ -164,7 +167,7 @@ export function WebhooksTab() {
           }}
         />
       )}
-      {secret && <SecretReveal title="Вебхук создан" items={[{ label: 'Секрет подписи', value: secret, testId: 'new-webhook-secret' }]} onClose={() => setSecret(null)} />}
+      {secret && <SecretReveal title={t('clinic.webhooks.createdTitle')} items={[{ label: t('clinic.webhooks.signingSecret'), value: secret, testId: 'new-webhook-secret' }]} onClose={() => setSecret(null)} />}
     </div>
   );
 }

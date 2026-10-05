@@ -12,6 +12,7 @@ import { useCan } from '@/shared/auth/guards';
 import { ROLE_LABEL, SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { GUARANTEE_STATUS_CHIP, GUARANTEE_STATUS_LABEL, INTEGRATION_MODE_LABEL, REGISTRY_STATUS_CHIP, REGISTRY_STATUS_LABEL } from '@/shared/domain/clinics';
 import { clinicAdminInviteSchema } from '@/shared/schemas/forms';
+import { t, tm } from '@/i18n';
 import { formatDate, formatDateTime, formatMoney, formatPercent } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -36,7 +37,7 @@ function InviteAdminDialog({ clinicId, onClose }: { clinicId: string; onClose: (
   const submit = form.handleSubmit(async (v) => {
     try {
       await invite.mutateAsync({ id: clinicId, ...v });
-      toast.success('Приглашение отправлено');
+      toast.success(t('staffOps.clinicCard.inviteSent'));
       onClose();
     } catch (err) {
       toast.error(errorMessage(err));
@@ -46,24 +47,24 @@ function InviteAdminDialog({ clinicId, onClose }: { clinicId: string; onClose: (
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Пригласить администратора клиники"
-      description="Первый администратор затем сам приглашает регистраторов и управляет интеграцией"
+      title={t('staffOps.clinicCard.inviteTitle')}
+      description={t('staffOps.clinicCard.inviteText')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={invite.isPending} onClick={() => void submit()}>
-            Пригласить
+            {t('staffOps.clinicCard.invite')}
           </Button>
         </>
       }
     >
       <form className="flex flex-col gap-3" onSubmit={(ev) => void submit(ev)} noValidate>
-        <Field label="ФИО" error={e.fullName?.message}>
+        <Field label={t('common.fullName')} error={tm(e.fullName?.message) || undefined}>
           {(a) => <Input {...a} autoComplete="off" maxLength={120} {...form.register('fullName')} />}
         </Field>
-        <Field label="Email" error={e.email?.message}>
+        <Field label={t('common.email')} error={tm(e.email?.message) || undefined}>
           {(a) => <Input {...a} type="email" autoComplete="off" maxLength={254} {...form.register('email')} />}
         </Field>
       </form>
@@ -76,8 +77,8 @@ export default function ClinicCardPage() {
   const navigate = useNavigate();
   const q = useClinicCard(clinicId);
   const responseNorm = useDmsParam('clinicResponseMinutes');
-  useDocumentTitle('Клиника');
-  useTopbar([{ label: 'Клиники', to: '/staff/clinics' }, { label: q.data?.clinic.name ?? 'Клиника' }]);
+  useDocumentTitle(t('common.clinic'));
+  useTopbar([{ label: t('staffOps.clinicCard.clinics'), to: '/staff/clinics' }, { label: q.data?.clinic.name ?? t('common.clinic') }]);
   const [f, setF] = useUrlFilters(['tab'] as const);
   const tab = ['overview', 'users', 'integration', 'guarantees', 'registries'].includes(f.tab) ? f.tab : 'overview';
   const canManage = useCan('clinics.manage');
@@ -105,7 +106,7 @@ export default function ClinicCardPage() {
     if (!mode) return;
     try {
       await setMode.mutateAsync({ id: c.id, integrationMode: mode });
-      toast.success('Режим интеграции изменён');
+      toast.success(t('staffOps.clinicCard.modeChanged'));
       setModeValue(null);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -115,7 +116,7 @@ export default function ClinicCardPage() {
     if (!revoking) return;
     try {
       await revoke.mutateAsync({ clinicId: c.id, keyId: revoking.id });
-      toast.success('Ключ отозван');
+      toast.success(t('staffOps.clinicCard.keyRevoked'));
       setRevoking(null);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -123,46 +124,46 @@ export default function ClinicCardPage() {
   };
 
   const userCols: Column<ClinicUserView>[] = [
-    { key: 'name', header: 'ФИО', cell: (u) => <span className="font-medium">{u.fullName}</span> },
-    { key: 'email', header: 'Email', cell: (u) => <span className="text-muted">{u.email}</span> },
-    { key: 'role', header: 'Роль', cell: (u) => ROLE_LABEL[u.role] },
-    { key: 'active', header: 'Статус', cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? 'Активен' : 'Заблокирован'}</Chip> },
-    { key: 'login', header: 'Последний вход', cell: (u) => <span className="num text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
+    { key: 'name', header: t('common.fullName'), cell: (u) => <span className="font-medium">{u.fullName}</span> },
+    { key: 'email', header: t('common.email'), cell: (u) => <span className="text-muted">{u.email}</span> },
+    { key: 'role', header: t('common.role'), cell: (u) => ROLE_LABEL[u.role] },
+    { key: 'active', header: t('common.status'), cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('staffOps.clinicCard.active') : t('staffOps.clinicCard.blocked')}</Chip> },
+    { key: 'login', header: t('staffOps.clinicCard.lastLogin'), cell: (u) => <span className="num text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
   ];
   const keyCols: Column<IntegrationClient>[] = [
-    { key: 'name', header: 'Название', cell: (k) => <span className="font-medium">{k.name}</span> },
+    { key: 'name', header: t('common.name'), cell: (k) => <span className="font-medium">{k.name}</span> },
     { key: 'id', header: 'client_id', cell: (k) => <code className="text-[12px]">{k.clientId}</code> },
-    { key: 'scopes', header: 'Области', cell: (k) => <span className="text-[12px] text-muted">{k.scopes.join(', ')}</span> },
-    { key: 'used', header: 'Последнее использование', cell: (k) => <span className="num text-muted">{k.lastUsedAt ? formatDateTime(k.lastUsedAt) : '—'}</span> },
+    { key: 'scopes', header: t('staffOps.clinicCard.scopes'), cell: (k) => <span className="text-[12px] text-muted">{k.scopes.join(', ')}</span> },
+    { key: 'used', header: t('staffOps.clinicCard.lastUsed'), cell: (k) => <span className="num text-muted">{k.lastUsedAt ? formatDateTime(k.lastUsedAt) : '—'}</span> },
     {
       key: 'actions',
       header: '',
       align: 'right',
       cell: (k) =>
         k.revokedAt ? (
-          <Chip kind="neutral">Отозван {formatDateTime(k.revokedAt)}</Chip>
+          <Chip kind="neutral">{t('staffOps.clinicCard.revokedAt', { date: formatDateTime(k.revokedAt) })}</Chip>
         ) : canRevoke ? (
-          <Button size="sm" variant="secondary" onClick={() => setRevoking(k)} aria-label={`Отозвать ключ ${k.name}`}>
-            Отозвать
+          <Button size="sm" variant="secondary" onClick={() => setRevoking(k)} aria-label={t('staffOps.clinicCard.revokeKeyAria', { name: k.name })}>
+            {t('common.revoke')}
           </Button>
         ) : (
-          <Chip kind="success">Активен</Chip>
+          <Chip kind="success">{t('staffOps.clinicCard.active')}</Chip>
         ),
     },
   ];
   const gCols: Column<GuaranteeView>[] = [
-    { key: 'num', header: 'Номер', cell: (g) => <span className="num">{g.number}</span> },
-    { key: 'date', header: 'Создано', cell: (g) => <span className="num text-muted">{formatDate(g.createdAt)}</span> },
-    { key: 'svc', header: 'Услуга', cell: (g) => g.serviceName },
-    { key: 'sum', header: 'Сумма', align: 'right', cell: (g) => <span className="num">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
-    { key: 'st', header: 'Статус', cell: (g) => <Chip kind={GUARANTEE_STATUS_CHIP[g.status]}>{GUARANTEE_STATUS_LABEL[g.status]}</Chip> },
+    { key: 'num', header: t('common.number'), cell: (g) => <span className="num">{g.number}</span> },
+    { key: 'date', header: t('common.created'), cell: (g) => <span className="num text-muted">{formatDate(g.createdAt)}</span> },
+    { key: 'svc', header: t('common.service'), cell: (g) => g.serviceName },
+    { key: 'sum', header: t('common.amount'), align: 'right', cell: (g) => <span className="num">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
+    { key: 'st', header: t('common.status'), cell: (g) => <Chip kind={GUARANTEE_STATUS_CHIP[g.status]}>{GUARANTEE_STATUS_LABEL[g.status]}</Chip> },
   ];
   const rCols: Column<RegistrySummary>[] = [
-    { key: 'period', header: 'Период', cell: (r) => <span className="num">{r.period}</span> },
-    { key: 'lines', header: 'Строк', align: 'right', cell: (r) => <span className="num">{r.lineCount}</span> },
-    { key: 'claimed', header: 'Заявлено', align: 'right', cell: (r) => <span className="num">{formatMoney(r.totals.claimed)}</span> },
-    { key: 'accepted', header: 'Принято', align: 'right', cell: (r) => <span className="num">{formatMoney(r.totals.accepted)}</span> },
-    { key: 'st', header: 'Статус', cell: (r) => <Chip kind={REGISTRY_STATUS_CHIP[r.status]}>{REGISTRY_STATUS_LABEL[r.status]}</Chip> },
+    { key: 'period', header: t('common.period'), cell: (r) => <span className="num">{r.period}</span> },
+    { key: 'lines', header: t('staffOps.clinicCard.lines'), align: 'right', cell: (r) => <span className="num">{r.lineCount}</span> },
+    { key: 'claimed', header: t('staffOps.registries.claimed'), align: 'right', cell: (r) => <span className="num">{formatMoney(r.totals.claimed)}</span> },
+    { key: 'accepted', header: t('staffOps.registries.accepted'), align: 'right', cell: (r) => <span className="num">{formatMoney(r.totals.accepted)}</span> },
+    { key: 'st', header: t('common.status'), cell: (r) => <Chip kind={REGISTRY_STATUS_CHIP[r.status]}>{REGISTRY_STATUS_LABEL[r.status]}</Chip> },
   ];
 
   return (
@@ -175,23 +176,23 @@ export default function ClinicCardPage() {
       </div>
       <Tabs value={tab} onValueChange={(v) => setF({ tab: v === 'overview' ? null : v })}>
         <TabsList>
-          <TabsTrigger value="overview">Обзор</TabsTrigger>
-          <TabsTrigger value="users">Пользователи</TabsTrigger>
-          <TabsTrigger value="integration">Интеграция</TabsTrigger>
-          {canGuarantees && <TabsTrigger value="guarantees">Гарантийные письма</TabsTrigger>}
-          {canRegistries && <TabsTrigger value="registries">Реестры</TabsTrigger>}
+          <TabsTrigger value="overview">{t('staffOps.clinicCard.tab.overview')}</TabsTrigger>
+          <TabsTrigger value="users">{t('staffOps.clinicCard.tab.users')}</TabsTrigger>
+          <TabsTrigger value="integration">{t('staffOps.clinicCard.tab.integration')}</TabsTrigger>
+          {canGuarantees && <TabsTrigger value="guarantees">{t('staffOps.guarantees.title')}</TabsTrigger>}
+          {canRegistries && <TabsTrigger value="registries">{t('staffOps.clinicCard.tab.registries')}</TabsTrigger>}
         </TabsList>
         <TabsContent value="overview">
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card title="Договор">
+            <Card title={t('common.contract')}>
               <div className="grid gap-2 sm:grid-cols-2">
-                <Kv label="Номер договора">{card.contractNumber}</Kv>
-                <Kv label="Действует до">{formatDate(c.contractUntil)}</Kv>
-                <Kv label="Специальности">{c.specialties.map((s) => SPECIALTY_LABEL[s]).join(', ')}</Kv>
-                <Kv label="Режим интеграции">
+                <Kv label={t('staffOps.clinicCard.contractNumber')}>{card.contractNumber}</Kv>
+                <Kv label={t('common.validUntil')}>{formatDate(c.contractUntil)}</Kv>
+                <Kv label={t('staffOps.clinicCard.specialties')}>{c.specialties.map((s) => SPECIALTY_LABEL[s]).join(', ')}</Kv>
+                <Kv label={t('staffOps.clinicCard.integrationMode')}>
                   {canManage ? (
                     <span className="flex items-center gap-2">
-                      <Select aria-label="Режим интеграции" className="w-44" value={mode ?? c.integrationMode} onChange={(e) => setModeValue(e.target.value as IntegrationMode)}>
+                      <Select aria-label={t('staffOps.clinicCard.integrationMode')} className="w-44" value={mode ?? c.integrationMode} onChange={(e) => setModeValue(e.target.value as IntegrationMode)}>
                         {(Object.keys(INTEGRATION_MODE_LABEL) as IntegrationMode[]).map((m) => (
                           <option key={m} value={m}>
                             {INTEGRATION_MODE_LABEL[m]}
@@ -200,7 +201,7 @@ export default function ClinicCardPage() {
                       </Select>
                       {mode && mode !== c.integrationMode && (
                         <Button size="sm" loading={setMode.isPending} onClick={() => void saveMode()}>
-                          Сохранить
+                          {t('common.save')}
                         </Button>
                       )}
                     </span>
@@ -210,14 +211,14 @@ export default function ClinicCardPage() {
                 </Kv>
               </div>
             </Card>
-            <Card title="Показатели">
+            <Card title={t('staffOps.clinicCard.metrics')}>
               <div className="grid gap-2 sm:grid-cols-3" data-testid="clinic-metrics">
-                <Kv label="Среднее время ответа на запись">
-                  {card.metrics.avgResponseMinutes === null ? '—' : `${card.metrics.avgResponseMinutes} мин`}
-                  <span className="block text-[12px] text-muted">норматив {c.responseSlaMinutes ?? responseNorm} мин</span>
+                <Kv label={t('staffOps.clinicCard.avgResponse')}>
+                  {card.metrics.avgResponseMinutes === null ? '—' : t('staffOps.clinicCard.minutes', { n: card.metrics.avgResponseMinutes })}
+                  <span className="block text-[12px] text-muted">{t('staffOps.clinicCard.norm', { n: c.responseSlaMinutes ?? responseNorm })}</span>
                 </Kv>
-                <Kv label="Доля отклонённых строк">{card.metrics.rejectedLineShare === null ? '—' : formatPercent(card.metrics.rejectedLineShare, 1)}</Kv>
-                <Kv label="Сумма к оплате">
+                <Kv label={t('staffOps.clinicCard.rejectedShare')}>{card.metrics.rejectedLineShare === null ? '—' : formatPercent(card.metrics.rejectedLineShare, 1)}</Kv>
+                <Kv label={t('staffOps.clinicCard.amountToPay')}>
                   <span className="num">{formatMoney(card.metrics.amountToPay)}</span>
                 </Kv>
               </div>
@@ -226,65 +227,65 @@ export default function ClinicCardPage() {
         </TabsContent>
         <TabsContent value="users">
           <Card
-            title="Пользователи клиники"
+            title={t('staffOps.clinicCard.clinicUsers')}
             actions={
               canInvite && !hasAdmin ? (
                 <Button size="sm" onClick={() => setInviting(true)}>
-                  Пригласить администратора
+                  {t('staffOps.clinicCard.inviteAdmin')}
                 </Button>
               ) : undefined
             }
           >
-            {hasAdmin && canInvite && <p className="mb-2 text-[12px] text-muted">Остальных пользователей приглашает администратор клиники в своём кабинете.</p>}
-            <DataTable caption="Пользователи клиники" columns={userCols} rows={card.users} rowKey={(u) => u.id} empty={<EmptyState title="Пользователей нет" />} />
+            {hasAdmin && canInvite && <p className="mb-2 text-[12px] text-muted">{t('staffOps.clinicCard.othersInvitedByAdmin')}</p>}
+            <DataTable caption={t('staffOps.clinicCard.clinicUsers')} columns={userCols} rows={card.users} rowKey={(u) => u.id} empty={<EmptyState title={t('staffOps.clinicCard.noUsers')} />} />
           </Card>
         </TabsContent>
         <TabsContent value="integration">
           <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
-              ['Вебхуков', card.webhooks.endpoints],
-              ['Доставок в повторе', card.webhooks.retrying],
-              ['Не доставлено за 24 ч', card.webhooks.failed24h],
-              ['Ошибок API за 24 ч', card.apiErrors24h],
-            ].map(([label, value]) => (
+              [t('staffOps.clinicCard.webhooks'), card.webhooks.endpoints],
+              [t('staffOps.clinicCard.retrying'), card.webhooks.retrying],
+              [t('staffOps.clinicCard.failed24h'), card.webhooks.failed24h],
+              [t('staffOps.clinicCard.apiErrors24h'), card.apiErrors24h],
+            ].map(([label, value], i) => (
               <div key={label} className="rounded-card border border-border bg-surface p-3">
                 <div className="text-[12px] text-muted">{label}</div>
-                <div className={Number(value) > 0 && label !== 'Вебхуков' ? 'num font-semibold text-warning-text' : 'num font-semibold'}>{value}</div>
+                <div className={Number(value) > 0 && i > 0 ? 'num font-semibold text-warning-text' : 'num font-semibold'}>{value}</div>
               </div>
             ))}
           </div>
-          <Card title="Ключи API (секреты не показываются)">
-            <DataTable caption="Ключи API" columns={keyCols} rows={card.keys} rowKey={(k) => k.id} empty={<EmptyState title="Ключей нет" />} />
+          <Card title={t('staffOps.clinicCard.keysTitle')}>
+            <DataTable caption={t('staffOps.clinicCard.keys')} columns={keyCols} rows={card.keys} rowKey={(k) => k.id} empty={<EmptyState title={t('staffOps.clinicCard.noKeys')} />} />
           </Card>
         </TabsContent>
         {canGuarantees && (
           <TabsContent value="guarantees">
-            <Card title="Гарантийные письма">
+            <Card title={t('staffOps.guarantees.title')}>
               <DataTable
-                caption="Гарантийные письма клиники"
+                caption={t('staffOps.clinicCard.guaranteesCaption')}
                 columns={gCols}
                 rows={guarantees.data}
                 rowKey={(g) => g.id}
                 loading={guarantees.isLoading}
                 error={guarantees.error}
                 onRowClick={() => navigate(`/staff/guarantees?clinicId=${c.id}&status=all`)}
-                empty={<EmptyState title="Писем нет" />}
+                empty={<EmptyState title={t('staffOps.guarantees.empty')} />}
               />
             </Card>
           </TabsContent>
         )}
         {canRegistries && (
           <TabsContent value="registries">
-            <Card title="Реестры">
+            <Card title={t('staffOps.clinicCard.tab.registries')}>
               <DataTable
-                caption="Реестры клиники"
+                caption={t('staffOps.clinicCard.registriesCaption')}
                 columns={rCols}
                 rows={registries.data}
                 rowKey={(r) => r.id}
                 loading={registries.isLoading}
                 error={registries.error}
                 onRowClick={(r) => navigate(`/staff/registries/${r.id}`)}
-                empty={<EmptyState title="Реестров нет" />}
+                empty={<EmptyState title={t('staffOps.registries.empty')} />}
               />
             </Card>
           </TabsContent>
@@ -294,9 +295,9 @@ export default function ClinicCardPage() {
       <ConfirmDialog
         open={!!revoking}
         onOpenChange={(o) => !o && setRevoking(null)}
-        title="Отозвать ключ клиники?"
-        description="Ключ и все выданные по нему токены сразу перестанут работать. Клиника увидит отзыв в журнале событий."
-        confirmLabel="Отозвать"
+        title={t('staffOps.clinicCard.revokeTitle')}
+        description={t('staffOps.clinicCard.revokeText')}
+        confirmLabel={t('common.revoke')}
         danger
         loading={revoke.isPending}
         onConfirm={() => void doRevoke()}
