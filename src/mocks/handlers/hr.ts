@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import Papa from 'papaparse';
@@ -148,7 +149,7 @@ export const hrHandlers = [
         if (!filter) list = [...requests.map((r) => requestRow(d, r)), ...list];
       }
       const term = q(url);
-      if (term) list = list.filter((i) => i.fullName.toLowerCase().includes(term) || i.position.toLowerCase().includes(term));
+      if (term) list = list.filter((i) => matchesSearch(term, i.fullName, i.position));
       const sort = url.searchParams.get('sort') ?? 'fullName:asc';
       const [key, dir] = sort.split(':');
       const mul = dir === 'desc' ? -1 : 1;

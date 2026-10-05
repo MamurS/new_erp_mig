@@ -20,73 +20,51 @@ beforeEach(() => {
   resetDb();
 });
 
-function names(d: Db): [string, string][] {
-  const out: [string, string][] = [];
-  const add = (where: string, v: string | undefined) => {
-    if (v !== undefined) out.push([where, v]);
-  };
-  for (const c of d.clients) {
-    add('client', c.name);
-    add('client.hrContact', c.hrContact.name);
-    add('client.director', c.requisites?.director);
-    add('client.manager', c.managerName);
-  }
-  for (const c of d.clinics) add('clinic', c.name);
-  for (const a of d.assistances) add('assistance', a.name);
-  for (const p of d.policies) add('policy.client', p.clientName);
-  for (const s of d.staff) add('staff', s.fullName);
-  for (const u of d.hrUsers) add('hr', u.fullName);
-  for (const u of d.clinicUsers) add('clinicUser', u.fullName);
-  for (const u of d.assistUsers) add('assistUser', u.fullName);
-  for (const i of d.insured) {
-    add('insured', i.fullName);
-    add('insured.client', i.clientName);
-  }
-  for (const r of d.contractInsured.flatMap((c) => c.rows)) add('contractInsured', r.fullName);
-  for (const r of d.policyChanges) add('policyChange', r.fullName);
-  for (const c of d.claims) {
-    add('claim.insured', c.insuredName);
-    add('claim.client', c.clientName);
-    add('claim.provider', c.providerName);
-  }
-  for (const k of d.kp) add('kp.client', k.clientName);
-  for (const c of d.contracts) add('contract.client', c.clientName);
-  for (const g of d.guarantees) add('guarantee.insured', g.insuredName);
-  for (const b of d.bankPayments) add('bankPayment.payer', b.payerName);
-  return out;
+/** Fields with a name of a legal entity or a person, wherever they are in the database. */
+const NAME_KEY = /^(name|director|owner|signer)$|[a-z]Name$/;
+/** Fields with a document number. */
+const NUMBER_KEY = /^(number|refundDocument)$|[a-z]Number$/;
+/**
+ * Text data that may stay in Russian: names of medical services (catalogue and price lists) and the
+ * labels of system actors in histories (not people).
+ */
+const TEXT_PATHS = [/\.serviceName$/, /^db\.(priceLists|clinicContracts)\[\]\.(items|priceList)\[\]\.name$/];
+const SYSTEM_ACTORS = new Set(['Оператор', 'Система', 'Неизвестный', 'Бухгалтер', 'Застрахованный (приложение)', 'Клиника (счёт)']);
+
+interface Field {
+  path: string;
+  key: string;
+  value: string;
 }
 
-function numbers(d: Db): [string, string][] {
-  const out: [string, string][] = [];
-  const add = (where: string, v: string | undefined) => {
-    if (v !== undefined) out.push([where, v]);
+/** Every string field of the database whose key is a name or a number field, with its path. */
+function fields(d: Db): { names: Field[]; numbers: Field[] } {
+  const names: Field[] = [];
+  const numbers: Field[] = [];
+  const walk = (v: unknown, path: string, key: string): void => {
+    if (Array.isArray(v)) {
+      for (const x of v) walk(x, `${path}[]`, key);
+    } else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`, k);
+    } else if (typeof v === 'string' && v !== '') {
+      if (NUMBER_KEY.test(key)) numbers.push({ path, key, value: v });
+      else if (NAME_KEY.test(key) && !TEXT_PATHS.some((re) => re.test(path)) && !SYSTEM_ACTORS.has(v)) names.push({ path, key, value: v });
+    }
   };
-  for (const p of d.policies) add('policy', p.number);
-  for (const c of d.claims) add('claim', c.number);
-  for (const i of d.invoices) add('invoice', i.number);
-  for (const c of d.contracts) add('contract', c.number);
-  for (const e of d.endorsements) add('endorsement', e.number);
-  for (const k of d.kp) add('kp', k.number);
-  for (const g of d.guarantees) add('guarantee', g.number);
-  for (const x of d.deals) add('deal', x.number);
-  for (const c of d.cases) add('case', c.number);
-  for (const r of d.rebills) add('assistInvoice', r.number);
-  for (const a of d.assistances) add('assistContract', a.contract.number);
-  for (const i of d.insured) add('certificate', i.certificateNumber);
-  for (const l of d.registries.flatMap((r) => r.lines)) {
-    add('paymentOrder', l.payment?.orderNumber);
-    add('registryLine.guarantee', l.guaranteeNumber);
-  }
-  for (const r of d.limitRequests) add('limitRequest.policy', r.policyNumber);
-  for (const r of d.policyChanges) add('policyChange.policy', r.policyNumber);
-  return out;
+  walk(d, 'db', '');
+  return { names, numbers };
 }
+
+const paths = (list: Field[]) => new Set(list.map((f) => f.path));
 
 describe('Latin seed', () => {
-  it('legal entities and people have Latin names', () => {
-    const list = names(db());
-    expect(list.length).toBeGreaterThan(1000);
-    expect(list.filter(([, v]) => CYRILLIC.test(v))).toEqual([]);
+  it('no name of a legal entity or a person in the whole database has Cyrillic letters', () => {
+    const { names } = fields(db());
+    // The walk reaches the collections it must cover.
+    for (const p of ['db.clients[].name', 'db.clinics[].name', 'db.assistances[].name', 'db.staff[].fullName', 'db.hrUsers[].fullName', 'db.insured[].fullName', 'db.clinicUsers[].fullName', 'db.assistUsers[].fullName', 'db.claims[].insuredName', 'db.bankPayments[].payerName', 'db.clients[].requisites.director']) {
+      expect(paths(names), p).toContain(p);
+    }
+    expect(names.filter((f) => CYRILLIC.test(f.value))).toEqual([]);
     // Without the legal form and without quotes.
     for (const n of [...db().clients, ...db().clinics, ...db().assistances].map((x) => x.name)) expect(n).not.toMatch(/[«»"]|^(MChJ|AJ|OOO|LLC)\b/);
   });
@@ -108,20 +86,19 @@ describe('Latin seed', () => {
     expect(demo?.legalForm).toBe('llc');
   });
 
-  it('every document number is ASCII', () => {
-    const list = numbers(db());
-    for (const kind of ['policy', 'claim', 'invoice', 'contract', 'endorsement', 'kp', 'guarantee', 'deal', 'case', 'assistInvoice', 'assistContract', 'certificate', 'paymentOrder']) {
-      expect(list.some(([k]) => k === kind), kind).toBe(true);
+  it('every document number in the whole database is ASCII', () => {
+    const { numbers } = fields(db());
+    for (const p of ['db.policies[].number', 'db.claims[].number', 'db.invoices[].number', 'db.contracts[].number', 'db.endorsements[].number', 'db.kp[].number', 'db.guarantees[].number', 'db.deals[].number', 'db.cases[].number', 'db.rebills[].number', 'db.assistances[].contract.number', 'db.insured[].certificateNumber', 'db.registries[].lines[].payment.orderNumber']) {
+      expect(paths(numbers), p).toContain(p);
     }
-    expect(list.filter(([, v]) => CYRILLIC.test(v) || !DOC_NUMBER_RE.test(v))).toEqual([]);
-    expect(list.filter(([, v]) => !/^[A-Za-z0-9/-]+$/.test(v))).toEqual([]);
+    expect(numbers.filter((f) => CYRILLIC.test(f.value) || !DOC_NUMBER_RE.test(f.value) || !/^[A-Za-z0-9/-]+$/.test(f.value))).toEqual([]);
   });
 
   it('the seed stays deterministic', () => {
-    const a = numbers(db());
-    const b = numbers(resetDb());
+    const a = fields(db());
+    const b = fields(resetDb());
     expect(b).toEqual(a);
-    expect(names(db()).slice(0, 200)).toEqual(names(createSeed()).slice(0, 200));
+    expect(fields(createSeed()).names.slice(0, 500)).toEqual(a.names.slice(0, 500));
     resetDb();
   });
 
@@ -143,6 +120,18 @@ describe('saved mock database', () => {
     expect(store().getItem('mig.mock.db')).toBeNull();
     store().setItem('mig.mock.db', JSON.stringify({ ...rest, schemaVersion: MOCK_DB_VERSION - 1 }));
     expect(loadSnapshot()).toBeNull();
+  });
+
+  it('on start, a saved state of an older seed is replaced by the fresh seed automatically', () => {
+    const { sessions: _s, ...rest } = db();
+    const old = { ...rest, clients: rest.clients.map((c, k) => (k === 0 ? { ...c, name: 'Ташкент Агрологистика', legalForm: 'ООО' } : c)) };
+    store().setItem('mig.mock.db', JSON.stringify(old));
+    initMockDb({ restore: true });
+    expect(db().clients.some((c) => CYRILLIC.test(c.name))).toBe(false);
+    expect(db().clients.map((c) => c.name)).toEqual(createSeed().clients.map((c) => c.name));
+    expect(store().getItem('mig.mock.db')).toBeNull();
+    initMockDb({ restore: false });
+    resetDb();
   });
 
   it('a snapshot of the current version is restored', () => {

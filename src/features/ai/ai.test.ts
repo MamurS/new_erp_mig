@@ -30,6 +30,14 @@ describe('redactForAi', () => {
     expect(r.text).not.toContain('Иванова');
     expect(r.text.match(/\[ФИО-1\]/g)?.length).toBe(2);
   });
+  it('removes Latin names as in the ID card / MyID (Uzbek letters with ʻ included)', () => {
+    const r = redactForAi('Patient Sobirov Akmal Ravshanovich va Yoʻldosheva Gulnora Bahromovna: tizza MRT');
+    expect(r.text).not.toContain('Sobirov');
+    expect(r.text).not.toContain('Yoʻldosheva');
+    expect(r.text).toContain('[ФИО-1]');
+    expect(r.text).toContain('[ФИО-2]');
+    expect(r.text).toContain('tizza MRT');
+  });
   it('leaves medical text alone', () => {
     expect(redactForAi('Нурофен 200 мг, витамин С шип.').text).toBe('Нурофен 200 мг, витамин С шип.');
   });

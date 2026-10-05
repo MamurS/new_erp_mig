@@ -389,7 +389,7 @@ export function ensureQaSample(d: Db, now = Date.now()): void {
   const known = new Set(d.qaSamples.map((s) => s.subject.id));
   for (const a of d.assistances) {
     const decisions: { id: UUID; type: 'guarantee' | 'registry_line'; label: string; at: string }[] = [
-      ...d.guarantees.filter((g) => g.assistanceId === a.id && g.decidedBy === 'assistance' && (g.decidedAt ?? g.createdAt).startsWith(month)).map((g) => ({ id: g.id, type: 'guarantee' as const, label: `ГП ${g.number}`, at: g.decidedAt ?? g.createdAt })),
+      ...d.guarantees.filter((g) => g.assistanceId === a.id && g.decidedBy === 'assistance' && (g.decidedAt ?? g.createdAt).startsWith(month)).map((g) => ({ id: g.id, type: 'guarantee' as const, label: g.number, at: g.decidedAt ?? g.createdAt })),
       ...d.registries
         .filter((r) => (r.submittedAt ?? '').startsWith(month))
         .flatMap((r) => r.lines.filter((l) => l.payer === a.id && l.status === 'accepted').map((l) => ({ id: l.id, type: 'registry_line' as const, label: `${r.period}: ${l.serviceName}`, at: r.submittedAt! }))),

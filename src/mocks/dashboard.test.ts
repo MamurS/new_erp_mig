@@ -110,7 +110,7 @@ describe('dashboard by role', () => {
     expect(card.data.activity.some((a) => /Новый убыток/.test(a.text))).toBe(false);
     const op = await login(ACCOUNTS.operator);
     const opCard = await call<{ activity: { text: string }[] }>(`/clients/${row.entityId}`, op.sid);
-    expect(opCard.data.activity.some((a) => /Новый убыток У-/.test(a.text))).toBe(true);
+    expect(opCard.data.activity.some((a) => /Новый убыток U-/.test(a.text))).toBe(true);
     // Roles without clients.read get 403.
     expect((await call(`/clients/${row.entityId}/loss-stats`, (await login(ACCOUNTS.claims_officer)).sid)).status).toBe(403);
   });

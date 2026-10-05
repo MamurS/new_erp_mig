@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { http } from 'msw';
 import { z } from 'zod';
 import { medicalAccessSchema, piiField, revealSchema } from '@/shared/schemas/forms';
@@ -72,7 +73,7 @@ export const insuredHandlers = [
       if (user.role === 'hr' || user.role === 'insured') throw notFound();
       let list = db().insured;
       const term = q(url);
-      if (term) list = list.filter((i) => i.fullName.toLowerCase().includes(term));
+      if (term) list = list.filter((i) => matchesSearch(term, i.fullName));
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((i) => i.clientId === clientId);
       const p = paginate(sortBy(list, url, { fullName: (i) => i.fullName, clientName: (i) => i.clientName }, 'fullName:asc'), url);

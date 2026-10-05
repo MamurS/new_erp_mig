@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { http } from 'msw';
 import { clientCreateSchema, clientPatchSchema } from '@/shared/schemas/forms';
 import type { ClientDetail, ClientListResponse, ClientLossStats, PolicyDetail } from '@/shared/types/dto';
@@ -30,7 +31,7 @@ export const clientHandlers = [
       const now = Date.now();
       let list = d.clients;
       const term = q(url);
-      if (term) list = list.filter((c) => c.name.toLowerCase().includes(term) || c.inn.includes(term));
+      if (term) list = list.filter((c) => matchesSearch(term, c.name) || c.inn.includes(term.trim()));
       const status = url.searchParams.get('status');
       if (status) list = list.filter((c) => status.split(',').includes(c.status));
       const program = url.searchParams.get('program');
@@ -207,7 +208,7 @@ export const clientHandlers = [
       const c = findClient(param(ctx, 'id'));
       const term = q(ctx.url);
       let list = db().insured.filter((i) => i.clientId === c.id);
-      if (term) list = list.filter((i) => i.fullName.toLowerCase().includes(term));
+      if (term) list = list.filter((i) => matchesSearch(term, i.fullName));
       return paginate(sortBy(list, ctx.url, { fullName: (i) => i.fullName, position: (i) => i.position }, 'fullName:asc').map((i) => toInsuredListItem(i, user)), ctx.url);
     }),
   ),
@@ -263,7 +264,7 @@ export const clientHandlers = [
       if (user.role === 'hr' || user.role === 'insured') throw notFound();
       let list: Policy[] = db().policies;
       const term = q(url);
-      if (term) list = list.filter((p) => p.number.toLowerCase().includes(term) || p.clientName.toLowerCase().includes(term));
+      if (term) list = list.filter((p) => matchesSearch(term, p.number, p.clientName));
       const status = url.searchParams.get('status');
       if (status) list = list.filter((p) => status.split(',').includes(p.status));
       const program = url.searchParams.get('program');

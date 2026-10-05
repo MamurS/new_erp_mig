@@ -393,7 +393,7 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
 
   // ---- quality-control sample: 20 decisions of A1, 2 «не согласен» (§12) ----
   const subjects: QaSample['subject'][] = [
-    ...d.guarantees.filter((g) => g.assistanceId === A1.id && g.decidedBy === 'assistance').map((g) => ({ type: 'guarantee' as const, id: g.id, label: `ГП ${g.number}` })),
+    ...d.guarantees.filter((g) => g.assistanceId === A1.id && g.decidedBy === 'assistance').map((g) => ({ type: 'guarantee' as const, id: g.id, label: g.number })),
     ...d.registries.flatMap((r) => r.lines.filter((l) => l.payer === A1.id && l.status === 'accepted').map((l) => ({ type: 'registry_line' as const, id: l.id, label: `${r.period}: ${l.serviceName}` }))),
   ].slice(0, 20);
   const doctor = d.staff.find((s) => s.role === 'doctor_expert')!;
@@ -425,8 +425,8 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
     createdAt: tzIso(now - 90 * DAY),
     lastUsedAt: tzIso(now - 2 * 3600_000),
   });
-  const k1 = key(A1.id, 'CRM «Shifo»');
-  const k2 = key(A2.id, 'Система MedYurt');
+  const k1 = key(A1.id, 'Shifo CRM');
+  const k2 = key(A2.id, 'MedYurt API');
   d.integrationClients.push(k1, k2);
   const templates = ['/assistance/roster', '/assistance/guarantees', '/assistance/guarantees/{id}/decide', '/assistance/registries', '/assistance/cases'];
   for (const [k, n] of [[k1, 24], [k2, 30]] as const) {

@@ -343,7 +343,7 @@ export function seedClinics(
   const key: IntegrationClientRow = {
     id: id(),
     clinicId: demoClinic.id,
-    name: 'МИС «Medialog»',
+    name: 'Medialog MIS',
     clientId: `mig_${hex(rng, 20)}`,
     secretLast4: hex(rng, 4),
     secretHash: hex(rng, 64), // the secret was shown once at creation and is unknown now

@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { http, HttpResponse } from 'msw';
 import { adminUserPatchSchema, exportSchema, limitRequestSchema, rejectLimitSchema } from '@/shared/schemas/forms';
 import type { AuditEntry, Clinic, LimitChangeRequest, Slot, Specialty } from '@/shared/types';
@@ -86,7 +87,7 @@ export const staffMiscHandlers = [
       requirePermission(user, 'clinics.read');
       let list = db().clinics;
       const term = q(url);
-      if (term) list = list.filter((c) => c.name.toLowerCase().includes(term) || c.district.toLowerCase().includes(term));
+      if (term) list = list.filter((c) => matchesSearch(term, c.name, c.district));
       const spec = url.searchParams.get('specialty') as Specialty | null;
       if (spec && SPECIALTIES.has(spec)) list = list.filter((c) => c.specialties.includes(spec));
       list = filterLegalForm(list, url, (c) => c.legalForm);

@@ -29,6 +29,8 @@ const RULES: { kind: string; re: RegExp }[] = [
 
 /** Three capitalised Cyrillic words, the last with a patronymic ending: «Иванов Иван Иванович». */
 const FULL_NAME = /(?<!\p{L})[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+(?:вич|вна|ична)(?!\p{L})/gu;
+/** Latin names as in the ID card / MyID: «Sobirov Akmal Ravshanovich», «Karimova Dilnoza Bahromovna». */
+const FULL_NAME_LATIN = /(?<!\p{L})[A-Z][a-zʻʼ']+\s+[A-Z][a-zʻʼ']+\s+[A-Z][a-zʻʼ']+(?:ovich|evich|ovna|evna)(?!\p{L})/gu;
 
 export function redactForAi(input: string, known: { names?: readonly string[] } = {}): RedactResult {
   const labels: Record<string, string> = {};
@@ -51,6 +53,7 @@ export function redactForAi(input: string, known: { names?: readonly string[] } 
     }
   }
   text = text.replace(FULL_NAME, (m) => put(NAME_KIND, m));
+  text = text.replace(FULL_NAME_LATIN, (m) => put(NAME_KIND, m));
   for (const r of RULES) text = text.replace(r.re, (m) => put(r.kind, m));
   return { text, labels };
 }

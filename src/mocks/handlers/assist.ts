@@ -3,6 +3,7 @@
  * assistance from the session and checks the scope of the record on the date of the event
  * (requireAssistanceScope): foreign records are 404, records of a former client are read-only.
  */
+import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import type { Action } from '@/shared/auth/permissions';
@@ -289,7 +290,7 @@ export const assistHandlers = [
       const digits = term.replace(/\D/g, '');
       const policies = new Map(d.policies.map((p) => [p.id, p.number.toLowerCase()]));
       const list = rosterOf(d, assistanceId)
-        .filter((i) => !term || i.fullName.toLowerCase().includes(term) || (policies.get(i.policyId) ?? '').includes(term) || (digits.length >= 4 && i.phone.replace(/\D/g, '').includes(digits)))
+        .filter((i) => !term || matchesSearch(term, i.fullName, policies.get(i.policyId)) || (digits.length >= 4 && i.phone.replace(/\D/g, '').includes(digits)))
         .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
         .slice(0, 50);
       return list.map((i) => toItem(d, i, 'full'));

@@ -145,7 +145,7 @@ export default function PolicyIssuePage() {
 
   const template = () => {
     // eslint-disable-next-line mig/no-cyrillic-ui -- sample row of the CSV template (data, not UI)
-    const rows = [['Иванов Иван Иванович', '15.03.1990', '31503900000001', '+998901234567', 'Инженер', 2]];
+    const rows = [['Ivanov Ivan Ivanovich', '15.03.1990', '31503900000001', '+998901234567', 'Инженер', 2]];
     downloadText(toCsv(POLICY_CSV_HEADER, rows), 'policy-insured-template.csv');
   };
 
