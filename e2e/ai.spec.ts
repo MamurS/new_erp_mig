@@ -4,7 +4,7 @@ import { acceptConsent, api, loginStaff } from './helpers';
 
 async function switchTo(page: Page, label: string, home: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'Войти как…' }).click();
-  await page.getByRole('menuitem', { name: new RegExp(`^${label}\\s*[a-z0-9.+-]+@`) }).click();
+  await page.getByRole('menuitem', { name: new RegExp(`^${label} — [a-z0-9.+-]+@`) }).click();
   await expect(page.getByText(`Вы вошли как «${label}»`).last()).toBeVisible();
   await expect(page).toHaveURL(home);
 }

@@ -21,6 +21,8 @@ export const useClients = (p: Params, enabled = true) =>
   useQuery({ queryKey: qk.clients(p), queryFn: () => request('/clients', { query: p, schema: S.clientList }), enabled, ...list });
 export const useClient = (id: string | undefined) =>
   useQuery({ queryKey: qk.client(id ?? ''), queryFn: () => request(`/clients/${id}`, { schema: S.clientDetail }), enabled: !!id });
+export const useClientLossStats = (id: string | undefined) =>
+  useQuery({ queryKey: ['client-loss', id ?? ''], queryFn: () => request(`/clients/${id}/loss-stats`, { schema: S.clientLossStats }), enabled: !!id });
 export const useClientInsured = (id: string, p: Params) =>
   useQuery({
     queryKey: qk.clientInsured(id, p),

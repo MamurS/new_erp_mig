@@ -2,11 +2,12 @@
  * Demo module. Loaded only when VITE_DEMO_MODE === 'true'; absent from other builds.
  * «Войти как…» performs a real login through the mock API, it never changes the role client-side.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as Popover from '@radix-ui/react-popover';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, FlaskConical, RotateCcw } from 'lucide-react';
+import { ChevronDown, FlaskConical, RotateCcw, Search } from 'lucide-react';
 import type { Role } from '@/shared/types';
 import type { DemoModule } from '@/shared/demo';
 import { request, errorMessage } from '@/shared/api/client';
@@ -14,23 +15,26 @@ import * as S from '@/shared/api/schemas';
 import { getSession, setSession } from '@/shared/auth/session';
 import { homeFor } from '@/shared/auth/home';
 import { ROLE_LABEL } from '@/shared/domain/labels';
-import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/shared/ui/dropdown';
 import { toast } from '@/shared/ui/toast';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
 import { MisSimulator } from './MisSimulator';
 import { AssistSimulator } from './AssistSimulator';
 import { DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from '@/mocks/credentials';
 
-/** One entry per demo account: a role may have several (e.g. a claims officer and their head). */
-const ACCOUNTS: { role: Role; login: string; label?: string }[] = [
-  ...DEMO_STAFF.map((s) => ({ role: s.role as Role, login: s.email, label: s.label })),
-  { role: 'hr', login: DEMO_HR.email },
-  ...DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, login: c.email })),
-  ...DEMO_ASSIST_USERS.map((c) => ({ role: c.role as Role, login: c.email })),
-  { role: 'insured', login: '+998 90 000 00 01' },
+type Account = { role: Role; login: string; label?: string };
+
+/** One entry per demo account, grouped by portal: a role may have several (a claims officer and their head). */
+const GROUPS: { title: string; accounts: Account[] }[] = [
+  { title: 'МИГ', accounts: DEMO_STAFF.map((s) => ({ role: s.role as Role, login: s.email, label: s.label })) },
+  { title: 'Ассистанс', accounts: DEMO_ASSIST_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
+  { title: 'Клиника', accounts: DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
+  { title: 'HR компании', accounts: [{ role: 'hr', login: DEMO_HR.email }] },
+  { title: 'Застрахованный', accounts: [{ role: 'insured', login: '+998 90 000 00 01' }] },
 ];
 
-async function loginAs(acc: (typeof ACCOUNTS)[number]): Promise<Role> {
+const accountLabel = (a: Account) => a.label ?? ROLE_LABEL[a.role];
+
+async function loginAs(acc: Account): Promise<Role> {
   const current = getSession();
   if (current) await request('/auth/logout', { method: 'POST' }).catch(() => undefined);
   let challengeId: string;
@@ -76,38 +80,22 @@ function DemoBanner() {
         Демо-версия · все данные вымышленные
       </span>
       <div className="flex shrink-0 items-center gap-1">
-        <Menu>
-          <MenuTrigger asChild>
-            <button type="button" className="inline-flex h-7 items-center gap-1 rounded-btn px-2 font-medium hover:bg-warning/10" disabled={busy}>
-              Войти как… <ChevronDown className="h-3 w-3" aria-hidden />
-            </button>
-          </MenuTrigger>
-          <MenuContent className="max-h-[calc(100vh-56px)] overflow-y-auto">
-            {ACCOUNTS.map((a) => (
-              <MenuItem
-                key={a.login}
-                onSelect={async () => {
-                  setBusy(true);
-                  try {
-                    qc.clear();
-                    const role = await loginAs(a);
-                    navigate(homeFor(role));
-                    toast.success(`Вы вошли как «${a.label ?? ROLE_LABEL[role]}»`);
-                  } catch (e) {
-                    toast.error(errorMessage(e));
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <span className="flex flex-col">
-                  <span>{a.label ?? ROLE_LABEL[a.role]}</span>
-                  <span className="text-[11px] text-muted">{a.login}</span>
-                </span>
-              </MenuItem>
-            ))}
-          </MenuContent>
-        </Menu>
+        <LoginAsMenu
+          busy={busy}
+          onPick={async (a) => {
+            setBusy(true);
+            try {
+              qc.clear();
+              const role = await loginAs(a);
+              navigate(homeFor(role));
+              toast.success(`Вы вошли как «${a.label ?? ROLE_LABEL[role]}»`);
+            } catch (e) {
+              toast.error(errorMessage(e));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
         <button
           type="button"
           className="hidden h-7 items-center gap-1 rounded-btn px-2 font-medium hover:bg-warning/10 sm:inline-flex"
@@ -157,6 +145,97 @@ function DemoBanner() {
         }}
       />
     </div>
+  );
+}
+
+/** «Войти как…»: accounts grouped by portal, «Роль — email», with a search on top. */
+function LoginAsMenu({ busy, onPick }: { busy: boolean; onPick: (a: Account) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const list = useRef<HTMLDivElement>(null);
+  const q = query.trim().toLowerCase();
+  const groups = GROUPS.map((g) => ({ ...g, accounts: g.accounts.filter((a) => !q || `${g.title} ${accountLabel(a)} ${a.login}`.toLowerCase().includes(q)) })).filter((g) => g.accounts.length > 0);
+  const items = () => Array.from(list.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+  const move = (from: HTMLElement | null, step: number) => {
+    const all = items();
+    const i = from ? all.indexOf(from as HTMLButtonElement) : -1;
+    all[Math.max(0, Math.min(all.length - 1, i + step))]?.focus();
+  };
+  return (
+    <Popover.Root
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setQuery('');
+      }}
+    >
+      <Popover.Trigger asChild>
+        <button type="button" className="inline-flex h-7 items-center gap-1 rounded-btn px-2 font-medium hover:bg-warning/10" disabled={busy}>
+          Войти как… <ChevronDown className="h-3 w-3" aria-hidden />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          data-theme="staff"
+          align="end"
+          sideOffset={4}
+          className="z-50 flex max-h-[calc(100vh-56px)] w-[360px] max-w-[calc(100vw-16px)] flex-col rounded-card border border-border bg-surface text-[13px] text-text shadow-lg"
+        >
+          <div className="flex items-center gap-2 border-b border-border px-3">
+            <Search className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+            <input
+              autoFocus
+              aria-label="Поиск аккаунта"
+              placeholder="Роль, портал или email"
+              className="h-10 w-full bg-transparent outline-hidden placeholder:text-muted"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  move(null, 1);
+                } else if (e.key === 'Enter' && groups.length) {
+                  e.preventDefault();
+                  items()[0]?.click();
+                }
+              }}
+            />
+          </div>
+          <div ref={list} role="menu" aria-label="Демо-аккаунты" className="min-h-0 flex-1 overflow-y-auto p-1">
+            {groups.length === 0 && <p className="px-2 py-3 text-muted">Ничего не найдено</p>}
+            {groups.map((g) => (
+              <div key={g.title} role="group" aria-label={g.title} className="mb-1">
+                <p aria-hidden className="px-2 pb-0.5 pt-2 text-[11px] text-muted">
+                  {g.title}
+                </p>
+                {g.accounts.map((a) => (
+                  <button
+                    key={a.login}
+                    type="button"
+                    role="menuitem"
+                    className="block w-full rounded-btn px-2 py-1.5 text-left outline-hidden hover:bg-rail focus-visible:bg-rail"
+                    onKeyDown={(e) => {
+                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        move(e.currentTarget, e.key === 'ArrowDown' ? 1 : -1);
+                      }
+                    }}
+                    onClick={() => {
+                      setOpen(false);
+                      setQuery('');
+                      onPick(a);
+                    }}
+                  >
+                    <span className="font-medium">{accountLabel(a)}</span>{' '}
+                    <span className="text-muted">— {a.login}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

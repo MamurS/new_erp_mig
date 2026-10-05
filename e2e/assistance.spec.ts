@@ -46,7 +46,7 @@ async function loginByEmail(page: Page, email: string): Promise<void> {
   await page.getByLabel('Цифра 1').fill('000000');
   // The login returns to the last page of the portal (`next`).
   await expect(page).toHaveURL(/\/assist(\/.*)?$/);
-  await expect(page.getByTestId('sidebar').getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await expect(page.getByTestId('sidebar').getByRole('button', { name: 'Меню пользователя' })).toBeVisible();
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');

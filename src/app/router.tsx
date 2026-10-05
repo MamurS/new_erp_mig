@@ -24,6 +24,7 @@ const staffRoutes: RouteObject[] = [
   guarded('clients', sectionRoles('/staff/clients'), [
     { index: true, lazy: lazy(() => import('@/features/staff/pages/ClientsPage')) },
     { path: ':clientId', lazy: lazy(() => import('@/features/staff/pages/ClientCardPage')) },
+    { path: ':clientId/loss', lazy: lazy(() => import('@/features/staff/pages/LossStatsPage')) },
     {
       path: ':clientId/kp/new',
       element: (

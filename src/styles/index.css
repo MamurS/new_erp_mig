@@ -78,6 +78,24 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+  /* Thin warm scrollbars everywhere: 6 px, light thumb, transparent track. */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scroll-thumb-hover);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
   /* Tailwind v4 dropped the pointer cursor on buttons; v3 had it. */
   button:not(:disabled),
   [role='button']:not(:disabled) {
@@ -175,5 +193,20 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Firefox: the standard properties (in Chromium they would switch the styled scrollbars above off). */
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+}
+
+@keyframes sb-in {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
   }
 }

@@ -161,6 +161,18 @@ export interface ClientActivity {
   at: ISODateTime;
   text: string;
 }
+/** GET /api/clients/:id/loss-stats — aggregates only: no claims, people or diagnoses. */
+export interface ClientLossStats {
+  clientId: UUID;
+  clientName: string;
+  premium: Money;
+  lossRatio: number | null;
+  lossRatioWarn: number;
+  claimsCount: number;
+  claimsAmount: Money;
+  byCategory: { category: string; count: number; amount: Money }[];
+  byMonth: { month: string; count: number; amount: Money }[];
+}
 export interface ClientDetail extends Client {
   claimsByMonth: { month: string; amount: Money; count: number }[];
   claimsByCategory: { category: string; count: number; amount: Money }[];

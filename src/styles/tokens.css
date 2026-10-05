@@ -74,3 +74,17 @@
   --radius-card: 20px;
   --radius-hero: 26px;
 }
+
+/* Side panel of every portal: one warm neutral look, independent of the staff/client theme. */
+:root {
+  --sb-bg: #faf9f6;
+  --sb-border: #e7e4dc;
+  --sb-text: #1f1e1b;
+  --sb-muted: #78736a;
+  --sb-group: #8c877d;
+  --sb-hover: #f2f1ec;
+  --sb-active: #eceae4;
+  --sb-handle: #c4bcae;
+  --scroll-thumb: #d6d0c4;
+  --scroll-thumb-hover: #c4bcae;
+}
