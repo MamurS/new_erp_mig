@@ -6,3 +6,5 @@ useDefault = true
 description = "Fictional demo accounts and test fixtures of the prototype"
 # abcdefghijklmnop_123: a made-up card token in src/shared/integration/integration.test.ts
 regexes = ['''Demo-2026!''', '''abcdefghijklmnop_123''']
+# Interface dictionaries hold only UI text; "password" next to a key name trips generic-api-key.
+paths = ['''^src/i18n/dict/[a-zA-Z-]+/[a-zA-Z]+\.ts$''']
