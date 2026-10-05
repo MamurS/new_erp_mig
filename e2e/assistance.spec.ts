@@ -150,6 +150,8 @@ test('2. Guarantees: within authority the assistance doctor decides; above it es
 });
 
 test('3. Limit: an approved letter lowers what is left in the app; the accepted line makes it final and releases the reserve', async ({ page }) => {
+  // A multi-role scenario (several logins): ~40–55 s locally, over 60 s on a loaded CI runner.
+  test.setTimeout(120_000);
   failOnDialog(page);
   await loginStaff(page, 'clinic_admin');
   const visitId = await openVisit(page);
@@ -227,6 +229,8 @@ test('4. One registry of two payers is split: the assistance sees its lines, MIG
 });
 
 test('5. Rebill: the assistance pays the clinic, bills MIG; the claims officer rejects, the assistance disputes, the claims officer accepts, the accountant pays', async ({ page }) => {
+  // A multi-role scenario (several logins): ~40–55 s locally, over 60 s on a loaded CI runner.
+  test.setTimeout(120_000);
   failOnDialog(page);
   await loginStaff(page, 'asst_doctor');
   // A registry of another clinic waits for review: the doctor accepts the lines of the assistance.

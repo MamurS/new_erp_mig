@@ -109,6 +109,8 @@ test('2. Insured books in the demo clinic, registrar confirms, the app shows «�
 });
 
 test('3. CSV registry: upload, submit; the payer\'s assistance rejects, the clinic disputes, it accepts and pays — the clinic sees «Оплачен»', async ({ page }) => {
+  // A multi-role scenario (several logins): ~40–55 s locally, over 60 s on a loaded CI runner.
+  test.setTimeout(120_000);
   await loginStaff(page, 'clinic_admin');
   const visitId = await openVisit(page);
   // Prices of the patient's payer (the demo patient is served by an assistance with its own price list).
