@@ -6,7 +6,10 @@ import { join, resolve } from 'node:path';
 import Papa from 'papaparse';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { applyCsv, buildRows, normalizeUz, readDicts, toCsv } from '../scripts/i18n-review-lib.mjs';
-import { ru } from '../src/i18n/dict/ru';
+import { ru as ruMain } from '../src/i18n/dict/ru';
+import { demo } from '../src/i18n/dict/ru/demo';
+
+const ru = { ...ruMain, ...demo };
 
 const root = resolve(__dirname, '..');
 let dict: string;
@@ -31,14 +34,14 @@ describe('i18n review CSV', () => {
     expect(logout.slice(1, 4)).toEqual(['Выйти', 'Chiqish', 'Sign out']);
     expect(logout[4]).toContain('src/shared/ui/app-sidebar.tsx');
     const csv = toCsv([['k', '=1+1', 'ok', '-x', '']]);
-    expect(Papa.parse(csv.replace(/^﻿/, '')).data[1]).toEqual(['k', "'=1+1", 'ok', "'-x", '']);
+    expect(Papa.parse(csv.replace(/^\ufeff/, '')).data[1]).toEqual(['k', "'=1+1", 'ok', "'-x", '']);
   });
 
   it('imports changed cells only, normalises Uzbek apostrophes and reports unknown keys', () => {
     // A first round trip only normalises what is already there.
     applyCsv(toCsv(buildRows(dict, join(root, 'src'), root)), dict);
     const rows = buildRows(dict, join(root, 'src'), root);
-    const edited = rows.map((r) => (r[0] === 'shell.user.logout' ? [r[0], r[1], "Tizimdan chiqish (o'zim)", 'Log out', r[4]] : r));
+    const edited: string[][] = rows.map((r) => (r[0] === 'shell.user.logout' ? [r[0]!, r[1]!, "Tizimdan chiqish (o'zim)", 'Log out', r[4]!] : r));
     edited.push(['no.such.key', 'x', 'y', 'z', '']);
     const report = applyCsv(toCsv(edited), dict);
     expect(report.updated).toBe(2);

@@ -16,7 +16,7 @@ import { CsvFileButton } from '@/features/staff/lifecycle/common';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { HrCard, HrHeader, HrSectionTitle } from '../ui';
-import { t } from '@/i18n';
+import { t, tm } from '@/i18n';
 
 function Back() {
   return (
@@ -84,7 +84,7 @@ function EndorsementBody({ e }: { e: EndorsementView }) {
                 <li key={l.changeRequestId} className="flex justify-between gap-3 py-2">
                   <span>
                     {l.description}
-                    <span className="block text-[12px] text-muted">{l.formula}</span>
+                    <span className="block text-[12px] text-muted">{tm(l.formula)}</span>
                   </span>
                   <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span>
                 </li>

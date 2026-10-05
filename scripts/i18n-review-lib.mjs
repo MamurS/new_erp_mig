@@ -62,20 +62,26 @@ function walk(dir, out = []) {
 
 /** key → source files using it (exact key, else the longest dynamic prefix such as `labels.role`). */
 export function findUsages(srcRoot, keys, repoRoot) {
-  const sources = walk(srcRoot).map((f) => ({ f: relative(repoRoot, f), text: readFileSync(f, 'utf8') }));
-  const literalIn = (needle) => sources.filter((s) => s.text.includes(needle)).map((s) => s.f);
+  // One pass over the sources: every quoted key-like literal and every `prefix.${…}` template head.
+  const literal = new Map();
+  const add = (k, f) => {
+    let set = literal.get(k);
+    if (!set) literal.set(k, (set = new Set()));
+    set.add(f);
+  };
+  for (const file of walk(srcRoot)) {
+    const f = relative(repoRoot, file);
+    const text = readFileSync(file, 'utf8');
+    for (const m of text.matchAll(/['"`]([a-zA-Z][\w-]*(?:\.[\w-]+)+)\.?['"`]/g)) add(m[1], f);
+    for (const m of text.matchAll(/`([a-zA-Z][\w-]*(?:\.[\w-]+)*)\.\$\{/g)) add(m[1], f);
+  }
   const usage = new Map();
   for (const key of keys) {
     const base = key.replace(/\.(one|few|many|other)$/, '');
-    let found = [...new Set([...literalIn(`'${base}'`), ...literalIn(`"${base}"`), ...literalIn(`\`${base}\``)])];
-    if (found.length === 0) {
-      const parts = base.split('.');
-      for (let n = parts.length - 1; n >= 2 && found.length === 0; n--) {
-        const prefix = parts.slice(0, n).join('.');
-        found = [...new Set([...literalIn(`'${prefix}'`), ...literalIn(`\`${prefix}.`), ...literalIn(`'${prefix}.'`)])];
-      }
-    }
-    usage.set(key, found.sort().slice(0, 5).join('; '));
+    let found = literal.get(base);
+    const parts = base.split('.');
+    for (let n = parts.length - 1; !found && n >= 1; n--) found = literal.get(parts.slice(0, n).join('.'));
+    usage.set(key, found ? [...found].sort().slice(0, 5).join('; ') : '');
   }
   return usage;
 }
@@ -86,7 +92,7 @@ const guard = (s) => (FORMULA.test(s) ? `'${s}` : s);
 const unguard = (s) => (s.startsWith("'") && FORMULA.test(s.slice(1)) ? s.slice(1) : s);
 
 export function toCsv(rows) {
-  return `﻿${Papa.unparse([HEADER, ...rows.map((r) => r.map(guard))], { quotes: true, newline: '\n' })}\n`;
+  return `\ufeff${Papa.unparse([HEADER, ...rows.map((r) => r.map(guard))], { quotes: true, newline: '\n' })}\n`;
 }
 
 export function buildRows(dictRoot, srcRoot, repoRoot) {
@@ -106,7 +112,7 @@ export function normalizeUz(s) {
  * unless dryRun. A row's empty cell means "no change".
  */
 export function applyCsv(csvText, dictRoot, { dryRun = false } = {}) {
-  const parsed = Papa.parse(csvText.replace(/^﻿/, ''), { header: false, skipEmptyLines: true });
+  const parsed = Papa.parse(csvText.replace(/^\ufeff/, ''), { header: false, skipEmptyLines: true });
   const [header, ...rows] = parsed.data;
   if (!header || HEADER.some((h, i) => (header[i] ?? '').trim() !== h)) throw new Error(`Unexpected header: ${header?.join(' | ')}`);
   const { values, files } = readDicts(dictRoot);

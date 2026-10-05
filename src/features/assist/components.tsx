@@ -9,7 +9,7 @@ import { cn } from '@/shared/lib/cn';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { useDmsParam } from '@/shared/api/queries/params';
-import { defineLabels, t } from '@/i18n';
+import { defineLabels, t, tm } from '@/i18n';
 
 /** Re-renders every 30 seconds so SLA countdowns stay fresh. */
 function useNow(): number {
@@ -102,7 +102,7 @@ export function RebillSummaryBlock({ r }: { r: RebillView }) {
       </div>
       <p className="rounded-btn bg-rail px-3 py-2 text-[13px]" data-testid="fee-formula">
         <span className="text-muted">{FEE_MODEL_LABEL[r.fee.model]}: </span>
-        <span className="num font-medium">{r.fee.formula}</span>
+        <span className="num font-medium">{tm(r.fee.formula)}</span>
       </p>
       <p className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted">
         {r.submittedAt && <span>{t('assist.rebill.submittedAt', { date: formatDateTime(r.submittedAt) })}</span>}
@@ -132,7 +132,7 @@ export function CheckFlags({ checks }: { checks: RebillLine['checks'] }) {
           <Chip kind="danger" className="self-start">
             <AlertTriangle className="h-3 w-3" aria-hidden /> {REBILL_CHECK_LABEL[c.code]}
           </Chip>
-          <span className="text-[12px] text-muted">{c.message}</span>
+          <span className="text-[12px] text-muted">{tm(c.message)}</span>
         </li>
       ))}
     </ul>

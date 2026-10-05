@@ -110,9 +110,9 @@ function dealCard(d: Db, deal: Deal): DealCard {
   const client = clientRow(d, deal.clientId);
   const contract = dealContract(d, deal.id);
   const reminders: string[] = [];
-  if (contract && originalReminderDue(contract.signing, Date.now(), dmsParam('paperOriginalReminderDays'))) reminders.push(`Оригинал договора ${contract.number} от клиента не получен дольше ${dmsParam('paperOriginalReminderDays')} дн.`);
+  if (contract && originalReminderDue(contract.signing, Date.now(), dmsParam('paperOriginalReminderDays'))) reminders.push(msg('srv.deal.reminderOriginal', { number: contract.number, days: dmsParam('paperOriginalReminderDays') }));
   const overdue = d.invoices.filter((i) => contract && i.contractId === contract.id && i.status === 'overdue');
-  if (overdue.length) reminders.push(`Просрочено взносов: ${overdue.length}`);
+  if (overdue.length) reminders.push(msg('srv.deal.reminderOverdue', { count: overdue.length }));
   return {
     ...toDealView(d, deal),
     client: toClient(d, client),

@@ -10,7 +10,7 @@ import { errorMessage } from '@/shared/api/client';
 import { can } from '@/shared/auth/permissions';
 import { useCan } from '@/shared/auth/guards';
 import { useUser } from '@/shared/auth/session';
-import { DMS_PARAM_GROUPS, DMS_PARAMETERS, dmsUnitLabel, formatDmsParam, fromDisplayValue, toDisplayValue } from '@/shared/config/dmsParameters';
+import { DMS_PARAM_GROUP_LABEL, DMS_PARAM_GROUPS, DMS_PARAMETERS, dmsUnitLabel, formatDmsParam, fromDisplayValue, toDisplayValue } from '@/shared/config/dmsParameters';
 import { dmsParamChangeSchema, dmsParamRejectSchema } from '@/shared/schemas/forms';
 import { formatDateTime } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
@@ -229,9 +229,9 @@ export default function ParametersPage() {
             <>
               <PendingCard changes={pending} />
               {DMS_PARAM_GROUPS.map((group) => (
-                <Card key={group} title={group} className="mb-4" bodyClassName="p-0">
+                <Card key={group} title={DMS_PARAM_GROUP_LABEL[group]} className="mb-4" bodyClassName="p-0">
                   <table className="w-full text-[13px]">
-                    <caption className="sr-only">{group}</caption>
+                    <caption className="sr-only">{DMS_PARAM_GROUP_LABEL[group]}</caption>
                     <thead className="border-b border-border-soft text-left text-[12px] text-muted">
                       <tr>
                         <th className="px-4 py-2 font-medium">{t('staff.params.colParam')}</th>

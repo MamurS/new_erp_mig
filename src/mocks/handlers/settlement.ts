@@ -2,6 +2,7 @@
  * Claims settlement (LIFECYCLE_SPEC §13): medical opinion, decisions within the officer's authority and
  * approval above it, reserves, fraud flags, appeals, the decision letter, reserve report and claims register.
  */
+import { t } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { ClaimDecision, SessionUser } from '@/shared/types';
 import type { ClaimLetter, ReserveReport, ReserveReportRow } from '@/shared/types/dto';
@@ -261,7 +262,7 @@ export const settlementHandlers = [
         .map(({ c, reserve }) => {
           const i = d.insured.find((x) => x.id === c.insuredId);
           const a = i ? assistanceOn(d.assignments, i.policyId, c.serviceDate) : null;
-          return { c, reserve, assistance: a, assistanceLabel: a ? (assistanceName(d, a) ?? 'Ассистанс') : 'Без ассистанса (МИГ)' };
+          return { c, reserve, assistance: a, assistanceLabel: a ? (assistanceName(d, a) ?? t('srv.dash.assistance')) : t('srv.noAssistance') };
         });
       const out: ReserveReport = {
         date,

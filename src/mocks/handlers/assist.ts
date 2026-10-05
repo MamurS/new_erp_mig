@@ -236,12 +236,12 @@ export const assistHandlers = [
         for (const c of cases) queue.push({ id: c.id, kind: 'case', title: `${c.number} · ${CASE_TYPE_LABEL[c.type]}`, subtitle: c.insuredName, dueAt: c.slaDueAt, to: `/assist/cases/${c.id}` });
       }
       if (user.role === 'asst_operator') {
-        for (const x of appts) queue.push({ id: x.id, kind: 'appointment', title: `Клиника не ответила: ${SPECIALTY_LABEL[x.specialty]}`, subtitle: `${x.insuredName} · ${x.clinicName}`, dueAt: x.startsAt, to: '/assist/appointments' });
+        for (const x of appts) queue.push({ id: x.id, kind: 'appointment', title: msg('srv.assistQ.noResponse', { specialty: SPECIALTY_LABEL[x.specialty] }), subtitle: `${x.insuredName} · ${x.clinicName}`, dueAt: x.startsAt, to: '/assist/appointments' });
       }
       if (user.role === 'asst_doctor') {
         for (const g of gps) queue.push({ id: g.id, kind: 'guarantee', title: `${g.number} · ${g.serviceName}`, subtitle: `${g.insuredName} · ${formatMoney(g.estimatedCost)}`, dueAt: tzIso(parseIso(g.createdAt) + DAY), to: `/assist/guarantees/${g.id}` });
         for (const g of d.guarantees.filter((x) => x.assistanceId === assistanceId && x.escalated && x.status === 'requested')) {
-          queue.push({ id: g.id, kind: 'escalation', title: `${g.number} · в МИГ`, subtitle: `${g.insuredName} · ожидает решения МИГ`, to: `/assist/guarantees/${g.id}` });
+          queue.push({ id: g.id, kind: 'escalation', title: msg('srv.assistQ.toMig', { number: g.number }), subtitle: msg('srv.assistQ.awaitingMig', { name: g.insuredName }), to: `/assist/guarantees/${g.id}` });
         }
       }
       if (user.role === 'asst_doctor' || user.role === 'asst_billing') {
@@ -249,16 +249,16 @@ export const assistHandlers = [
           const s = toSubSummary(d, r, assistanceId);
           const toReview = s.pendingCount + s.disputedCount;
           if (user.role === 'asst_doctor' && toReview) {
-            queue.push({ id: r.id, kind: 'registry', title: `Реестр ${s.clinicName} за ${r.period}`, subtitle: `На проверке строк: ${toReview}`, dueAt: tzIso(parseIso(r.submittedAt ?? tzIso(now)) + 5 * DAY), to: `/assist/registries/${r.id}` });
+            queue.push({ id: r.id, kind: 'registry', title: msg('srv.assistQ.registry', { clinic: s.clinicName, period: r.period }), subtitle: msg('srv.assistQ.linesInReview', { count: toReview }), dueAt: tzIso(parseIso(r.submittedAt ?? tzIso(now)) + 5 * DAY), to: `/assist/registries/${r.id}` });
           }
           if (user.role === 'asst_billing' && s.unpaidCount) {
-            queue.push({ id: r.id, kind: 'registry', title: `Оплата: ${s.clinicName} за ${r.period}`, subtitle: `Не оплачено строк: ${s.unpaidCount}`, to: `/assist/registries/${r.id}` });
+            queue.push({ id: r.id, kind: 'registry', title: msg('srv.assistQ.payment', { clinic: s.clinicName, period: r.period }), subtitle: msg('srv.assistQ.unpaidLines', { count: s.unpaidCount }), to: `/assist/registries/${r.id}` });
           }
         }
       }
       if (user.role === 'asst_billing') {
         for (const b of rebills.filter((x) => x.status === 'draft' || x.lines.some((l) => l.status === 'rejected') && x.status !== 'paid')) {
-          queue.push({ id: b.id, kind: 'rebill', title: `Счёт ${b.number}`, subtitle: b.status === 'draft' ? 'Черновик: проверьте и отправьте в МИГ' : 'Есть отклонённые строки', to: `/assist/rebills/${b.id}` });
+          queue.push({ id: b.id, kind: 'rebill', title: msg('srv.assistQ.rebill', { number: b.number }), subtitle: msg(b.status === 'draft' ? 'srv.assistQ.rebillDraft' : 'srv.assistQ.rebillRejected'), to: `/assist/rebills/${b.id}` });
         }
       }
       const out: AssistOverview = {

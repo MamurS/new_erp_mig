@@ -2,6 +2,7 @@
  * Demo module. Loaded only when VITE_DEMO_MODE === 'true'; absent from other builds.
  * «Войти как…» performs a real login through the mock API, it never changes the role client-side.
  */
+import './messages';
 import { defineLabels, t } from '@/i18n';
 import { useEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';

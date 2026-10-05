@@ -7,7 +7,6 @@ import { dom } from './dom';
 import { params } from './params';
 import { app } from './app';
 import { auth } from './auth';
-import { demo } from './demo';
 import { staff } from './staff';
 import { staffLc } from './staffLc';
 import { staffOps } from './staffOps';
@@ -30,7 +29,6 @@ export const uzLatn = {
   ...params,
   ...app,
   ...auth,
-  ...demo,
   ...staff,
   ...staffLc,
   ...staffOps,

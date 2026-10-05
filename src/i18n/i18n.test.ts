@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ru } from './dict/ru';
-import { uzLatn } from './dict/uz-Latn';
-import { en } from './dict/en';
+import { ru as ruMain } from './dict/ru';
+import { uzLatn as uzMain } from './dict/uz-Latn';
+import { en as enMain } from './dict/en';
+import { demo as ruDemo } from './dict/ru/demo';
+import { demo as uzDemo } from './dict/uz-Latn/demo';
+import { demo as enDemo } from './dict/en/demo';
+
+// The demo namespace is registered by the demo module at run time; the dictionaries cover it too.
+const ru: Record<string, string> = { ...ruMain, ...ruDemo };
+const uzLatn: Record<string, string> = { ...uzMain, ...uzDemo };
+const en: Record<string, string> = { ...enMain, ...enDemo };
 import { getLocale, msg, setLocale, t, tm, tp, translate, translatePlural, unpack } from './core';
 import { getPref, setPref } from '@/shared/lib/storage';
 import { formatMoney, formatMoneyShort, formatRelativeDays } from '@/shared/lib/format';

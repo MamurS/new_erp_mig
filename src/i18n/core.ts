@@ -17,14 +17,21 @@ import { DEFAULT_LOCALE, INTL_LOCALE, isLocale, type Locale } from './locales';
 import { ru } from './dict/ru';
 import { uzLatn } from './dict/uz-Latn';
 import { en } from './dict/en';
+import type { demo as ruDemo } from './dict/ru/demo';
 
-export type I18nKey = keyof typeof ru;
+/** Demo strings are registered by the demo module itself, so a build without VITE_DEMO_MODE has none. */
+export type I18nKey = keyof typeof ru | keyof typeof ruDemo;
 export type Params = Record<string, string | number>;
 
 /** Keys that have plural forms: `base.other` exists. */
 export type PluralBase = { [K in I18nKey]: K extends `${infer B}.other` ? B : never }[I18nKey];
 
-const DICTS: Record<Locale, Readonly<Record<string, string | undefined>>> = { ru, 'uz-Latn': uzLatn, en };
+const DICTS: Record<Locale, Record<string, string | undefined>> = { ru: { ...ru }, 'uz-Latn': { ...uzLatn }, en: { ...en } };
+
+/** Adds a namespace that is loaded on demand (the demo module's strings). */
+export function registerMessages(dicts: Record<Locale, Readonly<Record<string, string | undefined>>>): void {
+  for (const l of Object.keys(dicts) as Locale[]) Object.assign(DICTS[l], dicts[l]);
+}
 
 let current: Locale = readStored();
 const listeners = new Set<() => void>();

@@ -3,6 +3,7 @@
  * a clinic information system would: it creates its own key through the portal, keeps the
  * secret in memory only and uses the regular /api/integration/v1 endpoints.
  */
+import './messages';
 import { t, tm } from '@/i18n';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';

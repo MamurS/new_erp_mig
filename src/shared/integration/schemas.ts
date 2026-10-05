@@ -95,7 +95,8 @@ export const coverageCheckRequest = z.union([
   z.object({ qrToken: z.string().trim().min(8).max(200) }).strict(),
   z
     .object({
-      policyNumber: z.string().trim().toUpperCase().regex(/^ДМС-\d{4}-\d{6}$/, msg('v.policyNumberFormat')),
+      // eslint-disable-next-line mig/no-cyrillic-ui -- example of a document number format, not an interface string
+      policyNumber: z.string().trim().toUpperCase().regex(/^ДМС-\d{4}-\d{6}$/, msg('v.policyNumberFormat', { example: 'ДМС-2026-000123' })),
       pinfl: z.string().trim().regex(/^\d{14}$/, msg('v.pinflFormat')),
     })
     .strict(),
@@ -215,7 +216,8 @@ export const registryLineInput = z
     guaranteeNumber: z
       .string()
       .trim()
-      .regex(/^ГП-\d{4}-\d{6}$/, msg('v.guaranteeNumberFormat'))
+      // eslint-disable-next-line mig/no-cyrillic-ui -- example of a document number format, not an interface string
+      .regex(/^ГП-\d{4}-\d{6}$/, msg('v.guaranteeNumberFormat', { example: 'ГП-2026-000123' }))
       .optional(),
   })
   .strict();

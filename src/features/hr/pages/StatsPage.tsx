@@ -12,7 +12,7 @@ import { cn } from '@/shared/lib/cn';
 import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
 import { useDmsParam } from '@/shared/api/queries/params';
 import { limitWarnRatio } from '@/shared/config/dmsParameters';
-import { t } from '@/i18n';
+import { t, tm } from '@/i18n';
 
 function TooFew() {
   return (
@@ -41,10 +41,10 @@ function Slices({ title, slices, total }: { title: string; slices: HrStatsSlice[
         {slices.map((s) => (
           <li key={s.label}>
             <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
-              <span className="font-semibold">{s.label}</span>
+              <span className="font-semibold">{tm(s.label)}</span>
               {s.value === null ? <TooFew /> : <span className="num">{formatNumber(s.value)}</span>}
             </div>
-            {s.value !== null && <ProgressBar value={s.value} max={total} label={s.label} className="h-2.5" />}
+            {s.value !== null && <ProgressBar value={s.value} max={total} label={tm(s.label)} className="h-2.5" />}
           </li>
         ))}
       </ul>

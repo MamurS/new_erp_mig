@@ -41,6 +41,7 @@ export type ClientStatus = 'lead' | 'draft' | 'negotiation' | 'active' | 'renewa
 
 export interface Client {
   id: UUID;
+  // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values of the API contract
   legalForm: 'ООО' | 'АО' | 'СП ООО' | 'ЧП';
   name: string;
   inn: string;                             // 9 цифр, не ПДн

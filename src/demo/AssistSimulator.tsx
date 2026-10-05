@@ -2,6 +2,7 @@
  * Demo simulator of an assistance company's system (ASSISTANCE_SPEC §8). Real integration API calls
  * with its own key, created through the portal; the secret stays in memory only.
  */
+import './messages';
 import { t, tm } from '@/i18n';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';

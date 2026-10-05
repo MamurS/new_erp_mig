@@ -3,7 +3,7 @@
  * assignment of an assistance to a policy from a date, review (curator) and payment (accountant) of
  * rebills with four-eyes, the quality-control queue of doctor experts and the report by assistance.
  */
-import { msg } from '@/i18n/core';
+import { msg, t } from '@/i18n/core';
 import { http } from 'msw';
 import type { AssistanceCompany, SessionUser } from '@/shared/types';
 import type { AssignmentView, AssistanceCardView, AssistanceListItem, AssistanceReportRow, QaSampleView } from '@/shared/types/dto';
@@ -86,7 +86,7 @@ function reportByAssistance(d: Db): AssistanceReportRow[] {
     const insuredCount = people.filter((i) => i.status === 'active').length;
     rows.push({
       assistanceId: id,
-      name: id ? (assistanceName(d, id) ?? '—') : 'Без ассистанса (МИГ)',
+      name: id ? (assistanceName(d, id) ?? '—') : t('srv.noAssistance'),
       insuredCount,
       premium,
       paid,

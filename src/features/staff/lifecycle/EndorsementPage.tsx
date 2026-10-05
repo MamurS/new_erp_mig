@@ -219,7 +219,7 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
                   <tr key={l.changeRequestId} className="border-b border-border-soft align-top">
                     <td className="px-4 py-1.5">{tm(l.description)}</td>
                     <td className="num px-2 py-1.5 text-right">{l.days}</td>
-                    <td className="num px-2 py-1.5 text-[12px] text-muted">{l.formula}</td>
+                    <td className="num px-2 py-1.5 text-[12px] text-muted">{tm(l.formula)}</td>
                     <td className="num px-4 py-1.5 text-right">{formatMoney(l.amount)}</td>
                   </tr>
                 ))}

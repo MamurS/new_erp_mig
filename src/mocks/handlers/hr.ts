@@ -292,9 +292,9 @@ export const hrHandlers = [
       const client = d.clients.find((c) => c.id === user.companyId)!;
       const year = new Date(now).getFullYear();
       const groups: [string, number, number][] = [
-        ['до 30 лет', 0, 29],
-        ['30–44 года', 30, 44],
-        ['45 лет и старше', 45, 200],
+        [msg('srv.hrStats.ageUnder30'), 0, 29],
+        [msg('srv.hrStats.age30to44'), 30, 44],
+        [msg('srv.hrStats.age45plus'), 45, 200],
       ];
       const ageOf = (b: string) => year - Number(b.slice(0, 4));
       const out: HrStats = {
@@ -304,9 +304,9 @@ export const hrHandlers = [
         budgetUsedPct: client.lossRatio === null || employees.length < K_ANON ? null : Math.round(client.lossRatio * 100),
         byAgeGroup: groups.map(([label, a, b]) => ({ label, value: kAnon(employees.filter((e) => ageOf(e.birthDate) >= a && ageOf(e.birthDate) <= b).length) })),
         byAppStatus: [
-          { label: 'Пользуются приложением', value: kAnon(appUsers) },
-          { label: 'Приглашены', value: kAnon(employees.filter((e) => e.appStatus === 'invited').length) },
-          { label: 'Не приглашены', value: kAnon(employees.filter((e) => e.appStatus === 'not_invited').length) },
+          { label: msg('srv.hrStats.appActive'), value: kAnon(appUsers) },
+          { label: msg('srv.hrStats.appInvited'), value: kAnon(employees.filter((e) => e.appStatus === 'invited').length) },
+          { label: msg('srv.hrStats.appNotInvited'), value: kAnon(employees.filter((e) => e.appStatus === 'not_invited').length) },
         ],
         k: K_ANON,
       };

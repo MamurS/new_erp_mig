@@ -3,7 +3,7 @@
  * integration API (ASSISTANCE_SPEC). Scope by the date of the event, payers of registry lines, limits
  * with guarantee reserves, rebills with automatic checks, KPI and the quality-control sample.
  */
-import { msg } from '@/i18n/core';
+import { msg, t } from '@/i18n/core';
 import type {
   AssistanceCompany,
   AssistanceKpi,
@@ -111,7 +111,7 @@ export function payerOfLine(d: Db, line: Pick<RegistryLine, 'visitId' | 'service
   return who ? payerOn(d.assignments, who.policyId, line.serviceDate) : 'mig';
 }
 
-export const payerName = (d: Db, payer: Payer | undefined): string => (!payer || payer === 'mig' ? 'МИГ' : (assistanceName(d, payer) ?? 'Ассистанс'));
+export const payerName = (d: Db, payer: Payer | undefined): string => (!payer || payer === 'mig' ? 'МИГ' : (assistanceName(d, payer) ?? t('srv.dash.assistance')));
 
 /** Lines of one payer: a sub-registry. */
 export const linesOf = (r: Registry, payer: Payer): RegistryLine[] => r.lines.filter((l) => (l.payer ?? 'mig') === payer);

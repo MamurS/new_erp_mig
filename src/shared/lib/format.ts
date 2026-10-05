@@ -161,6 +161,7 @@ export function initials(name: string): string {
   const words = name
     .replace(/[«»"'()]/g, ' ')
     .split(/\s+/)
+    // eslint-disable-next-line mig/no-cyrillic-ui -- legal forms in company names (data) are skipped
     .filter((w) => w && !['ООО', 'АО', 'СП', 'ЧП'].includes(w));
   return words
     .slice(0, 2)

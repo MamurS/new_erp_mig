@@ -9,7 +9,7 @@ import { PageHeader, Card } from '@/shared/ui/page';
 import { EmptyState, QueryState } from '@/shared/ui/states';
 import { useTopbar } from '@/features/staff/topbar';
 import { KpiGrid, SlaBadge, Stat } from '../components';
-import { defineLabels, t } from '@/i18n';
+import { defineLabels, t, tm } from '@/i18n';
 
 const KIND_ICON = { appointment: CalendarClock, case: Headphones, guarantee: FileCheck, registry: ClipboardList, escalation: Send, rebill: Receipt } as const;
 const KIND_LABEL = defineLabels('assist.kind', ['appointment', 'case', 'guarantee', 'registry', 'escalation', 'rebill'] as const);
@@ -51,8 +51,8 @@ export default function DashboardPage() {
                         <Icon className="h-4 w-4 shrink-0 text-muted" aria-hidden />
                         <span className="w-24 shrink-0 text-[12px] text-muted">{KIND_LABEL[item.kind]}</span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{item.title}</span>
-                          <span className="block truncate text-[12px] text-muted">{item.subtitle}</span>
+                          <span className="block truncate font-medium">{tm(item.title)}</span>
+                          <span className="block truncate text-[12px] text-muted">{tm(item.subtitle)}</span>
                         </span>
                         {item.dueAt && <SlaBadge dueAt={item.dueAt} />}
                       </Link>

@@ -1,4 +1,4 @@
-import { t } from '@/i18n';
+import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { LimitChangeRequest } from '@/shared/types';
@@ -74,8 +74,8 @@ export default function LimitRequestsPage() {
           </span>
         );
         return allowed ? buttons : (
-          <Tooltip content={FOUR_EYES_LIMIT_HINT}>
-            <span tabIndex={0} aria-label={FOUR_EYES_LIMIT_HINT} data-testid="four-eyes-hint">
+          <Tooltip content={tm(FOUR_EYES_LIMIT_HINT)}>
+            <span tabIndex={0} aria-label={tm(FOUR_EYES_LIMIT_HINT)} data-testid="four-eyes-hint">
               {buttons}
             </span>
           </Tooltip>
