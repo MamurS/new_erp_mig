@@ -10,6 +10,7 @@ import { EmptyState, QueryState } from '@/shared/ui/states';
 import { useTopbar } from '@/features/staff/topbar';
 import { KpiGrid, SlaBadge, Stat } from '../components';
 import { defineLabels, t, tm } from '@/i18n';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const KIND_ICON = { appointment: CalendarClock, case: Headphones, guarantee: FileCheck, registry: ClipboardList, escalation: Send, rebill: Receipt } as const;
 const KIND_LABEL = defineLabels('assist.kind', ['appointment', 'case', 'guarantee', 'registry', 'escalation', 'rebill'] as const);
@@ -42,6 +43,7 @@ export default function DashboardPage() {
             {o.queue.length === 0 ? (
               <EmptyState title={t('assist.dashboard.queueEmpty')} description={t('assist.dashboard.queueEmptyHint')} />
             ) : (
+              <TableScroll>
               <ul className="divide-y divide-border-soft" data-testid="assist-queue">
                 {o.queue.map((item) => {
                   const Icon = KIND_ICON[item.kind];
@@ -60,6 +62,7 @@ export default function DashboardPage() {
                   );
                 })}
               </ul>
+              </TableScroll>
             )}
           </Card>
           <div>

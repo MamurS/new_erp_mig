@@ -10,6 +10,7 @@ import { PageHeader } from '@/shared/ui/page';
 import { QueryState } from '@/shared/ui/states';
 import { useTopbar } from '@/features/staff/topbar';
 import { t } from '@/i18n';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 export default function ClinicsPage() {
   useDocumentTitle(t('assist.nav.clinics'));
@@ -42,6 +43,7 @@ export default function ClinicsPage() {
                   <div className="border-b border-border-soft px-4 py-2.5 font-bold">
                     {current.clinicName} · {current.ownPrices ? t('assist.clinics.contractPrice') : t('assist.clinics.migPrice')}
                   </div>
+                  <TableScroll>
                   <table className="w-full text-left">
                     <caption className="sr-only">{t('assist.clinics.priceList')}</caption>
                     <thead className="text-[12px] text-muted">
@@ -65,6 +67,7 @@ export default function ClinicsPage() {
                       ))}
                     </tbody>
                   </table>
+                  </TableScroll>
                 </div>
               )}
             </div>

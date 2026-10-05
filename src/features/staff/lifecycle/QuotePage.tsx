@@ -22,6 +22,7 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { ReasonDialog } from './common';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const PROGRAMS: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
 const STATUS_LABEL = defineLabels('staffLc.quoteStatus', ['draft', 'pending_approval', 'approved', 'rejected'] as const);
@@ -146,11 +147,11 @@ function Calculator({ quote }: { quote: QuoteView }) {
                 )}
               </Field>
             </div>
-            <div className="overflow-x-auto">
+            <TableScroll>
               <table className="w-full text-[13px]" data-testid="quote-rates">
                 <caption className="sr-only">{t('staffLc.quote.ageBands')}</caption>
                 <thead>
-                  <tr className="border-b border-border text-left text-[12px] text-muted">
+                  <tr className="text-left text-[12px] text-muted">
                     <th className="py-2 pr-3 font-medium">{t('staffLc.reserves.colGroup')}</th>
                     <th className="py-2 pr-3 text-right font-medium">{t('staffLc.quote.people')}</th>
                     <th className="py-2 pr-3 text-right font-medium">{t('staffLc.quote.baseRate')}</th>
@@ -170,7 +171,7 @@ function Calculator({ quote }: { quote: QuoteView }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
             <p className="mt-2 text-[12px] text-muted">
               {t('staffLc.quote.ratesNote', { discount: shown.groupDiscountPct ? formatPercent(shown.groupDiscountPct) : t('staffLc.quote.noDiscount'), from: params.groupDiscountFrom })}
             </p>

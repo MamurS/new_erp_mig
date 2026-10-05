@@ -43,6 +43,7 @@ import { RevealField } from '../components/RevealField';
 import { LimitRequestDialog } from '../components/LimitRequestDialog';
 import { APPT_TONE, CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 export default function InsuredCardPage() {
   const { insuredId = '' } = useParams();
@@ -286,10 +287,11 @@ function AccessLogTab({ insuredId }: { insuredId: string }) {
           list.length === 0 ? (
             <EmptyState title={t('staff.insuredCard.accessEmpty')} />
           ) : (
-            <table className="mt-2 w-full">
+            <TableScroll className="mt-2">
+            <table className="w-full">
               <caption className="sr-only">{t('staff.insuredCard.tab.access')}</caption>
               <thead>
-                <tr className="border-b border-border text-left text-[12px] text-muted">
+                <tr className="text-left text-[12px] text-muted">
                   <th className="px-4 py-2 font-normal">{t('staff.insuredCard.colTime')}</th>
                   <th className="px-4 py-2 font-normal">{t('common.employee')}</th>
                   <th className="px-4 py-2 font-normal">{t('common.role')}</th>
@@ -309,6 +311,7 @@ function AccessLogTab({ insuredId }: { insuredId: string }) {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )
         }
       </QueryState>

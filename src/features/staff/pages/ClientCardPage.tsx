@@ -29,6 +29,7 @@ import { ClientDocumentsTable } from '../components/ClientDocumentsTable';
 import { HrLetterDialog } from '../components/HrLetterDialog';
 import { AssistanceBlock } from '../assistance/AssistanceBlock';
 import { useDmsParam } from '@/shared/api/queries/params';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const TAB_KEYS = ['tab', 'highlight'] as const;
 const TABS = ['overview', 'insured', 'policies', 'claims', 'documents', 'history'];
@@ -137,10 +138,11 @@ export default function ClientCardPage() {
             {c.claimsByCategory.length === 0 ? (
               <EmptyState title={t('staff.clientCard.noClaims')} />
             ) : (
-              <table className="mt-2 w-full">
+              <TableScroll className="mt-2">
+              <table className="w-full">
                 <caption className="sr-only">{t('staff.clientCard.claimsByCategory')}</caption>
                 <thead>
-                  <tr className="border-b border-border text-left text-[12px] text-muted">
+                  <tr className="text-left text-[12px] text-muted">
                     <th className="px-4 py-2 font-normal">{t('common.category')}</th>
                     <th className="px-4 py-2 text-right font-normal">{t('staff.clientCard.count')}</th>
                     <th className="px-4 py-2 text-right font-normal">{t('common.amount')}</th>
@@ -156,6 +158,7 @@ export default function ClientCardPage() {
                   ))}
                 </tbody>
               </table>
+              </TableScroll>
             )}
           </Card>
         </TabsContent>

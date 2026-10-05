@@ -16,6 +16,7 @@ import { QueryState } from '@/shared/ui/states';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const GROUP_IDS = ['byClient', 'byAssistance', 'byCategory'] as const;
 type Group = (typeof GROUP_IDS)[number];
@@ -23,10 +24,11 @@ const GROUPS = defineLabels('staffLc.reserves.group', GROUP_IDS);
 
 function Rows({ rows, total }: { rows: ReserveReportRow[]; total: number }) {
   return (
+    <TableScroll>
     <table className="w-full text-[13px]">
       <caption className="sr-only">{t('staffLc.reserves.short')}</caption>
       <thead>
-        <tr className="border-b border-border text-left text-[12px] text-muted">
+        <tr className="text-left text-[12px] text-muted">
           <th className="px-4 py-2 font-medium">{t('staffLc.reserves.colGroup')}</th>
           <th className="px-2 py-2 text-right font-medium">{t('staffLc.reserves.colClaims')}</th>
           <th className="px-2 py-2 text-right font-medium">{t('staffLc.reserves.colReserve')}</th>
@@ -44,6 +46,7 @@ function Rows({ rows, total }: { rows: ReserveReportRow[]; total: number }) {
         ))}
       </tbody>
     </table>
+    </TableScroll>
   );
 }
 

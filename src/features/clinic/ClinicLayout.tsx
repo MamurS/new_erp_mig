@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 /* Clinic cabinet shell (CLINIC_SPEC §4): client theme for the content, the common side panel for navigation. */
 import { Outlet, useLocation } from 'react-router-dom';
 import { CalendarClock, ClipboardList, FileCheck, FolderOpen, House, PlugZap, ScanLine, Users, type LucideIcon } from 'lucide-react';
@@ -46,7 +47,7 @@ export default function ClinicLayout() {
 
   return (
     <SidebarProvider portal="clinic">
-      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))' }}>
+      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))', '--app-top': 'calc(var(--banner-h, 0px) + var(--topbar-h))' } as CSSProperties}>
         <AppSidebar
           title={t('shell.title.clinic')}
           ariaLabel={t('clinic.nav.aria')}
@@ -57,7 +58,7 @@ export default function ClinicLayout() {
         />
         <div data-theme="client" className="flex min-w-0 flex-1 flex-col bg-bg text-text">
           <IdleWatcher />
-          <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <header data-testid="topbar" className="sticky top-(--banner-h,0px) z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] text-muted">{t('shell.portal.clinic')}</p>

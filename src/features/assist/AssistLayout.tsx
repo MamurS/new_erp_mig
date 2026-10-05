@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 /*
  * Assistance portal shell (ASSISTANCE_SPEC §6): the dense `staff` theme for the call centre, a rail of
  * collapsible side navigation grouped by work and a top bar with the assistance name and the «Портал партнёра» mark.
@@ -36,7 +37,7 @@ export default function AssistLayout() {
 
   return (
     <SidebarProvider portal="assist">
-      <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]">
+      <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]" style={{ '--app-top': 'calc(var(--banner-h, 0px) + var(--topbar-h))' } as CSSProperties}>
         <AppSidebar
           title={t('shell.title.assist')}
           ariaLabel={t('assist.layout.navAria')}
@@ -46,7 +47,7 @@ export default function AssistLayout() {
           onLogout={() => void logout()}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <header data-testid="topbar" className="sticky top-(--banner-h,0px) z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="flex min-w-0 shrink-0 items-center gap-2 border-r border-border pr-3">
               {name ? (

@@ -5,6 +5,7 @@ import { cn } from '@/shared/lib/cn';
 import { formatNumber } from '@/shared/lib/format';
 import { Button } from './button';
 import { EmptyState, ErrorState, Skeleton } from './states';
+import { TableScroll } from './table-scroll';
 
 export interface Column<T> {
   key: string;
@@ -54,6 +55,8 @@ export interface DataTableProps<T> {
   footer?: ReactNode;
   rowHeight?: number;
   hiddenColumns?: string[];
+  /** Totals row at the bottom, by column key; pinned to the bottom of the table's scroll container. */
+  totals?: Partial<Record<string, ReactNode>>;
   caption: string;
   density?: 'staff' | 'client';
 }
@@ -95,11 +98,11 @@ export function DataTable<T>(p: DataTableProps<T>) {
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="overflow-x-auto">
+      <TableScroll>
         <table className="w-full border-collapse text-left">
           <caption className="sr-only">{p.caption}</caption>
           <thead>
-            <tr className="border-b border-border">
+            <tr>
               {cols.map((c) => {
                 const active = p.sort?.key === c.sortKey;
                 return (
@@ -175,8 +178,19 @@ export function DataTable<T>(p: DataTableProps<T>) {
                   );
                 })}
           </tbody>
+          {p.totals && p.rows && p.rows.length > 0 && (
+            <tfoot data-testid="table-totals">
+              <tr>
+                {cols.map((c) => (
+                  <td key={c.key} className={cn('h-9 whitespace-nowrap px-3 font-semibold', c.align === 'right' && 'text-right', c.className)}>
+                    {p.totals?.[c.key] ?? null}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          )}
         </table>
-      </div>
+      </TableScroll>
       {p.error && !p.loading ? <ErrorState error={p.error} onRetry={p.onRetry} /> : null}
       {!p.loading && !p.error && p.rows && p.rows.length === 0 ? (p.empty ?? <EmptyState title={t('common.notFound')} description={t('shell.table.emptyHint')} />) : null}
       {(p.onPageChange || p.footer) && (
