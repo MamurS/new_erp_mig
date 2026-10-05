@@ -153,7 +153,7 @@ export const staff = {
   'staff.clients.title': 'Клиенты',
   'staff.clients.view.mine': 'Мои',
   'staff.clients.view.q4': 'Продления Q4',
-  'staff.clients.view.loss': 'Убыточность > 80%',
+  'staff.clients.view.loss': 'Убыточность > {pct}',
   'staff.clients.view.renewals': 'Продления < 30 дн без КП',
   'staff.clients.sort.name': 'По названию',
   'staff.clients.sort.premium': 'По премии',

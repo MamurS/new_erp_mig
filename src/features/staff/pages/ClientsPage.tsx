@@ -1,4 +1,4 @@
-import { t, tm, tp } from '@/i18n';
+import { t, tm, tp, type I18nKey } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDownUp, Columns3, Mail, Plus } from 'lucide-react';
@@ -37,66 +37,37 @@ import { HrLetterDialog } from '../components/HrLetterDialog';
 import { LossBar, RenewalCell } from '../components/cells';
 import { useDmsParam } from '@/shared/api/queries/params';
 
-const VIEWS = [
-  { key: '', get label() {
-      return t('common.all');
-    } },
-  { key: 'mine', get label() {
-      return t('staff.clients.view.mine');
-    } },
-  { key: 'q4', get label() {
-      return t('staff.clients.view.q4');
-    } },
-  { key: 'loss', get label() {
-      return t('staff.clients.view.loss');
-    } },
-] as const;
+const VIEWS = ['', 'mine', 'q4', 'loss'] as const;
 
-const SORTS = [
-  { key: 'name:asc', get label() {
-      return t('staff.clients.sort.name');
-    } },
-  { key: 'premium:desc', get label() {
-      return t('staff.clients.sort.premium');
-    } },
-  { key: 'renewalDate:asc', get label() {
-      return t('staff.clients.sort.renewal');
-    } },
-  { key: 'lossRatio:desc', get label() {
-      return t('staff.clients.sort.loss');
-    } },
-  { key: 'insuredCount:desc', get label() {
-      return t('staff.clients.sort.insured');
-    } },
+function viewLabel(view: (typeof VIEWS)[number], lossWarn: number): string {
+  if (view === 'mine') return t('staff.clients.view.mine');
+  if (view === 'q4') return t('staff.clients.view.q4');
+  if (view === 'loss') return t('staff.clients.view.loss', { pct: formatPercent(lossWarn) });
+  return t('common.all');
+}
+
+const SORTS: { key: string; label: I18nKey }[] = [
+  { key: 'name:asc', label: 'staff.clients.sort.name' },
+  { key: 'premium:desc', label: 'staff.clients.sort.premium' },
+  { key: 'renewalDate:asc', label: 'staff.clients.sort.renewal' },
+  { key: 'lossRatio:desc', label: 'staff.clients.sort.loss' },
+  { key: 'insuredCount:desc', label: 'staff.clients.sort.insured' },
 ];
 
-const HIDEABLE = [
-  { key: 'program', get label() {
-      return t('common.program');
-    } },
-  { key: 'insured', get label() {
-      return t('staff.clients.col.insured');
-    } },
-  { key: 'premium', get label() {
-      return t('common.premium');
-    } },
-  { key: 'renewal', get label() {
-      return t('staff.clients.col.renewal');
-    } },
-  { key: 'loss', get label() {
-      return t('staff.clients.col.loss');
-    } },
-  { key: 'manager', get label() {
-      return t('common.manager');
-    } },
-  { key: 'status', get label() {
-      return t('common.status');
-    } },
+const HIDEABLE: { key: string; label: I18nKey }[] = [
+  { key: 'program', label: 'common.program' },
+  { key: 'insured', label: 'staff.clients.col.insured' },
+  { key: 'premium', label: 'common.premium' },
+  { key: 'renewal', label: 'staff.clients.col.renewal' },
+  { key: 'loss', label: 'staff.clients.col.loss' },
+  { key: 'manager', label: 'common.manager' },
+  { key: 'status', label: 'common.status' },
 ];
 
 export default function ClientsPage() {
   useDocumentTitle(t('staff.clients.title'));
   const canWrite = useCan('clients.write');
+  const lossWarn = useDmsParam('lossRatioWarn');
   const [createOpen, setCreateOpen] = useState(false);
   useTopbar(
     [{ label: t('staff.clients.title') }],
@@ -169,14 +140,14 @@ export default function ClientsPage() {
         <div role="tablist" aria-label={t('staff.clients.savedViews')} className="mb-3 flex flex-wrap gap-1">
           {VIEWS.map((v) => (
             <button
-              key={v.key}
+              key={v}
               role="tab"
               type="button"
-              aria-selected={f.view === v.key}
-              onClick={() => setF({ view: v.key })}
-              className={cn('rounded-btn px-2.5 py-1', f.view === v.key ? 'bg-text text-white' : 'text-muted hover:bg-rail')}
+              aria-selected={f.view === v}
+              onClick={() => setF({ view: v })}
+              className={cn('rounded-btn px-2.5 py-1', f.view === v ? 'bg-text text-white' : 'text-muted hover:bg-rail')}
             >
-              {v.label}
+              {viewLabel(v, lossWarn)}
             </button>
           ))}
           {f.view === 'renewals' && (
@@ -209,7 +180,7 @@ export default function ClientsPage() {
               <MenuContent>
                 {SORTS.map((s) => (
                   <MenuItem key={s.key} onSelect={() => setF({ sort: s.key })} className={cn(formatSort(sort) === s.key && 'font-semibold')}>
-                    {s.label}
+                    {t(s.label)}
                   </MenuItem>
                 ))}
               </MenuContent>
@@ -224,7 +195,7 @@ export default function ClientsPage() {
                 <MenuLabel>{t('staff.clients.showColumns')}</MenuLabel>
                 {HIDEABLE.map((c) => (
                   <MenuCheckbox key={c.key} checked={!hidden.includes(c.key)} onCheckedChange={(v) => setHidden((h) => (v ? h.filter((x) => x !== c.key) : [...h, c.key]))}>
-                    {c.label}
+                    {t(c.label)}
                   </MenuCheckbox>
                 ))}
               </MenuContent>

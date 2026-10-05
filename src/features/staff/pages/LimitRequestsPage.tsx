@@ -22,15 +22,9 @@ import { Tooltip } from '@/shared/ui/tooltip';
 import { useTopbar } from '../topbar';
 
 const STATUS = {
-  pending: { tone: 'warning', get label() {
-      return t('staff.limitReq.status.pending');
-    } },
-  approved: { tone: 'success', get label() {
-      return t('staff.limitReq.status.approved');
-    } },
-  rejected: { tone: 'danger', get label() {
-      return t('staff.limitReq.status.rejected');
-    } },
+  pending: { tone: 'warning', label: 'staff.limitReq.status.pending' },
+  approved: { tone: 'success', label: 'staff.limitReq.status.approved' },
+  rejected: { tone: 'danger', label: 'staff.limitReq.status.rejected' },
 } as const;
 
 export default function LimitRequestsPage() {
@@ -61,7 +55,7 @@ export default function LimitRequestsPage() {
     { key: 'change', header: t('staff.limitReq.colChange'), align: 'right', cell: (r) => <span className="num whitespace-nowrap">{formatMoney(r.from, false)} → <b>{formatMoney(r.to)}</b></span> },
     { key: 'why', header: t('staff.limitReq.colJustification'), cell: (r) => <span className="line-clamp-2 text-muted">{r.justification}</span> },
     { key: 'by', header: t('staff.docs.colAuthor'), cell: (r) => (r.requestedById === user.id ? <b>{t('staff.limitReq.you')}</b> : r.requestedByName) },
-    { key: 'status', header: t('common.status'), cell: (r) => <StatusDot tone={STATUS[r.status].tone}>{STATUS[r.status].label}{r.decidedByName ? ` · ${r.decidedByName}` : ''}</StatusDot> },
+    { key: 'status', header: t('common.status'), cell: (r) => <StatusDot tone={STATUS[r.status].tone}>{t(STATUS[r.status].label)}{r.decidedByName ? ` · ${r.decidedByName}` : ''}</StatusDot> },
     {
       key: 'actions',
       header: '',

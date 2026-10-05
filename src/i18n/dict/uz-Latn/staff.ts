@@ -155,7 +155,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.clients.title': 'Mijozlar',
   'staff.clients.view.mine': 'Meniki',
   'staff.clients.view.q4': 'Q4 uzaytirishlari',
-  'staff.clients.view.loss': 'Zararlilik darajasi > 80%',
+  'staff.clients.view.loss': 'Zararlilik darajasi > {pct}',
   'staff.clients.view.renewals': '30 kundan kam qolgan, TT yoʻq uzaytirishlar',
   'staff.clients.sort.name': 'Nomi boʻyicha',
   'staff.clients.sort.premium': 'Sugʻurta mukofoti boʻyicha',

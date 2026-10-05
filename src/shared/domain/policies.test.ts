@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { tm } from '@/i18n';
 import { changeDateProblem, daysInclusive, defaultEndDate, defaultTariff, policyPeriodProblem, policyPremium, proRataDelta, tariffOf } from './policies';
 
 const year = { startDate: '2026-01-01', endDate: '2026-12-31' };
@@ -32,16 +33,16 @@ describe('policy premium and pro-rata (POLICY_SPEC §3)', () => {
 
   it('is 0 outside the policy period and the dates are checked', () => {
     expect(proRataDelta(year, t, 'add', '2027-01-01')).toBe(0);
-    expect(changeDateProblem(year, 'add', '2025-12-31')).toMatch(/срока полиса/);
-    expect(changeDateProblem(year, 'exclude', '2026-02-01', '2026-03-01')).toMatch(/раньше даты прикрепления/);
+    expect(tm(changeDateProblem(year, 'add', '2025-12-31'))).toMatch(/срока полиса/);
+    expect(tm(changeDateProblem(year, 'exclude', '2026-02-01', '2026-03-01'))).toMatch(/раньше даты прикрепления/);
     expect(changeDateProblem(year, 'exclude', '2026-04-01', '2026-03-01')).toBeNull();
   });
 
   it('policy period: 1–12 months, end after start', () => {
     expect(policyPeriodProblem('2026-10-01', '2027-09-30')).toBeNull();
-    expect(policyPeriodProblem('2026-10-01', '2027-10-01')).toMatch(/12 месяцев/);
-    expect(policyPeriodProblem('2026-10-01', '2026-10-10')).toMatch(/месяца/);
-    expect(policyPeriodProblem('2026-10-01', '2026-09-01')).toMatch(/раньше начала/);
+    expect(tm(policyPeriodProblem('2026-10-01', '2027-10-01'))).toMatch(/12 месяцев/);
+    expect(tm(policyPeriodProblem('2026-10-01', '2026-10-10'))).toMatch(/месяца/);
+    expect(tm(policyPeriodProblem('2026-10-01', '2026-09-01'))).toMatch(/раньше начала/);
   });
 
   it('seed policies without a stored tariff fall back to premium per person', () => {

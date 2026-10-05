@@ -26,15 +26,9 @@ import { EmptyState } from '@/shared/ui/states';
 import { useTopbar } from '../topbar';
 
 const API_STATUS = {
-  online: { tone: 'success', get label() {
-      return t('staff.clinics.api.online');
-    } },
-  offline: { tone: 'danger', get label() {
-      return t('staff.clinics.api.offline');
-    } },
-  manual: { tone: 'default', get label() {
-      return t('staff.clinics.api.manual');
-    } },
+  online: { tone: 'success', label: 'staff.clinics.api.online' },
+  offline: { tone: 'danger', label: 'staff.clinics.api.offline' },
+  manual: { tone: 'default', label: 'staff.clinics.api.manual' },
 } as const;
 
 type ClinicForm = z.input<typeof clinicCreateSchema>;
@@ -150,7 +144,7 @@ export default function ClinicsPage() {
     },
     { key: 'online', header: t('staff.clinics.colOnline'), cell: (c) => (c.onlineBooking ? <StatusDot tone="success">{t('common.yes')}</StatusDot> : <StatusDot tone="muted">{t('common.no')}</StatusDot>) },
     { key: 'mode', header: t('staff.clinics.colIntegration'), cell: (c) => INTEGRATION_MODE_LABEL[c.integrationMode] },
-    { key: 'api', header: t('staff.clinics.colApi'), cell: (c) => <StatusDot tone={API_STATUS[c.apiStatus].tone}>{API_STATUS[c.apiStatus].label}</StatusDot> },
+    { key: 'api', header: t('staff.clinics.colApi'), cell: (c) => <StatusDot tone={API_STATUS[c.apiStatus].tone}>{t(API_STATUS[c.apiStatus].label)}</StatusDot> },
     {
       key: 'contract',
       header: t('staff.clinics.colContract'),

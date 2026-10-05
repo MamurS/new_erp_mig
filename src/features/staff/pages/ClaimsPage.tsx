@@ -38,24 +38,12 @@ const SOURCE_LABEL = {
 };
 
 const CLAIM_TABS = [
-  { key: '', get label() {
-      return t('common.all');
-    } },
-  { key: 'new', get label() {
-      return t('staff.claims.tab.new');
-    } },
-  { key: 'review', get label() {
-      return t('staff.claims.tab.review');
-    } },
-  { key: 'opinion', get label() {
-      return t('staff.claims.tab.opinion');
-    } },
-  { key: 'above', get label() {
-      return t('staff.claims.tab.above');
-    } },
-  { key: 'appeals', get label() {
-      return t('staff.claims.tab.appeals');
-    } },
+  { key: '', label: 'common.all' },
+  { key: 'new', label: 'staff.claims.tab.new' },
+  { key: 'review', label: 'staff.claims.tab.review' },
+  { key: 'opinion', label: 'staff.claims.tab.opinion' },
+  { key: 'above', label: 'staff.claims.tab.above' },
+  { key: 'appeals', label: 'staff.claims.tab.appeals' },
 ] as const;
 
 export default function ClaimsPage() {
@@ -116,7 +104,7 @@ export default function ClaimsPage() {
               className={cn('-mb-px border-b-2 px-3 py-1.5 text-[13px]', (f.tab ?? '') === ct.key ? 'border-accent font-semibold text-accent-text' : 'border-transparent text-muted hover:text-text')}
               onClick={() => setF({ tab: ct.key || null, page: null })}
             >
-              {ct.label}
+              {t(ct.label)}
             </button>
           ))}
           <Link to="/staff/rebills" className="px-3 py-1.5 text-[13px] text-muted hover:text-text">

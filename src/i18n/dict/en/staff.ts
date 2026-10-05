@@ -155,7 +155,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.clients.title': 'Clients',
   'staff.clients.view.mine': 'Mine',
   'staff.clients.view.q4': 'Q4 renewals',
-  'staff.clients.view.loss': 'Loss ratio > 80%',
+  'staff.clients.view.loss': 'Loss ratio > {pct}',
   'staff.clients.view.renewals': 'Renewals < 30 days without a proposal',
   'staff.clients.sort.name': 'By name',
   'staff.clients.sort.premium': 'By premium',

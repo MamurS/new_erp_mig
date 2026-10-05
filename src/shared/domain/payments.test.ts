@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { tm } from '@/i18n';
 import { checkAllocation, invoicesNamedIn, matchPayment, statementLineKey, type OpenInvoice } from './payments';
 
 const inv = (
@@ -106,16 +107,16 @@ describe('checkAllocation', () => {
   it('limits by the rest of the payment and of each invoice', () => {
     expect(checkAllocation(payment, [{ invoice: a, amount: 8_000 }], undefined)).toBeNull();
     expect(
-      checkAllocation({ ...payment, allocated: 5_000 }, [{ invoice: a, amount: 4_000 }], undefined),
+      tm(checkAllocation({ ...payment, allocated: 5_000 }, [{ invoice: a, amount: 4_000 }], undefined)),
     ).toMatch(/остатка платежа/);
     expect(
-      checkAllocation({ ...payment, amount: 20_000 }, [{ invoice: a, amount: 10_001 }], undefined),
+      tm(checkAllocation({ ...payment, amount: 20_000 }, [{ invoice: a, amount: 10_001 }], undefined)),
     ).toMatch(/остатка по счёту/);
-    expect(checkAllocation(payment, [], undefined)).toMatch(/Выберите счёт/);
+    expect(tm(checkAllocation(payment, [], undefined))).toMatch(/Выберите счёт/);
   });
   it('a payer with another INN needs a comment', () => {
     const third = { ...payment, payerInn: '399' };
-    expect(checkAllocation(third, [{ invoice: a, amount: 8_000 }], '  ')).toMatch(/комментарий/);
+    expect(tm(checkAllocation(third, [{ invoice: a, amount: 8_000 }], '  '))).toMatch(/комментарий/);
     expect(checkAllocation(third, [{ invoice: a, amount: 8_000 }], 'Оплата за дочернюю компанию')).toBeNull();
   });
 });
