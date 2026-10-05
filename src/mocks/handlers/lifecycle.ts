@@ -26,7 +26,7 @@ import {
   quoteRejectSchema,
 } from '@/shared/schemas/forms';
 import { db, type Db, type StaffRow } from '../db';
-import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
+import { API, audit, body, byLegalForm, byLegalName, conflict, type Ctx, filterLegalForm, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { DAY, isoDay, tzIso } from '../time';
 import { toClient } from '../views';
@@ -70,10 +70,12 @@ function quoteView(d: Db, q: Quote, user: SessionUser): QuoteView {
   const deal = dealOf(d, q.dealId);
   const author = d.staff.find((s) => s.id === q.createdById);
   const approver = d.staff.find((s) => s.id === user.id);
+  const dv = toDealView(d, deal);
   return {
     ...q,
     dealNumber: deal.number,
-    clientName: toDealView(d, deal).clientName,
+    clientName: dv.clientName,
+    clientLegalForm: dv.clientLegalForm,
     census: census(d, deal.id),
     startDate: deal.expectedStart ?? todayIso(),
     authorityProblem: quoteAuthorityProblem(q, author?.authority),
@@ -295,7 +297,7 @@ export const lifecycleHandlers = [
         updatedAt: now,
       };
       d.deals.unshift(deal);
-      dealEvent(d, deal.id, user.displayName, `Лид создан: ${client.legalForm} «${client.name}», около ${input.estimatedHeadcount} сотрудников`);
+      dealEvent(d, deal.id, user.displayName, `Лид создан: ${client.name}, около ${input.estimatedHeadcount} сотрудников`);
       audit(user, 'lead_created', { targetType: 'deal', targetId: deal.id, targetLabel: `${deal.number}: ${client.name}` });
       return HttpResponse.json(toDealView(d, deal), { status: 201 });
     }),
@@ -314,7 +316,20 @@ export const lifecycleHandlers = [
       if (owner) list = list.filter((x) => x.ownerId === owner);
       const type = url.searchParams.get('type');
       if (type === 'new' || type === 'renewal') list = list.filter((x) => x.type === type);
-      return list.map((x) => toDealView(d, x));
+      const views = filterLegalForm(
+        list.map((x) => toDealView(d, x)),
+        url,
+        (x) => x.clientLegalForm,
+      );
+      return sortBy(views, url, {
+        number: (x) => x.number,
+        clientName: byLegalName((x) => x.clientName),
+        legalForm: byLegalForm((x) => x.clientLegalForm),
+        stage: (x) => x.stage,
+        ownerName: (x) => x.ownerName,
+        premium: (x) => x.premium,
+        expectedStart: (x) => x.expectedStart,
+      });
     }),
   ),
   http.get(

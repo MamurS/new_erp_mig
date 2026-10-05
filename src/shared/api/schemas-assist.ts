@@ -23,11 +23,10 @@ export const kpi: z.ZodType<T.AssistanceKpi> = z.object({
   complaintsPer1000: z.number(),
   lossRatio: z.number().nullable(),
 });
-const brief = z.object({ id: uuid, name: z.string(), phone24x7: z.string(), integrationMode });
+const brief = z.object({ id: uuid, name: z.string(), legalForm: z.enum(LEGAL_FORMS), phone24x7: z.string(), integrationMode });
 export const assistanceBrief: z.ZodType<D.AssistanceBrief> = brief;
 export const myAssistance: z.ZodType<{ assistance: D.AssistanceBrief | null }> = z.object({ assistance: brief.nullable() });
 export const assistanceCompany: z.ZodType<T.AssistanceCompany> = brief.extend({
-  legalForm: z.enum(LEGAL_FORMS),
   contract: z.object({
     number: z.string(),
     validFrom: isoDate,
@@ -109,6 +108,7 @@ const subSummary = z.object({
   id: uuid,
   clinicId: uuid,
   clinicName: z.string(),
+  clinicLegalForm: z.enum(LEGAL_FORMS).optional(),
   period: z.string(),
   status: I.registry.shape.status,
   source: I.registry.shape.source,
@@ -128,6 +128,7 @@ export const subRegistry: z.ZodType<D.SubRegistryView> = subSummary.extend({
 
 const rebillBase = I.rebill.extend({
   assistanceName: z.string(),
+  assistanceLegalForm: z.enum(LEGAL_FORMS).optional(),
   reviewDueAt: isoDate.optional(),
   acceptedById: uuid.optional(),
   paidById: uuid.optional(),
@@ -137,7 +138,7 @@ const rebillBase = I.rebill.extend({
 export const rebillView: z.ZodType<D.RebillView> = rebillBase;
 export const rebillSummaries: z.ZodType<D.RebillSummary[]> = z.array(rebillBase.omit({ lines: true }).extend({ lineCount: z.number(), flaggedCount: z.number() }));
 
-export const assistClinics: z.ZodType<D.AssistClinic[]> = z.array(z.object({ clinicId: uuid, clinicName: z.string(), city: z.string(), specialties: z.array(S.specialty), ownPrices: z.boolean(), priceList: C.priceList }));
+export const assistClinics: z.ZodType<D.AssistClinic[]> = z.array(z.object({ clinicId: uuid, clinicName: z.string(), clinicLegalForm: z.enum(LEGAL_FORMS), city: z.string(), specialties: z.array(S.specialty), ownPrices: z.boolean(), priceList: C.priceList }));
 const assistUser = z.object({ id: uuid, email: z.string(), fullName: z.string(), role: assistRole, active: z.boolean(), lastLoginAt: isoDateTime.optional() });
 export const assistUserView: z.ZodType<D.AssistUserView> = assistUser;
 export const assistUsers = z.array(assistUser);
@@ -151,6 +152,7 @@ const qaBase = z.object({
   reviewedById: uuid.optional(),
   createdAt: isoDateTime,
   assistanceName: z.string(),
+  assistanceLegalForm: z.enum(LEGAL_FORMS).optional(),
   reviewedByName: z.string().optional(),
 });
 export const qaSample: z.ZodType<D.QaSampleView> = qaBase;
@@ -163,7 +165,7 @@ export const assistanceCard: z.ZodType<D.AssistanceCardView> = z.object({
   assistance: assistanceCompany,
   kpi,
   insuredCount: z.number(),
-  clients: z.array(z.object({ id: uuid, name: z.string(), insuredCount: z.number(), policyNumber: z.string(), from: isoDate })),
+  clients: z.array(z.object({ id: uuid, name: z.string(), legalForm: z.enum(LEGAL_FORMS), insuredCount: z.number(), policyNumber: z.string(), from: isoDate })),
   users: assistUsers,
   keys: C.integrationClients,
   webhooks: z.object({ endpoints: z.number(), retrying: z.number(), failed24h: z.number() }),
@@ -181,6 +183,7 @@ export const reportByAssistance: z.ZodType<D.AssistanceReportRow[]> = z.array(
   z.object({
     assistanceId: uuid.nullable(),
     name: z.string(),
+    legalForm: z.enum(LEGAL_FORMS).optional(),
     insuredCount: z.number(),
     premium: money,
     paid: money,

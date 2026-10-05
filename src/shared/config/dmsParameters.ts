@@ -5,7 +5,8 @@
  * values; code never hardcodes them: the mock reads `param()` (src/mocks/params.ts), screens
  * read `useDmsParam()` or get computed values from the API.
  */
-import type { DmsParamKey, DmsParamValues, ProgramCode } from '@/shared/types';
+import type { DmsParamKey, DmsParamValues, NumberingParamKey, ParamKey, ProgramCode } from '@/shared/types';
+import { DEFAULT_NUMBERING, DOC_NUMBER_KINDS, docNumber, numberingTemplateProblem, renderDocNumber, REQUIRED_PLACEHOLDERS, type DocNumberKind, type NumberingTemplates } from '@/shared/domain/numbering';
 import { formatMoney, formatNumber } from '@/shared/lib/format';
 import { defineLabels, msg, t, tKey } from '@/i18n';
 
@@ -476,3 +477,56 @@ export const TARIFF_BASE_KEY: Record<ProgramCode, DmsParamKey> = {
   standard_plus: 'tariffBaseStandardPlus',
   premium: 'tariffBasePremium',
 };
+
+// ---------- numbering templates («Нумерация документов») ----------
+
+export function numberingParamKey(kind: DocNumberKind): NumberingParamKey {
+  return `numbering.${kind}`;
+}
+
+export function isNumberingParamKey(key: string): key is NumberingParamKey {
+  return key.startsWith('numbering.') && (DOC_NUMBER_KINDS as readonly string[]).includes(key.slice('numbering.'.length));
+}
+
+export function numberingKindOf(key: NumberingParamKey): DocNumberKind {
+  return key.slice('numbering.'.length) as DocNumberKind;
+}
+
+/** Name of the document kind in the current language. */
+export const DOC_NUMBER_KIND_LABEL = defineLabels<DocNumberKind>('params.numbering', DOC_NUMBER_KINDS);
+
+/** `{N}, {REF}`: placeholders a template of the kind must contain. */
+export function requiredPlaceholders(kind: DocNumberKind): string {
+  return REQUIRED_PLACEHOLDERS[kind].map((p) => `{${p}}`).join(', ');
+}
+
+/** Validation of a template; `null` when valid. The same rule on the form and on the server. */
+export function numberingTemplateError(kind: DocNumberKind, template: string): string | null {
+  if (template.length > 60) return msg('v.tooLong', { max: 60 });
+  const problem = numberingTemplateProblem(kind, template);
+  if (!problem) return null;
+  return problem === 'dom.numbering.missing' ? msg(problem, { required: requiredPlaceholders(kind) }) : msg(problem);
+}
+
+/** A sample number made with the template (the endorsement refers to a sample contract number). */
+export function numberingExample(kind: DocNumberKind, template: string, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
+  const year = new Date().getFullYear();
+  const vars = { year, period: `${year}-09`, n: 123, m: 1, code: 'A1' };
+  try {
+    const ref = kind === 'refund' ? renderDocNumber(templates.endorsement ?? DEFAULT_NUMBERING.endorsement, { ...vars, n: 1, ref: docNumber('contract', vars, templates) }) : docNumber('contract', vars, templates);
+    return renderDocNumber(template, { ...vars, ref });
+  } catch {
+    return '';
+  }
+}
+
+/** Label of any parameter a change targets. */
+export function paramLabel(key: ParamKey): string {
+  return isNumberingParamKey(key) ? DOC_NUMBER_KIND_LABEL[numberingKindOf(key)] : DMS_PARAMETERS[key].label;
+}
+
+/** Human value of any parameter: the template as is, numbers with their unit. */
+export function formatParamValue(key: ParamKey, value: number | string): string {
+  if (isNumberingParamKey(key)) return String(value);
+  return typeof value === 'number' ? formatDmsParam(key, value) : value;
+}

@@ -13,7 +13,7 @@ export const kp: Translation<typeof Ru> = {
   'kp.editor.savedSent': '{number} saqlandi va mijozga yuborildi',
   'kp.editor.saved': '{number} mijoz hujjatlarida saqlandi',
   'kp.editor.revoked': '{number} qaytarib olindi',
-  'kp.editor.subtitle': '{legalForm} «{name}» · GOLD dasturi · shablon {version}',
+  'kp.editor.subtitle': '{client} · GOLD dasturi · shablon {version}',
   'kp.editor.saveDraft': 'Qoralamani saqlash',
   'kp.editor.saveSend': 'Saqlash va mijozga yuborish',
   'kp.editor.revoke': 'Qaytarib olish',

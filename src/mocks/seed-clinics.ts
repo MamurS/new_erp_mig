@@ -4,7 +4,8 @@
  */
 import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 import type { Appointment, Clinic, GuaranteeStatus, PriceListItem, Registry, RegistryLine, ServiceCategory, Visit } from '@/shared/types';
-import { guaranteeNumber, registryTotals, VISIT_TTL_MS } from '@/shared/domain/clinics';
+import { registryTotals, VISIT_TTL_MS } from '@/shared/domain/clinics';
+import { docNumber } from '@/shared/domain/numbering';
 import type {
   ApiCallLogRow,
   ClinicEventRow,
@@ -141,7 +142,7 @@ export function seedClinics(
     id: id(),
     email: 'reception2@demo-clinic.uz',
     password: DEMO_PASSWORD,
-    fullName: 'Севара Назарова',
+    fullName: 'Nazarova Sevara Akmalovna',
     clinicId: demoClinic.id,
     role: 'clinic_registrar',
     active: true,
@@ -152,7 +153,7 @@ export function seedClinics(
       id: id(),
       email: `admin@api-clinic${i + 1}.example.uz`,
       password: DEMO_PASSWORD,
-      fullName: pick(rng, ['Азиз Хакимов', 'Лола Рашидова', 'Ильхом Юлдашев']),
+      fullName: pick(rng, ['Hakimov Aziz Rustamovich', 'Rashidova Lola Anvarovna', 'Yoʻldoshev Ilhom Temurovich']),
       clinicId: c.id,
       role: 'clinic_admin',
       active: true,
@@ -255,7 +256,7 @@ export function seedClinics(
     const bigFirst = k === 0; // above the threshold, one approval already in
     guarantees.push({
       id: id(),
-      number: guaranteeNumber(year, ++guaranteeSeq),
+      number: docNumber('guarantee', { year, n: ++guaranteeSeq }),
       clinicId: demoClinic.id,
       visitId: v.id,
       insuredId: who.id,
@@ -342,7 +343,7 @@ export function seedClinics(
   const key: IntegrationClientRow = {
     id: id(),
     clinicId: demoClinic.id,
-    name: 'МИС «Медиалог»',
+    name: 'МИС «Medialog»',
     clientId: `mig_${hex(rng, 20)}`,
     secretLast4: hex(rng, 4),
     secretHash: hex(rng, 64), // the secret was shown once at creation and is unknown now
@@ -418,7 +419,7 @@ export function seedClinics(
     const svc = item('DG-310');
     guarantees.push({
       id: id(),
-      number: guaranteeNumber(year, ++guaranteeSeq),
+      number: docNumber('guarantee', { year, n: ++guaranteeSeq }),
       clinicId: foreignClinic.id,
       visitId: fv.id,
       insuredId: who.id,

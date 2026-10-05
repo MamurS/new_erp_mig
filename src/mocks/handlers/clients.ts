@@ -9,7 +9,7 @@ import { db, hasLiveKp, type ClientRow } from '../db';
 import { API, body, byLegalForm, byLegalName, filterLegalForm, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { parseIso, tzIso } from '../time';
-import { toClient, toInsuredListItem } from '../views';
+import { clientLegalFormOf, toClient, toInsuredListItem } from '../views';
 import { PROGRAMS } from '../programs';
 import { renewalsWithoutOffer } from './dashboard';
 import { dmsParam } from '../params';
@@ -269,13 +269,20 @@ export const clientHandlers = [
       if (program) list = list.filter((p) => program.split(',').includes(p.program));
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((p) => p.clientId === clientId);
+      const d = db();
+      const withForm = filterLegalForm(
+        list.map((p) => ({ ...p, clientLegalForm: clientLegalFormOf(d, p.clientId) })),
+        url,
+        (p) => p.clientLegalForm,
+      );
       return paginate(
         sortBy(
-          list,
+          withForm,
           url,
           {
             number: (p) => p.number,
-            clientName: (p) => p.clientName,
+            clientName: byLegalName((p) => p.clientName),
+            legalForm: byLegalForm((p) => p.clientLegalForm),
             program: (p) => p.program,
             startDate: (p) => p.startDate,
             endDate: (p) => p.endDate,
@@ -300,6 +307,7 @@ export const clientHandlers = [
       if (!p) throw notFound();
       const detail: PolicyDetail = {
         ...p,
+        clientLegalForm: clientLegalFormOf(d, p.clientId),
         programInfo: PROGRAMS[p.program],
         documents: d.documents.filter((x) => x.clientId === p.clientId).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
       };

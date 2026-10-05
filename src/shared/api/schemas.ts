@@ -2,6 +2,7 @@ import { LEGAL_FORMS } from '@/shared/config/legalForms';
 /* Runtime validation of API responses at the client boundary (SPEC §9.1). */
 import { z } from 'zod';
 import { QUEUE_TYPES } from '@/shared/domain/queue';
+import { DOC_NUMBER_KINDS } from '@/shared/domain/numbering';
 import type * as T from '@/shared/types';
 import type * as D from '@/shared/types/dto';
 
@@ -124,6 +125,7 @@ export const policy: z.ZodType<T.Policy> = z.object({
   number: z.string(),
   clientId: uuid,
   clientName: z.string(),
+  clientLegalForm: z.enum(LEGAL_FORMS).optional(),
   program: programCode,
   startDate: isoDate,
   endDate: isoDate,
@@ -580,6 +582,7 @@ export const queueItems = z.array(
     dueAt: isoDateTime,
     action: z.enum(['confirm', 'open', 'prepare_offer']),
     subject: z.enum(['claim', 'registry', 'contract', 'endorsement']).optional(),
+    legalForm: z.enum(LEGAL_FORMS).optional(),
     policyId: uuid.optional(),
   }) satisfies z.ZodType<D.QueueItem>,
 );
@@ -593,7 +596,7 @@ export const integrations = z.array(
 );
 
 export const lossRatioRows = z.array(
-  z.object({ clientId: uuid, clientName: z.string(), lossRatio: z.number() }) satisfies z.ZodType<D.LossRatioRow>,
+  z.object({ clientId: uuid, clientName: z.string(), clientLegalForm: z.enum(LEGAL_FORMS).optional(), lossRatio: z.number() }) satisfies z.ZodType<D.LossRatioRow>,
 );
 export const claimsByCategoryRows = z.array(
   z.object({ category: claimCategory, count: z.number(), amount: money }) satisfies z.ZodType<D.ClaimsByCategoryRow>,
@@ -604,6 +607,7 @@ export const premiumByMonthRows = z.array(
 
 export const hrOverview: z.ZodType<D.HrOverview> = z.object({
   companyName: z.string(),
+  companyLegalForm: z.enum(LEGAL_FORMS).optional(),
   insuredCount: z.number(),
   notInApp: z.number(),
   nextInvoice: invoice.nullable(),
@@ -804,11 +808,13 @@ const dmsParamKey = z.enum([
 ]);
 /** Portals other than the MIG one receive only part of the values. */
 export const dmsParamValues: z.ZodType<Partial<T.DmsParamValues>> = z.record(dmsParamKey, z.number());
+const docNumberKind = z.enum(DOC_NUMBER_KINDS);
+const numberingParamKey = z.custom<T.NumberingParamKey>((v) => typeof v === 'string' && v.startsWith('numbering.') && (DOC_NUMBER_KINDS as readonly string[]).includes(v.slice('numbering.'.length)));
 export const dmsParamChange: z.ZodType<T.DmsParamChange> = z.object({
   id: uuid,
-  key: dmsParamKey,
-  from: z.number(),
-  to: z.number(),
+  key: z.union([dmsParamKey, numberingParamKey]),
+  from: z.union([z.number(), z.string()]),
+  to: z.union([z.number(), z.string()]),
   reason: z.string(),
   status: z.enum(['pending', 'applied', 'rejected']),
   proposedById: uuid,
@@ -821,5 +827,6 @@ export const dmsParamChange: z.ZodType<T.DmsParamChange> = z.object({
 });
 export const dmsParamsView: z.ZodType<D.DmsParamsView> = z.object({
   parameters: z.array(z.object({ key: dmsParamKey, value: z.number(), isDemo: z.boolean(), changedAt: isoDateTime.optional(), changedByName: z.string().optional() })),
+  numbering: z.array(z.object({ kind: docNumberKind, value: z.string(), isDemo: z.boolean(), changedAt: isoDateTime.optional(), changedByName: z.string().optional() })),
   changes: z.array(dmsParamChange),
 });

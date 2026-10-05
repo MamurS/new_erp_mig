@@ -155,7 +155,8 @@ function endorsementView(d: Db, e: Endorsement): EndorsementView {
     ...e,
     contractNumber: c.number,
     clientId: client.id,
-    clientName: `${client.legalForm} «${client.name}»`,
+    clientName: client.name,
+    clientLegalForm: client.legalForm,
     clientInn: client.inn,
     migSignatory: signatory ? signatoryOption(signatory) : null,
     clientSignatoryName: signerForClient(c),
@@ -484,9 +485,11 @@ function certificates(d: Db, policyId: string): CertificateView[] {
       policyNumber: p.number,
       policyEndDate: p.endDate,
       program: p.program,
-      clientName: client ? `${client.legalForm} «${client.name}»` : p.clientName,
+      clientName: client?.name ?? p.clientName,
+      clientLegalForm: client?.legalForm,
       contractNumber: c?.number ?? '—',
       assistanceName: a?.name ?? 'MIG',
+      assistanceLegalForm: a?.legalForm,
       assistancePhone: a?.phone24x7 ?? '+998 71 200 00 00',
     }));
 }

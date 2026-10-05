@@ -4,6 +4,8 @@
  */
 import type { ISODate, KpLang, KpPaymentTerms } from '@/shared/types';
 import { escapeHtml } from '@/features/documents/html';
+import { getLocale, type Locale } from '@/i18n';
+import { formatLegalName, type DocLang, type LegalFormCode } from '@/shared/config/legalForms';
 
 export { escapeHtml };
 
@@ -32,3 +34,13 @@ export const PAYMENT_TERMS_LABEL: Record<KpLang, Record<KpPaymentTerms, string>>
   ru: { single: 'Единовременно', quarterly: 'Поквартально', monthly: 'Помесячно' },
   en: { single: 'Single payment', quarterly: 'Quarterly', monthly: 'Monthly' },
 };
+
+const UI_DOC_LANG: Record<Locale, DocLang> = { ru: 'ru', 'uz-Latn': 'uz', en: 'en' };
+
+/**
+ * Client's full legal name for the editor screen around the document: written in the interface
+ * language (`ООО «Name»` / `«Name» MChJ` / `Name LLC`). The document itself uses its own language.
+ */
+export function clientLegalNameUi(name: string, legalForm: LegalFormCode, locale: Locale = getLocale()): string {
+  return formatLegalName(name, legalForm, UI_DOC_LANG[locale]);
+}

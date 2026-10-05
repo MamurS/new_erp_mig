@@ -1,5 +1,6 @@
 /* Response schemas of the clinic cabinet and staff clinic endpoints (entities shared with the integration API). */
 import { z } from 'zod';
+import { LEGAL_FORMS } from '@/shared/config/legalForms';
 import type * as D from '@/shared/types/dto';
 import type * as T from '@/shared/types';
 import * as I from '@/shared/integration/schemas';
@@ -16,6 +17,7 @@ export const priceList: z.ZodType<T.PriceListItem[]> = z.array(
 
 export const clinicOverview: z.ZodType<D.ClinicOverview> = z.object({
   clinicName: z.string(),
+  clinicLegalForm: z.enum(LEGAL_FORMS).optional(),
   integrationMode: z.enum(['portal', 'api', 'hybrid']),
   appointmentsToday: z.number(),
   unanswered: z.number(),
@@ -52,6 +54,7 @@ export const clinicAppointment: z.ZodType<T.Appointment> = appointmentBase;
 
 export const guaranteeView: z.ZodType<D.GuaranteeView> = I.guaranteeLetter.extend({
   clinicName: z.string(),
+  clinicLegalForm: z.enum(LEGAL_FORMS).optional(),
   approvalsNeeded: z.number(),
   infoComment: z.string().optional(),
 });
@@ -59,7 +62,7 @@ export const guaranteeViews = z.array(guaranteeView);
 
 const registryBase = I.registry.omit({ lines: true });
 export const registrySummaries: z.ZodType<D.RegistrySummary[]> = z.array(
-  registryBase.extend({ clinicName: z.string(), lineCount: z.number(), pendingCount: z.number(), disputedCount: z.number() }),
+  registryBase.extend({ clinicName: z.string(), clinicLegalForm: z.enum(LEGAL_FORMS).optional(), lineCount: z.number(), pendingCount: z.number(), disputedCount: z.number() }),
 );
 export const registryView: z.ZodType<D.RegistryView> = I.registry.extend({
   clinicName: z.string(),

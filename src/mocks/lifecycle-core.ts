@@ -96,7 +96,8 @@ export function toDealView(d: Db, deal: Deal): DealView {
   const client = d.clients.find((x) => x.id === deal.clientId);
   return {
     ...deal,
-    clientName: client ? `${client.legalForm} «${client.name}»` : '—',
+    clientName: client?.name ?? '—',
+    clientLegalForm: client?.legalForm,
     ownerName: staffName(d, deal.ownerId) ?? '—',
     underwriterName: staffName(d, deal.underwriterId),
     premium: c?.params.total ?? q?.total ?? kp?.totalPremium ?? null,

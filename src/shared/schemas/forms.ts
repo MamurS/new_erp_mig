@@ -8,7 +8,7 @@ import { msg } from '@/i18n';
 import { claimCategory, claimStatus, limitCategory, specialty, staffRole } from '@/shared/api/schemas';
 import { todayISO } from '@/shared/lib/format';
 import { digitsOnly, parseRuDate } from '@/shared/lib/masks';
-import { dmsParamError, isDmsParamKey } from '@/shared/config/dmsParameters';
+import { dmsParamError, isDmsParamKey, isNumberingParamKey, numberingKindOf, numberingTemplateError } from '@/shared/config/dmsParameters';
 
 const text = (min: number, max: number, message?: string) =>
   z
@@ -355,13 +355,19 @@ export const complaintResolutionSchema = z.object({ resolution: text(5, 1000, ms
 /** An admin proposes a new value of a DMS parameter; it applies after a second person confirms. */
 export const dmsParamChangeSchema = z
   .object({
-    key: z.string().trim().max(60).refine(isDmsParamKey, msg('v.unknownParam')),
-    value: z.number({ invalid_type_error: msg('v.numberRequired') }),
+    key: z
+      .string()
+      .trim()
+      .max(60)
+      .refine((k) => isDmsParamKey(k) || isNumberingParamKey(k), msg('v.unknownParam')),
+    /** A number for DMS parameters; a numbering template (`numbering.*`) is a string, trimmed, without inner spaces. */
+    value: z.union([z.number({ invalid_type_error: msg('v.numberRequired') }), z.string().max(200).transform((s) => s.trim())], { invalid_type_error: msg('v.numberRequired') }),
     reason: text(5, 500, msg('v.basisMin5')),
   })
   .superRefine((v, ctx) => {
-    if (!isDmsParamKey(v.key)) return;
-    const error = dmsParamError(v.key, v.value);
+    let error: string | null = null;
+    if (isNumberingParamKey(v.key)) error = typeof v.value === 'string' ? numberingTemplateError(numberingKindOf(v.key), v.value) : msg('dom.numbering.chars');
+    else if (isDmsParamKey(v.key)) error = typeof v.value === 'number' ? dmsParamError(v.key, v.value) : msg('v.numberRequired');
     if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: error });
   });
 export const dmsParamRejectSchema = z.object({ reason: text(5, 500, msg('v.reasonMin5')) });

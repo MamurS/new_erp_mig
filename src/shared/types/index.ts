@@ -80,6 +80,7 @@ export interface Policy {
   number: string;                          // 'DMS-2026-000123'
   clientId: UUID;
   clientName: string;
+  clientLegalForm?: LegalFormCode;
   program: ProgramCode;
   startDate: ISODate;
   endDate: ISODate;

@@ -4,7 +4,7 @@ import type { AuditEntry, SessionUser } from '@/shared/types';
 import type { AttentionItem, DashboardSummary, IntegrationStatus, Kpi, QueueItem, QueueType } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
 import { canSeeQueueType, QUEUE_TYPES } from '@/shared/domain/queue';
-import { DMS_PARAMETERS } from '@/shared/config/dmsParameters';
+import { formatParamValue, paramLabel } from '@/shared/config/dmsParameters';
 import { FLAG_LABEL } from '@/shared/domain/settlement';
 import { LIMIT_CATEGORY_LABEL } from '@/shared/domain/labels';
 import { isStaffRole, SPECIALTY_LABEL } from '@/shared/domain/labels';
@@ -450,7 +450,7 @@ const legalItems: Builder = (d, _user, now) => {
 const adminItems: Builder = (d, user) => {
   const out: QueueItem[] = [];
   for (const c of d.dmsParams.changes.filter((x) => x.status === 'pending' && x.proposedById !== user.id)) {
-    out.push({ id: c.id, type: 'param_change', entityId: c.id, who: c.proposedByName, details: `${DMS_PARAMETERS[c.key].label}: ${c.from} → ${c.to}`, status: msg('srv.dash.st.confirmationNeeded'), statusTone: 'warning', dueAt: tzIso(parseIso(c.proposedAt) + DAY), action: 'open' });
+    out.push({ id: c.id, type: 'param_change', entityId: c.id, who: c.proposedByName, details: `${paramLabel(c.key)}: ${formatParamValue(c.key, c.from)} → ${formatParamValue(c.key, c.to)}`, status: msg('srv.dash.st.confirmationNeeded'), statusTone: 'warning', dueAt: tzIso(parseIso(c.proposedAt) + DAY), action: 'open' });
   }
   for (const c of d.authorityChanges.filter((x) => x.status === 'pending' && x.proposedById !== user.id && x.staffId !== user.id)) {
     out.push({ id: c.id, type: 'authority_change', entityId: c.staffId, who: c.staffName, details: msg('srv.dash.q.proposedBy', { name: c.proposedByName, reason: c.reason.slice(0, 60) }), status: msg('srv.dash.st.confirmationNeeded'), statusTone: 'warning', dueAt: tzIso(parseIso(c.proposedAt) + DAY), action: 'open' });
