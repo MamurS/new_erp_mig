@@ -26,6 +26,7 @@ import { ExportButton } from '../components/ExportButton';
 import { monthShort } from '../components/months';
 import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const ACCENT = '#4f46e5';
 const WARN = '#d97706';
@@ -131,6 +132,7 @@ export default function ReportsPage() {
       <Card title={t('staff.reports.assistanceTitle')} bodyClassName="p-0">
         <QueryState query={byAssistance}>
           {(rows) => (
+            <TableScroll>
             <table className="w-full text-left" data-testid="report-by-assistance">
               <caption className="sr-only">{t('staff.reports.assistanceCaption')}</caption>
               <thead className="text-[12px] text-muted">
@@ -160,6 +162,7 @@ export default function ReportsPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
         </QueryState>
       </Card>

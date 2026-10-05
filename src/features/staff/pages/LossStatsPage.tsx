@@ -13,6 +13,7 @@ import { EmptyState, QueryState } from '@/shared/ui/states';
 import { MiniKpi } from '../components/KpiCard';
 import { monthShort } from '../components/months';
 import { useTopbar } from '../topbar';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 
 export default function LossStatsPage() {
@@ -45,10 +46,11 @@ export default function LossStatsPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <table className="mt-3 w-full text-[13px]" data-testid="loss-by-month">
+            <TableScroll className="mt-3">
+            <table className="w-full text-[13px]" data-testid="loss-by-month">
               <caption className="sr-only">{t('staff.clientCard.claimsByMonth')}</caption>
               <thead>
-                <tr className="border-b border-border text-left text-[12px] text-muted">
+                <tr className="text-left text-[12px] text-muted">
                   <th className="py-1.5 font-normal">{t('staff.loss.colMonth')}</th>
                   <th className="py-1.5 text-right font-normal">{t('staff.loss.requests')}</th>
                   <th className="py-1.5 text-right font-normal">{t('common.amount')}</th>
@@ -66,15 +68,17 @@ export default function LossStatsPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           </Card>
           <Card title={t('staff.clientCard.claimsByCategory')} className="mt-4" bodyClassName="p-0">
             {s.byCategory.length === 0 ? (
               <EmptyState title={t('staff.clientCard.noClaims')} />
             ) : (
+              <TableScroll>
               <table className="w-full" data-testid="loss-by-category">
                 <caption className="sr-only">{t('staff.clientCard.claimsByCategory')}</caption>
                 <thead>
-                  <tr className="border-b border-border text-left text-[12px] text-muted">
+                  <tr className="text-left text-[12px] text-muted">
                     <th className="px-4 py-2 font-normal">{t('common.category')}</th>
                     <th className="px-4 py-2 text-right font-normal">{t('staff.loss.requests')}</th>
                     <th className="px-4 py-2 text-right font-normal">{t('common.amount')}</th>
@@ -92,6 +96,7 @@ export default function LossStatsPage() {
                   ))}
                 </tbody>
               </table>
+              </TableScroll>
             )}
           </Card>
         </div>

@@ -88,3 +88,8 @@
   --scroll-thumb: #d6d0c4;
   --scroll-thumb-hover: #c4bcae;
 }
+
+/* Height of the portal top bar; the shell sets --app-top = demo banner + top bar on its root. */
+:root {
+  --topbar-h: 52px;
+}

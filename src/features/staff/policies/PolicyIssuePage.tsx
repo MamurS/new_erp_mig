@@ -24,6 +24,7 @@ import { Card, Kv } from '@/shared/ui/page';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const PROGRAM_CODES: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
 const STEPS = ['terms', 'list', 'review'] as const;
@@ -45,11 +46,11 @@ function ListPreview({ csv, result }: { csv: string; result: PolicyListCheck }) 
   const rows = parseCsv(csv).rows;
   const byRow = groupErrorsByRow(result.errors);
   return (
-    <div className="mt-3 max-h-[420px] overflow-auto rounded-btn border border-border">
+    <TableScroll className="mt-3 max-h-[420px] rounded-btn border border-border">
       <table className="w-full border-collapse text-left text-[13px]">
         <caption className="sr-only">{t('staffLc.issue.previewCaption')}</caption>
-        <thead className="sticky top-0 bg-surface">
-          <tr className="border-b border-border text-[12px] text-muted">
+        <thead>
+          <tr className="text-[12px] text-muted">
             <th className="px-2 py-1.5 font-normal">{t('staffLc.issue.colRow')}</th>
             <th className="px-2 py-1.5 font-normal">{t('common.fullName')}</th>
             <th className="px-2 py-1.5 font-normal">{t('common.position')}</th>
@@ -76,7 +77,7 @@ function ListPreview({ csv, result }: { csv: string; result: PolicyListCheck }) 
         </tbody>
       </table>
       {rows.length > PREVIEW_ROWS && <p className="px-2 py-1.5 text-[12px] text-muted">{t('staffLc.issue.previewLimited', { shown: PREVIEW_ROWS, total: rows.length })}</p>}
-    </div>
+    </TableScroll>
   );
 }
 

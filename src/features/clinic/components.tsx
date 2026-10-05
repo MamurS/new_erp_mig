@@ -25,6 +25,7 @@ import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 import { ClinicCoverage } from '@/features/ai/ClinicCoverage';
 import { t, tm } from '@/i18n';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 export function PageTitle({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
@@ -84,10 +85,11 @@ export function CoverageCard({ result, actions }: { result: CoverageCheckResult;
           <dt className="text-muted">{t('common.validUntil')}</dt>
           <dd className="num">{formatDate(result.policy.validTo)}</dd>
         </dl>
+        <TableScroll>
         <table className="w-full text-[14px]" data-testid="coverage-table">
           <caption className="sr-only">{t('clinic.coverage.caption')}</caption>
           <thead>
-            <tr className="border-b border-border text-left text-[12px] text-muted">
+            <tr className="text-left text-[12px] text-muted">
               <th className="py-1.5 pr-2 font-normal">{t('common.category')}</th>
               <th className="py-1.5 pr-2 font-normal">{t('clinic.coverage.coverage')}</th>
               <th className="py-1.5 font-normal">{t('clinic.coverage.limit')}</th>
@@ -107,6 +109,7 @@ export function CoverageCard({ result, actions }: { result: CoverageCheckResult;
             ))}
           </tbody>
         </table>
+        </TableScroll>
       </div>
       {actions && <div className="flex flex-wrap gap-2 border-t border-border-soft px-4 py-3">{actions}</div>}
     </Panel>

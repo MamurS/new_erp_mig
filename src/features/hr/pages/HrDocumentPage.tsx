@@ -17,6 +17,7 @@ import { ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { HrCard, HrHeader, HrSectionTitle } from '../ui';
 import { t, tm } from '@/i18n';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 function Back() {
   return (
@@ -79,6 +80,7 @@ function EndorsementBody({ e }: { e: EndorsementView }) {
         <div className="flex flex-col gap-5">
           <HrCard>
             <HrSectionTitle className="mb-2">{t('hr.doc.calculation')}</HrSectionTitle>
+            <TableScroll>
             <ul className="divide-y divide-border text-[14px]">
               {e.lines.map((l) => (
                 <li key={l.changeRequestId} className="flex justify-between gap-3 py-2">
@@ -90,6 +92,7 @@ function EndorsementBody({ e }: { e: EndorsementView }) {
                 </li>
               ))}
             </ul>
+            </TableScroll>
           </HrCard>
           <SigningPanel kind="endorsements" doc={e} mode="hr" printInput={() => endorsementDocument(e)} />
         </div>

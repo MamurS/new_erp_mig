@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
 import { BarChart3, CircleHelp, FileSignature, ReceiptText, Users } from 'lucide-react';
@@ -6,6 +7,7 @@ import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useHrOverview } from '@/shared/api/queries/hr';
+import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
 import { t } from '@/i18n';
@@ -33,7 +35,7 @@ export default function HrLayout() {
 
   return (
     <SidebarProvider portal="hr">
-      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))' }}>
+      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))', '--app-top': 'calc(var(--banner-h, 0px) + var(--topbar-h))' } as CSSProperties}>
         <AppSidebar
           title={t('shell.title.hr')}
           ariaLabel={t('hr.nav.aria')}
@@ -44,7 +46,7 @@ export default function HrLayout() {
         />
         <div data-theme="client" className="flex min-w-0 flex-1 flex-col bg-bg text-text">
           <IdleWatcher />
-          <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <header data-testid="topbar" className="sticky top-(--banner-h,0px) z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] text-muted">{t('shell.portal.hr')}</p>
@@ -59,6 +61,7 @@ export default function HrLayout() {
                 <Skeleton className="mt-1 h-4 w-40" />
               )}
             </div>
+            <LanguageButton className="ml-auto" />
           </header>
           <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 md:px-8 md:py-8">
             <Outlet />

@@ -18,7 +18,7 @@ import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
-import { DataTable, type Column } from '@/shared/ui/data-table';
+import { DataTable, type Column, type SortState } from '@/shared/ui/data-table';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { ErrorState, SkeletonRows } from '@/shared/ui/states';
@@ -160,6 +160,14 @@ function risky(x: AiCheckItem): boolean {
   return x.needsSpecialist || !['covered', 'needs_guarantee'].includes(x.verdict.decision);
 }
 
+/** Lines are sorted on the page: a registry is loaded whole. */
+function sortLines(lines: RegistryLine[], sort: SortState | null): RegistryLine[] {
+  if (sort?.key !== 'serviceDate' && sort?.key !== 'amount') return lines;
+  const k = sort.key;
+  const dir = sort.dir === 'desc' ? -1 : 1;
+  return [...lines].sort((a, b) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0) * dir);
+}
+
 export default function RegistryPage() {
   useDocumentTitle(t('clinic.registry.docTitle'));
   const { registryId = '' } = useParams();
@@ -167,6 +175,7 @@ export default function RegistryPage() {
   const submit = useSubmitRegistry();
   const del = useDeleteRegistryLine();
   const [disputing, setDisputing] = useState<RegistryLine | null>(null);
+  const [sort, setSort] = useState<SortState | null>(null);
   // «Проверить строки» (AI_COVERAGE_SPEC §4.2): lines likely to be rejected are highlighted; sending is still allowed.
   const aiStatus = useAiStatus();
   const aiCheck = useRegistryAiCheck();
@@ -193,12 +202,12 @@ export default function RegistryPage() {
   };
 
   const columns: Column<RegistryLine>[] = [
-    { key: 'date', header: t('common.date'), cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
+    { key: 'date', header: t('common.date'), sortKey: 'serviceDate', cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
     { key: 'who', header: t('common.patient'), cell: (l) => l.insuredName },
     { key: 'svc', header: t('common.service'), cell: (l) => <span>{l.serviceCode} · {l.serviceName}</span> },
     { key: 'icd', header: t('clinic.gp.icd10'), cell: (l) => <span className="num">{l.icd10}</span> },
     { key: 'qty', header: t('clinic.registry.qty'), align: 'right', cell: (l) => <span className="num">{l.quantity}</span> },
-    { key: 'amount', header: t('common.amount'), align: 'right', cell: (l) => <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span> },
+    { key: 'amount', header: t('common.amount'), align: 'right', sortKey: 'amount', cell: (l) => <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span> },
     { key: 'gp', header: t('clinic.registry.gp'), cell: (l) => <span className="num text-muted">{l.guaranteeNumber ?? '—'}</span> },
     { key: 'payer', header: t('clinic.registry.payer'), cell: (l) => <span data-testid="line-payer">{r.payerNames?.[l.payer ?? 'mig'] ?? t('common.mig')}</span> },
     {
@@ -321,7 +330,19 @@ export default function RegistryPage() {
         </p>
       )}
       <Panel>
-        <DataTable caption={t('clinic.registry.caption')} columns={columns} rows={r.lines} rowKey={(l) => l.id} />
+        <DataTable
+          caption={t('clinic.registry.caption')}
+          columns={columns}
+          rows={sortLines(r.lines, sort)}
+          rowKey={(l) => l.id}
+          sort={sort}
+          onSortChange={setSort}
+          totals={{
+            date: t('common.total'),
+            qty: <span className="num">{r.lines.reduce((s, l) => s + l.quantity, 0)}</span>,
+            amount: <span className="num">{formatMoney(r.lines.reduce((s, l) => s + l.amount, 0))}</span>,
+          }}
+        />
       </Panel>
       {draft && (
         <Panel title={t('clinic.registry.addLine')} className="mt-4">

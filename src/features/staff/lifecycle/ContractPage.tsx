@@ -32,6 +32,7 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { CsvFileButton, ReasonDialog } from './common';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const PROGRAMS: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
 
@@ -314,10 +315,11 @@ function Finance({ c }: { c: ContractView }) {
     <div className="grid gap-4 lg:grid-cols-2">
       <Card title={t('staffLc.contract.invoices')} bodyClassName="p-0">
         {c.invoices.length ? (
+          <TableScroll>
           <table className="w-full text-[13px]" data-testid="contract-invoices">
             <caption className="sr-only">{t('staffLc.contract.invoicesCaption')}</caption>
             <thead>
-              <tr className="border-b border-border text-left text-[12px] text-muted">
+              <tr className="text-left text-[12px] text-muted">
                 <th className="px-4 py-2 font-medium">{t('staffLc.contract.invoice')}</th>
                 <th className="px-2 py-2 font-medium">{t('staffLc.contract.due')}</th>
                 <th className="px-2 py-2 text-right font-medium">{t('common.amount')}</th>
@@ -338,6 +340,7 @@ function Finance({ c }: { c: ContractView }) {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         ) : (
           <p className="px-4 py-3 text-[13px] text-muted">{t('staffLc.contract.invoicesNote')}</p>
         )}
