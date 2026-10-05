@@ -1,6 +1,6 @@
 /* Assistance companies — ASSISTANCE_SPEC §14, e2e scenarios 1–8. */
 import { expect, test, type Page } from '@playwright/test';
-import { acceptConsent, api, failOnDialog, loginStaff } from './helpers';
+import { acceptConsent, api, failOnDialog, loginStaff, logoutFromSidebar } from './helpers';
 
 /** Switch the role in the same tab (and the same in-page mock DB) through the demo banner. */
 async function switchTo(page: Page, role: RegExp, home: RegExp): Promise<void> {
@@ -38,8 +38,7 @@ async function asInsured(page: Page): Promise<void> {
 
 /** Logs out through the user menu and logs in with email + password + code (accounts outside «Войти как…»). */
 async function loginByEmail(page: Page, email: string): Promise<void> {
-  await page.getByRole('button', { name: 'Меню пользователя' }).click();
-  await page.getByRole('menuitem', { name: 'Выйти' }).click();
+  await logoutFromSidebar(page);
   await expect(page).toHaveURL(/\/login/);
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Пароль').fill('Demo-2026!');
@@ -47,7 +46,7 @@ async function loginByEmail(page: Page, email: string): Promise<void> {
   await page.getByLabel('Цифра 1').fill('000000');
   // The login returns to the last page of the portal (`next`).
   await expect(page).toHaveURL(/\/assist(\/.*)?$/);
-  await expect(page.getByRole('button', { name: 'Меню пользователя' })).toBeVisible();
+  await expect(page.getByTestId('sidebar').getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');

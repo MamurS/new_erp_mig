@@ -105,7 +105,21 @@ export type QueueType =
   | 'contract'
   | 'endorsement'
   | 'invoice'
-  | 'appeal';
+  | 'appeal'
+  | 'lead'
+  | 'kp'
+  | 'limit_request'
+  | 'loss_ratio'
+  | 'fraud_flag'
+  | 'opinion'
+  | 'qa_sample'
+  | 'bank_payment'
+  | 'payout'
+  | 'scan'
+  | 'param_change'
+  | 'authority_change'
+  | 'ai_change'
+  | 'integration_error';
 export interface QueueItem {
   id: UUID;
   type: QueueType;
@@ -118,6 +132,8 @@ export interface QueueItem {
   action: 'confirm' | 'open' | 'prepare_offer';
   /** Client id for renewal rows (offer is prepared on the client's active policy). */
   policyId?: UUID;
+  /** What `entityId` points to when the type alone does not say (payouts, scans). */
+  subject?: 'claim' | 'registry' | 'contract' | 'endorsement';
 }
 export interface AttentionItem {
   key: 'renewals_no_offer' | 'high_loss_ratio' | 'sla_overdue';
@@ -128,6 +144,8 @@ export interface AttentionItem {
 export interface DashboardSummary {
   firstName: string;
   queueCount: number;
+  /** Types present in this role's queue with counts: the tabs of the queue. */
+  queueTypes: { type: QueueType; count: number }[];
   kpis: Kpi[];
   attention: AttentionItem[];
 }

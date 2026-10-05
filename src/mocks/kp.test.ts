@@ -152,7 +152,8 @@ describe('KP API', () => {
     const row = q.data.find((r) => r.action === 'prepare_offer')!;
     expect(row).toBeTruthy();
     await createDraft(uw, row.entityId);
+    // The underwriter's queue lists renewals without an offer only: the client leaves it.
     const after = await call<{ entityId: string; action: string; status: string }[]>('/queue?type=renewal', { sid: uw });
-    expect(after.data.find((r) => r.entityId === row.entityId)).toMatchObject({ action: 'open', status: 'КП готово' });
+    expect(after.data.find((r) => r.entityId === row.entityId)).toBeUndefined();
   });
 });

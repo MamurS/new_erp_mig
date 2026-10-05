@@ -1,5 +1,6 @@
 /* Runtime validation of API responses at the client boundary (SPEC §9.1). */
 import { z } from 'zod';
+import { QUEUE_TYPES } from '@/shared/domain/queue';
 import type * as T from '@/shared/types';
 import type * as D from '@/shared/types/dto';
 
@@ -536,9 +537,11 @@ const kpi: z.ZodType<D.Kpi> = z.object({
   tone: z.enum(['default', 'warning', 'danger']).optional(),
   to: z.string().optional(),
 });
+const queueType = z.enum(QUEUE_TYPES);
 export const dashboard: z.ZodType<D.DashboardSummary> = z.object({
   firstName: z.string(),
   queueCount: z.number(),
+  queueTypes: z.array(z.object({ type: queueType, count: z.number() })),
   kpis: z.array(kpi),
   attention: z.array(
     z.object({
@@ -552,7 +555,7 @@ export const dashboard: z.ZodType<D.DashboardSummary> = z.object({
 export const queueItems = z.array(
   z.object({
     id: uuid,
-    type: z.enum(['appointment', 'claim', 'renewal', 'guarantee', 'registry', 'clinic_no_response', 'policy_change', 'escalation', 'rebill', 'assistance_sla', 'complaint', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'appeal']),
+    type: queueType,
     entityId: uuid,
     who: z.string(),
     details: z.string(),
@@ -560,6 +563,7 @@ export const queueItems = z.array(
     statusTone: z.enum(['default', 'success', 'warning', 'danger', 'info']),
     dueAt: isoDateTime,
     action: z.enum(['confirm', 'open', 'prepare_offer']),
+    subject: z.enum(['claim', 'registry', 'contract', 'endorsement']).optional(),
     policyId: uuid.optional(),
   }) satisfies z.ZodType<D.QueueItem>,
 );
@@ -776,6 +780,8 @@ const dmsParamKey = z.enum([
   'refundRule',
   'coverageStartRule',
   'renewalLeadDays',
+  'leadIdleDays',
+  'kpNoAnswerDays',
   'fraudMaxClaimsPerMonth',
   'fraudPriceExcessShare',
   'fraudDaysBeforeExclusion',

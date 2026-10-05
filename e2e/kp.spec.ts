@@ -1,6 +1,6 @@
 /* KP_SPEC §10: commercial offer on the GOLD brochure. */
 import { expect, test, type Page } from '@playwright/test';
-import { api, CODE, failOnDialog, loginStaff, PASSWORD } from './helpers';
+import { api, CODE, failOnDialog, loginStaff, PASSWORD, logoutFromSidebar } from './helpers';
 
 const PAGES = 17;
 
@@ -15,8 +15,12 @@ async function loginByEmail(page: Page, email: string, home: RegExp): Promise<vo
 }
 
 async function logout(page: Page, portal: 'staff' | 'hr'): Promise<void> {
-  await page.getByRole('button', { name: portal === 'hr' ? 'Меню пользователя' : 'Профиль и выход' }).click();
-  await page.getByRole('menuitem', { name: 'Выйти' }).click();
+  if (portal === 'hr') {
+    await page.getByRole('button', { name: 'Меню пользователя' }).click();
+    await page.getByRole('menuitem', { name: 'Выйти' }).click();
+  } else {
+    await logoutFromSidebar(page);
+  }
   await expect(page).toHaveURL(/\/login/);
 }
 
@@ -93,8 +97,9 @@ test('KP 1. Underwriter prepares an offer from the queue, sends it; only this co
 
 test('KP 2. Operator has no «Подготовить КП» and gets 403 from POST /clients/:id/kp', async ({ page }) => {
   await loginStaff(page, 'operator');
-  await page.getByRole('tab', { name: 'Продления' }).click();
+  // The curator's queue is assistance service and appointments: renewals are the underwriter's work.
   await expect(page.locator('tbody tr[data-row]').first()).toBeVisible();
+  await expect(page.getByTestId('queue-tabs').getByRole('tab', { name: /^Продления/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Подготовить КП' })).toHaveCount(0);
 
   const clients = (await api(page, 'GET', '/clients?pageSize=1')).data as { items: { id: string }[] };

@@ -833,6 +833,8 @@ export type DmsParamKey =
   | 'refundRule'
   | 'coverageStartRule'
   | 'renewalLeadDays'
+  | 'leadIdleDays'
+  | 'kpNoAnswerDays'
   | 'fraudMaxClaimsPerMonth'
   | 'fraudPriceExcessShare'
   | 'fraudDaysBeforeExclusion';

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, KeyRound, PlugZap } from 'lucide-react';
-import type { QueueItem } from '@/shared/types/dto';
+import type { QueueItem, QueueType } from '@/shared/types/dto';
 import { useConfirmAppointment, useDashboard, useIntegrations, useMedicalAccessFeed, useQueue } from '@/shared/api/queries/staff';
 import { errorMessage } from '@/shared/api/client';
 import { useUser } from '@/shared/auth/session';
@@ -17,44 +17,68 @@ import { EmptyState, ErrorState, Skeleton, SkeletonRows } from '@/shared/ui/stat
 import { toast } from '@/shared/ui/toast';
 import { KpiCard } from '../components/KpiCard';
 import { kpNewPath } from '@/features/kp/paths';
-import { can } from '@/shared/auth/permissions';
+import { canSeeQueueType, QUEUE_TYPE_META } from '@/shared/domain/queue';
 import { useTopbar } from '../topbar';
 
-const TABS = [
-  { key: 'all', label: 'Все' },
-  { key: 'appointment', label: 'Записи' },
-  { key: 'claim', label: 'Убытки' },
-  { key: 'renewal', label: 'Продления' },
-  { key: 'guarantee', label: 'ГП', action: 'guarantees.decide' },
-  { key: 'registry', label: 'Реестры', action: 'registries.review' },
-  { key: 'policy_change', label: 'Состав', action: 'policy_changes.decide' },
-  { key: 'assistance', label: 'Ассистансы', action: 'rebills.review' },
-  { key: 'deal', label: 'Сделки', action: 'deals.manage' },
-  { key: 'quote', label: 'Котировки', action: 'quotes.approve' },
-  { key: 'contract', label: 'Договоры', action: 'contracts.legal_approve' },
-  { key: 'invoice', label: 'Счета', action: 'payments.record' },
-  { key: 'appeal', label: 'Апелляции', action: 'claims.decide' },
-] as const;
-
-const TYPE_CHIP: Record<QueueItem['type'], { kind: string; label: string }> = {
-  appointment: { kind: 'appointment', label: 'Запись' },
-  claim: { kind: 'claim', label: 'Убыток' },
-  renewal: { kind: 'renewal', label: 'Продление' },
-  guarantee: { kind: 'sky', label: 'ГП' },
-  registry: { kind: 'peach', label: 'Реестр' },
-  clinic_no_response: { kind: 'danger', label: 'Клиника не ответила' },
-  policy_change: { kind: 'accent', label: 'Состав полиса' },
-  escalation: { kind: 'warning', label: 'Эскалация ГП' },
-  rebill: { kind: 'peach', label: 'Счёт ассистанса' },
-  assistance_sla: { kind: 'danger', label: 'SLA ассистанса нарушен' },
-  complaint: { kind: 'danger', label: 'Жалоба' },
-  deal: { kind: 'accent', label: 'Сделка' },
-  quote: { kind: 'warning', label: 'Котировка' },
-  contract: { kind: 'sky', label: 'Договор' },
-  endorsement: { kind: 'sky', label: 'Доп. соглашение' },
-  invoice: { kind: 'peach', label: 'Счёт' },
-  appeal: { kind: 'danger', label: 'Апелляция' },
-};
+/** Where a queue row leads. */
+function queueRowPath(row: QueueItem, confirmed: boolean): string {
+  const id = row.entityId;
+  switch (row.type) {
+    case 'claim':
+    case 'appeal':
+    case 'fraud_flag':
+    case 'opinion':
+      return `/staff/claims/${id}`;
+    case 'payout':
+      return row.subject === 'registry' ? `/staff/registries/${id}` : `/staff/claims/${id}`;
+    case 'renewal':
+    case 'loss_ratio':
+      return `/staff/clients/${id}`;
+    case 'guarantee':
+    case 'escalation':
+      return '/staff/guarantees';
+    case 'rebill':
+      return `/staff/rebills/${id}`;
+    case 'assistance_sla':
+    case 'complaint':
+      return `/staff/assistance/${id}`;
+    case 'registry':
+      return `/staff/registries/${id}`;
+    case 'policy_change':
+      return `/staff/policy-changes?clientId=${id}`;
+    case 'deal':
+    case 'lead':
+    case 'kp':
+      return `/staff/deals/${id}`;
+    case 'quote':
+      return `/staff/quotes/${id}`;
+    case 'contract':
+      return `/staff/contracts/${id}`;
+    case 'endorsement':
+      return `/staff/endorsements/${id}`;
+    case 'scan':
+      return row.subject === 'endorsement' ? `/staff/endorsements/${id}` : `/staff/contracts/${id}`;
+    case 'invoice':
+      return '/staff/invoices?status=unpaid,overdue';
+    case 'bank_payment':
+      return '/staff/invoices/queue';
+    case 'limit_request':
+      return '/staff/limit-requests?status=pending';
+    case 'qa_sample':
+      return '/staff/qa';
+    case 'param_change':
+      return '/staff/admin/parameters';
+    case 'authority_change':
+      return '/staff/admin/users';
+    case 'ai_change':
+      return '/staff/admin/ai';
+    case 'integration_error':
+      return `/staff/clinics/${id}`;
+    case 'appointment':
+    case 'clinic_no_response':
+      return `/staff/appointments?status=${confirmed ? 'confirmed' : 'requested'}`;
+  }
+}
 
 function greeting(now = new Date()): string {
   const h = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Tashkent' }).format(now));
@@ -69,7 +93,7 @@ export default function DashboardPage() {
   const user = useUser()!;
   const navigate = useNavigate();
   const dashboard = useDashboard();
-  const [tab, setTab] = useState<(typeof TABS)[number]['key']>('all');
+  const [tab, setTab] = useState<QueueType | 'all'>('all');
   const queue = useQueue(tab);
   const confirm = useConfirmAppointment();
   const [done, setDone] = useState<Map<string, QueueItem>>(new Map());
@@ -80,7 +104,7 @@ export default function DashboardPage() {
   const rows = useMemo(() => {
     const base = (queue.data ?? []).map((r) => done.get(r.id) ?? r);
     for (const r of done.values()) {
-      if (!base.some((b) => b.id === r.id) && (tab === 'all' || tab === r.type || (tab === 'appointment' && r.type === 'clinic_no_response') || (tab === 'guarantee' && r.type === 'escalation'))) base.push(r);
+      if (!base.some((b) => b.id === r.id) && (tab === 'all' || tab === r.type)) base.push(r);
     }
     return base.sort((a, b) => (a.dueAt < b.dueAt ? -1 : 1));
   }, [queue.data, done, tab]);
@@ -101,25 +125,10 @@ export default function DashboardPage() {
     }
   };
 
-  const openRow = (row: QueueItem) => {
-    if (row.type === 'claim') navigate(`/staff/claims/${row.entityId}`);
-    else if (row.type === 'renewal') navigate(`/staff/clients/${row.entityId}`);
-    else if (row.type === 'guarantee' || row.type === 'escalation') navigate('/staff/guarantees');
-    else if (row.type === 'rebill') navigate(`/staff/rebills/${row.entityId}`);
-    else if (row.type === 'assistance_sla' || row.type === 'complaint') navigate(`/staff/assistance/${row.entityId}`);
-    else if (row.type === 'registry') navigate(`/staff/registries/${row.entityId}`);
-    else if (row.type === 'policy_change') navigate(`/staff/policy-changes?clientId=${row.entityId}`);
-    else if (row.type === 'deal') navigate(`/staff/deals/${row.entityId}`);
-    else if (row.type === 'quote') navigate(`/staff/quotes/${row.entityId}`);
-    else if (row.type === 'contract') navigate(`/staff/contracts/${row.entityId}`);
-    else if (row.type === 'endorsement') navigate(`/staff/endorsements/${row.entityId}`);
-    else if (row.type === 'invoice') navigate('/staff/invoices');
-    else if (row.type === 'appeal') navigate(`/staff/claims/${row.entityId}`);
-    else navigate(`/staff/appointments?status=${done.has(row.id) ? 'confirmed' : 'requested'}`);
-  };
+  const openRow = (row: QueueItem) => navigate(queueRowPath(row, done.has(row.id)));
 
   const columns: Column<QueueItem>[] = [
-    { key: 'type', header: 'Тип', cell: (r) => <Chip kind={TYPE_CHIP[r.type].kind}>{TYPE_CHIP[r.type].label}</Chip>, className: 'w-[150px]' },
+    { key: 'type', header: 'Тип', cell: (r) => <Chip kind={QUEUE_TYPE_META[r.type].chip}>{QUEUE_TYPE_META[r.type].label}</Chip>, className: 'w-[150px]' },
     { key: 'who', header: 'Кто', cell: (r) => <span className="font-medium">{r.who}</span> },
     { key: 'details', header: 'Детали', cell: (r) => <span className="text-muted">{r.details}</span> },
     { key: 'status', header: 'Статус', cell: (r) => <StatusDot tone={r.statusTone}>{r.status}</StatusDot> },
@@ -155,6 +164,12 @@ export default function DashboardPage() {
     },
   ];
 
+  // Tabs are the kinds of work in this role's queue (the server already filtered them by rights).
+  const queueTabs: { key: QueueType | 'all'; label: string; count?: number }[] = [
+    { key: 'all', label: 'Все' },
+    ...(dashboard.data?.queueTypes ?? []).filter((t) => canSeeQueueType(user, t.type)).map((t) => ({ key: t.type, label: QUEUE_TYPE_META[t.type].tab, count: t.count })),
+  ];
+
   const now = new Date();
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -178,20 +193,18 @@ export default function DashboardPage() {
           </div>
         )}
         <Card title="Очередь" bodyClassName="p-0">
-          <div role="tablist" aria-label="Тип задач" className="flex gap-1 border-b border-border-soft px-3 pt-2">
-            {TABS.filter((t) => !('action' in t) || can(user, t.action) || (t.key === 'registry' && can(user, 'registries.pay')) || (t.key === 'assistance' && can(user, 'assist.cases.manage', { sub: 'complaint' }))).map((t) => (
+          <div role="tablist" aria-label="Тип задач" className="flex gap-1 overflow-x-auto border-b border-border-soft px-3 pt-2" data-testid="queue-tabs">
+            {queueTabs.map((t) => (
               <button
                 key={t.key}
                 role="tab"
                 type="button"
                 aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
-                className={cn(
-                  '-mb-px border-b-2 border-transparent px-2.5 py-1.5 text-muted',
-                  tab === t.key && 'border-accent font-semibold text-text',
-                )}
+                className={cn('-mb-px whitespace-nowrap border-b-2 border-transparent px-2.5 py-1.5 text-muted', tab === t.key && 'border-accent font-semibold text-text')}
               >
                 {t.label}
+                {t.count !== undefined && <span className="ml-1 text-[11px] text-muted num">{t.count}</span>}
               </button>
             ))}
           </div>

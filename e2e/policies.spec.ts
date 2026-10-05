@@ -1,6 +1,6 @@
 /* Policy issuance and changes of the insured list — POLICY_SPEC §10, e2e scenarios 1–4. */
 import { expect, test, type Page } from '@playwright/test';
-import { api, CODE, loginStaff, PASSWORD } from './helpers';
+import { api, CODE, loginStaff, PASSWORD, logoutFromSidebar } from './helpers';
 
 async function switchTo(page: Page, role: RegExp, home: RegExp): Promise<void> {
   await page.getByRole('button', { name: 'Войти как…' }).click();
@@ -55,8 +55,7 @@ test('1. Underwriter issues a policy from a CSV of 3 employees and invites HR, w
   await expect(page.getByRole('table', { name: 'Застрахованные по полису' }).getByRole('row')).toHaveCount(4);
 
   // The invited HR logs in and sees the three employees.
-  await page.getByRole('button', { name: 'Профиль и выход' }).click();
-  await page.getByRole('menuitem', { name: 'Выйти' }).click();
+  await logoutFromSidebar(page);
   await page.goto('/login');
   await page.getByLabel('Email').fill('hr@new-policy.uz');
   await page.getByLabel('Пароль').fill(PASSWORD);

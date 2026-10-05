@@ -235,7 +235,7 @@ export interface PermissionContext {
   to?: ClaimStatus;
 }
 
-type MinimalUser = Pick<SessionUser, 'id' | 'role' | 'companyId' | 'insuredId' | 'clinicId' | 'assistanceId' | 'canSign'>;
+export type MinimalUser = Pick<SessionUser, 'id' | 'role' | 'companyId' | 'insuredId' | 'clinicId' | 'assistanceId' | 'canSign'>;
 
 export function ruleFor(role: Role, action: Action): Rule {
   return (PERMISSIONS[action] as Row)[role];

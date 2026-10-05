@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Role } from '../src/shared/types';
-import { api, login } from './helpers';
+import { api, login, logoutFromSidebar } from './helpers';
 
 const FORBIDDEN_ROUTES: Record<Role, string[]> = {
   operator: ['/staff/reports', '/staff/audit', '/staff/admin/users', '/hr', '/app'],
@@ -79,8 +79,7 @@ test.describe('4. IDOR', () => {
     await login(page, 'operator');
     const list = (await api(page, 'GET', '/claims?pageSize=5')).data as { items: { id: string; insuredName: string }[] };
     const foreign = list.items.find((c) => !c.insuredName.startsWith('Каримов Азиз'))!;
-    await page.getByRole('button', { name: 'Профиль и выход' }).click();
-    await page.getByRole('menuitem', { name: 'Выйти' }).click();
+    await logoutFromSidebar(page);
     await login(page, 'insured');
     expect((await api(page, 'GET', `/me/claims/${foreign.id}`)).status).toBe(404);
     const mine = (await api(page, 'GET', '/me/claims')).data as { id: string }[];
@@ -93,8 +92,7 @@ test.describe('4. IDOR', () => {
     await login(page, 'operator');
     const others = (await api(page, 'GET', '/insured?pageSize=100')).data as { items: { id: string; clientName: string }[] };
     const foreign = others.items.find((i) => i.clientName !== 'Ташкент Агрологистика')!;
-    await page.getByRole('button', { name: 'Профиль и выход' }).click();
-    await page.getByRole('menuitem', { name: 'Выйти' }).click();
+    await logoutFromSidebar(page);
     await login(page, 'hr');
     expect((await api(page, 'GET', `/hr/employees/${foreign.id}`)).status).toBe(404);
     expect((await api(page, 'DELETE', `/hr/employees/${foreign.id}`, { excludeFrom: '2026-12-01' })).status).toBe(404);

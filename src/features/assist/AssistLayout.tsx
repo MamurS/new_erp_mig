@@ -1,60 +1,59 @@
 /*
  * Assistance portal shell (ASSISTANCE_SPEC §6): the dense `staff` theme for the call centre, a rail of
- * sections by role and a top bar with the assistance name and the «Портал партнёра» mark.
+ * collapsible side navigation grouped by work and a top bar with the assistance name and the «Портал партнёра» mark.
  */
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { ChevronDown, Handshake, LogOut } from 'lucide-react';
+import { useId, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
+import { Handshake } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useAssistOverview } from '@/shared/api/queries/assist';
-import { cn } from '@/shared/lib/cn';
-import { Avatar } from '@/shared/ui/chips';
+import { AppSidebar, SidebarBurger, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Breadcrumbs } from '@/shared/ui/page';
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '@/shared/ui/dropdown';
 import { Skeleton } from '@/shared/ui/states';
-import { Tooltip } from '@/shared/ui/tooltip';
 import { useTopbarState } from '@/features/staff/topbar';
-import { ASSIST_SECTIONS } from './nav';
+import { ASSIST_NAV_GROUPS, ASSIST_SECTIONS } from './nav';
 
 export default function AssistLayout() {
   const user = useUser();
   const loc = useLocation();
   const overview = useAssistOverview();
   const { crumbs, action } = useTopbarState();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const mobileId = useId();
   if (!user) return null;
   const sections = ASSIST_SECTIONS.filter((s) => (s.roles as string[]).includes(user.role));
   const name = overview.data?.assistance.name;
+  const current = sections.filter((s) => (s.path === '/assist' ? loc.pathname === '/assist' : loc.pathname === s.path || loc.pathname.startsWith(`${s.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]?.path;
+  const c = overview.data?.counters;
+  const counts: Record<string, number | undefined> = c
+    ? { '/assist/cases': c.openCases, '/assist/guarantees': c.guaranteesPending, '/assist/registries': c.linesPending, '/assist/rebills': c.rebillsInReview }
+    : {};
+  const groups: SidebarGroup[] = ASSIST_NAV_GROUPS.map((g) => ({
+    label: g,
+    items: sections.filter((s) => s.group === g).map((s) => ({ path: s.path, label: s.label, icon: s.icon, count: counts[s.path] })),
+  })).filter((g) => g.items.length > 0);
 
   return (
     <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]">
-      <nav
-        aria-label="Разделы портала ассистанса"
-        className="sticky top-[var(--banner-h,0px)] flex h-[calc(100vh-var(--banner-h,0px))] w-[60px] shrink-0 flex-col items-center gap-1 border-r border-border bg-rail py-3"
-      >
-        <NavLink to="/assist" end aria-label="Рабочий стол ассистанса" className="mb-3 flex h-9 w-9 items-center justify-center rounded-btn bg-accent text-white">
-          <Handshake className="h-5 w-5" aria-hidden />
-        </NavLink>
-        {sections.map((s) => {
-          const active = s.path === '/assist' ? loc.pathname === '/assist' : loc.pathname.startsWith(s.path);
-          return (
-            <Tooltip key={s.path} content={s.label} side="right">
-              <NavLink
-                to={s.path}
-                end={s.path === '/assist'}
-                aria-label={s.label}
-                aria-current={active ? 'page' : undefined}
-                className={cn('flex h-10 w-10 items-center justify-center rounded-btn text-muted hover:bg-surface hover:text-text', active && 'bg-surface text-accent shadow-sm ring-1 ring-border')}
-              >
-                <s.icon className="h-[18px] w-[18px]" aria-hidden />
-              </NavLink>
-            </Tooltip>
-          );
-        })}
-      </nav>
+      <AppSidebar
+        portal="assist"
+        theme="staff"
+        ariaLabel="Разделы портала ассистанса"
+        brand={{ to: '/assist', label: 'Рабочий стол ассистанса', title: name ?? 'Ассистанс', subtitle: 'Портал партнёра', icon: Handshake }}
+        groups={groups}
+        activePath={current}
+        user={{ name: user.displayName, role: ROLE_LABEL[user.role] }}
+        onLogout={() => void logout()}
+        mobileOpen={menuOpen}
+        onMobileOpenChange={setMenuOpen}
+        mobileId={mobileId}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-[var(--banner-h,0px)] z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <SidebarBurger onClick={() => setMenuOpen(true)} controls={mobileId} expanded={menuOpen} />
           <div className="flex min-w-0 shrink-0 items-center gap-2 border-r border-border pr-3">
             {name ? (
               <span className="max-w-[220px] truncate font-semibold" data-testid="assistance-name">
@@ -63,31 +62,12 @@ export default function AssistLayout() {
             ) : (
               <Skeleton className="h-4 w-32" />
             )}
-            <span className="rounded-btn bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent-text">Портал партнёра</span>
+            <span className="hidden rounded-btn bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent-text sm:inline">Портал партнёра</span>
           </div>
           <div className="min-w-0 flex-1">
             <Breadcrumbs items={crumbs.length ? crumbs : [{ label: 'Рабочий стол' }]} />
           </div>
           {action}
-          <Menu>
-            <MenuTrigger asChild>
-              <button type="button" className="inline-flex h-9 items-center gap-2 rounded-full pl-1 pr-2 hover:bg-rail" aria-label="Меню пользователя">
-                <Avatar name={user.displayName} className="h-7 w-7 text-[11px]" />
-                <span className="hidden max-w-[160px] truncate font-medium md:inline">{user.displayName}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted" aria-hidden />
-              </button>
-            </MenuTrigger>
-            <MenuContent>
-              <MenuLabel>
-                <span className="block font-semibold text-text">{user.displayName}</span>
-                {ROLE_LABEL[user.role]}
-              </MenuLabel>
-              <MenuSeparator />
-              <MenuItem onSelect={() => void logout()}>
-                <LogOut className="h-4 w-4" aria-hidden /> Выйти
-              </MenuItem>
-            </MenuContent>
-          </Menu>
         </header>
         <main className="min-w-0 flex-1 p-4 lg:p-5">
           <Outlet />

@@ -111,3 +111,8 @@ export async function api(
     { method, path, body, headers },
   );
 }
+
+/** Logs out of the staff or assistance portal: «Выйти» in the user block of the side navigation. */
+export async function logoutFromSidebar(page: Page): Promise<void> {
+  await page.getByTestId('sidebar').getByRole('button', { name: 'Выйти', exact: true }).click();
+}
