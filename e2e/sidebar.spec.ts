@@ -63,6 +63,7 @@ for (const c of PORTALS) {
     await panel(page).getByRole('button', { name: 'Скрыть панель' }).focus();
     await page.keyboard.press('Control+b');
     await expect(panel(page)).toHaveAttribute('data-state', 'collapsed');
+    await page.mouse.move(1000, 500);
 
     // Hovering the toggle previews the panel over the content; leaving it closes the preview.
     await toggle(page).hover();
@@ -121,6 +122,46 @@ for (const c of PORTALS) {
     await page.reload();
     await expect(panel(page)).toHaveAttribute('data-state', 'collapsed');
     await expect(toggle(page)).toBeVisible();
+  });
+
+  test(`${c.portal}: hiding never previews by itself — the pointer must leave the toggle and come back; a quick pass opens nothing`, async ({ page }) => {
+    await loginStaff(page, c.role);
+    const preview = page.getByTestId('sidebar-preview');
+    // Click «Скрыть панель» and keep the mouse still: the toggle slides past the pointer while the content moves.
+    await panel(page).getByRole('button', { name: 'Скрыть панель' }).click();
+    await expect(panel(page)).toHaveAttribute('data-state', 'collapsed');
+    await page.waitForTimeout(700);
+    await expect(preview).toHaveCount(0);
+    // Leave and hover again: now it previews.
+    await page.mouse.move(1000, 500);
+    const spot = await center(page, 'sidebar-toggle');
+    await page.mouse.move(spot.x, spot.y);
+    await expect(preview).toBeVisible();
+    // Pin it, then hide with Ctrl+B: the toggle appears right under the still pointer.
+    await expect
+      .poll(async () => {
+        const b = await preview.getByRole('button', { name: 'Закрепить панель' }).boundingBox();
+        return !!b && Math.abs(b.x + b.width / 2 - spot.x) < 3;
+      })
+      .toBe(true);
+    await page.mouse.click(spot.x, spot.y);
+    await expect(panel(page)).toHaveAttribute('data-state', 'expanded');
+    await panel(page).getByRole('button', { name: 'Скрыть панель' }).focus();
+    await page.keyboard.press('Control+b');
+    await expect(panel(page)).toHaveAttribute('data-state', 'collapsed');
+    await page.mouse.move(spot.x + 1, spot.y); // wiggling over the toggle is not a new hover
+    await page.waitForTimeout(700);
+    await expect(preview).toHaveCount(0);
+    await page.mouse.move(1000, 500);
+    await page.mouse.move(spot.x, spot.y);
+    await expect(preview).toBeVisible();
+    await page.mouse.move(1000, 500);
+    await expect(preview).toBeHidden();
+    // Crossing the toggle in well under 200 ms opens nothing.
+    await page.mouse.move(spot.x, spot.y);
+    await page.mouse.move(1000, 500);
+    await page.waitForTimeout(500);
+    await expect(preview).toHaveCount(0);
   });
 
   test(`${c.portal}: narrow screen — hidden by default, opens over the content with a backdrop; Esc, outside click and navigation close it; focus stays inside`, async ({ page }) => {

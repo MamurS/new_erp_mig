@@ -78,23 +78,14 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
-  /* Thin warm scrollbars everywhere: 6 px, light thumb, transparent track. */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: var(--scroll-thumb);
-    border-radius: 6px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--scroll-thumb-hover);
-  }
-  ::-webkit-scrollbar-corner {
-    background: transparent;
+  /*
+   * Thin warm scrollbars everywhere through the standard properties: Chrome/Edge 121+ and Firefox
+   * draw them natively (on Windows Chrome keeps the step arrows at both ends, as in Claude).
+   * Setting them makes Chromium ignore ::-webkit-scrollbar, so the two never meet on one element.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
   }
   /* Tailwind v4 dropped the pointer cursor on buttons; v3 had it. */
   button:not(:disabled),
@@ -196,11 +187,22 @@
   }
 }
 
-/* Firefox: the standard properties (in Chromium they would switch the styled scrollbars above off). */
-@supports (-moz-appearance: none) {
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--scroll-thumb) transparent;
+/* Fallback for browsers without scrollbar-color (Safari): 6 px, light thumb, transparent track. */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scroll-thumb-hover);
   }
 }
 
