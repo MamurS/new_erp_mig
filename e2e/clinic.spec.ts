@@ -79,7 +79,7 @@ test('1. Registrar checks the app code, requests a guarantee letter, the doctor 
   await page.goto('/clinic/guarantees');
   const row = page.getByRole('row').filter({ hasText: number });
   await expect(row).toContainText('Одобрено');
-  await expect(row).toContainText('Шифо Ассистанс Групп');
+  await expect(row).toContainText('Shifo Assistans Group');
 });
 
 test('2. Insured books in the demo clinic, registrar confirms, the app shows «Подтвердила клиника»', async ({ page }) => {
@@ -162,7 +162,7 @@ test('3. CSV registry: upload, submit; the payer\'s assistance rejects, the clin
   await as(page, 'clinicAdmin');
   await page.goto(`/clinic/registries/${registryId}`);
   await expect(page.getByTestId('registry-status')).toContainText('Оплачен');
-  await expect(page.getByTestId('line-payment').first()).toContainText('Оплачено ассистансом Шифо Ассистанс Групп');
+  await expect(page.getByTestId('line-payment').first()).toContainText('Оплачено ассистансом Shifo Assistans Group');
 });
 
 test('4. Isolation: no visit → 404, foreign letter → 404, registrar has no integration or staff pages', async ({ page }) => {
