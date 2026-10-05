@@ -3,6 +3,7 @@
  * integration API (ASSISTANCE_SPEC). Scope by the date of the event, payers of registry lines, limits
  * with guarantee reserves, rebills with automatic checks, KPI and the quality-control sample.
  */
+import { msg, t } from '@/i18n/core';
 import type {
   AssistanceCompany,
   AssistanceKpi,
@@ -65,7 +66,7 @@ export function syncAssistance(d: Db): void {
 export function requireAssistanceScope(d: Db, assistanceId: UUID, policyId: UUID, eventDate: string, mode: 'read' | 'write' = 'read'): 'full' | 'read' {
   const s = assistanceScope(d.assignments, assistanceId, policyId, eventDate, todayIso());
   if (s === 'none') throw notFound();
-  if (mode === 'write' && s !== 'full') throw new HttpError(403, 'forbidden', 'Клиент передан другому ассистансу: доступ только на чтение');
+  if (mode === 'write' && s !== 'full') throw new HttpError(403, 'forbidden', 'srv.assist.readOnly');
   return s;
 }
 
@@ -110,7 +111,7 @@ export function payerOfLine(d: Db, line: Pick<RegistryLine, 'visitId' | 'service
   return who ? payerOn(d.assignments, who.policyId, line.serviceDate) : 'mig';
 }
 
-export const payerName = (d: Db, payer: Payer | undefined): string => (!payer || payer === 'mig' ? 'МИГ' : (assistanceName(d, payer) ?? 'Ассистанс'));
+export const payerName = (d: Db, payer: Payer | undefined): string => (!payer || payer === 'mig' ? 'МИГ' : (assistanceName(d, payer) ?? t('srv.dash.assistance')));
 
 /** Lines of one payer: a sub-registry. */
 export const linesOf = (r: Registry, payer: Payer): RegistryLine[] => r.lines.filter((l) => (l.payer ?? 'mig') === payer);
@@ -199,7 +200,7 @@ export function findRegistryLine(d: Db, lineId: UUID): { r: Registry; l: Registr
 /** Automatic checks of one rebill line against the data of MIG (§5.5). */
 export function checksFor(d: Db, rebill: Pick<Rebill, 'id' | 'assistanceId'>, line: Pick<RebillLine, 'registryLineId'>): RebillLine['checks'] {
   const found = findRegistryLine(d, line.registryLineId);
-  if (!found) return [{ code: 'not_paid_to_clinic', message: 'Строка реестра не найдена' }];
+  if (!found) return [{ code: 'not_paid_to_clinic', message: msg('srv.rebill.registryLineNotFound') }];
   const { r, l } = found;
   const who = insuredOfVisit(d, l.visitId);
   const policy = who && d.policies.find((p) => p.id === who.policyId);
@@ -277,13 +278,13 @@ export function recomputeRebill(d: Db, b: Rebill): void {
 export function upsertDraftRebill(d: Db, assistanceId: UUID, period: string, lineIds?: UUID[]): Rebill {
   const a = assistanceOf(d, assistanceId);
   const existing = d.rebills.find((b) => b.assistanceId === assistanceId && b.period === period);
-  if (existing && existing.status !== 'draft') throw conflict(`Счёт за ${period} уже отправлен в МИГ`);
+  if (existing && existing.status !== 'draft') throw conflict('srv.rebill.periodSent', { period });
   let picked: { r: Registry; l: RegistryLine }[];
   if (lineIds) {
     picked = lineIds.map((id) => {
       const f = findRegistryLine(d, id);
       // Lines of other payers do not exist for this assistance (anti-enumeration).
-      if (!f || f.l.payer !== assistanceId) throw new HttpError(422, 'validation', 'Строка реестра не найдена среди строк ассистанса', { lineIds: id });
+      if (!f || f.l.payer !== assistanceId) throw new HttpError(422, 'validation', 'srv.rebill.lineNotFound', { fields: { lineIds: id } });
       return f;
     });
   } else {

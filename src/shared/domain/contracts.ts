@@ -2,6 +2,7 @@
  * Contract rules (LIFECYCLE_SPEC §7–9): payment schedule, signing by each side with any method,
  * the paper original, and the moment the contract comes into force. Pure functions.
  */
+import { defineLabels } from '@/i18n';
 import type {
   ActivationRule,
   ContractStatus,
@@ -19,25 +20,13 @@ import type {
 
 export type Side = 'mig' | 'client';
 
-export const SIGN_METHOD_LABEL: Record<SignMethod, string> = { eimzo: 'ЭЦП (E-IMZO)', edo: 'ЭДО', paper: 'Бумага', scan: 'Скан' };
-export const PAYMENT_FREQUENCY_LABEL: Record<PaymentFrequency, string> = { single: 'Единовременно', quarterly: 'Поквартально', monthly: 'Помесячно' };
-export const ACTIVATION_RULE_LABEL: Record<ActivationRule, string> = {
-  on_start_date: 'с даты начала срока страхования',
-  after_first_payment: 'с даты начала, но не раньше оплаты первого взноса',
-};
+export const SIGN_METHOD_LABEL = defineLabels<SignMethod>('labels.signMethod', ['eimzo', 'edo', 'paper', 'scan']);
+export const PAYMENT_FREQUENCY_LABEL = defineLabels<PaymentFrequency>('labels.paymentFrequency', ['single', 'quarterly', 'monthly']);
+export const ACTIVATION_RULE_LABEL = defineLabels<ActivationRule>('labels.activationRule', ['on_start_date', 'after_first_payment']);
+// eslint-disable-next-line mig/no-cyrillic-ui -- operator names are data values of the API
 export const EDO_PROVIDERS = ['Didox', 'Faktura.uz', 'Soliq ЭДО'] as const;
 
-export const CONTRACT_STATUS_LABEL: Record<ContractStatus, string> = {
-  draft: 'Черновик',
-  legal_review: 'У юриста',
-  approved: 'Согласован',
-  sent: 'Отправлен клиенту',
-  signing: 'Подписание',
-  signed: 'Подписан',
-  active: 'Действует',
-  terminated: 'Расторгнут',
-  expired: 'Истёк',
-};
+export const CONTRACT_STATUS_LABEL = defineLabels<ContractStatus>('labels.contractStatus', ['draft', 'legal_review', 'approved', 'sent', 'signing', 'signed', 'active', 'terminated', 'expired']);
 export const CONTRACT_STATUS_CHIP: Record<ContractStatus, string> = {
   draft: 'neutral',
   legal_review: 'warning',
@@ -49,30 +38,10 @@ export const CONTRACT_STATUS_CHIP: Record<ContractStatus, string> = {
   terminated: 'danger',
   expired: 'neutral',
 };
-export const ENDORSEMENT_STATUS_LABEL: Record<EndorsementStatus, string> = {
-  draft: 'Черновик',
-  legal_review: 'У юриста',
-  approved: 'Согласовано',
-  sent: 'Отправлено клиенту',
-  signing: 'Подписание',
-  signed: 'Подписано',
-};
+export const ENDORSEMENT_STATUS_LABEL = defineLabels<EndorsementStatus>('labels.endorsementStatus', ['draft', 'legal_review', 'approved', 'sent', 'signing', 'signed']);
 
 export const DEAL_STAGES: readonly DealStage[] = ['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active'];
-export const DEAL_STAGE_LABEL: Record<DealStage, string> = {
-  lead: 'Лид',
-  census: 'Данные для оценки',
-  quote: 'Котировка',
-  kp_sent: 'КП отправлено',
-  kp_accepted: 'КП принято',
-  contract_draft: 'Договор: черновик',
-  contract_review: 'Договор: согласование',
-  contract_sent: 'Договор отправлен',
-  signing: 'Подписание',
-  awaiting_payment: 'Ожидает оплаты',
-  active: 'Действует',
-  lost: 'Проиграна',
-};
+export const DEAL_STAGE_LABEL = defineLabels<DealStage>('labels.dealStage', ['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active', 'lost']);
 
 const DAY = 86_400_000;
 const dayNumber = (d: ISODate) => Math.round(Date.parse(`${d}T00:00:00Z`) / DAY);
@@ -166,20 +135,24 @@ export function activationDate(
 }
 
 export function contractNumber(year: number, seq: number): string {
+  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
   return `ДМС-Д-${year}-${String(seq).padStart(6, '0')}`;
 }
 
 export function dealNumber(year: number, seq: number): string {
+  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
   return `СД-${year}-${String(seq).padStart(6, '0')}`;
 }
 
 /** 'СЕРТ-2026-000123-0001': contract sequence and the person's index in it. */
 export function certificateNumber(contractNo: string, index: number): string {
   const m = /^ДМС-Д-(\d{4})-(\d{6})$/.exec(contractNo);
+  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
   return `СЕРТ-${m?.[1] ?? '0000'}-${m?.[2] ?? '000000'}-${String(index).padStart(4, '0')}`;
 }
 
 export function endorsementNumber(n: number, contractNo: string): string {
+  // eslint-disable-next-line mig/no-cyrillic-ui -- document number format, not an interface string
   return `ДС-${n} к ${contractNo}`;
 }
 
@@ -191,7 +164,7 @@ export function signingSummary(s: Signing): { side: Side; state: 'signed' | 'sca
   }));
 }
 
-export const INVOICE_STATUS_LABEL: Record<Invoice['status'], string> = { unpaid: 'Ожидает оплаты', paid: 'Оплачен', overdue: 'Просрочен' };
+export const INVOICE_STATUS_LABEL = defineLabels<Invoice['status']>('labels.invoiceStatus', ['unpaid', 'paid', 'overdue']);
 export const INVOICE_STATUS_CHIP: Record<Invoice['status'], string> = { unpaid: 'warning', paid: 'success', overdue: 'danger' };
 
 /** Default start of coverage for a new deal: the first day of the month after next (time for the paperwork). */

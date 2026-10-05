@@ -2,6 +2,7 @@
  * «Параметры ДМС»: business parameters in one place. Every MIG role can read them; an admin proposes a
  * change, a second admin or an underwriter confirms it (four-eyes), and only then it applies.
  */
+import { defineLabels, t, tm } from '@/i18n';
 import { useState } from 'react';
 import type { DmsParamChange, DmsParameter, DmsParamKey } from '@/shared/types';
 import { useApproveDmsParam, useDmsParams, useProposeDmsParam, useRejectDmsParam } from '@/shared/api/queries/params';
@@ -9,7 +10,7 @@ import { errorMessage } from '@/shared/api/client';
 import { can } from '@/shared/auth/permissions';
 import { useCan } from '@/shared/auth/guards';
 import { useUser } from '@/shared/auth/session';
-import { DMS_PARAM_GROUPS, DMS_PARAMETERS, dmsUnitLabel, formatDmsParam, fromDisplayValue, toDisplayValue } from '@/shared/config/dmsParameters';
+import { DMS_PARAM_GROUP_LABEL, DMS_PARAM_GROUPS, DMS_PARAMETERS, dmsUnitLabel, formatDmsParam, fromDisplayValue, toDisplayValue } from '@/shared/config/dmsParameters';
 import { dmsParamChangeSchema, dmsParamRejectSchema } from '@/shared/schemas/forms';
 import { formatDateTime } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
@@ -20,13 +21,11 @@ import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { Card } from '@/shared/ui/page';
 import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { Rich } from '../components/rich';
 import { useTopbar } from '../topbar';
 
-const STATUS_CHIP: Record<DmsParamChange['status'], [string, string]> = {
-  pending: ['warning', 'Ждёт подтверждения'],
-  applied: ['success', 'Применено'],
-  rejected: ['neutral', 'Отклонено'],
-};
+const STATUS_TONE: Record<DmsParamChange['status'], string> = { pending: 'warning', applied: 'success', rejected: 'neutral' };
+const STATUS_LABEL = defineLabels('staff.params.status', ['pending', 'applied', 'rejected']);
 
 function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void }) {
   const def = DMS_PARAMETERS[p.key];
@@ -34,7 +33,7 @@ function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void })
   const [value, setValue] = useState(String(toDisplayValue(p.key, p.value)).replace('.', ','));
   const [reason, setReason] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const unit = def.unit === 'uzs' ? 'UZS' : dmsUnitLabel(def.unit);
+  const unit = def.unit === 'uzs' ? t('staff.params.unitUzs') : dmsUnitLabel(def.unit);
   const submit = async () => {
     const parsed = dmsParamChangeSchema.safeParse({ key: p.key, value: fromDisplayValue(p.key, Number(value.replace(/\s/g, '').replace(',', '.'))), reason });
     if (!parsed.success) {
@@ -44,7 +43,7 @@ function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void })
     setErrors({});
     try {
       await propose.mutateAsync({ key: p.key, value: parsed.data.value, reason: parsed.data.reason });
-      toast.success('Изменение отправлено на подтверждение');
+      toast.success(t('staff.params.sent'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -54,15 +53,15 @@ function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void })
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Изменить параметр"
+      title={t('staff.params.editTitle')}
       description={def.label}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={propose.isPending} onClick={() => void submit()}>
-            Отправить на подтверждение
+            {t('staff.params.sendForApproval')}
           </Button>
         </>
       }
@@ -70,10 +69,17 @@ function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void })
       <p className="mb-3 text-[13px] text-muted">{def.description}</p>
       <div className="grid gap-3">
         <p className="text-[13px]">
-          Сейчас: <span className="num font-semibold">{formatDmsParam(p.key, p.value)}</span> · допустимо от {formatDmsParam(p.key, def.min)} до {formatDmsParam(p.key, def.max)}
+          <Rich
+            k="staff.params.current"
+            values={{
+              value: <span className="num font-semibold">{formatDmsParam(p.key, p.value)}</span>,
+              min: formatDmsParam(p.key, def.min),
+              max: formatDmsParam(p.key, def.max),
+            }}
+          />
         </p>
         {def.options ? (
-          <Field label="Новое значение" error={errors.value}>
+          <Field label={t('staff.params.newValue')} error={tm(errors.value)}>
             {(a) => (
               <Select {...a} value={value} onChange={(e) => setValue(e.target.value)}>
                 {def.options?.map((o, i) => (
@@ -85,15 +91,15 @@ function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void })
             )}
           </Field>
         ) : (
-          <Field label={unit ? `Новое значение, ${unit}` : 'Новое значение'} error={errors.value}>
+          <Field label={unit ? t('staff.params.newValueUnit', { unit }) : t('staff.params.newValue')} error={tm(errors.value)}>
             {(a) => <Input {...a} inputMode="decimal" maxLength={16} value={value} onChange={(e) => setValue(e.target.value)} />}
           </Field>
         )}
-        <Field label="Основание" error={errors.reason} hint="Например, номер приказа или решение правления">
+        <Field label={t('staff.params.basis')} error={tm(errors.reason)} hint={t('staff.params.basisHint')}>
           {(a) => <Textarea {...a} rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
         </Field>
         <p className="rounded-btn bg-rail px-3 py-2 text-[12px] text-muted">
-          Значение изменится после подтверждения другим администратором или андеррайтером. Предложение и решение записываются в журнал аудита.
+          {t('staff.params.applyNote')}
         </p>
       </div>
     </Modal>
@@ -104,7 +110,7 @@ function RejectDialog({ c, own, onClose }: { c: DmsParamChange; own: boolean; on
   const reject = useRejectDmsParam();
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string>();
-  const label = own ? 'Отозвать предложение' : 'Отклонить изменение';
+  const label = own ? t('staff.params.withdrawProposal') : t('staff.params.rejectChange');
   return (
     <Modal
       open
@@ -114,7 +120,7 @@ function RejectDialog({ c, own, onClose }: { c: DmsParamChange; own: boolean; on
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             loading={reject.isPending}
@@ -126,7 +132,7 @@ function RejectDialog({ c, own, onClose }: { c: DmsParamChange; own: boolean; on
               }
               try {
                 await reject.mutateAsync({ id: c.id, reason: parsed.data.reason });
-                toast.success(own ? 'Предложение отозвано' : 'Изменение отклонено');
+                toast.success(own ? t('staff.params.withdrawn') : t('staff.params.rejected'));
                 onClose();
               } catch (e) {
                 toast.error(errorMessage(e));
@@ -138,7 +144,7 @@ function RejectDialog({ c, own, onClose }: { c: DmsParamChange; own: boolean; on
         </>
       }
     >
-      <Field label="Причина" error={error}>
+      <Field label={t('common.reason')} error={tm(error)}>
         {(a) => <Textarea {...a} rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
       </Field>
     </Modal>
@@ -151,7 +157,7 @@ function PendingCard({ changes }: { changes: DmsParamChange[] }) {
   const [rejecting, setRejecting] = useState<DmsParamChange | null>(null);
   if (changes.length === 0) return null;
   return (
-    <Card title="На подтверждении" className="mb-4">
+    <Card title={t('staff.params.pendingTitle')} className="mb-4">
       <ul className="flex flex-col divide-y divide-border-soft" data-testid="pending-params">
         {changes.map((c) => {
           const own = c.proposedById === user.id;
@@ -164,31 +170,31 @@ function PendingCard({ changes }: { changes: DmsParamChange[] }) {
                   {DMS_PARAMETERS[c.key].label}: <span className="num">{formatDmsParam(c.key, c.from)}</span> → <span className="num font-semibold">{formatDmsParam(c.key, c.to)}</span>
                 </p>
                 <p className="text-[12px] text-muted">
-                  Предложил {c.proposedByName}, {formatDateTime(c.proposedAt)} · {c.reason}
+                  {t('staff.params.proposedBy', { name: c.proposedByName, at: formatDateTime(c.proposedAt) })} · {c.reason}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {own && <Chip kind="warning">Нужен второй сотрудник</Chip>}
+                {own && <Chip kind="warning">{t('staff.params.needSecond')}</Chip>}
                 {canApprove && (
                   <Button
                     size="sm"
-                    aria-label={`Подтвердить: ${DMS_PARAMETERS[c.key].label}`}
+                    aria-label={t('staff.params.confirmAria', { label: DMS_PARAMETERS[c.key].label })}
                     loading={approve.isPending && approve.variables === c.id}
                     onClick={async () => {
                       try {
                         await approve.mutateAsync(c.id);
-                        toast.success('Изменение применено');
+                        toast.success(t('staff.params.applied'));
                       } catch (e) {
                         toast.error(errorMessage(e));
                       }
                     }}
                   >
-                    Подтвердить
+                    {t('common.confirm')}
                   </Button>
                 )}
                 {canReject && (
                   <Button size="sm" variant="secondary" onClick={() => setRejecting(c)}>
-                    {own ? 'Отозвать' : 'Отклонить'}
+                    {own ? t('common.revoke') : t('common.reject')}
                   </Button>
                 )}
               </div>
@@ -202,8 +208,8 @@ function PendingCard({ changes }: { changes: DmsParamChange[] }) {
 }
 
 export default function ParametersPage() {
-  useDocumentTitle('Параметры ДМС');
-  useTopbar([{ label: 'Параметры ДМС' }]);
+  useDocumentTitle(t('staff.params.title'));
+  useTopbar([{ label: t('staff.params.title') }]);
   const q = useDmsParams();
   const canPropose = useCan('dms_params.propose');
   const [editing, setEditing] = useState<DmsParameter | null>(null);
@@ -211,11 +217,8 @@ export default function ParametersPage() {
   return (
     <div>
       <div className="mb-3">
-        <h1 className="text-[22px] font-bold">Параметры ДМС</h1>
-        <p className="text-muted">
-          Бизнес-параметры, по которым работают порталы, мок-сервер и интеграции. Пометка «демо-значение» стоит, пока МИГ не подтвердил своё значение. Изменение применяется после подтверждения вторым сотрудником
-          (администратор или андеррайтер).
-        </p>
+        <h1 className="text-[22px] font-bold">{t('staff.params.title')}</h1>
+        <p className="text-muted">{t('staff.params.intro')}</p>
       </div>
       <QueryState query={q}>
         {({ parameters, changes }) => {
@@ -226,15 +229,15 @@ export default function ParametersPage() {
             <>
               <PendingCard changes={pending} />
               {DMS_PARAM_GROUPS.map((group) => (
-                <Card key={group} title={group} className="mb-4" bodyClassName="p-0">
+                <Card key={group} title={DMS_PARAM_GROUP_LABEL[group]} className="mb-4" bodyClassName="p-0">
                   <table className="w-full text-[13px]">
-                    <caption className="sr-only">{group}</caption>
+                    <caption className="sr-only">{DMS_PARAM_GROUP_LABEL[group]}</caption>
                     <thead className="border-b border-border-soft text-left text-[12px] text-muted">
                       <tr>
-                        <th className="px-4 py-2 font-medium">Параметр</th>
-                        <th className="px-4 py-2 text-right font-medium">Значение</th>
-                        <th className="hidden px-4 py-2 font-medium md:table-cell">Допустимо</th>
-                        {canPropose && <th className="px-4 py-2" aria-label="Действия" />}
+                        <th className="px-4 py-2 font-medium">{t('staff.params.colParam')}</th>
+                        <th className="px-4 py-2 text-right font-medium">{t('staff.params.colValue')}</th>
+                        <th className="hidden px-4 py-2 font-medium md:table-cell">{t('staff.params.colAllowed')}</th>
+                        {canPropose && <th className="px-4 py-2" aria-label={t('common.actions')} />}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-soft">
@@ -254,7 +257,7 @@ export default function ParametersPage() {
                                 </span>
                                 {p.isDemo ? (
                                   <Chip kind="peach" className="mt-1">
-                                    демо-значение
+                                    {t('staff.params.demo')}
                                   </Chip>
                                 ) : (
                                   <span className="mt-1 block text-[11px] text-muted">
@@ -269,10 +272,10 @@ export default function ParametersPage() {
                               {canPropose && (
                                 <td className="px-4 py-2.5 text-right align-top">
                                   {pendingKeys.has(p.key) ? (
-                                    <Chip kind="warning">на подтверждении</Chip>
+                                    <Chip kind="warning">{t('staff.params.pendingChip')}</Chip>
                                   ) : (
-                                    <Button size="sm" variant="secondary" aria-label={`Изменить: ${def.label}`} onClick={() => setEditing(p)}>
-                                      Изменить
+                                    <Button size="sm" variant="secondary" aria-label={t('staff.params.editAria', { label: def.label })} onClick={() => setEditing(p)}>
+                                      {t('common.edit')}
                                     </Button>
                                   )}
                                 </td>
@@ -285,19 +288,20 @@ export default function ParametersPage() {
                 </Card>
               ))}
               {history.length > 0 && (
-                <Card title="История изменений" bodyClassName="p-0">
+                <Card title={t('staff.params.history')} bodyClassName="p-0">
                   <ul className="divide-y divide-border-soft text-[13px]" data-testid="params-history">
                     {history.map((c) => (
                       <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
                         <span>
                           {DMS_PARAMETERS[c.key].label}: <span className="num">{formatDmsParam(c.key, c.from)}</span> → <span className="num">{formatDmsParam(c.key, c.to)}</span>
                           <span className="block text-[12px] text-muted">
-                            Предложил {c.proposedByName}, {formatDateTime(c.proposedAt)}
-                            {c.decidedByName && ` · ${c.status === 'applied' ? 'подтвердил' : 'отклонил'} ${c.decidedByName}${c.decidedAt ? `, ${formatDateTime(c.decidedAt)}` : ''}`}
+                            {t('staff.params.proposedBy', { name: c.proposedByName, at: formatDateTime(c.proposedAt) })}
+                            {c.decidedByName &&
+                              `${t(c.status === 'applied' ? 'staff.params.decidedApplied' : 'staff.params.decidedRejected', { name: c.decidedByName })}${c.decidedAt ? `, ${formatDateTime(c.decidedAt)}` : ''}`}
                             {c.rejectReason && ` · ${c.rejectReason}`}
                           </span>
                         </span>
-                        <Chip kind={STATUS_CHIP[c.status][0]}>{STATUS_CHIP[c.status][1]}</Chip>
+                        <Chip kind={STATUS_TONE[c.status]}>{STATUS_LABEL[c.status]}</Chip>
                       </li>
                     ))}
                   </ul>

@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Invoice } from '@/shared/types';
 import type { BankPaymentView, ImportPaymentsResult, SessionResponse } from '@/shared/types/dto';
+import { tm } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 
@@ -172,7 +173,7 @@ describe('payment matching (1C statement)', () => {
       { method: 'POST', sid: acc, json: { lines: [{ invoiceId: inv.id, amount: 5_000_000 }] } },
     );
     expect(noComment.status).toBe(422);
-    expect(noComment.data.fields?.comment).toMatch(/другой ИНН/);
+    expect(tm(noComment.data.fields?.comment)).toMatch(/другой ИНН/);
     const ok = await call<BankPaymentView>(`/payments/queue/${third.id}/allocate`, {
       method: 'POST',
       sid: acc,
@@ -292,7 +293,8 @@ describe('payment matching (1C statement)', () => {
     expect(third.data.matched + third.data.queued).toBe(2);
     // A line without the payment document number is an error, not a payment.
     const noDoc = await call<ImportPaymentsResult>('/payments/import-1c', { method: 'POST', sid: acc, text: `doc_number,date,amount,inn,purpose\n,${today()},1000,${c.inn},x` });
-    expect(noDoc.data.unmatched).toEqual([{ line: 2, reason: 'Нет номера платёжного документа' }]);
+    expect(noDoc.data.unmatched).toEqual([{ line: 2, reason: 'srv.statement.noDocNumber' }]);
+    expect(tm(noDoc.data.unmatched[0]?.reason)).toBe('Нет номера платёжного документа');
     expect((await call('/payments/import-1c', { method: 'POST', sid: acc, text: `date,amount,inn,purpose\n${today()},1000,${c.inn},x` })).status).toBe(422);
   });
 

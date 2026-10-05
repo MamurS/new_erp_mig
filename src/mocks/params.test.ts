@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AuditEntry, DmsParamChange, DmsParamValues } from '@/shared/types';
 import type { AssistOverview, DmsParamsView, SessionResponse } from '@/shared/types/dto';
 import { DMS_DEFAULTS, DMS_PARAM_KEYS } from '@/shared/config/dmsParameters';
+import { translate, type I18nKey, type Params } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 import { dmsParam } from './params';
@@ -97,7 +98,7 @@ describe('DMS parameters', () => {
     const audit = db().audit.filter((e: AuditEntry) => e.targetType === 'parameter');
     const changed = audit.find((e) => e.action === 'dms_param_changed')!;
     expect(changed.actorName).toBe('Дмитрий Соколов');
-    expect(changed.targetLabel).toMatch(/Порог двух подписей на ГП: 20\s000\s000\sUZS → 25\s000\s000\sUZS/);
+    expect(changed.targetLabel).toMatch(/Порог двух подписей на ГП: 20\s000\s000\s(?:сум|UZS) → 25\s000\s000\s(?:сум|UZS)/);
     expect(changed.reason).toContain('Тимур Алиев');
     expect(changed.at).toBeTruthy();
     expect(audit.some((e) => e.action === 'dms_param_proposed' && e.actorName === 'Тимур Алиев')).toBe(true);
@@ -139,8 +140,9 @@ describe('DMS parameters', () => {
     const uw = await login('underwriter@demo.mig.uz');
     await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: uw });
     for (let i = 0; i < 3; i++) expect((await call('/auth/login', { method: 'POST', json: { email: 'operator@demo.mig.uz', password: 'wrong-password-1' } })).status).toBe(401);
-    const locked = await call<{ message: string }>('/auth/login', { method: 'POST', json: { email: 'operator@demo.mig.uz', password: 'Demo-2026!' } });
+    const locked = await call<{ key: I18nKey; params?: Params }>('/auth/login', { method: 'POST', json: { email: 'operator@demo.mig.uz', password: 'Demo-2026!' } });
     expect(locked.status).toBe(429);
-    expect(locked.data.message).toContain(`на ${DMS_DEFAULTS.loginLockMinutes} мин`);
+    expect(locked.data).toMatchObject({ key: 'srv.auth.locked', params: { minutes: DMS_DEFAULTS.loginLockMinutes } });
+    expect(translate('ru', locked.data.key, locked.data.params)).toContain(`на ${DMS_DEFAULTS.loginLockMinutes} мин`);
   });
 });

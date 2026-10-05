@@ -4,6 +4,7 @@
  * through the session, clinics through an open visit or their own registry, assistances through the
  * assignment of the policy, MIG through the claim, letter or line. Settings change by four eyes.
  */
+import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { AiCallLog, AiScenario, AiSettings, SessionUser } from '@/shared/types';
 import type { AiAdminView, AiCheckItem, AiCheckResult, AiStatus } from '@/shared/types/dto';
@@ -170,7 +171,7 @@ export const aiHandlers = [
           const refundable = items.filter((x) => x.receiptLabel === 'refund').reduce((s, x) => s + (x.amount ?? 0), 0);
           return { available: true, items, suspicious: items.some((x) => x.suspicious), expectedReimbursement: limit ? Math.min(refundable, limit.remaining) : refundable } satisfies AiCheckResult;
         }
-        if (!input.query) throw new HttpError(422, 'validation', 'Напишите услугу или лекарство', { query: 'Напишите услугу или лекарство' });
+        if (!input.query) throw new HttpError(422, 'validation', 'srv.ai.queryRequired', { fields: { query: msg('srv.ai.queryRequired') } });
         const item = await check(d, user, 'insured', { insured: me, text: input.query, serviceDate: today, subject: { type: 'query' } }, { lang });
         return { available: true, items: [item], suspicious: item.suspicious } satisfies AiCheckResult;
       }
@@ -261,7 +262,7 @@ export const aiHandlers = [
       const d = db();
       const b = d.rebills.find((x) => x.id === param(ctx, 'id'));
       if (!b) throw notFound();
-      if (!aiEnabled(d.ai.settings, 'rebill')) throw conflict('Проверка ИИ временно недоступна');
+      if (!aiEnabled(d.ai.settings, 'rebill')) throw conflict('srv.ai.unavailable');
       let flagged = 0;
       for (const line of b.lines) {
         const found = findRegistryLine(d, line.registryLineId);
@@ -300,7 +301,7 @@ export const aiHandlers = [
       requirePermission(user, 'ai.admin');
       const { to, reason } = await body(request, aiSettingsChangeSchema);
       const d = db();
-      for (const x of AI_SCENARIOS) if (!AI_PROVIDERS_AVAILABLE.includes(to.scenarios[x].provider)) throw new HttpError(422, 'validation', 'Этот провайдер появится вместе с бэкендом', { provider: 'Доступен только мок' });
+      for (const x of AI_SCENARIOS) if (!AI_PROVIDERS_AVAILABLE.includes(to.scenarios[x].provider)) throw new HttpError(422, 'validation', 'srv.ai.providerLater', { fields: { provider: msg('srv.ai.mockOnly') } });
       const from = d.ai.settings;
       const at = tzIso(Date.now());
       // The kill switch turns AI off at once (the safe direction); everything else waits for a second admin.
@@ -312,8 +313,8 @@ export const aiHandlers = [
         audit(user, 'ai_kill_switch', { targetType: 'ai', targetId: c.id, targetLabel: 'ИИ отключён везде', reason });
         return HttpResponse.json(c, { status: 201 });
       }
-      if (JSON.stringify(to) === JSON.stringify(from)) throw conflict('Настройки не изменились');
-      if (d.ai.changes.some((c) => c.status === 'pending')) throw conflict('Уже есть изменение, которое ждёт подтверждения');
+      if (JSON.stringify(to) === JSON.stringify(from)) throw conflict('srv.ai.unchanged');
+      if (d.ai.changes.some((c) => c.status === 'pending')) throw conflict('srv.ai.alreadyPending');
       const c = { id: randomId(), to, from, reason, status: 'pending' as const, proposedById: user.id, proposedByName: user.displayName, proposedAt: at };
       d.ai.changes.unshift(c);
       audit(user, 'ai_settings_proposed', { targetType: 'ai', targetId: c.id, targetLabel: `${describe(from)} → ${describe(to)}`, reason });
@@ -327,12 +328,12 @@ export const aiHandlers = [
       const d = db();
       const c = d.ai.changes.find((x) => x.id === param(ctx, 'id'));
       if (!c) throw notFound();
-      if (!can(user, 'ai.admin', { createdById: c.proposedById })) throw new HttpError(403, 'forbidden', 'Изменение подтверждает другой администратор');
-      if (c.status !== 'pending') throw conflict('Изменение уже рассмотрено');
+      if (!can(user, 'ai.admin', { createdById: c.proposedById })) throw new HttpError(403, 'forbidden', 'srv.ai.fourEyes');
+      if (c.status !== 'pending') throw conflict('srv.change.alreadyReviewed');
       const decision = String(ctx.params.decision ?? '');
       const at = tzIso(Date.now());
       if (decision === 'approve') {
-        if (JSON.stringify(d.ai.settings) !== JSON.stringify(c.from)) throw conflict('Настройки успели измениться: предложите изменение заново');
+        if (JSON.stringify(d.ai.settings) !== JSON.stringify(c.from)) throw conflict('srv.ai.stale');
         d.ai.settings = c.to;
         Object.assign(c, { status: 'applied', decidedByName: user.displayName, decidedAt: at });
         audit(user, 'ai_settings_changed', { targetType: 'ai', targetId: c.id, targetLabel: `${describe(c.from)} → ${describe(c.to)}`, reason: `Предложил ${c.proposedByName}: ${c.reason}` });

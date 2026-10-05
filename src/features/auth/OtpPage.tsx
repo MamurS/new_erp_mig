@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useOtp, useResend } from '@/shared/api/queries/auth';
@@ -19,7 +20,7 @@ interface OtpState {
 }
 
 export default function OtpPage() {
-  useDocumentTitle('Код подтверждения');
+  useDocumentTitle(t('auth.otp.docTitle'));
   const loc = useLocation();
   const navigate = useNavigate();
   const state = loc.state as OtpState | null;
@@ -53,11 +54,11 @@ export default function OtpPage() {
 
   return (
     <AuthCard
-      title="Второй фактор"
-      subtitle="Введите 6-значный код из приложения-аутентификатора или SMS"
+      title={t('auth.otp.title')}
+      subtitle={t('auth.otp.subtitle')}
       footer={
         <p className="mt-3 text-center text-[12px] text-muted">
-          Вход защищён MFA. Все входы записываются в журнал аудита.
+          {t('auth.otp.footer')}
         </p>
       }
     >
@@ -71,14 +72,14 @@ export default function OtpPage() {
       >
         <OtpInput value={code} onChange={setCode} onComplete={(v) => void submit(v)} invalid={!!error} autoFocus />
         <Button type="submit" size="lg" className="h-10 w-full text-[14px]" loading={otp.isPending} disabled={code.length !== 6}>
-          Подтвердить
+          {t('common.confirm')}
         </Button>
         <div className="flex w-full items-center justify-between text-[13px]">
           <Button variant="link" onClick={() => navigate('/login')}>
-            Назад
+            {t('common.back')}
           </Button>
           {left > 0 ? (
-            <span className="text-muted">Отправить код повторно через {left} с</span>
+            <span className="text-muted">{t('auth.otp.resendIn', { n: left })}</span>
           ) : (
             <Button
               variant="link"
@@ -88,13 +89,13 @@ export default function OtpPage() {
                   const r = await resend.mutateAsync({ challengeId });
                   setChallengeId(r.challengeId);
                   setResendAt(Date.now() + r.resendInSec * 1000);
-                  toast.success('Код отправлен повторно');
+                  toast.success(t('auth.otp.resent'));
                 } catch (e) {
                   setError(errorMessage(e));
                 }
               }}
             >
-              Отправить код повторно
+              {t('auth.otp.resend')}
             </Button>
           )}
         </div>

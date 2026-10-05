@@ -11,6 +11,7 @@ import { useUser } from '@/shared/auth/session';
 import { can } from '@/shared/auth/permissions';
 import { GUARANTEE_STATUS_CHIP, GUARANTEE_STATUS_LABEL, needsSecondApproval } from '@/shared/domain/clinics';
 import { guaranteeDecisionSchema } from '@/shared/schemas/forms';
+import { t, tm } from '@/i18n';
 import { addDaysISO, formatDate, formatDateTime, formatMoney, todayISO } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -25,12 +26,13 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
 
-const TABS: [string, string][] = [
-  ['requested', 'Ждут решения'],
-  ['info_requested', 'Ждут документы'],
-  ['approved,used', 'Одобрены'],
-  ['rejected,expired', 'Отклонены и истекли'],
-  ['all', 'Все'],
+const TAB_KEYS = ['requested', 'info_requested', 'approved,used', 'rejected,expired', 'all'] as const;
+const tabs = (): [string, string][] => [
+  ['requested', t('staffOps.guarantees.tab.requested')],
+  ['info_requested', t('staffOps.guarantees.tab.infoRequested')],
+  ['approved,used', t('staffOps.guarantees.tab.approved')],
+  ['rejected,expired', t('staffOps.guarantees.tab.rejected')],
+  ['all', t('common.all')],
 ];
 
 type Mode = 'approve' | 'reject' | 'request_info';
@@ -62,7 +64,13 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
     try {
       const res = await decide.mutateAsync({ id: g.id, body: parsed.data });
       toast.success(
-        res.status === 'approved' ? 'Письмо одобрено' : res.status === 'requested' ? 'Первое одобрение сохранено — нужно одобрение второго врача-эксперта' : res.status === 'rejected' ? 'Письмо отклонено' : 'Клинике отправлен запрос документов',
+        res.status === 'approved'
+          ? t('staffOps.guarantees.toast.approved')
+          : res.status === 'requested'
+            ? t('staffOps.guarantees.toast.firstApproval')
+            : res.status === 'rejected'
+              ? t('staffOps.guarantees.toast.rejected')
+              : t('staffOps.guarantees.toast.infoRequested'),
       );
       onClose();
     } catch (e) {
@@ -75,21 +83,21 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title={`Гарантийное письмо ${g.number}`}
+      title={t('staffOps.guarantees.dialogTitle', { number: g.number })}
       description={`${g.clinicName} · ${formatDateTime(g.createdAt)}`}
       footer={
         canDecide ? (
           <>
             <Button variant="secondary" onClick={onClose}>
-              Отмена
+              {t('common.cancel')}
             </Button>
             <Button loading={decide.isPending} disabled={mode === 'approve' && alreadyApprovedByMe} onClick={() => void submit()}>
-              {mode === 'approve' ? 'Одобрить' : mode === 'reject' ? 'Отклонить' : 'Запросить документы'}
+              {mode === 'approve' ? t('common.approve') : mode === 'reject' ? t('common.reject') : t('staffOps.guarantees.requestDocs')}
             </Button>
           </>
         ) : (
           <Button variant="secondary" onClick={onClose}>
-            Закрыть
+            {t('common.close')}
           </Button>
         )
       }
@@ -98,36 +106,36 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
         <AiHint subject={{ type: 'guarantee', id: g.id }} />
       </div>
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-        <Kv label="Пациент">{g.insuredName}</Kv>
-        <Kv label="Статус">
+        <Kv label={t('common.patient')}>{g.insuredName}</Kv>
+        <Kv label={t('common.status')}>
           <Chip kind={GUARANTEE_STATUS_CHIP[g.status]}>{GUARANTEE_STATUS_LABEL[g.status]}</Chip>
         </Kv>
-        <Kv label="Услуга">
+        <Kv label={t('common.service')}>
           {g.serviceCode} · {g.serviceName}
         </Kv>
-        <Kv label="МКБ-10">{g.icd10}</Kv>
-        <Kv label="Оценка стоимости">
+        <Kv label={t('staffOps.registry.col.icd')}>{g.icd10}</Kv>
+        <Kv label={t('staffOps.guarantees.estimatedCost')}>
           <span className="num">{formatMoney(g.estimatedCost)}</span>
         </Kv>
         {g.approvedAmount !== undefined && (
-          <Kv label="Одобренная сумма">
+          <Kv label={t('staffOps.guarantees.approvedAmount')}>
             <span className="num">{formatMoney(g.approvedAmount)}</span>
-            {g.validUntil ? ` до ${formatDate(g.validUntil)}` : ''}
+            {g.validUntil ? t('staffOps.guarantees.until', { date: formatDate(g.validUntil) }) : ''}
           </Kv>
         )}
       </div>
       <p className="mt-3 text-[13px]" data-testid="decision-owner">
-        Решение принимает: <span className="font-semibold">{g.assistanceId && !g.escalated ? g.assistanceName : 'МИГ'}</span>
-        {g.escalated && g.assistanceName ? ` · эскалация от ${g.assistanceName}` : ''}
+        {t('staffOps.guarantees.decidedBy')} <span className="font-semibold">{g.assistanceId && !g.escalated ? g.assistanceName : t('common.mig')}</span>
+        {g.escalated && g.assistanceName ? t('staffOps.guarantees.escalationFrom', { name: g.assistanceName }) : ''}
       </p>
       {g.escalated && g.assistanceOpinion && (
         <p className="mt-2 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="assistance-opinion">
-          Заключение врача ассистанса: {g.assistanceOpinion}
+          {t('staffOps.guarantees.assistanceOpinion', { text: g.assistanceOpinion })}
         </p>
       )}
-      {g.comment && <p className="mt-3 rounded-btn bg-rail px-3 py-2 text-[13px]">Комментарий клиники: {g.comment}</p>}
-      {g.infoComment && <p className="mt-2 rounded-btn bg-rail px-3 py-2 text-[13px]">Ответ клиники на запрос документов: {g.infoComment}</p>}
-      {g.reason && <p className="mt-2 text-[13px] text-muted">Причина решения: {g.reason}</p>}
+      {g.comment && <p className="mt-3 rounded-btn bg-rail px-3 py-2 text-[13px]">{t('staffOps.guarantees.clinicComment', { text: g.comment })}</p>}
+      {g.infoComment && <p className="mt-2 rounded-btn bg-rail px-3 py-2 text-[13px]">{t('staffOps.guarantees.clinicInfo', { text: g.infoComment })}</p>}
+      {g.reason && <p className="mt-2 text-[13px] text-muted">{t('staffOps.guarantees.decisionReason', { text: g.reason })}</p>}
       {g.attachments.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">
           {g.attachments.map((a) => (
@@ -141,18 +149,18 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
       )}
       {firstApproval && g.status === 'requested' && (
         <p className="mt-3 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="four-eyes-note">
-          Первое одобрение: {firstApproval.byName}, {formatDateTime(firstApproval.at)}. Сумма выше {formatMoney(threshold)} — нужно одобрение второго врача-эксперта.
-          {alreadyApprovedByMe && ' Вы уже одобрили это письмо.'}
+          {t('staffOps.guarantees.firstApprovalNote', { name: firstApproval.byName, date: formatDateTime(firstApproval.at), threshold: formatMoney(threshold) })}
+          {alreadyApprovedByMe && t('staffOps.guarantees.alreadyApproved')}
         </p>
       )}
       {canDecide && (
         <div className="mt-4 flex flex-col gap-3 border-t border-border-soft pt-4">
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Решение">
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('common.decision')}>
             {(
               [
-                ['approve', 'Одобрить'],
-                ['reject', 'Отклонить'],
-                ['request_info', 'Запросить документы'],
+                ['approve', t('common.approve')],
+                ['reject', t('common.reject')],
+                ['request_info', t('staffOps.guarantees.requestDocs')],
               ] as const
             ).map(([m, label]) => (
               <label key={m} className="flex items-center gap-1.5">
@@ -163,15 +171,15 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
           </div>
           {mode === 'approve' ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Сумма, UZS" error={errors.amount} hint={needsSecondApproval(amountNum, threshold) ? 'Выше порога — понадобится второй врач-эксперт' : undefined}>
+              <Field label={t('staffOps.guarantees.amountUzs')} error={tm(errors.amount) || undefined} hint={needsSecondApproval(amountNum, threshold) ? t('staffOps.guarantees.aboveThreshold') : undefined}>
                 {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={amount} onChange={(e) => setAmount(e.target.value)} />}
               </Field>
-              <Field label="Действует до" error={errors.validUntil}>
+              <Field label={t('common.validUntil')} error={tm(errors.validUntil) || undefined}>
                 {(a) => <Input {...a} type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />}
               </Field>
             </div>
           ) : (
-            <Field label={mode === 'reject' ? 'Причина отказа' : 'Какие документы нужны'} error={errors.reason}>
+            <Field label={mode === 'reject' ? t('staffOps.guarantees.denialReason') : t('staffOps.guarantees.whichDocs')} error={tm(errors.reason) || undefined}>
               {(a) => <Textarea {...a} rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
             </Field>
           )}
@@ -182,39 +190,39 @@ function DecisionDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void 
 }
 
 export default function GuaranteesQueuePage() {
-  useDocumentTitle('Гарантийные письма');
+  useDocumentTitle(t('staffOps.guarantees.title'));
   const threshold = useDmsParam('guaranteeDualApprovalThreshold');
-  useTopbar([{ label: 'Гарантийные письма' }]);
+  useTopbar([{ label: t('staffOps.guarantees.title') }]);
   const [f, setF] = useUrlFilters(['status', 'clinicId', 'scope'] as const);
-  const status = TABS.some(([k]) => k === f.status) ? f.status : 'requested';
+  const status = TAB_KEYS.some((k) => k === f.status) ? f.status : 'requested';
   const list = useStaffGuarantees({ ...(status === 'all' ? {} : { status }), ...(f.clinicId ? { clinicId: f.clinicId } : {}), ...(f.scope === 'all' ? { scope: 'all' } : {}) });
   const [open, setOpen] = useState<GuaranteeView | null>(null);
   const cols: Column<GuaranteeView>[] = [
-    { key: 'num', header: 'Номер', cell: (g) => <span className="num font-medium">{g.number}</span> },
-    { key: 'created', header: 'Создано', cell: (g) => <span className="num text-muted">{formatDateTime(g.createdAt)}</span> },
-    { key: 'clinic', header: 'Клиника', cell: (g) => g.clinicName },
-    { key: 'patient', header: 'Пациент', cell: (g) => g.insuredName },
+    { key: 'num', header: t('common.number'), cell: (g) => <span className="num font-medium">{g.number}</span> },
+    { key: 'created', header: t('common.created'), cell: (g) => <span className="num text-muted">{formatDateTime(g.createdAt)}</span> },
+    { key: 'clinic', header: t('common.clinic'), cell: (g) => g.clinicName },
+    { key: 'patient', header: t('common.patient'), cell: (g) => g.insuredName },
     {
       key: 'owner',
-      header: 'Решает',
+      header: t('staffOps.guarantees.col.owner'),
       cell: (g) =>
         g.escalated ? (
-          <Chip kind="warning">Эскалация · {g.assistanceName}</Chip>
+          <Chip kind="warning">{t('staffOps.guarantees.escalation', { name: g.assistanceName ?? '' })}</Chip>
         ) : g.assistanceId ? (
           <span className="text-muted">{g.assistanceName}</span>
         ) : (
-          <span>МИГ</span>
+          <span>{t('common.mig')}</span>
         ),
     },
-    { key: 'service', header: 'Услуга', cell: (g) => <span className="line-clamp-2">{g.serviceName}</span> },
-    { key: 'cost', header: 'Сумма', align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
+    { key: 'service', header: t('common.service'), cell: (g) => <span className="line-clamp-2">{g.serviceName}</span> },
+    { key: 'cost', header: t('common.amount'), align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
     {
       key: 'status',
-      header: 'Статус',
+      header: t('common.status'),
       cell: (g: GuaranteeView) => (
         <span className="flex flex-wrap items-center gap-1">
           <Chip kind={GUARANTEE_STATUS_CHIP[g.status as GuaranteeStatus]}>{GUARANTEE_STATUS_LABEL[g.status]}</Chip>
-          {g.status === 'requested' && g.approvals.length > 0 && <Chip kind="warning">1 из 2 одобрений</Chip>}
+          {g.status === 'requested' && g.approvals.length > 0 && <Chip kind="warning">{t('staffOps.guarantees.oneOfTwo')}</Chip>}
         </span>
       ),
     },
@@ -222,18 +230,18 @@ export default function GuaranteesQueuePage() {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-[22px] font-bold">Гарантийные письма</h1>
+        <h1 className="text-[22px] font-bold">{t('staffOps.guarantees.title')}</h1>
         <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted">
-          <span>МИГ решает эскалации ассистансов и письма клиентов без ассистанса. Выше {formatMoney(threshold)} письмо одобряют два врача-эксперта</span>
+          <span>{t('staffOps.guarantees.policyNote', { threshold: formatMoney(threshold) })}</span>
           <label className="flex items-center gap-1.5 text-text">
             <input type="checkbox" checked={f.scope === 'all'} onChange={(e) => setF({ scope: e.target.checked ? 'all' : null })} />
-            Показать решения ассистансов
+            {t('staffOps.guarantees.showAssistance')}
           </label>
         </div>
       </div>
       <Tabs value={status} onValueChange={(v) => setF({ status: v === 'requested' ? null : v })}>
         <TabsList>
-          {TABS.map(([k, label]) => (
+          {tabs().map(([k, label]) => (
             <TabsTrigger key={k} value={k}>
               {label}
             </TabsTrigger>
@@ -242,7 +250,7 @@ export default function GuaranteesQueuePage() {
       </Tabs>
       <div className="mt-3 rounded-card border border-border bg-surface">
         <DataTable
-          caption="Гарантийные письма"
+          caption={t('staffOps.guarantees.title')}
           columns={cols}
           rows={list.data}
           rowKey={(g) => g.id}
@@ -250,7 +258,7 @@ export default function GuaranteesQueuePage() {
           loading={list.isLoading}
           error={list.error}
           onRetry={() => void list.refetch()}
-          empty={<EmptyState title="Писем нет" />}
+          empty={<EmptyState title={t('staffOps.guarantees.empty')} />}
         />
       </div>
       {open && <DecisionDialog key={open.id} g={open} onClose={() => setOpen(null)} />}

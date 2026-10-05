@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -17,7 +18,7 @@ export function SidePanel({ open, onClose, title, children, className }: { open:
   return (
     <aside
       ref={ref}
-      aria-label="Детали"
+      aria-label={t('shell.sidePanel.label')}
       className={cn(
         'animate-panel fixed inset-y-0 right-0 z-40 flex w-full max-w-[380px] flex-col border-l border-border bg-surface shadow-xl lg:sticky lg:top-0 lg:z-0 lg:h-[calc(100vh-52px)] lg:shadow-none',
         className,
@@ -25,7 +26,7 @@ export function SidePanel({ open, onClose, title, children, className }: { open:
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
         <div className="min-w-0 truncate font-bold">{title}</div>
-        <button type="button" onClick={onClose} aria-label="Закрыть панель" className="rounded-btn p-1 text-muted hover:bg-rail">
+        <button type="button" onClick={onClose} aria-label={t('shell.sidePanel.close')} className="rounded-btn p-1 text-muted hover:bg-rail">
           <X className="h-4 w-4" />
         </button>
       </div>

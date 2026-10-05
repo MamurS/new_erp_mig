@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { KP_PAGE_COUNT } from '@/shared/domain/kp';
+import { t } from '@/i18n';
 import { cn } from '@/shared/lib/cn';
 import { DocFrame } from '@/features/documents/DocFrame';
 import { KP_PAGE_GAP, KP_PAGE_HEIGHT, KP_PAGE_WIDTH } from './render';
 
 const PREVIEW_HEIGHT = KP_PAGE_COUNT * KP_PAGE_HEIGHT + (KP_PAGE_COUNT - 1) * KP_PAGE_GAP;
 
-/** Pages stacked and scaled to the column width, with a «Страница N из 17» counter. */
+/** Pages stacked and scaled to the column width, with a «Page N of 17» counter. */
 export function KpPreview({ frameRef, title, html, className }: { frameRef: RefObject<HTMLIFrameElement | null>; title: string; html: string; className?: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.6);
@@ -31,11 +32,11 @@ export function KpPreview({ frameRef, title, html, className }: { frameRef: RefO
   };
 
   return (
-    <section aria-label="Предпросмотр КП" className={cn('relative flex min-w-0 flex-col rounded-card border border-border bg-[#E9E9E7]', className)}>
+    <section aria-label={t('kp.preview.label')} className={cn('relative flex min-w-0 flex-col rounded-card border border-border bg-[#E9E9E7]', className)}>
       <div className="flex items-center justify-between border-b border-border px-4 py-2 text-[12px] text-muted">
-        <span>Предпросмотр · {KP_PAGE_COUNT} страниц A4</span>
+        <span>{t('kp.preview.pages', { n: KP_PAGE_COUNT })}</span>
         <span className="num" aria-live="polite" data-testid="kp-page-counter">
-          Страница {pageNo} из {KP_PAGE_COUNT}
+          {t('kp.preview.pageOf', { n: pageNo, total: KP_PAGE_COUNT })}
         </span>
       </div>
       <div ref={box} onScroll={onScroll} className="h-[calc(100vh-11rem)] min-h-[480px] overflow-y-auto overflow-x-hidden p-4">

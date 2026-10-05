@@ -1,7 +1,9 @@
+import { msg } from '@/i18n';
 import type { LimitChangeRequest, SessionUser } from '@/shared/types';
 import { can } from '@/shared/auth/permissions';
 
-export const FOUR_EYES_LIMIT_HINT = 'Нужно подтверждение другого сотрудника';
+/** Message key (tm() shows it); the server returns it as the 409 reason. */
+export const FOUR_EYES_LIMIT_HINT = msg('dom.limits.fourEyes');
 
 /** Four-eyes: the author of a limit change request cannot decide it. */
 export function canDecideLimitRequest(

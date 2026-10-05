@@ -9,16 +9,16 @@ import { BIG, CardSkeletons, ClaimStepBar, Empty, LoadError, ScreenHeader, Statu
 
 export default function ClaimsPage() {
   const { t } = useI18n();
-  useDocumentTitle(t('claims.title'));
+  useDocumentTitle(t('app.claims.title'));
   const q = useMyClaims();
 
   return (
     <div>
-      <ScreenHeader title={t('claims.title')} />
+      <ScreenHeader title={t('app.claims.title')} />
       <Button asChild className={BIG}>
         <Link to="/app/claims/new">
           <Plus className="h-5 w-5" aria-hidden />
-          {t('claims.new')}
+          {t('app.claims.new')}
         </Link>
       </Button>
       <div className="mt-5">
@@ -28,10 +28,10 @@ export default function ClaimsPage() {
           <LoadError error={q.error} onRetry={() => void q.refetch()} />
         ) : !q.data || q.data.length === 0 ? (
           <Empty
-            title={t('claims.empty')}
+            title={t('app.claims.empty')}
             action={
               <Button asChild variant="secondary" className={BIG}>
-                <Link to="/app/claims/new">{t('claims.new')}</Link>
+                <Link to="/app/claims/new">{t('app.claims.new')}</Link>
               </Button>
             }
           />
@@ -44,7 +44,7 @@ export default function ClaimsPage() {
                     <div className="min-w-0">
                       <p className="truncate font-bold">{c.providerName}</p>
                       <p className="text-[13px] text-muted">
-                        {t(`claimCat.${c.category}`)} · {formatDate(c.serviceDate)}
+                        {t(`app.claimCat.${c.category}`)} · {formatDate(c.serviceDate)}
                       </p>
                     </div>
                     <StatusPill status={c.status} />

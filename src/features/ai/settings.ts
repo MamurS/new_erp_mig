@@ -1,20 +1,13 @@
 /* AI settings (AI_COVERAGE_SPEC §4.5): four scenarios, the provider of each, the confidence threshold and the kill switch. */
 import type { AiProviderId, AiScenario, AiSettings } from '@/shared/types';
+import { defineLabels } from '@/i18n';
 
 export const AI_SCENARIOS: readonly AiScenario[] = ['insured', 'clinic', 'decision', 'rebill'];
 
-export const AI_SCENARIO_LABEL: Record<AiScenario, string> = {
-  insured: 'Застрахованный в приложении',
-  clinic: 'Клиника: ГП и реестр',
-  decision: 'Подсказки при решениях (МИГ и ассистанс)',
-  rebill: 'Предпроверка счёта ассистанса',
-};
+export const AI_SCENARIO_LABEL: Readonly<Record<AiScenario, string>> = defineLabels('ai.scenario', AI_SCENARIOS);
 
-export const AI_PROVIDER_LABEL: Record<AiProviderId, string> = {
-  mock: 'Мок (словарь синонимов)',
-  local: 'Локальная модель на сервере МИГ',
-  external: 'Внешний облачный провайдер',
-};
+const AI_PROVIDERS: readonly AiProviderId[] = ['mock', 'local', 'external'];
+export const AI_PROVIDER_LABEL: Readonly<Record<AiProviderId, string>> = defineLabels('ai.provider', AI_PROVIDERS);
 
 /** Only the mock exists in the prototype; the others come with the backend. */
 export const AI_PROVIDERS_AVAILABLE: readonly AiProviderId[] = ['mock'];

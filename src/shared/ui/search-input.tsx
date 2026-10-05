@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -13,7 +14,7 @@ export interface SearchInputProps {
 }
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
-  { value, onChange, placeholder = 'Поиск', className, slashFocus, 'aria-label': ariaLabel },
+  { value, onChange, placeholder = t('common.search'), className, slashFocus, 'aria-label': ariaLabel },
   outerRef,
 ) {
   const ref = useRef<HTMLInputElement>(null);

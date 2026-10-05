@@ -1,24 +1,13 @@
 /* Plain-language verdicts of the coverage check (AI_COVERAGE_SPEC §4.1). */
 import type { CoverageVerdictDecision } from '@/shared/types';
+import { defineLabels, t } from '@/i18n';
 
-export const VERDICT_LABEL: Record<CoverageVerdictDecision, string> = {
-  covered: 'Скорее всего покрывается',
-  needs_guarantee: 'Нужно гарантийное письмо, его запросит клиника',
-  excluded: 'Не покрывается программой',
-  limit_exhausted: 'Лимит исчерпан',
-  policy_inactive: 'Полис не действует на эту дату',
-  unknown: 'Нужна проверка специалиста',
-};
+const DECISIONS: readonly CoverageVerdictDecision[] = ['covered', 'needs_guarantee', 'excluded', 'limit_exhausted', 'policy_inactive', 'unknown'];
+
+export const VERDICT_LABEL: Readonly<Record<CoverageVerdictDecision, string>> = defineLabels('ai.verdict', DECISIONS);
 
 /** Short verdicts for staff screens. */
-export const VERDICT_SHORT: Record<CoverageVerdictDecision, string> = {
-  covered: 'Покрывается',
-  needs_guarantee: 'Нужно ГП',
-  excluded: 'Не покрывается',
-  limit_exhausted: 'Лимит исчерпан',
-  policy_inactive: 'Полис не действует',
-  unknown: 'Нужна проверка специалиста',
-};
+export const VERDICT_SHORT: Readonly<Record<CoverageVerdictDecision, string>> = defineLabels('ai.verdictShort', DECISIONS);
 
 export const VERDICT_CHIP: Record<CoverageVerdictDecision, string> = {
   covered: 'success',
@@ -29,6 +18,9 @@ export const VERDICT_CHIP: Record<CoverageVerdictDecision, string> = {
   unknown: 'neutral',
 };
 
-export const LIMIT_STATUS_LABEL = { available: 'Лимит доступен', low: 'Лимит на исходе', exhausted: 'Лимит исчерпан' } as const;
+export const LIMIT_STATUS_LABEL = defineLabels('ai.limit', ['available', 'low', 'exhausted'] as const);
 
-export const PRELIMINARY = 'Это предварительная оценка. Окончательное решение принимается при рассмотрении.';
+/** Read in the current language. */
+export function preliminaryNote(): string {
+  return t('ai.preliminary');
+}

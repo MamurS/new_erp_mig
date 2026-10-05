@@ -39,6 +39,28 @@ const storageSession = [
 const localGlobal = { name: 'localStorage', message: 'Use src/shared/lib/storage.ts' };
 const sessionGlobal = { name: 'sessionStorage', message: 'Use src/shared/auth/session.ts' };
 
+// Interface strings live in src/i18n. Cyrillic in a string or JSX text anywhere else in the app is
+// an untranslated string. Documents, mock data and reference catalogues are not interface strings.
+const CYRILLIC = /[А-Яа-яЁё]/;
+const noCyrillicUi = {
+  meta: {
+    type: 'problem',
+    messages: { ui: 'Interface strings belong in src/i18n (t(), msg(), defineLabels()); no Cyrillic outside the dictionaries.' },
+    schema: [],
+  },
+  create(context) {
+    const check = (node, text) => {
+      if (CYRILLIC.test(text)) context.report({ node, messageId: 'ui' });
+    };
+    return {
+      Literal: (n) => typeof n.value === 'string' && check(n, n.value),
+      TemplateElement: (n) => check(n, n.value.raw),
+      JSXText: (n) => check(n, n.value),
+    };
+  },
+};
+const migPlugin = { rules: { 'no-cyrillic-ui': noCyrillicUi } };
+
 export default tseslint.config(
   {
     ignores: [
@@ -79,6 +101,33 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/i18n/**',
+      // The mock server: seed data and server-side texts that are data (audit, chat, activity).
+      'src/mocks/**',
+      'src/test/**',
+      '**/*.test.{ts,tsx}',
+      // Documents keep their own language (the approved KP template, contracts, endorsements, certificates).
+      'src/features/kp/templates/**',
+      'src/features/kp/format.ts',
+      'src/features/kp/render.ts',
+      'src/features/documents/templates/**',
+      'src/features/documents/builders.ts',
+      'src/features/documents/render.ts',
+      'src/features/documents/html.ts',
+      'src/features/documents/mig.ts',
+      'src/features/documents/templatesDoc.ts',
+      // Developer documentation and sample payloads of the clinic integration API.
+      'src/shared/integration/openapi.ts',
+      'src/shared/integration/sandbox.ts',
+      // Reference data: the medical services catalogue.
+      'src/features/coverage/catalog.ts',
+    ],
+    plugins: { mig: migPlugin },
+    rules: { 'mig/no-cyrillic-ui': 'error' },
   },
   {
     // The single place allowed to render an HTML string: a sandboxed iframe without scripts.

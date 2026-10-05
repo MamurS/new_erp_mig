@@ -3,6 +3,7 @@
  * purpose, then by the payer's INN plus the exact outstanding amount. Anything ambiguous or not found
  * goes to the accountant's «Ручная разноска» queue with candidate invoices. Pure functions.
  */
+import { defineLabels, msg } from '@/i18n';
 import type { ISODate, Money, PaymentCandidateWhy, PaymentQueueReason, UUID } from '@/shared/types';
 
 export interface OpenInvoice {
@@ -31,22 +32,9 @@ export type MatchResult =
   | { kind: 'matched'; invoiceId: UUID; by: 'number' | 'inn_amount' }
   | { kind: 'manual'; reason: PaymentQueueReason; candidates: Candidate[] };
 
-export const PAYMENT_QUEUE_REASON_LABEL: Record<PaymentQueueReason, string> = {
-  third_party: 'Счёт указан, но плательщик — другой ИНН',
-  over_remaining: 'Сумма больше остатка по указанному счёту',
-  several_numbers: 'В назначении несколько счетов',
-  ambiguous: 'Несколько счетов плательщика с такой суммой',
-  amount_mismatch: 'Сумма не совпадает ни с одним счётом плательщика',
-  no_invoices: 'У плательщика нет неоплаченных счетов',
-  unknown_payer: 'Плательщик с таким ИНН не найден',
-};
+export const PAYMENT_QUEUE_REASON_LABEL = defineLabels<PaymentQueueReason>('labels.paymentQueueReason', ['third_party', 'over_remaining', 'several_numbers', 'ambiguous', 'amount_mismatch', 'no_invoices', 'unknown_payer']);
 
-export const PAYMENT_CANDIDATE_WHY_LABEL: Record<PaymentCandidateWhy, string> = {
-  number: 'номер в назначении',
-  inn_amount: 'ИНН и сумма',
-  inn: 'ИНН плательщика',
-  amount: 'сумма',
-};
+export const PAYMENT_CANDIDATE_WHY_LABEL = defineLabels<PaymentCandidateWhy>('labels.paymentCandidateWhy', ['number', 'inn_amount', 'inn', 'amount']);
 
 export const remainingOf = (i: Pick<OpenInvoice, 'amount' | 'paid'>): Money => Math.max(0, i.amount - i.paid);
 
@@ -143,23 +131,23 @@ function others(open: readonly OpenInvoice[], except: OpenInvoice, inn: string):
     .map((i) => ({ invoiceId: i.id, why: 'inn' }));
 }
 
-/** Manual allocation of a queued payment; returns an error text or null. */
+/** Manual allocation of a queued payment; returns a packed message key (tm() shows it) or null. */
 export function checkAllocation(
   payment: { amount: Money; allocated: Money; payerInn: string },
   lines: readonly { invoice: Pick<OpenInvoice, 'amount' | 'paid' | 'clientInn' | 'number'>; amount: Money }[],
   comment: string | undefined,
 ): string | null {
-  if (!lines.length) return 'Выберите счёт';
+  if (!lines.length) return msg('v.selectInvoice');
   const total = lines.reduce((s, l) => s + l.amount, 0);
   if (total > payment.amount - payment.allocated)
-    return `Сумма разноски больше остатка платежа (${payment.amount - payment.allocated})`;
+    return msg('dom.payments.overPayment', { left: payment.amount - payment.allocated });
   for (const l of lines) {
-    if (l.amount <= 0) return 'Сумма по счёту больше нуля';
-    if (l.amount > remainingOf(l.invoice)) return `Сумма больше остатка по счёту ${l.invoice.number}`;
+    if (l.amount <= 0) return msg('dom.payments.amountPositive');
+    if (l.amount > remainingOf(l.invoice)) return msg('dom.payments.overInvoice', { number: l.invoice.number });
   }
   const foreign = lines.some((l) => l.invoice.clientInn !== payment.payerInn.replace(/\D/g, ''));
   if (foreign && (comment ?? '').trim().length < 5)
-    return 'Плательщик — другой ИНН: укажите комментарий (минимум 5 символов)';
+    return msg('dom.payments.thirdPartyComment');
   return null;
 }
 

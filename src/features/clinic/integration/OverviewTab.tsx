@@ -6,8 +6,9 @@ import { Chip } from '@/shared/ui/chips';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
 import { Panel } from '../components';
 import { usePartner } from './partner';
+import { t, defineLabels } from '@/i18n';
 
-const DELIVERY_LABEL = { delivered: 'Доставлен', retrying: 'Повтор', failed: 'Не доставлен' } as const;
+const DELIVERY_LABEL = defineLabels('clinic.integration.delivery', ['delivered', 'retrying', 'failed'] as const);
 
 export function OverviewTab() {
   const partner = usePartner();
@@ -20,24 +21,24 @@ export function OverviewTab() {
         {(o) => (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="integration-overview">
             <Panel className="p-4">
-              <div className="text-[12px] text-muted">Режим</div>
+              <div className="text-[12px] text-muted">{t('clinic.overview.mode')}</div>
               <div className="font-semibold">{INTEGRATION_MODE_LABEL[o.mode]}</div>
             </Panel>
             <Panel className="p-4">
-              <div className="text-[12px] text-muted">Подключение</div>
-              <Chip kind={o.connected ? 'success' : 'neutral'}>{o.connected ? 'Запросы идут' : 'Запросов за сутки нет'}</Chip>
-              <div className="mt-1 text-[12px] text-muted">Активных ключей: {o.activeKeys}</div>
+              <div className="text-[12px] text-muted">{t('clinic.overview.connection')}</div>
+              <Chip kind={o.connected ? 'success' : 'neutral'}>{o.connected ? t('clinic.overview.connected') : t('clinic.overview.idle')}</Chip>
+              <div className="mt-1 text-[12px] text-muted">{t('clinic.overview.activeKeys', { n: o.activeKeys })}</div>
             </Panel>
             <Panel className="p-4">
-              <div className="text-[12px] text-muted">Запросы за 24 ч</div>
+              <div className="text-[12px] text-muted">{t('clinic.overview.requests24h')}</div>
               <div className="num font-semibold">{o.requests24h}</div>
             </Panel>
             <Panel className="p-4">
-              <div className="text-[12px] text-muted">Ошибки за 24 ч</div>
+              <div className="text-[12px] text-muted">{t('clinic.overview.errors24h')}</div>
               <div className={o.errors24h ? 'num font-semibold text-danger-text' : 'num font-semibold'}>{o.errors24h}</div>
             </Panel>
             <Panel className="p-4">
-              <div className="text-[12px] text-muted">Последний вебхук</div>
+              <div className="text-[12px] text-muted">{t('clinic.overview.lastWebhook')}</div>
               {o.lastWebhook ? (
                 <>
                   <div className="font-semibold">{WEBHOOK_EVENT_LABEL[o.lastWebhook.event]}</div>

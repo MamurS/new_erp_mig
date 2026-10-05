@@ -28,8 +28,9 @@ import { LimitBars } from '@/features/staff/components/LimitBars';
 import { MedicalCard } from '@/features/staff/components/MedicalCard';
 import { RevealField } from '@/features/staff/components/RevealField';
 import { CaseStatus, SlaBadge } from '../components';
+import { defineLabels, t, tm } from '@/i18n';
 
-const APPT_STATUS = { requested: 'Ждёт клинику', confirmed: 'Подтверждена', declined: 'Отклонена', completed: 'Состоялась', cancelled: 'Отменена' } as const;
+const APPT_STATUS = defineLabels('assist.appt', ['requested', 'confirmed', 'declined', 'completed', 'cancelled'] as const);
 
 export function NewCaseDialog({ insuredId, name, onClose }: { insuredId: string; name: string; onClose: () => void }) {
   const create = useCreateCase();
@@ -40,12 +41,12 @@ export function NewCaseDialog({ insuredId, name, onClose }: { insuredId: string;
   const submit = async () => {
     const parsed = caseCreateSchema.safeParse({ insuredId, type, channel: 'phone', description });
     if (!parsed.success) {
-      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])));
+      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), tm(i.message)])));
       return;
     }
     try {
       const c = await create.mutateAsync(parsed.data);
-      toast.success(`Обращение ${c.number} создано`);
+      toast.success(t('assist.card.caseCreated', { number: c.number }));
       onClose();
       navigate(`/assist/cases/${c.id}`);
     } catch (e) {
@@ -56,21 +57,21 @@ export function NewCaseDialog({ insuredId, name, onClose }: { insuredId: string;
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Новое обращение"
-      description={`${name} · звонок в колл-центр`}
+      title={t('assist.card.newCase')}
+      description={t('assist.card.newCaseDescription', { name })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={create.isPending} onClick={() => void submit()}>
-            Создать обращение
+            {t('assist.card.createCase')}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Тип" error={errors.type}>
+        <Field label={t('common.type')} error={errors.type}>
           {(a) => (
             <Select {...a} value={type} onChange={(e) => setType(e.target.value as AssistanceCase['type'])}>
               {Object.entries(CASE_TYPE_LABEL).map(([k, v]) => (
@@ -81,7 +82,7 @@ export function NewCaseDialog({ insuredId, name, onClose }: { insuredId: string;
             </Select>
           )}
         </Field>
-        <Field label="Суть обращения" error={errors.description}>
+        <Field label={t('assist.card.caseEssence')} error={errors.description}>
           {(a) => <Textarea {...a} rows={3} maxLength={1000} value={description} onChange={(e) => setDescription(e.target.value)} />}
         </Field>
       </div>
@@ -101,12 +102,12 @@ export function BookDialog({ insuredId, caseId, onClose }: { insuredId: string; 
     const startsAt = when ? `${when}:00+05:00` : '';
     const parsed = assistAppointmentSchema.safeParse({ insuredId, clinicId, specialty, startsAt, caseId });
     if (!parsed.success) {
-      setError('Выберите клинику, врача и время');
+      setError(t('assist.card.bookError'));
       return;
     }
     try {
       await book.mutateAsync(parsed.data);
-      toast.success('Заявка отправлена в клинику');
+      toast.success(t('assist.card.bookSent'));
       onClose();
     } catch (e) {
       setError(errorMessage(e));
@@ -116,21 +117,21 @@ export function BookDialog({ insuredId, caseId, onClose }: { insuredId: string; 
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Записать к врачу"
-      description="Заявка уйдёт в клинику, клиника подтверждает сама"
+      title={t('assist.card.bookTitle')}
+      description={t('assist.card.bookDescription')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={book.isPending} onClick={() => void submit()}>
-            Записать
+            {t('assist.card.book')}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Клиника">
+        <Field label={t('common.clinic')}>
           {(a) => (
             <Select
               {...a}
@@ -140,7 +141,7 @@ export function BookDialog({ insuredId, caseId, onClose }: { insuredId: string; 
                 setSpecialty('');
               }}
             >
-              <option value="">Выберите клинику</option>
+              <option value="">{t('assist.card.pickClinic')}</option>
               {(clinics.data ?? []).map((c) => (
                 <option key={c.clinicId} value={c.clinicId}>
                   {c.clinicName} · {c.city}
@@ -149,10 +150,10 @@ export function BookDialog({ insuredId, caseId, onClose }: { insuredId: string; 
             </Select>
           )}
         </Field>
-        <Field label="Врач">
+        <Field label={t('assist.card.doctor')}>
           {(a) => (
             <Select {...a} value={specialty} disabled={!clinic} onChange={(e) => setSpecialty(e.target.value as Specialty)}>
-              <option value="">Выберите специальность</option>
+              <option value="">{t('assist.card.pickSpecialty')}</option>
               {(clinic?.specialties ?? []).map((s) => (
                 <option key={s} value={s}>
                   {SPECIALTY_LABEL[s]}
@@ -161,7 +162,7 @@ export function BookDialog({ insuredId, caseId, onClose }: { insuredId: string; 
             </Select>
           )}
         </Field>
-        <Field label="Дата и время" error={error}>
+        <Field label={t('assist.card.dateTime')} error={error}>
           {(a) => <Input {...a} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />}
         </Field>
       </div>
@@ -184,13 +185,13 @@ export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insured
   const submit = async () => {
     const parsed = assistGuaranteeRequestSchema.safeParse({ insuredId, clinicId, serviceCode, icd10, estimatedCost: Number(cost.replace(/\s/g, '')), comment: comment || undefined, caseId });
     if (!parsed.success) {
-      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])));
+      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), tm(i.message)])));
       return;
     }
     setErrors({});
     try {
       const g = await requestGp.mutateAsync(parsed.data);
-      toast.success(`Гарантийное письмо ${g.number} запрошено`);
+      toast.success(t('assist.card.gpRequested', { number: g.number }));
       onClose();
       navigate(`/assist/guarantees/${g.id}`);
     } catch (e) {
@@ -202,21 +203,21 @@ export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insured
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title="Запросить гарантийное письмо"
-      description="Направление в клинику по звонку: клиника увидит пациента и письмо, решение принимает врач ассистанса"
+      title={t('assist.card.gpTitle')}
+      description={t('assist.card.gpDescription')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={requestGp.isPending} onClick={() => void submit()}>
-            Запросить ГП
+            {t('assist.case.requestGuarantee')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Клиника" error={errors.clinicId}>
+        <Field label={t('common.clinic')} error={errors.clinicId}>
           {(a) => (
             <Select
               {...a}
@@ -226,7 +227,7 @@ export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insured
                 setServiceCode('');
               }}
             >
-              <option value="">Выберите клинику</option>
+              <option value="">{t('assist.card.pickClinic')}</option>
               {(clinics.data ?? []).map((c) => (
                 <option key={c.clinicId} value={c.clinicId}>
                   {c.clinicName} · {c.city}
@@ -235,7 +236,7 @@ export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insured
             </Select>
           )}
         </Field>
-        <Field label="Услуга" error={errors.serviceCode}>
+        <Field label={t('common.service')} error={errors.serviceCode}>
           {(a) => (
             <Select
               {...a}
@@ -247,7 +248,7 @@ export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insured
                 if (p) setCost(String(p.price));
               }}
             >
-              <option value="">Выберите услугу</option>
+              <option value="">{t('assist.card.pickService')}</option>
               {services.map((p) => (
                 <option key={p.code} value={p.code}>
                   {p.code} · {p.name}
@@ -256,13 +257,13 @@ export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insured
             </Select>
           )}
         </Field>
-        <Field label="Код МКБ-10" error={errors.icd10}>
+        <Field label={t('assist.card.icd10')} error={errors.icd10}>
           {(a) => <Input {...a} maxLength={8} value={icd10} onChange={(e) => setIcd10(e.target.value)} placeholder="G43.9" />}
         </Field>
-        <Field label="Оценка стоимости, UZS" error={errors.estimatedCost}>
+        <Field label={t('assist.card.estimatedCostUzs')} error={errors.estimatedCost}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={cost} onChange={(e) => setCost(e.target.value)} />}
         </Field>
-        <Field label="Комментарий" error={errors.comment} className="sm:col-span-2">
+        <Field label={t('common.comment')} error={errors.comment} className="sm:col-span-2">
           {(a) => <Textarea {...a} rows={2} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />}
         </Field>
       </div>
@@ -273,8 +274,8 @@ export function RequestGuaranteeDialog({ insuredId, caseId, onClose }: { insured
 export default function InsuredCardPage() {
   const { insuredId = '' } = useParams();
   const q = useAssistPerson(insuredId);
-  useDocumentTitle('Карточка застрахованного');
-  useTopbar([{ label: 'Застрахованные', to: '/assist/insured' }, { label: 'Карточка' }]);
+  useDocumentTitle(t('assist.card.docTitle'));
+  useTopbar([{ label: t('assist.insured.title'), to: '/assist/insured' }, { label: t('assist.card.crumb') }]);
   const canReveal = useCan('assist.insured.reveal_pii');
   const canCases = useCan('assist.cases.manage');
   const canBook = useCan('assist.appointments.manage');
@@ -291,50 +292,50 @@ export default function InsuredCardPage() {
               <div>
                 <h1 className="text-[22px] font-bold">{p.fullName}</h1>
                 <p className="text-muted">
-                  {p.clientName} · полис <span className="num">{p.policyNumber}</span> · {p.programName}
+                  {p.clientName} · {t('assist.card.policyLine')} <span className="num">{p.policyNumber}</span> · {p.programName}
                 </p>
               </div>
               {full ? (
                 <div className="flex gap-2">
                   {canCases && (
                     <Button variant="secondary" onClick={() => setDialog('case')}>
-                      Новое обращение
+                      {t('assist.card.newCase')}
                     </Button>
                   )}
                   {canCases && (
                     <Button variant="secondary" onClick={() => setDialog('gp')}>
-                      Запросить ГП
+                      {t('assist.case.requestGuarantee')}
                     </Button>
                   )}
-                  {canBook && <Button onClick={() => setDialog('book')}>Записать к врачу</Button>}
+                  {canBook && <Button onClick={() => setDialog('book')}>{t('assist.card.bookTitle')}</Button>}
                 </div>
               ) : (
                 <Chip kind="warning">
-                  <Lock className="h-3 w-3" aria-hidden /> Клиент передан другому ассистансу: только чтение
+                  <Lock className="h-3 w-3" aria-hidden /> {t('assist.case.transferred')}
                 </Chip>
               )}
             </div>
             <div className="grid gap-4 lg:grid-cols-3">
-              <Card title="Полис и данные">
+              <Card title={t('assist.card.policyAndData')}>
                 <dl className="divide-y divide-border-soft">
-                  <Kv label="Срок полиса">
+                  <Kv label={t('assist.card.policyTerm')}>
                     <span className="num">
                       {formatDate(p.policyStart)} — {formatDate(p.policyEnd)}
                     </span>
                   </Kv>
-                  <Kv label="Статус">{p.status === 'active' ? 'Застрахован' : 'Исключён'}</Kv>
+                  <Kv label={t('common.status')}>{p.status === 'active' ? t('assist.insured.active') : t('assist.insured.excluded')}</Kv>
                   <RevealField insuredId={p.id} field="pinfl" masked={p.pinflMasked} canReveal={canReveal && full} apiBase="/assist/insured" />
                   <RevealField insuredId={p.id} field="phone" masked={p.phoneMasked} canReveal={canReveal && full} apiBase="/assist/insured" />
                   <RevealField insuredId={p.id} field="birthDate" masked={p.birthDateMasked} canReveal={canReveal && full} apiBase="/assist/insured" />
                 </dl>
               </Card>
-              <Card title="Лимиты с учётом резервов ГП" className="lg:col-span-2">
+              <Card title={t('assist.card.limits')} className="lg:col-span-2">
                 <LimitBars limits={p.limits} />
               </Card>
             </div>
-            <Card title="Обращения" bodyClassName="p-0">
+            <Card title={t('assist.card.cases')} bodyClassName="p-0">
               {p.cases.length === 0 ? (
-                <EmptyState title="Обращений нет" />
+                <EmptyState title={t('assist.card.noCases')} />
               ) : (
                 <ul className="divide-y divide-border-soft">
                   {p.cases.map((c) => (
@@ -352,9 +353,9 @@ export default function InsuredCardPage() {
               )}
             </Card>
             <div className="grid gap-4 lg:grid-cols-2">
-              <Card title="Записи к врачу" bodyClassName="p-0">
+              <Card title={t('assist.card.appointments')} bodyClassName="p-0">
                 {p.appointments.length === 0 ? (
-                  <EmptyState title="Записей нет" />
+                  <EmptyState title={t('assist.card.noAppointments')} />
                 ) : (
                   <ul className="divide-y divide-border-soft">
                     {p.appointments.map((a) => (
@@ -368,9 +369,9 @@ export default function InsuredCardPage() {
                   </ul>
                 )}
               </Card>
-              <Card title="Гарантийные письма" bodyClassName="p-0">
+              <Card title={t('assist.card.guarantees')} bodyClassName="p-0">
                 {p.guarantees.length === 0 ? (
-                  <EmptyState title="Писем нет" />
+                  <EmptyState title={t('assist.card.noGuarantees')} />
                 ) : (
                   <ul className="divide-y divide-border-soft">
                     {p.guarantees.map((g) => (

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { AppStatus } from '@/shared/types';
 import { Chip } from '@/shared/ui/chips';
 import { cn } from '@/shared/lib/cn';
+import { defineLabels } from '@/i18n';
 
 /** HR screen heading: Rubik 600, 30px (SPEC §7.2). */
 export function HrHeader({ title, subtitle, actions, className }: { title: string; subtitle?: ReactNode; actions?: ReactNode; className?: string }) {
@@ -38,15 +39,11 @@ export function HrSectionTitle({ children, className }: { children: ReactNode; c
   return <h2 className={cn('font-heading text-[18px] font-semibold', className)}>{children}</h2>;
 }
 
-const APP_STATUS: Record<AppStatus, { label: string; kind: string }> = {
-  active: { label: 'Пользуется', kind: 'success' },
-  invited: { label: 'Приглашён', kind: 'sun' },
-  not_invited: { label: 'Не приглашён', kind: 'neutral' },
-};
+const APP_STATUS_KIND: Record<AppStatus, string> = { active: 'success', invited: 'sun', not_invited: 'neutral' };
+const APP_STATUS_LABEL = defineLabels('hr.appStatus', ['active', 'invited', 'not_invited'] as const);
 
 export function AppStatusChip({ status }: { status: AppStatus }) {
-  const s = APP_STATUS[status];
-  return <Chip kind={s.kind}>{s.label}</Chip>;
+  return <Chip kind={APP_STATUS_KIND[status]}>{APP_STATUS_LABEL[status]}</Chip>;
 }
 
 /** Client-mode control height (46–54px) and touch target ≥ 44px. */

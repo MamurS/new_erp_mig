@@ -1,3 +1,4 @@
+import { msg } from '@/i18n';
 import { useEffect } from 'react';
 import { setUnauthorizedHandler } from '@/shared/api/client';
 import { queryClient } from '@/shared/api/queryClient';
@@ -8,7 +9,7 @@ import { initSessionSync, subscribeSession, getSession } from '@/shared/auth/ses
 export function AuthSync() {
   useEffect(() => {
     initSessionSync();
-    setUnauthorizedHandler(() => localLogout('Сессия завершена, войдите снова'));
+    setUnauthorizedHandler(() => localLogout(msg('errors.unauthorized')));
     return subscribeSession(() => {
       if (!getSession()) queryClient.clear();
     });

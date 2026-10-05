@@ -7,6 +7,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import type { PartnerType } from '@/shared/types';
 import { ASSIST_SCOPES, ASSIST_WEBHOOK_EVENTS, INTEGRATION_SCOPES, WEBHOOK_EVENTS } from '@/shared/integration/schemas';
 import { ASSIST_SANDBOX_METHODS, SANDBOX_METHODS, type SandboxMethod } from '@/shared/integration/sandbox';
+import { t } from '@/i18n';
 
 export interface PartnerInfo {
   type: PartnerType;
@@ -21,7 +22,8 @@ export interface PartnerInfo {
   systemName: string;
 }
 
-const isAssistTag = (t: string) => t.startsWith('Ассистанс');
+// eslint-disable-next-line mig/no-cyrillic-ui -- matches OpenAPI tag names (documentation data, not UI text)
+const isAssistTag = (tag: string) => tag.startsWith('Ассистанс');
 
 export const CLINIC_PARTNER: PartnerInfo = {
   type: 'clinic',
@@ -29,9 +31,11 @@ export const CLINIC_PARTNER: PartnerInfo = {
   scopes: INTEGRATION_SCOPES,
   events: WEBHOOK_EVENTS,
   sandbox: SANDBOX_METHODS,
-  docsTag: (t) => !isAssistTag(t),
+  docsTag: (tag) => !isAssistTag(tag),
   defaultScope: 'coverage:check',
-  systemName: 'медицинской информационной системы клиники',
+  get systemName() {
+    return t('clinic.integration.system.clinic');
+  },
 };
 
 export const ASSIST_PARTNER: PartnerInfo = {
@@ -40,9 +44,12 @@ export const ASSIST_PARTNER: PartnerInfo = {
   scopes: ASSIST_SCOPES,
   events: ASSIST_WEBHOOK_EVENTS,
   sandbox: ASSIST_SANDBOX_METHODS,
-  docsTag: (t) => t === 'Авторизация' || isAssistTag(t),
+  // eslint-disable-next-line mig/no-cyrillic-ui -- matches an OpenAPI tag name (documentation data, not UI text)
+  docsTag: (tag) => tag === 'Авторизация' || isAssistTag(tag),
   defaultScope: 'roster:read',
-  systemName: 'системы ассистанса',
+  get systemName() {
+    return t('clinic.integration.system.assistance');
+  },
 };
 
 const PartnerContext = createContext<PartnerInfo>(CLINIC_PARTNER);

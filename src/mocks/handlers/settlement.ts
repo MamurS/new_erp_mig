@@ -2,6 +2,7 @@
  * Claims settlement (LIFECYCLE_SPEC §13): medical opinion, decisions within the officer's authority and
  * approval above it, reserves, fraud flags, appeals, the decision letter, reserve report and claims register.
  */
+import { t } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { ClaimDecision, SessionUser } from '@/shared/types';
 import type { ClaimLetter, ReserveReport, ReserveReportRow } from '@/shared/types/dto';
@@ -22,7 +23,7 @@ import {
 } from '@/shared/schemas/forms';
 import { toCsv } from '@/shared/lib/csv';
 import { db, type ClaimRow, type Db } from '../db';
-import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
+import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { toClaimDetail } from '../views';
 import { assistanceName } from '../assistance-core';
 import { assistanceOn } from '@/shared/domain/assistance';
@@ -67,7 +68,7 @@ export const settlementHandlers = [
     `${API}/claims/:id/request-opinion`,
     route(async (ctx) => {
       const { user, d, c } = staffClaim(ctx, 'claims.decide');
-      if (c.status !== 'new' && c.status !== 'review') throw conflict('Заключение запрашивают по убытку на рассмотрении');
+      if (c.status !== 'new' && c.status !== 'review') throw conflict('srv.claim.opinionOnlyInReview');
       const { question } = await body(ctx.request, opinionRequestSchema);
       const at = nowIso();
       c.opinion = { requestedAt: at, requestedByName: user.displayName, ...(question ? { question } : {}) };
@@ -82,7 +83,7 @@ export const settlementHandlers = [
     `${API}/claims/:id/opinion`,
     route(async (ctx) => {
       const { user, d, c } = staffClaim(ctx, 'claims.medical_opinion');
-      if (!c.opinion || c.opinion.text) throw conflict('Заключение не запрашивалось или уже дано');
+      if (!c.opinion || c.opinion.text) throw conflict('srv.claim.opinionNotRequested');
       const input = await body(ctx.request, opinionSchema);
       const at = nowIso();
       // The doctor gives a medical opinion, not a decision: the claim returns to the claims officer.
@@ -99,11 +100,15 @@ export const settlementHandlers = [
     route(async (ctx) => {
       const { user, d, c } = staffClaim(ctx, 'claims.decide');
       const reopening = c.appeal?.status === 'open';
-      if (!reopening && c.status !== 'new' && c.status !== 'review') throw conflict(c.status === 'medical_review' ? 'Ждём заключения врача' : 'Решение уже принято');
-      if (c.pendingDecision) throw conflict('Решение уже ждёт согласования');
+      if (!reopening && c.status !== 'new' && c.status !== 'review') throw conflict(c.status === 'medical_review' ? 'srv.claim.awaitingOpinion' : 'srv.decision.alreadyMade');
+      if (c.pendingDecision) throw conflict('srv.claim.decisionPending');
       const input = await body(ctx.request, claimDecideSchema);
       const problem = decisionProblem(input.kind, input.amount, c.amountClaimed, input.clauseRef, input.reason, isClause);
-      if (problem) throw new HttpError(422, 'validation', problem, { [problem.startsWith('Укажите пункт') ? 'clauseRef' : problem.startsWith('Опишите') ? 'reason' : 'amount']: problem });
+      if (problem) {
+        // Same order of checks as decisionProblem: clause, then reason, then the amount.
+        const field = input.kind !== 'approve' && (!input.clauseRef || !isClause(input.clauseRef)) ? 'clauseRef' : input.kind !== 'approve' && input.reason.trim().length < 5 ? 'reason' : 'amount';
+        throw httpErrorOf(422, 'validation', problem, { [field]: problem });
+      }
       const staff = d.staff.find((s) => s.id === user.id)!;
       const decision: ClaimDecision = {
         kind: input.kind,
@@ -137,10 +142,10 @@ export const settlementHandlers = [
     route((ctx) => {
       const { user, d, c } = staffClaim(ctx, 'claims.decide');
       const pending = c.pendingDecision;
-      if (!pending) throw conflict('Решение не ждёт согласования');
+      if (!pending) throw conflict('srv.claim.decisionNotPending');
       const staff = d.staff.find((s) => s.id === user.id)!;
-      if (pending.byId === user.id) throw new HttpError(403, 'forbidden', 'Решение согласует другой сотрудник');
-      if (!canApproveDecision(staff, pending)) throw new HttpError(403, 'forbidden', 'Сумма выше ваших полномочий: нужен сотрудник с бо́льшими полномочиями');
+      if (pending.byId === user.id) throw new HttpError(403, 'forbidden', 'srv.claim.fourEyes');
+      if (!canApproveDecision(staff, pending)) throw new HttpError(403, 'forbidden', 'srv.claim.overAuthority');
       const { required: _r, ...decision } = pending;
       applyDecision(c, { ...decision, approvedByName: user.displayName }, { id: pending.byId, displayName: pending.byName });
       audit(user, 'claim_decided', { targetType: 'claim', targetId: c.id, targetLabel: `${c.number}: согласовано решение ${pending.byName}`, reason: pending.reason || undefined });
@@ -152,7 +157,7 @@ export const settlementHandlers = [
     route(async (ctx) => {
       const { user, d, c } = staffClaim(ctx, 'claims.decide');
       const pending = c.pendingDecision;
-      if (!pending) throw conflict('Решение не ждёт согласования');
+      if (!pending) throw conflict('srv.claim.decisionNotPending');
       const staff = d.staff.find((s) => s.id === user.id)!;
       if (!canApproveDecision(staff, pending)) throw forbidden();
       const { comment } = await body(ctx.request, decisionRejectSchema);
@@ -167,7 +172,7 @@ export const settlementHandlers = [
     `${API}/claims/:id/reserve`,
     route(async (ctx) => {
       const { user, d, c } = staffClaim(ctx, 'claims.reserves');
-      if (!['new', 'review', 'medical_review', 'approved', 'to_pay'].includes(c.status)) throw conflict('Резерв закрытого убытка не меняется');
+      if (!['new', 'review', 'medical_review', 'approved', 'to_pay'].includes(c.status)) throw conflict('srv.claim.reserveClosed');
       const input = await body(ctx.request, reserveSchema);
       const from = currentReserve(c);
       c.reserveHistory = [...(c.reserveHistory ?? []), { at: nowIso(), byName: user.displayName, from, to: input.amount, reason: input.reason }];
@@ -182,7 +187,7 @@ export const settlementHandlers = [
       const flagId = param(ctx, 'flagId');
       const f = c.flags?.find((x) => x.id === flagId);
       if (!f) throw notFound();
-      if (f.dismissed) throw conflict('Флаг уже снят');
+      if (f.dismissed) throw conflict('srv.claim.flagDismissed');
       const { comment } = await body(ctx.request, flagDismissSchema);
       f.dismissed = { byName: user.displayName, at: nowIso(), comment };
       audit(user, 'claim_flag_dismissed', { targetType: 'claim', targetId: c.id, targetLabel: `${c.number}: ${f.code}`, reason: comment });
@@ -193,7 +198,7 @@ export const settlementHandlers = [
     `${API}/claims/:id/appeal/resolve`,
     route(async (ctx) => {
       const { user, d, c } = staffClaim(ctx, 'claims.decide');
-      if (c.appeal?.status !== 'open') throw conflict('Открытой апелляции нет');
+      if (c.appeal?.status !== 'open') throw conflict('srv.claim.noOpenAppeal');
       const { resolution } = await body(ctx.request, appealResolveSchema);
       c.appeal = { ...c.appeal, status: 'resolved', resolution, resolvedAt: nowIso() };
       audit(user, 'claim_appeal_resolved', { targetType: 'claim', targetId: c.id, targetLabel: c.number, reason: resolution });
@@ -222,8 +227,8 @@ export const settlementHandlers = [
       const d = db();
       const c = d.claims.find((x) => x.id === param(ctx, 'id') && x.insuredId === user.insuredId);
       if (!c) throw notFound();
-      if (c.appeal) throw conflict('Решение уже оспорено');
-      if (c.status !== 'rejected' && c.decision?.kind !== 'partial') throw conflict('Оспорить можно отказ или частичное одобрение');
+      if (c.appeal) throw conflict('srv.claim.alreadyAppealed');
+      if (c.status !== 'rejected' && c.decision?.kind !== 'partial') throw conflict('srv.claim.appealOnlyRejected');
       const { text } = await body(ctx.request, appealSchema);
       c.appeal = { at: nowIso(), by: 'insured', text, status: 'open' };
       c.updatedAt = nowIso();
@@ -257,7 +262,7 @@ export const settlementHandlers = [
         .map(({ c, reserve }) => {
           const i = d.insured.find((x) => x.id === c.insuredId);
           const a = i ? assistanceOn(d.assignments, i.policyId, c.serviceDate) : null;
-          return { c, reserve, assistance: a, assistanceLabel: a ? (assistanceName(d, a) ?? 'Ассистанс') : 'Без ассистанса (МИГ)' };
+          return { c, reserve, assistance: a, assistanceLabel: a ? (assistanceName(d, a) ?? t('srv.dash.assistance')) : t('srv.noAssistance') };
         });
       const out: ReserveReport = {
         date,

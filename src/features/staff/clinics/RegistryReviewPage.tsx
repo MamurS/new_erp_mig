@@ -7,6 +7,7 @@ import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { REGISTRY_LINE_STATUS_LABEL, REGISTRY_STATUS_CHIP, REGISTRY_STATUS_LABEL } from '@/shared/domain/clinics';
 import { registryLineDecisionSchema } from '@/shared/schemas/forms';
+import { t, tm } from '@/i18n';
 import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -20,7 +21,7 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
 const LINE_CHIP = { pending: 'sky', accepted: 'success', rejected: 'danger', disputed: 'warning' } as const;
-const SOURCE_LABEL = { portal: 'кабинет клиники', csv: 'CSV', api: 'API МИС' } as const;
+const sourceLabel = (s: 'portal' | 'csv' | 'api'): string => (s === 'portal' ? t('staffOps.registry.source.portal') : s === 'csv' ? 'CSV' : t('staffOps.registry.source.api'));
 
 function RejectDialog({ registryId, line, onClose }: { registryId: string; line: RegistryLine; onClose: () => void }) {
   const decide = useDecideLine();
@@ -34,7 +35,7 @@ function RejectDialog({ registryId, line, onClose }: { registryId: string; line:
     }
     try {
       await decide.mutateAsync({ id: registryId, lineId: line.id, body: parsed.data });
-      toast.success('Строка отклонена');
+      toast.success(t('staffOps.registry.lineRejected'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -44,21 +45,21 @@ function RejectDialog({ registryId, line, onClose }: { registryId: string; line:
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title={line.status === 'disputed' ? 'Оставить отклонение' : 'Отклонить строку'}
+      title={line.status === 'disputed' ? t('staffOps.registry.keepRejection') : t('staffOps.registry.rejectLine')}
       description={`${line.serviceName} · ${formatMoney(line.amount)}`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button variant="danger" loading={decide.isPending} onClick={() => void send()}>
-            Отклонить
+            {t('common.reject')}
           </Button>
         </>
       }
     >
-      {line.disputeComment && <p className="mb-3 rounded-btn bg-rail px-3 py-2 text-[13px]">Клиника: {line.disputeComment}</p>}
-      <Field label="Причина" error={error}>
+      {line.disputeComment && <p className="mb-3 rounded-btn bg-rail px-3 py-2 text-[13px]">{t('staffOps.registry.clinicSays', { text: line.disputeComment })}</p>}
+      <Field label={t('common.reason')} error={tm(error) || undefined}>
         {(a) => <Textarea {...a} rows={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />}
       </Field>
     </Modal>
@@ -66,10 +67,10 @@ function RejectDialog({ registryId, line, onClose }: { registryId: string; line:
 }
 
 export default function RegistryReviewPage() {
-  useDocumentTitle('Реестр клиники');
+  useDocumentTitle(t('staffOps.registry.docTitle'));
   const { registryId = '' } = useParams();
   const q = useStaffRegistry(registryId);
-  useTopbar([{ label: 'Реестры клиник', to: '/staff/registries' }, { label: q.data ? `${q.data.clinicName} · ${q.data.period}` : 'Реестр' }]);
+  useTopbar([{ label: t('staffOps.registries.title'), to: '/staff/registries' }, { label: q.data ? `${q.data.clinicName} · ${q.data.period}` : t('staffOps.registry.crumb') }]);
   const canReview = useCan('registries.review');
   const canPay = useCan('registries.pay');
   const decide = useDecideLine();
@@ -87,7 +88,7 @@ export default function RegistryReviewPage() {
   const accept = async (l: RegistryLine) => {
     try {
       await decide.mutateAsync({ id: r.id, lineId: l.id, body: { decision: 'accept' } });
-      toast.success('Строка принята');
+      toast.success(t('staffOps.registry.lineAccepted'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -95,7 +96,7 @@ export default function RegistryReviewPage() {
   const doPay = async () => {
     try {
       await pay.mutateAsync(r.id);
-      toast.success('Реестр оплачен');
+      toast.success(t('staffOps.registry.paidToast'));
       setConfirmPay(false);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -103,14 +104,14 @@ export default function RegistryReviewPage() {
   };
 
   const columns: Column<RegistryLine>[] = [
-    { key: 'date', header: 'Дата', cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
-    { key: 'who', header: 'Пациент', cell: (l) => l.insuredName },
-    { key: 'svc', header: 'Услуга', cell: (l) => <span>{l.serviceCode} · {l.serviceName}</span> },
-    { key: 'icd', header: 'МКБ-10', cell: (l) => <span className="num">{l.icd10}</span> },
-    { key: 'amount', header: 'Сумма', align: 'right', cell: (l) => <span className="num whitespace-nowrap">{l.quantity > 1 ? `${l.quantity} × ${formatMoney(l.price, false)} = ` : ''}{formatMoney(l.amount)}</span> },
+    { key: 'date', header: t('common.date'), cell: (l) => <span className="num whitespace-nowrap">{formatDate(l.serviceDate)}</span> },
+    { key: 'who', header: t('common.patient'), cell: (l) => l.insuredName },
+    { key: 'svc', header: t('common.service'), cell: (l) => <span>{l.serviceCode} · {l.serviceName}</span> },
+    { key: 'icd', header: t('staffOps.registry.col.icd'), cell: (l) => <span className="num">{l.icd10}</span> },
+    { key: 'amount', header: t('common.amount'), align: 'right', cell: (l) => <span className="num whitespace-nowrap">{l.quantity > 1 ? `${l.quantity} × ${formatMoney(l.price, false)} = ` : ''}{formatMoney(l.amount)}</span> },
     {
       key: 'gp',
-      header: 'ГП',
+      header: t('staffOps.registry.col.gl'),
       cell: (l) => {
         if (!l.guaranteeNumber) return <span className="text-muted">—</span>;
         const check = r.guaranteeChecks[l.id];
@@ -119,7 +120,7 @@ export default function RegistryReviewPage() {
             <span className="num">{l.guaranteeNumber}</span>
             {check && (
               <span className={check.ok ? 'text-[12px] text-success-text' : 'text-[12px] text-danger-text'} data-testid="gp-check">
-                {check.approvedAmount === null ? 'ГП не одобрено' : check.ok ? `в пределах ${formatMoney(check.approvedAmount)}` : `больше одобренных ${formatMoney(check.approvedAmount)}`}
+                {check.approvedAmount === null ? t('staffOps.registry.glNotApproved') : check.ok ? t('staffOps.registry.glWithin', { amount: formatMoney(check.approvedAmount) }) : t('staffOps.registry.glOver', { amount: formatMoney(check.approvedAmount) })}
               </span>
             )}
           </span>
@@ -128,12 +129,12 @@ export default function RegistryReviewPage() {
     },
     {
       key: 'status',
-      header: 'Статус',
+      header: t('common.status'),
       cell: (l) => (
         <span className="flex flex-col gap-0.5">
           <Chip kind={LINE_CHIP[l.status]}>{REGISTRY_LINE_STATUS_LABEL[l.status]}</Chip>
           {l.rejectionReason && <span className="text-[12px] text-muted">{l.rejectionReason}</span>}
-          {l.disputeComment && <span className="text-[12px] text-warning-text">Клиника: {l.disputeComment}</span>}
+          {l.disputeComment && <span className="text-[12px] text-warning-text">{t('staffOps.registry.clinicSays', { text: l.disputeComment })}</span>}
         </span>
       ),
     },
@@ -144,11 +145,11 @@ export default function RegistryReviewPage() {
       cell: (l) =>
         canReview && open && (l.status === 'pending' || l.status === 'disputed') ? (
           <span className="flex justify-end gap-1">
-            <Button size="sm" variant="secondary" onClick={() => void accept(l)} aria-label={`Принять строку ${l.serviceName}`}>
-              Принять
+            <Button size="sm" variant="secondary" onClick={() => void accept(l)} aria-label={t('staffOps.registry.acceptLineAria', { name: l.serviceName })}>
+              {t('staffOps.registry.accept')}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setRejecting(l)} aria-label={`Отклонить строку ${l.serviceName}`}>
-              {l.status === 'disputed' ? 'Оставить отказ' : 'Отклонить'}
+            <Button size="sm" variant="ghost" onClick={() => setRejecting(l)} aria-label={t('staffOps.registry.rejectLineAria', { name: l.serviceName })}>
+              {l.status === 'disputed' ? t('staffOps.registry.keepDenial') : t('common.reject')}
             </Button>
           </span>
         ) : null,
@@ -160,29 +161,29 @@ export default function RegistryReviewPage() {
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="text-[22px] font-bold">
-            Реестр {r.clinicName} за {r.period}
+            {t('staffOps.registry.heading', { clinic: r.clinicName, period: r.period })}
           </h1>
           <p className="flex flex-wrap items-center gap-2 text-[12px] text-muted">
             <span data-testid="registry-status">
               <Chip kind={REGISTRY_STATUS_CHIP[r.status]}>{REGISTRY_STATUS_LABEL[r.status]}</Chip>
             </span>
-            <span>источник: {SOURCE_LABEL[r.source]}</span>
-            {r.submittedAt && <span>отправлен {formatDateTime(r.submittedAt)}</span>}
+            <span>{t('staffOps.registry.sourceLine', { source: sourceLabel(r.source) })}</span>
+            {r.submittedAt && <span>{t('staffOps.registry.sentAt', { date: formatDateTime(r.submittedAt) })}</span>}
           </p>
         </div>
         {canPay && open && (
-          <Button disabled={!payable} onClick={() => setConfirmPay(true)} title={payable ? undefined : disputed ? 'Есть оспоренные строки' : 'Реестр ещё проверяется'}>
-            Оплатить {formatMoney(r.totals.accepted)}
+          <Button disabled={!payable} onClick={() => setConfirmPay(true)} title={payable ? undefined : disputed ? t('staffOps.registry.hasDisputed') : t('staffOps.registry.stillReviewing')}>
+            {t('staffOps.registry.payAmount', { amount: formatMoney(r.totals.accepted) })}
           </Button>
         )}
       </div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
         {[
-          ['Заявлено', formatMoney(r.totals.claimed)],
-          ['Принято', formatMoney(r.totals.accepted)],
-          ['Отклонено', formatMoney(r.totals.rejected)],
-          ['Оплачено', formatMoney(r.totals.paid)],
-          ['Дата оплаты', r.paidAt ? formatDate(r.paidAt) : '—'],
+          [t('staffOps.registries.claimed'), formatMoney(r.totals.claimed)],
+          [t('staffOps.registries.accepted'), formatMoney(r.totals.accepted)],
+          [t('staffOps.registry.rejectedTotal'), formatMoney(r.totals.rejected)],
+          [t('staffOps.registry.paidTotal'), formatMoney(r.totals.paid)],
+          [t('staffOps.registry.paidAt'), r.paidAt ? formatDate(r.paidAt) : '—'],
         ].map(([label, value]) => (
           <div key={label} className="rounded-card border border-border bg-surface p-3">
             <div className="text-[12px] text-muted">{label}</div>
@@ -191,15 +192,15 @@ export default function RegistryReviewPage() {
         ))}
       </div>
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption="Строки реестра" columns={columns} rows={r.lines} rowKey={(l) => l.id} />
+        <DataTable caption={t('staffOps.registry.linesCaption')} columns={columns} rows={r.lines} rowKey={(l) => l.id} />
       </div>
       {rejecting && <RejectDialog registryId={r.id} line={rejecting} onClose={() => setRejecting(null)} />}
       <ConfirmDialog
         open={confirmPay}
         onOpenChange={setConfirmPay}
-        title="Оплатить реестр?"
-        description={`К оплате ${formatMoney(r.totals.accepted)} — принятые строки. Убытки по ним перейдут в статус «Оплачен».`}
-        confirmLabel="Оплатить"
+        title={t('staffOps.registry.confirmTitle')}
+        description={t('staffOps.registry.confirmText', { amount: formatMoney(r.totals.accepted) })}
+        confirmLabel={t('staffOps.registry.pay')}
         loading={pay.isPending}
         onConfirm={() => void doPay()}
       />

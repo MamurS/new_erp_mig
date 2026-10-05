@@ -6,7 +6,7 @@ import type { GuaranteeView } from '@/shared/types/dto';
 import { useAnswerGuarantee, useClinicGuarantees } from '@/shared/api/queries/clinic';
 import { errorMessage, request } from '@/shared/api/client';
 import { downloadText } from '@/shared/lib/csv';
-import { formatDate, formatDateTime, formatMoney, todayISO } from '@/shared/lib/format';
+import { formatDate, formatDateTime, formatMoney, formatMoneyDoc, todayISO } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { DataTable, type Column } from '@/shared/ui/data-table';
@@ -16,12 +16,14 @@ import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { buildPdf, downloadPdf } from '@/features/hr/pdf';
 import { FilesPicker, GuaranteeChip, PageTitle, Panel } from '../components';
+import { t } from '@/i18n';
 
 /** Client-side PDF stub of an approved letter; no patient data in the file or its name. */
 /** Who decides the letter (ASSISTANCE_SPEC §7): the patient's assistance, or MIG for escalations and clients without one. */
 function decisionOwner(g: { assistanceId?: string | null; assistanceName?: string; escalated?: boolean }): string {
-  if (!g.assistanceId) return 'МИГ';
-  return g.escalated ? `МИГ (эскалация от ${g.assistanceName ?? 'ассистанса'})` : (g.assistanceName ?? 'Ассистанс');
+  if (!g.assistanceId) return t('common.mig');
+  if (g.escalated) return g.assistanceName ? t('clinic.gp.ownerEscalated', { name: g.assistanceName }) : t('clinic.gp.ownerEscalatedAssist');
+  return g.assistanceName ?? t('clinic.gp.ownerAssist');
 }
 
 function guaranteePdf(g: GuaranteeView): string {
@@ -33,7 +35,7 @@ function guaranteePdf(g: GuaranteeView): string {
       `Clinic: ${g.clinicName}`,
       `Service: ${g.serviceCode} ${g.serviceName}`,
       `ICD-10: ${g.icd10}`,
-      `Approved amount: ${formatMoney(g.approvedAmount ?? 0)}`,
+      `Approved amount: ${formatMoneyDoc(g.approvedAmount ?? 0)}`,
       `Valid until: ${g.validUntil ? formatDate(g.validUntil) : '-'}`,
       `Approved by: ${g.approvals.map((a) => a.byName).join(', ')}`,
       '',
@@ -63,52 +65,52 @@ function GuaranteeDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void
     if (comment.trim().length < 3) return;
     try {
       await answer.mutateAsync({ id: g.id, comment: comment.trim(), files });
-      toast.success('Документы отправлены врачу-эксперту');
+      toast.success(t('clinic.gp.docsSent'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
   return (
-    <Modal open onOpenChange={(o) => !o && onClose()} wide title={`Гарантийное письмо ${g.number}`} description={<GuaranteeChip status={g.status} />}>
+    <Modal open onOpenChange={(o) => !o && onClose()} wide title={t('clinic.gp.title', { number: g.number })} description={<GuaranteeChip status={g.status} />}>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[14px]">
-        <dt className="text-muted">Пациент</dt>
+        <dt className="text-muted">{t('common.patient')}</dt>
         <dd>{g.insuredName}</dd>
-        <dt className="text-muted">Услуга</dt>
+        <dt className="text-muted">{t('common.service')}</dt>
         <dd>
           {g.serviceCode} · {g.serviceName}
         </dd>
-        <dt className="text-muted">МКБ-10</dt>
+        <dt className="text-muted">{t('clinic.gp.icd10')}</dt>
         <dd className="num">{g.icd10}</dd>
-        <dt className="text-muted">Стоимость</dt>
+        <dt className="text-muted">{t('clinic.gp.cost')}</dt>
         <dd className="num">{formatMoney(g.estimatedCost)}</dd>
-        <dt className="text-muted">Решение принимает</dt>
+        <dt className="text-muted">{t('clinic.gp.owner')}</dt>
         <dd data-testid="decision-owner">{decisionOwner(g)}</dd>
         {g.approvedAmount !== undefined && g.status !== 'requested' && (
           <>
-            <dt className="text-muted">Одобрено</dt>
+            <dt className="text-muted">{t('clinic.gp.approved')}</dt>
             <dd className="num font-semibold">{formatMoney(g.approvedAmount)}</dd>
           </>
         )}
         {g.validUntil && g.status !== 'requested' && (
           <>
-            <dt className="text-muted">Действует до</dt>
+            <dt className="text-muted">{t('common.validUntil')}</dt>
             <dd className="num">{formatDate(g.validUntil)}</dd>
           </>
         )}
         {g.comment && (
           <>
-            <dt className="text-muted">Комментарий врача</dt>
+            <dt className="text-muted">{t('clinic.gpRequest.comment')}</dt>
             <dd className="whitespace-pre-wrap">{g.comment}</dd>
           </>
         )}
         {g.reason && (
           <>
-            <dt className="text-muted">{g.status === 'rejected' ? 'Причина отказа' : `Запрос ${g.assistanceId && !g.escalated ? 'ассистанса' : 'МИГ'}`}</dt>
+            <dt className="text-muted">{g.status === 'rejected' ? t('clinic.gp.rejectReason') : g.assistanceId && !g.escalated ? t('clinic.gp.requestAssist') : t('clinic.gp.requestMig')}</dt>
             <dd className="whitespace-pre-wrap">{g.reason}</dd>
           </>
         )}
-        <dt className="text-muted">Запрошено</dt>
+        <dt className="text-muted">{t('clinic.gp.requested')}</dt>
         <dd className="num">{formatDateTime(g.createdAt)}</dd>
       </dl>
       {g.attachments.length > 0 && (
@@ -124,17 +126,17 @@ function GuaranteeDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void
       )}
       {(g.status === 'approved' || g.status === 'used') && (
         <Button className="mt-4" onClick={() => downloadPdf(guaranteePdf(g), `guarantee-${todayISO()}.pdf`)}>
-          <Download className="h-4 w-4" aria-hidden /> Скачать письмо (PDF)
+          <Download className="h-4 w-4" aria-hidden /> {t('clinic.gp.downloadPdf')}
         </Button>
       )}
       {g.status === 'info_requested' && (
         <div className="mt-4 flex flex-col gap-3 border-t border-border-soft pt-4">
-          <FilesPicker files={files} onChange={setFiles} label="Документы для врача-эксперта" />
-          <Field label="Комментарий" error={touched && comment.trim().length < 3 ? 'Добавьте комментарий: минимум 3 символа' : undefined}>
+          <FilesPicker files={files} onChange={setFiles} label={t('clinic.gp.docsForExpert')} />
+          <Field label={t('common.comment')} error={touched && comment.trim().length < 3 ? t('clinic.gp.commentError') : undefined}>
             {(a) => <Textarea {...a} rows={3} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} />}
           </Field>
           <Button className="w-fit" loading={answer.isPending} onClick={() => void send()}>
-            Отправить документы
+            {t('clinic.gp.sendDocs')}
           </Button>
         </div>
       )}
@@ -143,33 +145,33 @@ function GuaranteeDialog({ g, onClose }: { g: GuaranteeView; onClose: () => void
 }
 
 export default function GuaranteesPage() {
-  useDocumentTitle('Гарантийные письма');
+  useDocumentTitle(t('clinic.nav.guarantees'));
   const q = useClinicGuarantees();
   const [open, setOpen] = useState<GuaranteeView | null>(null);
   const columns: Column<GuaranteeView>[] = [
-    { key: 'number', header: 'Номер', cell: (g) => <span className="num font-semibold">{g.number}</span> },
-    { key: 'who', header: 'Пациент', cell: (g) => g.insuredName },
-    { key: 'service', header: 'Услуга', cell: (g) => <span className="text-muted">{g.serviceName}</span> },
-    { key: 'amount', header: 'Сумма', align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
-    { key: 'status', header: 'Статус', cell: (g) => <GuaranteeChip status={g.status} /> },
-    { key: 'owner', header: 'Решение принимает', cell: (g) => <span className="text-muted">{decisionOwner(g)}</span> },
-    { key: 'date', header: 'Запрошено', cell: (g) => <span className="num whitespace-nowrap text-muted">{formatDate(g.createdAt)}</span> },
+    { key: 'number', header: t('common.number'), cell: (g) => <span className="num font-semibold">{g.number}</span> },
+    { key: 'who', header: t('common.patient'), cell: (g) => g.insuredName },
+    { key: 'service', header: t('common.service'), cell: (g) => <span className="text-muted">{g.serviceName}</span> },
+    { key: 'amount', header: t('common.amount'), align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
+    { key: 'status', header: t('common.status'), cell: (g) => <GuaranteeChip status={g.status} /> },
+    { key: 'owner', header: t('clinic.gp.owner'), cell: (g) => <span className="text-muted">{decisionOwner(g)}</span> },
+    { key: 'date', header: t('clinic.gp.requested'), cell: (g) => <span className="num whitespace-nowrap text-muted">{formatDate(g.createdAt)}</span> },
   ];
   const current = open ? (q.data ?? []).find((g) => g.id === open.id) ?? open : null;
   return (
     <>
       <PageTitle
-        title="Гарантийные письма"
-        subtitle="Новый запрос создаётся из визита после проверки пациента"
+        title={t('clinic.nav.guarantees')}
+        subtitle={t('clinic.gp.subtitle')}
         actions={
           <Button asChild>
-            <Link to="/clinic/check">Проверить пациента</Link>
+            <Link to="/clinic/check">{t('clinic.home.checkPatient')}</Link>
           </Button>
         }
       />
       <Panel>
         <DataTable
-          caption="Гарантийные письма клиники"
+          caption={t('clinic.gp.caption')}
           columns={columns}
           rows={q.data}
           rowKey={(g) => g.id}
@@ -177,7 +179,7 @@ export default function GuaranteesPage() {
           error={q.error}
           onRetry={() => void q.refetch()}
           onRowClick={setOpen}
-          empty={<EmptyState title="Писем пока нет" />}
+          empty={<EmptyState title={t('clinic.gp.empty')} />}
         />
       </Panel>
       {current && <GuaranteeDialog g={current} onClose={() => setOpen(null)} />}

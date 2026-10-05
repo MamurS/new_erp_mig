@@ -1,4 +1,5 @@
 /* Claim business rules shared by UI and mock server (SPEC §4). */
+import { defineLabels, msg } from '@/i18n';
 import { roleTransitionsFrom } from '@/shared/auth/permissions';
 import type { Claim, ClaimCategory, ClaimStatus, LimitCategory, MyClaim, SessionUser } from '@/shared/types';
 
@@ -16,9 +17,9 @@ export const CLAIM_TO_LIMIT: Record<ClaimCategory, LimitCategory> = {
   inpatient: 'inpatient',
 };
 
-export const MEDICAL_REVIEW_HINT =
-  'Нужна медэкспертиза: стоматология, стационар или сумма больше 5 000 000 UZS. Сначала передайте убыток врачу-эксперту.';
-export const FOUR_EYES_PAY_HINT = 'Оплату проводит другой сотрудник: вы одобряли этот убыток.';
+/** Message keys (tm() shows them); the server returns them as the 409 reason. */
+export const MEDICAL_REVIEW_HINT = msg('dom.claims.medicalReview');
+export const FOUR_EYES_PAY_HINT = msg('dom.claims.fourEyesPay');
 
 export interface TransitionCheck {
   allowed: ClaimStatus[];
@@ -61,40 +62,10 @@ export function toMyClaimStatus(status: ClaimStatus): MyClaim['status'] {
   }
 }
 
-export const CLAIM_STATUS_LABEL: Record<ClaimStatus, string> = {
-  new: 'Новый',
-  review: 'На проверке',
-  medical_review: 'Медэкспертиза',
-  approved: 'Одобрен',
-  rejected: 'Отклонён',
-  to_pay: 'К оплате',
-  paid: 'Оплачен',
-};
+export const CLAIM_STATUS_LABEL = defineLabels<ClaimStatus>('labels.claimStatus', ['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid']);
 
-export const TRANSITION_LABEL: Record<ClaimStatus, string> = {
-  new: 'Вернуть в новые',
-  review: 'Взять в работу',
-  medical_review: 'Передать на медэкспертизу',
-  approved: 'Одобрить',
-  rejected: 'Отклонить',
-  to_pay: 'Передать к оплате',
-  paid: 'Отметить оплату',
-};
+export const TRANSITION_LABEL = defineLabels<ClaimStatus>('labels.claimTransition', ['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid']);
 
-export const TRANSITION_TOAST: Record<ClaimStatus, string> = {
-  new: 'Убыток возвращён',
-  review: 'Убыток взят в работу',
-  medical_review: 'Убыток передан на медэкспертизу',
-  approved: 'Убыток одобрен',
-  rejected: 'Убыток отклонён',
-  to_pay: 'Убыток передан к оплате',
-  paid: 'Оплата отмечена',
-};
+export const TRANSITION_TOAST = defineLabels<ClaimStatus>('labels.claimTransitionToast', ['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid']);
 
-export const CLAIM_CATEGORY_LABEL: Record<ClaimCategory, string> = {
-  medicines: 'Лекарства',
-  doctor_visit: 'Приём врача',
-  diagnostics: 'Анализы и диагностика',
-  dental: 'Стоматология',
-  inpatient: 'Стационар',
-};
+export const CLAIM_CATEGORY_LABEL = defineLabels<ClaimCategory>('labels.claimCategory', ['medicines', 'doctor_visit', 'diagnostics', 'dental', 'inpatient']);

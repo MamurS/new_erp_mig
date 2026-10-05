@@ -1,3 +1,4 @@
+import { t, tm, tp } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, KeyRound, PlugZap } from 'lucide-react';
@@ -6,7 +7,7 @@ import { useConfirmAppointment, useDashboard, useIntegrations, useMedicalAccessF
 import { errorMessage } from '@/shared/api/client';
 import { useUser } from '@/shared/auth/session';
 import { AUDIT_ACTION_LABEL } from '@/shared/domain/labels';
-import { daysUntil, formatDate, formatDateTime, formatRelativeDays, formatTime, plural } from '@/shared/lib/format';
+import { daysUntil, formatDate, formatDateTime, formatRelativeDays, formatTime } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
@@ -83,14 +84,14 @@ function queueRowPath(row: QueueItem, confirmed: boolean): string {
 
 function greeting(now = new Date()): string {
   const h = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Tashkent' }).format(now));
-  if (h < 12) return 'Доброе утро';
-  if (h < 18) return 'Добрый день';
-  return 'Добрый вечер';
+  if (h < 12) return t('staff.dashboard.morning');
+  if (h < 18) return t('staff.dashboard.afternoon');
+  return t('staff.dashboard.evening');
 }
 
 export default function DashboardPage() {
-  useDocumentTitle('Рабочий стол');
-  useTopbar([{ label: 'Рабочий стол' }]);
+  useDocumentTitle(t('staff.dashboard.title'));
+  useTopbar([{ label: t('staff.dashboard.title') }]);
   const user = useUser()!;
   const navigate = useNavigate();
   const dashboard = useDashboard();
@@ -114,8 +115,8 @@ export default function DashboardPage() {
     if (row.action === 'confirm') {
       try {
         await confirm.mutateAsync(row.entityId);
-        setDone((m) => new Map(m).set(row.id, { ...row, status: 'Подтверждена', statusTone: 'success', action: 'open' }));
-        toast.success('Запись подтверждена');
+        setDone((m) => new Map(m).set(row.id, { ...row, status: t('staff.dashboard.confirmedStatus'), statusTone: 'success', action: 'open' }));
+        toast.success(t('staff.dashboard.confirmed'));
       } catch (e) {
         toast.error(errorMessage(e));
       }
@@ -129,18 +130,18 @@ export default function DashboardPage() {
   const openRow = (row: QueueItem) => navigate(queueRowPath(row, done.has(row.id)));
 
   const columns: Column<QueueItem>[] = [
-    { key: 'type', header: 'Тип', cell: (r) => <Chip kind={QUEUE_TYPE_META[r.type].chip}>{QUEUE_TYPE_META[r.type].label}</Chip>, className: 'w-[150px]' },
-    { key: 'who', header: 'Кто', cell: (r) => <span className="font-medium">{r.who}</span> },
-    { key: 'details', header: 'Детали', cell: (r) => <span className="text-muted">{r.details}</span> },
-    { key: 'status', header: 'Статус', cell: (r) => <StatusDot tone={r.statusTone}>{r.status}</StatusDot> },
+    { key: 'type', header: t('common.type'), cell: (r) => <Chip kind={QUEUE_TYPE_META[r.type].chip}>{QUEUE_TYPE_META[r.type].label}</Chip>, className: 'w-[150px]' },
+    { key: 'who', header: t('staff.dashboard.colWho'), cell: (r) => <span className="font-medium">{r.who}</span> },
+    { key: 'details', header: t('staff.dashboard.colDetails'), cell: (r) => <span className="text-muted">{tm(r.details)}</span> },
+    { key: 'status', header: t('common.status'), cell: (r) => <StatusDot tone={r.statusTone}>{tm(r.status)}</StatusDot> },
     {
       key: 'due',
-      header: 'Срок',
+      header: t('staff.dashboard.colDue'),
       cell: (r) => {
         const d = daysUntil(r.dueAt);
         return (
           <span className={cn('whitespace-nowrap', d < 0 && 'font-medium text-danger-text')} title={formatDateTime(r.dueAt)}>
-            {(r.type === 'appointment' || r.type === 'clinic_no_response') && d === 0 ? `сегодня, ${formatTime(r.dueAt)}` : formatRelativeDays(r.dueAt)}
+            {(r.type === 'appointment' || r.type === 'clinic_no_response') && d === 0 ? t('staff.dashboard.todayAt', { time: formatTime(r.dueAt) }) : formatRelativeDays(r.dueAt)}
           </span>
         );
       },
@@ -159,7 +160,7 @@ export default function DashboardPage() {
             void onAction(r);
           }}
         >
-          {r.action === 'confirm' ? 'Подтвердить' : r.action === 'prepare_offer' ? 'Подготовить КП' : 'Открыть'}
+          {r.action === 'confirm' ? t('common.confirm') : r.action === 'prepare_offer' ? t('staff.dashboard.prepareOffer') : t('common.open')}
         </Button>
       ),
     },
@@ -167,8 +168,8 @@ export default function DashboardPage() {
 
   // Tabs are the kinds of work in this role's queue (the server already filtered them by rights).
   const queueTabs: { key: QueueType | 'all'; label: string; count?: number }[] = [
-    { key: 'all', label: 'Все' },
-    ...(dashboard.data?.queueTypes ?? []).filter((t) => canSeeQueueType(user, t.type)).map((t) => ({ key: t.type, label: QUEUE_TYPE_META[t.type].tab, count: t.count })),
+    { key: 'all', label: t('common.all') },
+    ...(dashboard.data?.queueTypes ?? []).filter((q) => canSeeQueueType(user, q.type)).map((q) => ({ key: q.type, label: QUEUE_TYPE_META[q.type].tab, count: q.count })),
   ];
 
   const now = new Date();
@@ -177,11 +178,11 @@ export default function DashboardPage() {
       <div className="flex min-w-0 flex-col gap-4">
         <div>
           <h1 className="text-[22px] font-bold">
-            {greeting(now)}, {dashboard.data?.firstName ?? user.displayName.split(' ')[0]}
+            {t('staff.dashboard.greeting', { greeting: greeting(now), name: dashboard.data?.firstName ?? user.displayName.split(' ')[0] ?? '' })}
           </h1>
           <p className="text-muted">
             {formatDate(now)} ·{' '}
-            {dashboard.data ? `${dashboard.data.queueCount} ${plural(dashboard.data.queueCount, ['задача', 'задачи', 'задач'])} в очереди` : '…'}
+            {dashboard.data ? tp('staff.dashboard.queueCount', dashboard.data.queueCount) : '…'}
           </p>
         </div>
         {dashboard.isError ? (
@@ -193,24 +194,24 @@ export default function DashboardPage() {
               : Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[86px] rounded-card" />)}
           </div>
         )}
-        <Card title="Очередь" bodyClassName="p-0">
-          <div role="tablist" aria-label="Тип задач" className="flex gap-1 overflow-x-auto border-b border-border-soft px-3 pt-2" data-testid="queue-tabs">
-            {queueTabs.map((t) => (
+        <Card title={t('staff.dashboard.queue')} bodyClassName="p-0">
+          <div role="tablist" aria-label={t('staff.dashboard.queueTabs')} className="flex gap-1 overflow-x-auto border-b border-border-soft px-3 pt-2" data-testid="queue-tabs">
+            {queueTabs.map((qt) => (
               <button
-                key={t.key}
+                key={qt.key}
                 role="tab"
                 type="button"
-                aria-selected={tab === t.key}
-                onClick={() => setTab(t.key)}
-                className={cn('-mb-px whitespace-nowrap border-b-2 border-transparent px-2.5 py-1.5 text-muted', tab === t.key && 'border-accent font-semibold text-text')}
+                aria-selected={tab === qt.key}
+                onClick={() => setTab(qt.key)}
+                className={cn('-mb-px whitespace-nowrap border-b-2 border-transparent px-2.5 py-1.5 text-muted', tab === qt.key && 'border-accent font-semibold text-text')}
               >
-                {t.label}
-                {t.count !== undefined && <span className="ml-1 text-[11px] text-muted num">{t.count}</span>}
+                {qt.label}
+                {qt.count !== undefined && <span className="ml-1 text-[11px] text-muted num">{qt.count}</span>}
               </button>
             ))}
           </div>
           <DataTable
-            caption="Очередь задач"
+            caption={t('staff.dashboard.queueCaption')}
             columns={columns}
             rows={queue.data ? (showAll ? rows : rows.slice(0, 15)) : undefined}
             rowKey={(r) => `${r.type}-${r.id}`}
@@ -219,19 +220,19 @@ export default function DashboardPage() {
             onRetry={() => void queue.refetch()}
             onRowClick={openRow}
             rowHeight={46}
-            empty={<EmptyState title="Очередь пуста" description="Новые задачи появятся здесь автоматически" />}
+            empty={<EmptyState title={t('staff.dashboard.queueEmpty')} description={t('staff.dashboard.queueEmptyHint')} />}
             footer={
               rows.length > 15 ? (
                 <Button variant="link" onClick={() => setShowAll((v) => !v)}>
-                  {showAll ? 'Свернуть' : `Показать все (${rows.length})`}
+                  {showAll ? t('staff.dashboard.collapse') : t('staff.dashboard.showAll', { n: rows.length })}
                 </Button>
               ) : undefined
             }
           />
         </Card>
       </div>
-      <aside className="flex flex-col gap-4" aria-label="Сводка">
-        <Card title="Требует внимания" bodyClassName="p-2">
+      <aside className="flex flex-col gap-4" aria-label={t('staff.dashboard.summary')}>
+        <Card title={t('staff.dashboard.attention')} bodyClassName="p-2">
           {dashboard.isLoading ? (
             <SkeletonRows rows={3} />
           ) : dashboard.data?.attention.length ? (
@@ -240,7 +241,7 @@ export default function DashboardPage() {
                 <li key={a.key}>
                   <Link to={a.to} className="flex items-center gap-2 rounded-btn px-2 py-2 hover:bg-rail">
                     <AlertTriangle className={cn('h-4 w-4', a.count ? 'text-warning' : 'text-muted')} aria-hidden />
-                    <span className="flex-1">{a.label}</span>
+                    <span className="flex-1">{tm(a.label)}</span>
                     <span className={cn('font-bold num', a.count ? 'text-warning-text' : 'text-muted')}>{a.count}</span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted" aria-hidden />
                   </Link>
@@ -248,7 +249,7 @@ export default function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="px-2 py-3 text-muted">Всё под контролем</p>
+            <p className="px-2 py-3 text-muted">{t('staff.dashboard.allGood')}</p>
           )}
         </Card>
         <IntegrationsCard />
@@ -261,9 +262,9 @@ export default function DashboardPage() {
 function IntegrationsCard() {
   const q = useIntegrations();
   const tone = { ok: 'success', degraded: 'warning', down: 'danger' } as const;
-  const label = { ok: 'Работает', degraded: 'С задержками', down: 'Недоступно' } as const;
+  const label = { ok: t('staff.dashboard.intOk'), degraded: t('staff.dashboard.intDegraded'), down: t('staff.dashboard.intDown') };
   return (
-    <Card title={<span className="flex items-center gap-1.5"><PlugZap className="h-4 w-4" aria-hidden /> Интеграции</span>} bodyClassName="p-2">
+    <Card title={<span className="flex items-center gap-1.5"><PlugZap className="h-4 w-4" aria-hidden /> {t('staff.dashboard.integrations')}</span>} bodyClassName="p-2">
       {q.isLoading ? (
         <SkeletonRows rows={4} />
       ) : q.isError ? (
@@ -275,7 +276,7 @@ function IntegrationsCard() {
               <StatusDot tone={tone[i.status]}>{i.name}</StatusDot>
               <span className="text-right text-[12px] text-muted">
                 {label[i.status]} · {formatTime(i.lastSyncAt)}
-                {i.queue > 0 && ` · в очереди ${i.queue}`}
+                {i.queue > 0 && t('staff.dashboard.intQueued', { n: i.queue })}
               </span>
             </li>
           ))}
@@ -288,13 +289,13 @@ function IntegrationsCard() {
 function MedicalAccessCard() {
   const q = useMedicalAccessFeed(true);
   return (
-    <Card title={<span className="flex items-center gap-1.5"><KeyRound className="h-4 w-4" aria-hidden /> Доступ к медданным</span>} bodyClassName="p-2">
+    <Card title={<span className="flex items-center gap-1.5"><KeyRound className="h-4 w-4" aria-hidden /> {t('staff.dashboard.medicalAccess')}</span>} bodyClassName="p-2">
       {q.isLoading ? (
         <SkeletonRows rows={3} />
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
       ) : q.data!.length === 0 ? (
-        <p className="px-2 py-3 text-muted">Обращений к данным не было</p>
+        <p className="px-2 py-3 text-muted">{t('staff.dashboard.medicalNone')}</p>
       ) : (
         <ul className="flex flex-col">
           {q.data!.map((e) => (
@@ -304,7 +305,7 @@ function MedicalAccessCard() {
                 <span className="text-[12px] text-muted">{formatDateTime(e.at)}</span>
               </div>
               <div className="text-[12px] text-muted">
-                {AUDIT_ACTION_LABEL[e.action]} · {e.targetLabel}
+                {AUDIT_ACTION_LABEL[e.action]} · {tm(e.targetLabel)}
               </div>
             </li>
           ))}

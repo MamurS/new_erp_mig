@@ -2,6 +2,7 @@
  * Sales part of the lifecycle (LIFECYCLE_SPEC §2–6): staff authority changes (four-eyes), leads, deals,
  * the anonymous census, quotes with authority routing, the offer from an approved quote, the client's answer.
  */
+import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { AuthorityChange, Deal, KpDocument, KpParams, Quote, SessionUser, StaffAuthority } from '@/shared/types';
 import type { DealCard, QuoteView, StaffDirectoryItem } from '@/shared/types/dto';
@@ -25,7 +26,7 @@ import {
   quoteRejectSchema,
 } from '@/shared/schemas/forms';
 import { db, type Db, type StaffRow } from '../db';
-import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
+import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { randomId } from '../rng';
 import { DAY, isoDay, tzIso } from '../time';
 import { toClient } from '../views';
@@ -90,7 +91,7 @@ function quoteOf(d: Db, ctx: Ctx): Quote {
 function recalc(d: Db, q: Quote, program: Quote['program'], adjustments: Quote['adjustments']): void {
   const deal = dealOf(d, q.dealId);
   const c = census(d, deal.id);
-  if (!c) throw conflict('Сначала загрузите данные для оценки');
+  if (!c) throw conflict('srv.deal.uploadCensusFirst');
   const calc = calculateQuote({ program, rows: c.rows, startDate: deal.expectedStart ?? todayIso(), adjustments }, paramValues());
   Object.assign(q, {
     program,
@@ -109,9 +110,9 @@ function dealCard(d: Db, deal: Deal): DealCard {
   const client = clientRow(d, deal.clientId);
   const contract = dealContract(d, deal.id);
   const reminders: string[] = [];
-  if (contract && originalReminderDue(contract.signing, Date.now(), dmsParam('paperOriginalReminderDays'))) reminders.push(`Оригинал договора ${contract.number} от клиента не получен дольше ${dmsParam('paperOriginalReminderDays')} дн.`);
+  if (contract && originalReminderDue(contract.signing, Date.now(), dmsParam('paperOriginalReminderDays'))) reminders.push(msg('srv.deal.reminderOriginal', { number: contract.number, days: dmsParam('paperOriginalReminderDays') }));
   const overdue = d.invoices.filter((i) => contract && i.contractId === contract.id && i.status === 'overdue');
-  if (overdue.length) reminders.push(`Просрочено взносов: ${overdue.length}`);
+  if (overdue.length) reminders.push(msg('srv.deal.reminderOverdue', { count: overdue.length }));
   return {
     ...toDealView(d, deal),
     client: toClient(d, client),
@@ -183,7 +184,7 @@ export const lifecycleHandlers = [
       const d = db();
       const target = staffRow(d, param(ctx, 'id'));
       const input = await body(ctx.request, authorityChangeSchema);
-      if (d.authorityChanges.some((c) => c.staffId === target.id && c.status === 'pending')) throw conflict('По этому сотруднику уже есть изменение на подтверждении');
+      if (d.authorityChanges.some((c) => c.staffId === target.id && c.status === 'pending')) throw conflict('srv.authority.alreadyPending');
       const to = { authority: input.authority, ...(input.signatory ? { signatory: { canSign: true as const, basis: input.signatory.basis } } : {}) };
       const change: AuthorityChange = {
         id: randomId(),
@@ -216,9 +217,9 @@ export const lifecycleHandlers = [
         const c = d.authorityChanges.find((x) => x.id === param(ctx, 'id'));
         if (!c) throw notFound();
         if (!can(user, 'staff.authority.manage', { sub: 'approve', createdById: c.proposedById })) throw forbidden();
-        if (c.status !== 'pending') throw conflict('Изменение уже рассмотрено');
+        if (c.status !== 'pending') throw conflict('srv.change.alreadyReviewed');
         if (kind === 'approve' && (c.proposedById === user.id || c.staffId === user.id)) {
-          throw new HttpError(403, 'forbidden', 'Подтверждает другой сотрудник, и не тот, чьи полномочия меняются (правило четырёх глаз)');
+          throw new HttpError(403, 'forbidden', 'srv.authority.fourEyes');
         }
         const target = staffRow(d, c.staffId);
         const at = tzIso(Date.now());
@@ -261,7 +262,7 @@ export const lifecycleHandlers = [
       requirePermission(user, 'leads.manage');
       const input = await body(request, leadCreateSchema);
       const d = db();
-      if (d.clients.some((c) => c.inn === input.inn)) throw new HttpError(409, 'conflict', 'Клиент с таким ИНН уже есть', { inn: 'ИНН уже есть в базе' });
+      if (d.clients.some((c) => c.inn === input.inn)) throw new HttpError(409, 'conflict', 'srv.clients.innTaken', { fields: { inn: msg('srv.clients.innInDb') } });
       const now = tzIso(Date.now());
       const client = {
         id: randomId(),
@@ -336,7 +337,7 @@ export const lifecycleHandlers = [
       const d = db();
       const deal = dealOf(d, param(ctx, 'id'));
       const input = await body(ctx.request, dealPatchSchema);
-      if (input.underwriterId && d.staff.find((s) => s.id === input.underwriterId)?.role !== 'underwriter') throw new HttpError(422, 'validation', 'Выберите андеррайтера', { underwriterId: 'Выберите андеррайтера' });
+      if (input.underwriterId && d.staff.find((s) => s.id === input.underwriterId)?.role !== 'underwriter') throw new HttpError(422, 'validation', 'srv.deal.chooseUnderwriter', { fields: { underwriterId: msg('srv.deal.chooseUnderwriter') } });
       if (input.expectedStart) deal.expectedStart = input.expectedStart;
       if (input.underwriterId) {
         deal.underwriterId = input.underwriterId;
@@ -353,7 +354,7 @@ export const lifecycleHandlers = [
       requirePermission(user, 'deals.manage');
       const d = db();
       const deal = dealOf(d, param(ctx, 'id'));
-      if (deal.stage === 'active' || deal.stage === 'lost') throw conflict('Сделка уже закрыта');
+      if (deal.stage === 'active' || deal.stage === 'lost') throw conflict('srv.deal.alreadyClosed');
       const { reason } = await body(ctx.request, dealLostSchema);
       deal.stage = 'lost';
       deal.lostReason = reason;
@@ -372,11 +373,11 @@ export const lifecycleHandlers = [
       requirePermission(user, 'census.upload');
       const d = db();
       const deal = dealOf(d, param(ctx, 'id'));
-      if (deal.stage === 'lost' || deal.stage === 'active') throw conflict('Сделка закрыта');
+      if (deal.stage === 'lost' || deal.stage === 'active') throw conflict('srv.deal.closed');
       const text = await ctx.request.text();
-      if (text.length > CENSUS_MAX_BYTES) throw new HttpError(413, 'validation', 'Файл больше 1 МБ');
+      if (text.length > CENSUS_MAX_BYTES) throw new HttpError(413, 'validation', 'srv.file.tooLarge1mb');
       const parsed = parseCensusCsv(text, todayIso());
-      if (!parsed.rows.length) throw new HttpError(422, 'validation', parsed.errors[0]?.message ?? 'В файле нет строк');
+      if (!parsed.rows.length) throw parsed.errors[0] ? httpErrorOf(422, 'validation', parsed.errors[0].message) : new HttpError(422, 'validation', 'srv.census.noRows');
       // Names, PINFL and phones are not accepted at this stage: such columns were dropped by the parser.
       const c = { id: randomId(), dealId: deal.id, rows: parsed.rows, uploadedAt: tzIso(Date.now()) };
       d.censuses.push(c);
@@ -395,7 +396,7 @@ export const lifecycleHandlers = [
       const input = await body(request, quoteCreateSchema);
       const d = db();
       const deal = dealOf(d, input.dealId);
-      if (deal.stage === 'lost' || deal.stage === 'active') throw conflict('Сделка закрыта');
+      if (deal.stage === 'lost' || deal.stage === 'active') throw conflict('srv.deal.closed');
       const q: Quote = {
         id: randomId(),
         dealId: deal.id,
@@ -436,7 +437,7 @@ export const lifecycleHandlers = [
       requirePermission(user, 'quotes.calculate');
       const d = db();
       const q = quoteOf(d, ctx);
-      if (q.status !== 'draft' && q.status !== 'rejected') throw conflict('Котировку на согласовании или утверждённую нельзя изменить');
+      if (q.status !== 'draft' && q.status !== 'rejected') throw conflict('srv.quote.locked');
       const input = await body(ctx.request, quotePatchSchema);
       recalc(d, q, input.program, input.adjustments);
       q.status = 'draft';
@@ -451,7 +452,7 @@ export const lifecycleHandlers = [
       requirePermission(user, 'quotes.calculate');
       const d = db();
       const q = quoteOf(d, ctx);
-      if (q.status !== 'draft' && q.status !== 'rejected') throw conflict('Котировка уже отправлена');
+      if (q.status !== 'draft' && q.status !== 'rejected') throw conflict('srv.quote.alreadySent');
       const deal = dealOf(d, q.dealId);
       const author = d.staff.find((s) => s.id === user.id);
       const problem = quoteAuthorityProblem(q, author?.authority);
@@ -476,10 +477,10 @@ export const lifecycleHandlers = [
       requirePermission(user, 'quotes.approve');
       const d = db();
       const q = quoteOf(d, ctx);
-      if (q.status !== 'pending_approval') throw conflict('Котировка не ждёт согласования');
+      if (q.status !== 'pending_approval') throw conflict('srv.quote.notPending');
       const approver = d.staff.find((s) => s.id === user.id)!;
-      if (q.createdById === user.id) throw new HttpError(403, 'forbidden', 'Котировку утверждает другой андеррайтер (правило четырёх глаз)');
-      if (!canApproveQuote(approver, q)) throw new HttpError(403, 'forbidden', 'Котировка выше ваших полномочий: нужен сотрудник с бо́льшими полномочиями');
+      if (q.createdById === user.id) throw new HttpError(403, 'forbidden', 'srv.quote.fourEyes');
+      if (!canApproveQuote(approver, q)) throw new HttpError(403, 'forbidden', 'srv.quote.overAuthority');
       const { comment } = await body(ctx.request, quoteApproveSchema);
       q.status = 'approved';
       q.approvals.push({ byId: user.id, byName: user.displayName, at: tzIso(Date.now()), ...(comment ? { comment } : {}) });
@@ -496,7 +497,7 @@ export const lifecycleHandlers = [
       requirePermission(user, 'quotes.approve');
       const d = db();
       const q = quoteOf(d, ctx);
-      if (q.status !== 'pending_approval') throw conflict('Котировка не ждёт согласования');
+      if (q.status !== 'pending_approval') throw conflict('srv.quote.notPending');
       if (q.createdById === user.id) throw forbidden();
       const { reason } = await body(ctx.request, quoteRejectSchema);
       q.status = 'rejected';
@@ -517,7 +518,7 @@ export const lifecycleHandlers = [
       const d = db();
       const deal = dealOf(d, param(ctx, 'id'));
       const q = latestQuote(d, deal.id);
-      if (!q || q.status !== 'approved') throw conflict('КП можно отправить только по утверждённой котировке');
+      if (!q || q.status !== 'approved') throw conflict('srv.kp.needsApprovedQuote');
       const client = clientRow(d, deal.clientId);
       const start = deal.expectedStart && deal.expectedStart >= todayIso() ? deal.expectedStart : defaultStartDate(todayIso());
       const c = census(d, deal.id);
@@ -586,7 +587,7 @@ export const lifecycleHandlers = [
         if (user.role === 'hr') {
           if (!can(user, 'kp.respond', { companyId: kp.clientId })) throw notFound();
         } else if (!can(user, 'kp.respond', { sub: 'manual' })) throw forbidden();
-        if (kp.status !== 'sent') throw conflict('Ответить можно только на отправленное КП');
+        if (kp.status !== 'sent') throw conflict('srv.kp.answerSentOnly');
         const reason = kind === 'decline' ? (await body(ctx.request, kpDeclineSchema)).reason : undefined;
         kp.status = kind === 'accept' ? 'accepted' : 'declined';
         kp.response = { at: tzIso(Date.now()), byName: user.displayName, via: user.role === 'hr' ? 'hr' : 'manager', ...(reason ? { reason } : {}) };

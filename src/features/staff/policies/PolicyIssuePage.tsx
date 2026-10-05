@@ -1,4 +1,5 @@
 /* Policy issuance wizard (POLICY_SPEC §4): terms → list of insured persons → review and HR invite. */
+import { defineLabels, t, tm } from '@/i18n';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Download, FileUp } from 'lucide-react';
@@ -24,7 +25,8 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
 const PROGRAM_CODES: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
-const STEPS = ['Условия', 'Список застрахованных', 'Проверка'] as const;
+const STEPS = ['terms', 'list', 'review'] as const;
+const STEP_LABEL = defineLabels('staffLc.issue.step', STEPS);
 
 interface Terms {
   program: ProgramCode;
@@ -44,14 +46,14 @@ function ListPreview({ csv, result }: { csv: string; result: PolicyListCheck }) 
   return (
     <div className="mt-3 max-h-[420px] overflow-auto rounded-btn border border-border">
       <table className="w-full border-collapse text-left text-[13px]">
-        <caption className="sr-only">Строки файла со списком застрахованных</caption>
+        <caption className="sr-only">{t('staffLc.issue.previewCaption')}</caption>
         <thead className="sticky top-0 bg-surface">
           <tr className="border-b border-border text-[12px] text-muted">
-            <th className="px-2 py-1.5 font-normal">Строка</th>
-            <th className="px-2 py-1.5 font-normal">ФИО</th>
-            <th className="px-2 py-1.5 font-normal">Должность</th>
-            <th className="px-2 py-1.5 font-normal">Семья</th>
-            <th className="px-2 py-1.5 font-normal">Проверка</th>
+            <th className="px-2 py-1.5 font-normal">{t('staffLc.issue.colRow')}</th>
+            <th className="px-2 py-1.5 font-normal">{t('common.fullName')}</th>
+            <th className="px-2 py-1.5 font-normal">{t('common.position')}</th>
+            <th className="px-2 py-1.5 font-normal">{t('staffLc.issue.colFamily')}</th>
+            <th className="px-2 py-1.5 font-normal">{t('staffLc.issue.colCheck')}</th>
           </tr>
         </thead>
         <tbody>
@@ -65,28 +67,28 @@ function ListPreview({ csv, result }: { csv: string; result: PolicyListCheck }) 
                 <td className="px-2 py-1.5">{r.position}</td>
                 <td className="num px-2 py-1.5">{r.familyMembers || '0'}</td>
                 <td className={cn('px-2 py-1.5', errs ? 'text-danger-text' : 'text-success-text')}>
-                  {errs ? errs.map((e) => `${e.field ? `${e.field}: ` : ''}${e.message}`).join('; ') : 'Корректно'}
+                  {errs ? errs.map((e) => `${e.field ? `${e.field}: ` : ''}${tm(e.message)}`).join('; ') : t('staffLc.issue.valid')}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      {rows.length > PREVIEW_ROWS && <p className="px-2 py-1.5 text-[12px] text-muted">Показаны первые {PREVIEW_ROWS} строк из {rows.length}; итоги выше посчитаны по всему файлу.</p>}
+      {rows.length > PREVIEW_ROWS && <p className="px-2 py-1.5 text-[12px] text-muted">{t('staffLc.issue.previewLimited', { shown: PREVIEW_ROWS, total: rows.length })}</p>}
     </div>
   );
 }
 
 function Steps({ step }: { step: number }) {
   return (
-    <ol className="flex flex-wrap gap-2" aria-label="Шаги оформления">
-      {STEPS.map((label, i) => (
+    <ol className="flex flex-wrap gap-2" aria-label={t('staffLc.issue.stepsAria')}>
+      {STEPS.map((id, i) => (
         <li
-          key={label}
+          key={id}
           aria-current={i === step ? 'step' : undefined}
           className={cn('rounded-full border px-3 py-1 text-[13px]', i === step ? 'border-accent bg-accent-soft font-semibold text-accent-text' : i < step ? 'border-border text-text' : 'border-border text-muted')}
         >
-          {i + 1}. {label}
+          {i + 1}. {STEP_LABEL[id]}
         </li>
       ))}
     </ol>
@@ -97,16 +99,16 @@ export default function PolicyIssuePage() {
   const { clientId = '' } = useParams();
   const navigate = useNavigate();
   const client = useClient(clientId);
-  useDocumentTitle('Оформление полиса');
-  useTopbar([{ label: 'Клиенты', to: '/staff/clients' }, { label: client.data?.name ?? 'Клиент', to: `/staff/clients/${clientId}` }, { label: 'Оформление полиса' }]);
+  useDocumentTitle(t('staffLc.issue.title'));
+  useTopbar([{ label: t('staffLc.issue.clients'), to: '/staff/clients' }, { label: client.data?.name ?? t('common.client'), to: `/staff/clients/${clientId}` }, { label: t('staffLc.issue.title') }]);
   const check = useCheckPolicyList();
   const issue = useIssuePolicy();
 
   const [step, setStep] = useState(0);
   const start = addDaysISO(todayISO(), 1);
   const [terms, setTerms] = useState<Terms>(() => {
-    const t = defaultTariff('standard');
-    return { program: 'standard', startDate: start, endDate: defaultEndDate(start), employee: String(t.employee), family: String(t.family) };
+    const tr = defaultTariff('standard');
+    return { program: 'standard', startDate: start, endDate: defaultEndDate(start), employee: String(tr.employee), family: String(tr.family) };
   });
   const [termErrors, setTermErrors] = useState<Record<string, string>>({});
   const [csv, setCsv] = useState<string | null>(null);
@@ -124,8 +126,8 @@ export default function PolicyIssuePage() {
   const c = client.data;
 
   const pickProgram = (program: ProgramCode) => {
-    const t = defaultTariff(program);
-    setTerms((s) => ({ ...s, program, employee: String(t.employee), family: String(t.family) }));
+    const tr = defaultTariff(program);
+    setTerms((s) => ({ ...s, program, employee: String(tr.employee), family: String(tr.family) }));
   };
 
   const nextFromTerms = () => {
@@ -141,6 +143,7 @@ export default function PolicyIssuePage() {
   };
 
   const template = () => {
+    // eslint-disable-next-line mig/no-cyrillic-ui -- sample row of the CSV template (data, not UI)
     const rows = [['Иванов Иван Иванович', '15.03.1990', '31503900000001', '+998901234567', 'Инженер', 2]];
     downloadText(toCsv(POLICY_CSV_HEADER, rows), 'policy-insured-template.csv');
   };
@@ -149,11 +152,11 @@ export default function PolicyIssuePage() {
     setPreview(null);
     setCsv(null);
     if (!/\.csv$/i.test(file.name) || (file.type && !['text/csv', 'application/vnd.ms-excel', 'text/plain'].includes(file.type))) {
-      setFileError('Нужен файл .csv — в Excel: «Сохранить как» → CSV UTF-8');
+      setFileError(t('staffLc.issue.needCsv'));
       return;
     }
     if (file.size > POLICY_CSV_MAX_BYTES) {
-      setFileError('Файл больше 5 МБ — разделите список на несколько файлов');
+      setFileError(t('staffLc.issue.tooBig'));
       return;
     }
     setFileError(null);
@@ -181,7 +184,7 @@ export default function PolicyIssuePage() {
     setHrErrors({});
     try {
       const policy = await issue.mutateAsync({ clientId, body: { program: terms.program, startDate: terms.startDate, endDate: terms.endDate, tariff, csv, hr: hrBody } });
-      toast.success(`Полис ${policy.number} оформлен`);
+      toast.success(t('staffLc.issue.issued', { number: policy.number }));
       navigate(`/staff/policies/${policy.id}`, { replace: true });
     } catch (e) {
       toast.error(errorMessage(e));
@@ -191,18 +194,18 @@ export default function PolicyIssuePage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-[22px] font-bold">Оформление полиса</h1>
+        <h1 className="text-[22px] font-bold">{t('staffLc.issue.title')}</h1>
         <p className="text-muted">
-          {c.legalForm} «{c.name}» · ИНН <span className="num">{c.inn}</span>
+          {c.legalForm} «{c.name}» · {t('staffLc.deals.inn')} <span className="num">{c.inn}</span>
         </p>
       </div>
       <Steps step={step} />
 
       {step === 0 && (
-        <Card title="Условия полиса">
+        <Card title={t('staffLc.issue.termsTitle')}>
           <fieldset>
-            <legend className="mb-2 text-[12px] font-medium text-muted">Программа</legend>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label="Программа">
+            <legend className="mb-2 text-[12px] font-medium text-muted">{t('common.program')}</legend>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label={t('common.program')}>
               {PROGRAM_CODES.map((code) => (
                 <button
                   key={code}
@@ -213,7 +216,7 @@ export default function PolicyIssuePage() {
                   className={cn('rounded-card border p-3 text-left', terms.program === code ? 'border-accent bg-accent-soft' : 'border-border hover:bg-rail')}
                 >
                   <span className="block font-semibold">{PROGRAM_LABEL[code]}</span>
-                  <span className="block text-[12px] text-muted">тариф {formatMoney(defaultTariff(code).employee)} в год</span>
+                  <span className="block text-[12px] text-muted">{t('staffLc.issue.ratePerYear', { amount: formatMoney(defaultTariff(code).employee) })}</span>
                   <dl className="mt-2 text-[12px]">
                     {(Object.keys(PROGRAMS[code].limits) as LimitCategory[]).map((cat) => (
                       <div key={cat} className="flex justify-between gap-2">
@@ -227,45 +230,44 @@ export default function PolicyIssuePage() {
             </div>
           </fieldset>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Начало" error={termErrors.startDate}>
+            <Field label={t('common.start')} error={tm(termErrors.startDate) || undefined}>
               {(a) => <Input {...a} type="date" value={terms.startDate} onChange={(e) => setTerms((s) => ({ ...s, startDate: e.target.value, endDate: e.target.value ? defaultEndDate(e.target.value) : s.endDate }))} />}
             </Field>
-            <Field label="Окончание" error={termErrors.endDate}>
+            <Field label={t('common.end')} error={tm(termErrors.endDate) || undefined}>
               {(a) => <Input {...a} type="date" value={terms.endDate} onChange={(e) => setTerms((s) => ({ ...s, endDate: e.target.value }))} />}
             </Field>
-            <Field label="Тариф на сотрудника, UZS в год" error={termErrors.employee}>
+            <Field label={t('staffLc.issue.rateEmployee')} error={tm(termErrors.employee) || undefined}>
               {(a) => <Input {...a} inputMode="numeric" maxLength={13} value={terms.employee} onChange={(e) => setTerms((s) => ({ ...s, employee: e.target.value }))} />}
             </Field>
-            <Field label="Тариф на члена семьи, UZS в год" error={termErrors.family}>
+            <Field label={t('staffLc.issue.rateFamily')} error={tm(termErrors.family) || undefined}>
               {(a) => <Input {...a} inputMode="numeric" maxLength={13} value={terms.family} onChange={(e) => setTerms((s) => ({ ...s, family: e.target.value }))} />}
             </Field>
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => navigate(`/staff/clients/${clientId}`)}>
-              Отмена
+              {t('common.cancel')}
             </Button>
-            <Button onClick={nextFromTerms}>Далее</Button>
+            <Button onClick={nextFromTerms}>{t('common.next')}</Button>
           </div>
         </Card>
       )}
 
       {step === 1 && (
-        <Card title="Список застрахованных">
+        <Card title={t('staffLc.issue.step.list')}>
           <p className="text-muted">
-            Список сотрудников от клиента — приложение 1 к полису. Файл .csv в UTF-8, до 5 МБ и {formatNumber(POLICY_CSV_MAX_ROWS)} строк. Колонки: <code>{POLICY_CSV_HEADER.join(', ')}</code>; <code>familyMembers</code> — сколько членов семьи
-            застраховано вместе с сотрудником (0–10, можно не заполнять).
+            {t('staffLc.issue.listHelp', { rows: formatNumber(POLICY_CSV_MAX_ROWS), columns: POLICY_CSV_HEADER.join(', ') })}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={template}>
-              <Download className="h-3.5 w-3.5" aria-hidden /> Скачать шаблон CSV
+              <Download className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.issue.downloadTemplate')}
             </Button>
             <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-btn border border-border px-3 text-[13px] font-medium hover:bg-rail">
-              <FileUp className="h-3.5 w-3.5" aria-hidden /> {check.isPending ? 'Проверяем…' : 'Загрузить список'}
+              <FileUp className="h-3.5 w-3.5" aria-hidden /> {check.isPending ? t('staffLc.issue.checking') : t('staffLc.contract.uploadList')}
               <input
                 type="file"
                 accept=".csv,text/csv"
                 className="sr-only"
-                aria-label="Файл со списком застрахованных"
+                aria-label={t('staffLc.issue.fileAria')}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   e.target.value = '';
@@ -282,21 +284,21 @@ export default function PolicyIssuePage() {
           {preview && (
             <div className="mt-4" data-testid="policy-list-preview">
               <p className="font-medium">
-                Строк в файле: {preview.total} · корректных: {preview.valid} · с ошибками: {preview.total - preview.valid}
+                {t('staffLc.issue.fileStats', { total: preview.total, valid: preview.valid, invalid: preview.total - preview.valid })}
               </p>
               <p className="text-muted">
-                Сотрудников: {preview.employees}, членов семьи: {preview.familyMembers}
+                {t('staffLc.issue.peopleStats', { employees: preview.employees, family: preview.familyMembers })}
               </p>
               {csv && <ListPreview csv={csv} result={preview} />}
-              {preview.errors.length > 0 && <p className="mt-2 text-[13px] text-muted">Строки с ошибками не попадут в полис — исправьте их в файле и загрузите снова.</p>}
+              {preview.errors.length > 0 && <p className="mt-2 text-[13px] text-muted">{t('staffLc.issue.errorsNote')}</p>}
             </div>
           )}
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setStep(0)}>
-              Назад
+              {t('common.back')}
             </Button>
             <Button disabled={!preview || preview.valid === 0} onClick={() => setStep(2)}>
-              Далее
+              {t('common.next')}
             </Button>
           </div>
         </Card>
@@ -304,50 +306,50 @@ export default function PolicyIssuePage() {
 
       {step === 2 && preview && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="Итоги">
+          <Card title={t('staffLc.issue.summary')}>
             <dl className="divide-y divide-border-soft" data-testid="policy-summary">
-              <Kv label="Программа">{PROGRAM_LABEL[terms.program]}</Kv>
-              <Kv label="Срок">
+              <Kv label={t('common.program')}>{PROGRAM_LABEL[terms.program]}</Kv>
+              <Kv label={t('staffLc.contracts.term')}>
                 {formatDate(terms.startDate)} — {formatDate(terms.endDate)}
               </Kv>
-              <Kv label="Сотрудников">{formatNumber(preview.employees)}</Kv>
-              <Kv label="Членов семьи">{formatNumber(preview.familyMembers)}</Kv>
-              <Kv label="Тарифы">
+              <Kv label={t('staffLc.census.employeesCount')}>{formatNumber(preview.employees)}</Kv>
+              <Kv label={t('staffLc.census.familyCount')}>{formatNumber(preview.familyMembers)}</Kv>
+              <Kv label={t('staffLc.issue.rates')}>
                 {formatMoney(tariff.employee)} / {formatMoney(tariff.family)}
               </Kv>
-              <Kv label="Премия">
+              <Kv label={t('common.premium')}>
                 <span className="num font-semibold">{formatMoney(premium)}</span>
               </Kv>
               {(Object.keys(PROGRAMS[terms.program].limits) as LimitCategory[]).map((cat) => (
-                <Kv key={cat} label={`Лимит: ${LIMIT_CATEGORY_LABEL[cat].toLowerCase()}`}>
+                <Kv key={cat} label={t('staffLc.issue.limit', { category: LIMIT_CATEGORY_LABEL[cat].toLowerCase() })}>
                   <span className="num">{formatMoney(PROGRAMS[terms.program].limits[cat])}</span>
                 </Kv>
               ))}
             </dl>
           </Card>
-          <Card title="HR клиента">
+          <Card title={t('staffLc.endorsements.clientHr')}>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={inviteHr} onChange={(e) => setInviteHr(e.target.checked)} />
-              Пригласить HR клиента в кабинет
+              {t('staffLc.issue.inviteHr')}
             </label>
             {inviteHr && (
               <div className="mt-3 grid gap-3">
-                <Field label="ФИО HR" error={hrErrors.fullName}>
+                <Field label={t('staffLc.issue.hrName')} error={tm(hrErrors.fullName) || undefined}>
                   {(a) => <Input {...a} autoComplete="off" maxLength={120} value={hr.fullName} onChange={(e) => setHr((s) => ({ ...s, fullName: e.target.value }))} />}
                 </Field>
-                <Field label="Email HR" error={hrErrors.email}>
+                <Field label={t('staffLc.issue.hrEmail')} error={tm(hrErrors.email) || undefined}>
                   {(a) => <Input {...a} type="email" autoComplete="off" maxLength={254} value={hr.email} onChange={(e) => setHr((s) => ({ ...s, email: e.target.value }))} />}
                 </Field>
-                <p className="text-[12px] text-muted">Если у компании уже есть HR в системе, новый пользователь не создаётся.</p>
+                <p className="text-[12px] text-muted">{t('staffLc.issue.hrExists')}</p>
               </div>
             )}
           </Card>
           <div className="flex justify-end gap-2 lg:col-span-2">
             <Button variant="secondary" onClick={() => setStep(1)}>
-              Назад
+              {t('common.back')}
             </Button>
             <Button loading={issue.isPending} onClick={() => void submit()}>
-              Оформить полис
+              {t('staffLc.issue.issue')}
             </Button>
           </div>
         </div>

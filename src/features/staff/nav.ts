@@ -1,15 +1,18 @@
 import { BadgeCheck, Banknote, BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FilePen, FileSignature, FileText, Handshake, Hospital, Kanban, LayoutDashboard, Landmark, PiggyBank, Receipt, ReceiptText, ScrollText, Settings2, SlidersHorizontal, Sparkles, type LucideIcon, UserPlus, Users } from 'lucide-react';
+import { defineLabels, t, type I18nKey } from '@/i18n';
 import type { StaffRole } from '@/shared/types';
 import type { QueueType } from '@/shared/types/dto';
 
-export type StaffNavGroup = 'Работа' | 'Продажи и андеррайтинг' | 'Урегулирование' | 'Партнёры' | 'Финансы' | 'Отчёты' | 'Администрирование';
-
 /** Order of the groups in the side navigation. */
-export const STAFF_NAV_GROUPS: StaffNavGroup[] = ['Работа', 'Продажи и андеррайтинг', 'Урегулирование', 'Партнёры', 'Финансы', 'Отчёты', 'Администрирование'];
+export const STAFF_NAV_GROUPS = ['work', 'sales', 'claims', 'partners', 'finance', 'reports', 'admin'] as const;
+export type StaffNavGroup = (typeof STAFF_NAV_GROUPS)[number];
+/** Group headings, read in the current language. */
+export const STAFF_NAV_GROUP_LABEL = defineLabels('staff.nav.group', STAFF_NAV_GROUPS);
 
 export interface StaffSection {
   path: string;
-  label: string;
+  /** Read in the current language. */
+  readonly label: string;
   icon: LucideIcon;
   roles: StaffRole[];
   /** Hidden from the rail (detail pages). */
@@ -19,33 +22,47 @@ export interface StaffSection {
 
 const ALL: StaffRole[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer'];
 
+function section(path: string, labelKey: string, icon: LucideIcon, roles: StaffRole[], inNav: boolean, group: StaffNavGroup): StaffSection {
+  const key = `staff.nav.${labelKey}` as I18nKey;
+  return {
+    path,
+    get label() {
+      return t(key);
+    },
+    icon,
+    roles,
+    inNav,
+    group,
+  };
+}
+
 /** Route access matrix for the staff portal (SPEC §3). */
 export const STAFF_SECTIONS: StaffSection[] = [
-  { path: '/staff', label: 'Рабочий стол', icon: LayoutDashboard, roles: ALL, inNav: true, group: 'Работа' },
-  { path: '/staff/deals', label: 'Сделки', icon: Kanban, roles: ['sales_manager', 'underwriter'], inNav: true, group: 'Продажи и андеррайтинг' },
-  { path: '/staff/quotes', label: 'Котировка', icon: Kanban, roles: ['sales_manager', 'underwriter'], inNav: false, group: 'Продажи и андеррайтинг' },
-  { path: '/staff/clients', label: 'Клиенты', icon: Building2, roles: ['operator', 'underwriter', 'accountant', 'admin', 'sales_manager', 'legal'], inNav: true, group: 'Продажи и андеррайтинг' },
-  { path: '/staff/contracts', label: 'Договоры', icon: FileSignature, roles: ['operator', 'underwriter', 'accountant', 'sales_manager', 'legal'], inNav: true, group: 'Продажи и андеррайтинг' },
-  { path: '/staff/endorsements', label: 'Доп. соглашения', icon: FilePen, roles: ['underwriter', 'sales_manager', 'legal', 'accountant'], inNav: true, group: 'Продажи и андеррайтинг' },
-  { path: '/staff/invoices', label: 'Счета и оплаты', icon: Landmark, roles: ['underwriter', 'accountant', 'sales_manager'], inNav: true, group: 'Финансы' },
-  { path: '/staff/invoices/queue', label: 'Ручная разноска', icon: Banknote, roles: ['accountant'], inNav: true, group: 'Финансы' },
-  { path: '/staff/policies', label: 'Полисы', icon: FileText, roles: ['operator', 'underwriter', 'accountant', 'sales_manager'], inNav: true, group: 'Продажи и андеррайтинг' },
-  { path: '/staff/claims', label: 'Убытки', icon: Receipt, roles: ['operator', 'doctor_expert', 'accountant', 'claims_officer'], inNav: true, group: 'Урегулирование' },
-  { path: '/staff/appointments', label: 'Записи к врачу', icon: CalendarClock, roles: ['operator', 'doctor_expert'], inNav: true, group: 'Работа' },
-  { path: '/staff/clinics', label: 'Клиники', icon: Hospital, roles: ['operator', 'underwriter', 'doctor_expert', 'admin'], inNav: true, group: 'Партнёры' },
-  { path: '/staff/guarantees', label: 'Гарантийные письма', icon: FileCheck, roles: ['operator', 'doctor_expert'], inNav: true, group: 'Урегулирование' },
-  { path: '/staff/registries', label: 'Реестры клиник', icon: ClipboardList, roles: ['operator', 'accountant'], inNav: true, group: 'Партнёры' },
-  { path: '/staff/assistance', label: 'Ассистансы', icon: Handshake, roles: ALL, inNav: true, group: 'Партнёры' },
-  { path: '/staff/rebills', label: 'Счета ассистансов', icon: ReceiptText, roles: ['claims_officer', 'accountant'], inNav: true, group: 'Финансы' },
-  { path: '/staff/qa', label: 'Контроль качества', icon: BadgeCheck, roles: ['doctor_expert'], inNav: true, group: 'Работа' },
-  { path: '/staff/policy-changes', label: 'Изменения состава', icon: UserPlus, roles: ['operator', 'underwriter', 'accountant'], inNav: true, group: 'Работа' },
-  { path: '/staff/limit-requests', label: 'Изменения лимитов', icon: SlidersHorizontal, roles: ['operator', 'underwriter'], inNav: true, group: 'Работа' },
-  { path: '/staff/reports', label: 'Отчёты', icon: BarChart3, roles: ['underwriter', 'accountant'], inNav: true, group: 'Отчёты' },
-  { path: '/staff/reports/reserves', label: 'Резервы', icon: PiggyBank, roles: ['claims_officer', 'underwriter', 'accountant'], inNav: true, group: 'Урегулирование' },
-  { path: '/staff/audit', label: 'Журнал аудита', icon: ScrollText, roles: ['admin'], inNav: true, group: 'Администрирование' },
-  { path: '/staff/admin/users', label: 'Пользователи и роли', icon: Users, roles: ['admin'], inNav: true, group: 'Администрирование' },
-  { path: '/staff/admin/parameters', label: 'Параметры ДМС', icon: Settings2, roles: ALL, inNav: true, group: 'Администрирование' },
-  { path: '/staff/admin/ai', label: 'ИИ-проверка покрытия', icon: Sparkles, roles: ['admin'], inNav: true, group: 'Администрирование' },
+  section('/staff', 'dashboard', LayoutDashboard, ALL, true, 'work'),
+  section('/staff/deals', 'deals', Kanban, ['sales_manager', 'underwriter'], true, 'sales'),
+  section('/staff/quotes', 'quotes', Kanban, ['sales_manager', 'underwriter'], false, 'sales'),
+  section('/staff/clients', 'clients', Building2, ['operator', 'underwriter', 'accountant', 'admin', 'sales_manager', 'legal'], true, 'sales'),
+  section('/staff/contracts', 'contracts', FileSignature, ['operator', 'underwriter', 'accountant', 'sales_manager', 'legal'], true, 'sales'),
+  section('/staff/endorsements', 'endorsements', FilePen, ['underwriter', 'sales_manager', 'legal', 'accountant'], true, 'sales'),
+  section('/staff/invoices', 'invoices', Landmark, ['underwriter', 'accountant', 'sales_manager'], true, 'finance'),
+  section('/staff/invoices/queue', 'paymentQueue', Banknote, ['accountant'], true, 'finance'),
+  section('/staff/policies', 'policies', FileText, ['operator', 'underwriter', 'accountant', 'sales_manager'], true, 'sales'),
+  section('/staff/claims', 'claims', Receipt, ['operator', 'doctor_expert', 'accountant', 'claims_officer'], true, 'claims'),
+  section('/staff/appointments', 'appointments', CalendarClock, ['operator', 'doctor_expert'], true, 'work'),
+  section('/staff/clinics', 'clinics', Hospital, ['operator', 'underwriter', 'doctor_expert', 'admin'], true, 'partners'),
+  section('/staff/guarantees', 'guarantees', FileCheck, ['operator', 'doctor_expert'], true, 'claims'),
+  section('/staff/registries', 'registries', ClipboardList, ['operator', 'accountant'], true, 'partners'),
+  section('/staff/assistance', 'assistance', Handshake, ALL, true, 'partners'),
+  section('/staff/rebills', 'rebills', ReceiptText, ['claims_officer', 'accountant'], true, 'finance'),
+  section('/staff/qa', 'qa', BadgeCheck, ['doctor_expert'], true, 'work'),
+  section('/staff/policy-changes', 'policyChanges', UserPlus, ['operator', 'underwriter', 'accountant'], true, 'work'),
+  section('/staff/limit-requests', 'limitRequests', SlidersHorizontal, ['operator', 'underwriter'], true, 'work'),
+  section('/staff/reports', 'reports', BarChart3, ['underwriter', 'accountant'], true, 'reports'),
+  section('/staff/reports/reserves', 'reserves', PiggyBank, ['claims_officer', 'underwriter', 'accountant'], true, 'claims'),
+  section('/staff/audit', 'audit', ScrollText, ['admin'], true, 'admin'),
+  section('/staff/admin/users', 'users', Users, ['admin'], true, 'admin'),
+  section('/staff/admin/parameters', 'parameters', Settings2, ALL, true, 'admin'),
+  section('/staff/admin/ai', 'ai', Sparkles, ['admin'], true, 'admin'),
 ];
 
 export const INSURED_CARD_ROLES: StaffRole[] = ['operator', 'underwriter', 'doctor_expert', 'claims_officer'];

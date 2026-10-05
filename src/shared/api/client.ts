@@ -7,30 +7,39 @@ import type { ApiError } from '@/shared/types';
 import { clearSession, getSessionId } from '@/shared/auth/session';
 import { markActivity } from '@/shared/auth/activity';
 import { logger } from '@/shared/lib/logger';
+import { t, tKey, type I18nKey } from '@/i18n/core';
 
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api';
 
+/**
+ * The server sends only a code, a message key and its params; the text comes from the client's
+ * dictionaries in the current language (errorMessage). `message` holds the key: no text, no PII.
+ */
 export class ApiRequestError extends Error implements ApiError {
   readonly code: ApiError['code'];
   readonly status: number;
+  readonly key: string;
+  readonly params?: ApiError['params'];
   readonly fields?: Record<string, string>;
   constructor(status: number, err: ApiError) {
-    super(err.message);
+    super(err.key);
     this.name = 'ApiRequestError';
     this.status = status;
     this.code = err.code;
+    this.key = err.key;
+    this.params = err.params;
     this.fields = err.fields;
   }
 }
 
-const GENERIC: Record<ApiError['code'], string> = {
-  unauthorized: 'Сессия завершена, войдите снова',
-  forbidden: 'Недостаточно прав для этого действия',
-  not_found: 'Не найдено',
-  validation: 'Проверьте заполнение полей',
-  conflict: 'Действие невозможно в текущем состоянии',
-  rate_limited: 'Слишком много попыток. Попробуйте позже',
-  server: 'Сервис временно недоступен. Повторите попытку',
+const GENERIC: Record<ApiError['code'], I18nKey> = {
+  unauthorized: 'errors.unauthorized',
+  forbidden: 'errors.forbidden',
+  not_found: 'errors.notFound',
+  validation: 'errors.validation',
+  conflict: 'errors.conflict',
+  rate_limited: 'errors.rateLimited',
+  server: 'errors.server',
 };
 
 function codeFromStatus(status: number): ApiError['code'] {
@@ -68,7 +77,7 @@ export function buildUrl(path: string, query?: Query): string {
 }
 
 let onUnauthorized: () => void = () => {
-  clearSession({ notice: 'Сессия завершена, войдите снова', broadcast: false });
+  clearSession({ notice: 'errors.unauthorized', broadcast: false });
 };
 export function setUnauthorizedHandler(fn: () => void): void {
   onUnauthorized = fn;
@@ -107,15 +116,15 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
     if ((e as Error).name === 'AbortError') throw e;
     throw new ApiRequestError(0, {
       code: 'server',
-      message: 'Нет соединения с сервером. Проверьте интернет и повторите',
+      key: 'errors.offline',
     });
   }
 
   if (!res.ok) {
-    let err: ApiError = { code: codeFromStatus(res.status), message: GENERIC[codeFromStatus(res.status)] };
+    let err: ApiError = { code: codeFromStatus(res.status), key: GENERIC[codeFromStatus(res.status)] };
     try {
       const data = (await res.json()) as Partial<ApiError>;
-      if (data && typeof data.message === 'string' && typeof data.code === 'string') err = data as ApiError;
+      if (data && typeof data.key === 'string' && typeof data.code === 'string') err = data as ApiError;
     } catch {
       /* non-JSON error body */
     }
@@ -134,14 +143,15 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
     logger.warn(`Response validation failed for ${path.replace(/[0-9a-f-]{36}/g, ':id')}`, {
       issues: parsed.error.issues.slice(0, 5).map((i) => ({ path: i.path.join('.'), message: i.message })),
     });
-    throw new ApiRequestError(500, { code: 'server', message: 'Сервер вернул неожиданный ответ. Повторите позже' });
+    throw new ApiRequestError(500, { code: 'server', key: 'errors.badResponse' });
   }
   return parsed.data as never;
 }
 
+/** The error's text in the current language. */
 export function errorMessage(e: unknown): string {
-  if (e instanceof ApiRequestError) return e.message;
-  return 'Что-то пошло не так. Повторите попытку';
+  if (e instanceof ApiRequestError) return tKey(e.key, e.params);
+  return t('errors.unknown');
 }
 
 export interface IntegrationCallResult {
@@ -194,6 +204,6 @@ export async function integrationCall(
 export async function fetchPublicJson(path: string): Promise<unknown> {
   if (!/^\/docs\/[a-z0-9/_-]+\.json$/.test(path)) throw new Error('Unexpected static path');
   const res = await fetch(path, { credentials: 'omit', cache: 'no-cache', referrerPolicy: 'no-referrer' });
-  if (!res.ok) throw new ApiRequestError(res.status, { code: codeFromStatus(res.status), message: 'Документация недоступна' });
+  if (!res.ok) throw new ApiRequestError(res.status, { code: codeFromStatus(res.status), key: 'errors.docsUnavailable' });
   return res.json();
 }

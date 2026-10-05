@@ -1,3 +1,4 @@
+import { t, tp } from '@/i18n';
 import { useState } from 'react';
 import {
   Bar,
@@ -21,20 +22,20 @@ import { useAssistanceReport } from '@/shared/api/queries/assist';
 import { Card } from '@/shared/ui/page';
 import { EmptyState, QueryState, Skeleton } from '@/shared/ui/states';
 import { ExportButton } from '../components/ExportButton';
+import { monthShort } from '../components/months';
 import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
 
 const ACCENT = '#4f46e5';
 const WARN = '#d97706';
 const GRID = '#eceef1';
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-const money = (v: number) => formatMoneyShort(v).replace(' UZS', '');
+const money = (v: number) => formatMoneyShort(v).replace(`\u00a0${t('fmt.currency')}`, '');
 
 export default function ReportsPage() {
   const lossWarn = useDmsParam('lossRatioWarn');
   const byAssistance = useAssistanceReport();
-  useDocumentTitle('Отчёты');
-  useTopbar([{ label: 'Отчёты' }]);
+  useDocumentTitle(t('staff.reports.title'));
+  useTopbar([{ label: t('staff.reports.title') }]);
   const [from, setFrom] = useState(() => addDaysISO(todayISO(), -365));
   const [to, setTo] = useState(() => todayISO());
   const loss = useLossRatioReport();
@@ -44,21 +45,21 @@ export default function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-[22px] font-bold">Отчёты</h1>
-      <Card title="Убыточность по клиентам" actions={<ExportButton type="loss_ratio" label="CSV" />}>
+      <h1 className="text-[22px] font-bold">{t('staff.reports.title')}</h1>
+      <Card title={t('staff.reports.lossByClient')} actions={<ExportButton type="loss_ratio" label="CSV" />}>
         <QueryState query={loss} skeleton={chartSkeleton}>
           {(rows) =>
             rows.length === 0 ? (
-              <EmptyState title="Нет данных" />
+              <EmptyState title={t('staff.reports.noData')} />
             ) : (
-              <div style={{ height: Math.max(280, rows.length * 22) }} role="img" aria-label={`Убыточность по клиентам. От ${formatPercent(lossWarn)}: ${rows.filter((r) => r.lossRatio >= lossWarn).length} клиентов`}>
+              <div style={{ height: Math.max(280, rows.length * 22) }} role="img" aria-label={tp('staff.reports.lossAria', rows.filter((r) => r.lossRatio >= lossWarn).length, { pct: formatPercent(lossWarn) })}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={rows.map((r) => ({ ...r, pct: Math.round(r.lossRatio * 100) }))} layout="vertical" margin={{ left: 8, right: 24 }}>
                     <CartesianGrid horizontal={false} stroke={GRID} />
                     <XAxis type="number" unit="%" tickLine={false} axisLine={false} fontSize={12} />
                     <YAxis type="category" dataKey="clientName" width={210} tickLine={false} axisLine={false} fontSize={12} interval={0} />
-                    <RTooltip formatter={(v: number) => [`${v}%`, 'Убыточность']} />
-                    <ReferenceLine x={80} stroke={WARN} strokeDasharray="4 3" label={{ value: 'Порог 80%', position: 'top', fill: WARN, fontSize: 12 }} />
+                    <RTooltip formatter={(v: number) => [`${v}%`, t('staff.clients.col.loss')]} />
+                    <ReferenceLine x={80} stroke={WARN} strokeDasharray="4 3" label={{ value: t('staff.reports.threshold'), position: 'top', fill: WARN, fontSize: 12 }} />
                     <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={12}>
                       {rows.map((r) => (
                         <Cell key={r.clientId} fill={r.lossRatio >= lossWarn ? WARN : ACCENT} />
@@ -73,12 +74,12 @@ export default function ReportsPage() {
       </Card>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card
-          title="Убытки по категориям"
+          title={t('staff.clientCard.claimsByCategory')}
           actions={
             <span className="flex items-center gap-2">
-              <Input type="date" aria-label="С даты" className="h-7 w-auto" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
+              <Input type="date" aria-label={t('common.from')} className="h-7 w-auto" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
               <span className="text-muted">—</span>
-              <Input type="date" aria-label="По дату" className="h-7 w-auto" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} />
+              <Input type="date" aria-label={t('common.to')} className="h-7 w-auto" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} />
               <ExportButton type="claims_by_category" label="CSV" />
             </span>
           }
@@ -86,38 +87,38 @@ export default function ReportsPage() {
           <QueryState query={cats} skeleton={chartSkeleton}>
             {(rows) =>
               rows.length === 0 ? (
-                <EmptyState title="За период убытков нет" description="Расширьте период" />
+                <EmptyState title={t('staff.reports.noClaimsPeriod')} description={t('staff.reports.widenPeriod')} />
               ) : (
                 <>
-                  <div className="h-72" role="img" aria-label="Сумма убытков по категориям за период">
+                  <div className="h-72" role="img" aria-label={t('staff.reports.byCategoryAria')}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={rows.map((r) => ({ ...r, label: CLAIM_CATEGORY_LABEL[r.category] }))}>
                         <CartesianGrid vertical={false} stroke={GRID} />
                         <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval={0} />
                         <YAxis tickFormatter={money} tickLine={false} axisLine={false} fontSize={12} width={64} />
-                        <RTooltip formatter={(v: number) => [formatMoney(v), 'Сумма']} />
+                        <RTooltip formatter={(v: number) => [formatMoney(v), t('common.amount')]} />
                         <Bar dataKey="amount" fill={ACCENT} radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                   <p className="mt-2 text-[12px] text-muted">
-                    Всего {formatNumber(rows.reduce((s, r) => s + r.count, 0))} убытков на {formatMoney(rows.reduce((s, r) => s + r.amount, 0))}
+                    {tp('staff.reports.totalClaims', rows.reduce((s, r) => s + r.count, 0), { amount: formatMoney(rows.reduce((s, r) => s + r.amount, 0)) })}
                   </p>
                 </>
               )
             }
           </QueryState>
         </Card>
-        <Card title="Премия по месяцам" actions={<ExportButton type="premium_by_month" label="CSV" />}>
+        <Card title={t('staff.reports.premiumByMonth')} actions={<ExportButton type="premium_by_month" label="CSV" />}>
           <QueryState query={premium} skeleton={chartSkeleton}>
             {(rows) => (
-              <div className="h-72" role="img" aria-label="Начисленная премия по месяцам за 12 месяцев">
+              <div className="h-72" role="img" aria-label={t('staff.reports.premiumAria')}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={rows.map((r) => ({ ...r, label: `${MONTHS[Number(r.month.slice(5)) - 1]} ${r.month.slice(2, 4)}` }))}>
+                  <LineChart data={rows.map((r) => ({ ...r, label: t('staff.reports.monthYear', { month: monthShort(r.month), year: r.month.slice(2, 4) }) }))}>
                     <CartesianGrid vertical={false} stroke={GRID} />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
                     <YAxis tickFormatter={money} tickLine={false} axisLine={false} fontSize={12} width={64} />
-                    <RTooltip formatter={(v: number) => [formatMoney(v), 'Премия']} />
+                    <RTooltip formatter={(v: number) => [formatMoney(v), t('common.premium')]} />
                     <Line type="monotone" dataKey="premium" stroke={ACCENT} strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -126,20 +127,20 @@ export default function ReportsPage() {
           </QueryState>
         </Card>
       </div>
-      <Card title="Ассистансы: убыточность, выплаты и стоимость обслуживания" bodyClassName="p-0">
+      <Card title={t('staff.reports.assistanceTitle')} bodyClassName="p-0">
         <QueryState query={byAssistance}>
           {(rows) => (
             <table className="w-full text-left" data-testid="report-by-assistance">
-              <caption className="sr-only">Отчёт по ассистансам</caption>
+              <caption className="sr-only">{t('staff.reports.assistanceCaption')}</caption>
               <thead className="text-[12px] text-muted">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Ассистанс</th>
-                  <th className="px-4 py-2 text-right font-medium">Застрахованных</th>
-                  <th className="px-4 py-2 text-right font-medium">Премия</th>
-                  <th className="px-4 py-2 text-right font-medium">Выплаты</th>
-                  <th className="px-4 py-2 text-right font-medium">Убыточность</th>
-                  <th className="px-4 py-2 text-right font-medium">Вознаграждение</th>
-                  <th className="px-4 py-2 text-right font-medium">На застрахованного</th>
+                  <th className="px-4 py-2 font-medium">{t('staff.audit.assistance')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('staff.clients.col.insured')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('common.premium')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('staff.reports.colPaid')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('staff.clients.col.loss')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('staff.reports.colFee')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('staff.reports.colPerInsured')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -159,7 +160,7 @@ export default function ReportsPage() {
           )}
         </QueryState>
       </Card>
-      <p className="text-[12px] text-muted">Проценты убыточности: {formatPercent(lossWarn)} и выше отмечены оранжевым.</p>
+      <p className="text-[12px] text-muted">{t('staff.reports.footnote', { pct: formatPercent(lossWarn) })}</p>
     </div>
   );
 }

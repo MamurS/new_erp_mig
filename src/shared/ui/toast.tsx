@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { useSyncExternalStore } from 'react';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -48,21 +49,21 @@ export function Toaster() {
       role="status"
       className="pointer-events-none fixed bottom-4 left-1/2 z-70 flex w-[min(420px,calc(100vw-24px))] -translate-x-1/2 flex-col gap-2"
     >
-      {list.map((t) => (
+      {list.map((item) => (
         <div
-          key={t.id}
+          key={item.id}
           className={cn(
             'pointer-events-auto flex items-start gap-2 rounded-card border px-3 py-2.5 shadow-lg',
-            t.tone === 'error' ? 'border-danger/30 bg-danger-soft text-danger-text' : 'border-border bg-surface text-text',
+            item.tone === 'error' ? 'border-danger/30 bg-danger-soft text-danger-text' : 'border-border bg-surface text-text',
           )}
         >
-          {t.tone === 'error' ? (
+          {item.tone === 'error' ? (
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           ) : (
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
           )}
-          <span className="flex-1">{t.text}</span>
-          <button type="button" aria-label="Закрыть уведомление" onClick={() => dismiss(t.id)} className="text-muted">
+          <span className="flex-1">{item.text}</span>
+          <button type="button" aria-label={t('shell.toast.close')} onClick={() => dismiss(item.id)} className="text-muted">
             <X className="h-4 w-4" />
           </button>
         </div>

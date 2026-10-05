@@ -1,4 +1,5 @@
 /* «Сделки» (LIFECYCLE_SPEC §3): the sales funnel as a board by stages, or a table; new leads. */
+import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LayoutGrid, Plus, Table2 } from 'lucide-react';
@@ -22,6 +23,7 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
 const EMPTY_LEAD = {
+  // eslint-disable-next-line mig/no-cyrillic-ui -- legal form is contract data, not UI text
   legalForm: 'ООО',
   name: '',
   inn: '',
@@ -29,6 +31,7 @@ const EMPTY_LEAD = {
   account: '',
   mfo: '',
   director: '',
+  // eslint-disable-next-line mig/no-cyrillic-ui -- default basis is contract data (goes into the document)
   directorBasis: 'Устав',
   contactName: '',
   contactPhone: '',
@@ -64,14 +67,14 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
     setErrors({});
     try {
       const deal = await create.mutateAsync(parsed.data);
-      toast.success(`Лид создан: сделка ${deal.number}`);
+      toast.success(t('staffLc.deals.leadCreated', { number: deal.number }));
       navigate(`/staff/deals/${deal.id}`);
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
   const f = (key: keyof typeof EMPTY_LEAD, label: string, err: string, extra: { maxLength?: number; inputMode?: 'numeric' | 'email' | 'tel'; placeholder?: string } = {}) => (
-    <Field label={label} error={errors[err]}>
+    <Field label={label} error={tm(errors[err]) || undefined}>
       {(a) => <Input {...a} {...extra} value={v[key]} onChange={set(key)} />}
     </Field>
   );
@@ -80,42 +83,43 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title="Новый лид"
-      description="Компания, реквизиты для договора и контакт. Данные сотрудников на этом этапе не нужны"
+      title={t('staffLc.deals.newLead')}
+      description={t('staffLc.deals.newLeadDesc')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={create.isPending} onClick={() => void submit()}>
-            Создать лид
+            {t('staffLc.deals.createLead')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Форма" error={errors.legalForm}>
+        <Field label={t('staffLc.deals.legalForm')} error={tm(errors.legalForm) || undefined}>
           {(a) => (
             <Select {...a} value={v.legalForm} onChange={set('legalForm')}>
+              {/* eslint-disable-next-line mig/no-cyrillic-ui -- legal forms are data values stored in the contract */}
               {['ООО', 'АО', 'СП ООО', 'ЧП'].map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </Select>
           )}
         </Field>
-        <div className="sm:col-span-2">{f('name', 'Название', 'name', { maxLength: 120 })}</div>
-        {f('inn', 'ИНН', 'inn', { maxLength: 11, inputMode: 'numeric' })}
-        {f('estimatedHeadcount', 'Численность, примерно', 'estimatedHeadcount', { maxLength: 6, inputMode: 'numeric' })}
-        {f('currentInsurer', 'Текущий страховщик', 'currentInsurer', { maxLength: 120 })}
-        {f('bank', 'Банк', 'requisites.bank', { maxLength: 120 })}
-        {f('account', 'Расчётный счёт', 'requisites.account', { maxLength: 24, inputMode: 'numeric' })}
-        {f('mfo', 'МФО', 'requisites.mfo', { maxLength: 5, inputMode: 'numeric' })}
-        {f('director', 'Руководитель', 'requisites.director', { maxLength: 120 })}
-        {f('directorBasis', 'Основание полномочий', 'requisites.directorBasis', { maxLength: 120 })}
-        {f('expectedStart', 'Желаемое начало (ДД.ММ.ГГГГ)', 'expectedStart', { maxLength: 10 })}
-        {f('contactName', 'Контактное лицо', 'contactName', { maxLength: 120 })}
-        {f('contactPhone', 'Телефон контакта', 'contactPhone', { maxLength: 20, inputMode: 'tel' })}
-        {f('contactEmail', 'Email контакта', 'contactEmail', { maxLength: 254, inputMode: 'email' })}
+        <div className="sm:col-span-2">{f('name', t('common.name'), 'name', { maxLength: 120 })}</div>
+        {f('inn', t('staffLc.deals.inn'), 'inn', { maxLength: 11, inputMode: 'numeric' })}
+        {f('estimatedHeadcount', t('staffLc.deals.headcount'), 'estimatedHeadcount', { maxLength: 6, inputMode: 'numeric' })}
+        {f('currentInsurer', t('staffLc.deals.currentInsurer'), 'currentInsurer', { maxLength: 120 })}
+        {f('bank', t('staffLc.deals.bank'), 'requisites.bank', { maxLength: 120 })}
+        {f('account', t('staffLc.deals.account'), 'requisites.account', { maxLength: 24, inputMode: 'numeric' })}
+        {f('mfo', t('staffLc.deals.mfo'), 'requisites.mfo', { maxLength: 5, inputMode: 'numeric' })}
+        {f('director', t('staffLc.deals.director'), 'requisites.director', { maxLength: 120 })}
+        {f('directorBasis', t('staffLc.deals.directorBasis'), 'requisites.directorBasis', { maxLength: 120 })}
+        {f('expectedStart', t('staffLc.deals.expectedStart'), 'expectedStart', { maxLength: 10 })}
+        {f('contactName', t('staffLc.deals.contactName'), 'contactName', { maxLength: 120 })}
+        {f('contactPhone', t('staffLc.deals.contactPhone'), 'contactPhone', { maxLength: 20, inputMode: 'tel' })}
+        {f('contactEmail', t('staffLc.deals.contactEmail'), 'contactEmail', { maxLength: 254, inputMode: 'email' })}
       </div>
     </Modal>
   );
@@ -127,12 +131,12 @@ function DealCardTile({ d }: { d: DealView }) {
       to={`/staff/deals/${d.id}`}
       className="block rounded-btn border border-border bg-surface p-2.5 text-[13px] shadow-xs hover:border-accent"
       data-testid="deal-card"
-      aria-label={`Сделка ${d.number}: ${d.clientName}`}
+      aria-label={t('staffLc.deals.tileAria', { number: d.number, client: d.clientName })}
     >
       <span className="block truncate font-semibold">{d.clientName}</span>
       <span className="mt-0.5 flex items-center justify-between gap-2 text-[12px] text-muted">
         <span className="num">{d.number}</span>
-        {d.type === 'renewal' && <Chip kind="renewal">продление</Chip>}
+        {d.type === 'renewal' && <Chip kind="renewal">{t('staffLc.deals.renewalChip')}</Chip>}
       </span>
       <span className="mt-1 flex items-center justify-between gap-2 text-[12px]">
         <span className="truncate text-muted">{d.ownerName}</span>
@@ -143,8 +147,8 @@ function DealCardTile({ d }: { d: DealView }) {
 }
 
 export default function DealsPage() {
-  useDocumentTitle('Сделки');
-  useTopbar([{ label: 'Сделки' }]);
+  useDocumentTitle(t('staffLc.deals.title'));
+  useTopbar([{ label: t('staffLc.deals.title') }]);
   const navigate = useNavigate();
   const canCreate = useCan('leads.manage');
   const [f, setF] = useUrlFilters(['view', 'owner', 'type'] as const);
@@ -155,56 +159,56 @@ export default function DealsPage() {
   const view = f.view === 'table' ? 'table' : 'board';
 
   const columns: Column<DealView>[] = [
-    { key: 'num', header: 'Сделка', cell: (d) => <span className="num font-medium">{d.number}</span> },
-    { key: 'client', header: 'Клиент', cell: (d) => d.clientName },
-    { key: 'type', header: 'Тип', cell: (d) => (d.type === 'renewal' ? 'Продление' : 'Новый клиент') },
-    { key: 'stage', header: 'Этап', cell: (d) => <Chip kind={d.stage === 'lost' ? 'danger' : d.stage === 'active' ? 'success' : 'accent'}>{DEAL_STAGE_LABEL[d.stage]}</Chip> },
-    { key: 'owner', header: 'Менеджер', cell: (d) => d.ownerName },
-    { key: 'premium', header: 'Премия', align: 'right', cell: (d) => <span className="num whitespace-nowrap">{d.premium ? formatMoney(d.premium) : '—'}</span> },
-    { key: 'start', header: 'Начало', cell: (d) => (d.expectedStart ? <span className="num">{formatDate(d.expectedStart)}</span> : '—') },
+    { key: 'num', header: t('staffLc.deal.fallback'), cell: (d) => <span className="num font-medium">{d.number}</span> },
+    { key: 'client', header: t('common.client'), cell: (d) => d.clientName },
+    { key: 'type', header: t('common.type'), cell: (d) => (d.type === 'renewal' ? t('staffLc.deals.typeRenewal') : t('staffLc.deals.typeNew')) },
+    { key: 'stage', header: t('staffLc.deals.stage'), cell: (d) => <Chip kind={d.stage === 'lost' ? 'danger' : d.stage === 'active' ? 'success' : 'accent'}>{DEAL_STAGE_LABEL[d.stage]}</Chip> },
+    { key: 'owner', header: t('common.manager'), cell: (d) => d.ownerName },
+    { key: 'premium', header: t('common.premium'), align: 'right', cell: (d) => <span className="num whitespace-nowrap">{d.premium ? formatMoney(d.premium) : '—'}</span> },
+    { key: 'start', header: t('common.start'), cell: (d) => (d.expectedStart ? <span className="num">{formatDate(d.expectedStart)}</span> : '—') },
   ];
 
   return (
     <>
       <PageHeader
-        title="Сделки"
-        subtitle="Путь клиента: лид → данные для оценки → котировка → КП → договор → подписание → оплата → полис"
+        title={t('staffLc.deals.title')}
+        subtitle={t('staffLc.deals.subtitle')}
         actions={
           <>
-            <div className="flex rounded-btn border border-border" role="group" aria-label="Вид">
+            <div className="flex rounded-btn border border-border" role="group" aria-label={t('staffLc.deals.view')}>
               <button type="button" className={cn('flex items-center gap-1 px-2.5 py-1 text-[13px]', view === 'board' && 'bg-accent-soft font-semibold text-accent-text')} onClick={() => setF({ view: null })} aria-pressed={view === 'board'}>
-                <LayoutGrid className="h-3.5 w-3.5" aria-hidden /> Доска
+                <LayoutGrid className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.deals.board')}
               </button>
               <button type="button" className={cn('flex items-center gap-1 px-2.5 py-1 text-[13px]', view === 'table' && 'bg-accent-soft font-semibold text-accent-text')} onClick={() => setF({ view: 'table' })} aria-pressed={view === 'table'}>
-                <Table2 className="h-3.5 w-3.5" aria-hidden /> Таблица
+                <Table2 className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.deals.table')}
               </button>
             </div>
             {canCreate && (
               <Button onClick={() => setLead(true)}>
-                <Plus className="h-4 w-4" aria-hidden /> Новый лид
+                <Plus className="h-4 w-4" aria-hidden /> {t('staffLc.deals.newLead')}
               </Button>
             )}
           </>
         }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Select aria-label="Менеджер" className="h-8 w-56" value={f.owner ?? ''} onChange={(e) => setF({ owner: e.target.value || null })}>
-          <option value="">Все менеджеры</option>
+        <Select aria-label={t('common.manager')} className="h-8 w-56" value={f.owner ?? ''} onChange={(e) => setF({ owner: e.target.value || null })}>
+          <option value="">{t('staffLc.deals.allManagers')}</option>
           {managers.map((m) => (
             <option key={m.id} value={m.id}>
               {m.fullName}
             </option>
           ))}
         </Select>
-        <Select aria-label="Тип сделки" className="h-8 w-48" value={f.type ?? ''} onChange={(e) => setF({ type: e.target.value || null })}>
-          <option value="">Все сделки</option>
-          <option value="new">Новые клиенты</option>
-          <option value="renewal">Продления</option>
+        <Select aria-label={t('staffLc.deals.dealType')} className="h-8 w-48" value={f.type ?? ''} onChange={(e) => setF({ type: e.target.value || null })}>
+          <option value="">{t('staffLc.deals.allDeals')}</option>
+          <option value="new">{t('staffLc.deals.newClients')}</option>
+          <option value="renewal">{t('staffLc.deals.renewals')}</option>
         </Select>
       </div>
       {view === 'table' ? (
         <div className="rounded-card border border-border bg-surface">
-          <DataTable caption="Сделки" columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(d) => d.id} onRowClick={(d) => navigate(`/staff/deals/${d.id}`)} empty="Сделок нет" />
+          <DataTable caption={t('staffLc.deals.title')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(d) => d.id} onRowClick={(d) => navigate(`/staff/deals/${d.id}`)} empty={t('staffLc.deals.empty')} />
         </div>
       ) : (
         <QueryState query={q}>
@@ -225,7 +229,7 @@ export default function DealsPage() {
                       {items.map((d) => (
                         <DealCardTile key={d.id} d={d} />
                       ))}
-                      {!items.length && <p className="px-1 py-3 text-center text-[12px] text-muted">Пусто</p>}
+                      {!items.length && <p className="px-1 py-3 text-center text-[12px] text-muted">{t('staffLc.deals.emptyColumn')}</p>}
                     </div>
                   </section>
                 );

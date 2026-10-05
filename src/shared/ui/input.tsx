@@ -1,3 +1,4 @@
+import { tm } from '@/i18n';
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { cn } from '@/shared/lib/cn';
 
@@ -39,7 +40,7 @@ export function Field({ label, error, hint, children, className }: FieldProps) {
       {children({ id, 'aria-invalid': !!error, 'aria-describedby': describedBy })}
       {error ? (
         <p id={`${id}-err`} role="alert" className="text-[12px] text-danger-text">
-          {error}
+          {tm(error)}
         </p>
       ) : hint ? (
         <p id={`${id}-hint`} className="text-[12px] text-muted">

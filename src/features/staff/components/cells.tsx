@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { Claim, ClaimStatus } from '@/shared/types';
 import { cn } from '@/shared/lib/cn';
 import { daysUntil, formatDateTime, formatPercent, formatRelativeDays } from '@/shared/lib/format';
@@ -31,7 +32,7 @@ export function SlaCell({ claim }: { claim: Pick<Claim, 'slaDueAt' | 'status'> }
   const overdue = Date.parse(claim.slaDueAt) < Date.now();
   return (
     <span className={cn('whitespace-nowrap', overdue ? 'font-semibold text-danger-text' : d <= 1 && 'text-warning-text')} title={formatDateTime(claim.slaDueAt)}>
-      {overdue ? `просрочен ${formatRelativeDays(claim.slaDueAt)}` : formatRelativeDays(claim.slaDueAt)}
+      {overdue ? t('staff.sla.overdue', { when: formatRelativeDays(claim.slaDueAt) }) : formatRelativeDays(claim.slaDueAt)}
     </span>
   );
 }

@@ -4,6 +4,7 @@
  */
 import { useRef, useState } from 'react';
 import { CheckCircle2, Clock, FileSignature, Printer, Send, Upload } from 'lucide-react';
+import { defineLabels, t, tm } from '@/i18n';
 import type { Signing } from '@/shared/types';
 import { useDocStep, type DocKind } from '@/shared/api/queries/lifecycle';
 import { errorMessage } from '@/shared/api/client';
@@ -28,7 +29,7 @@ export interface SignableDoc {
   signing: Signing;
 }
 
-const SIDE_LABEL = { mig: 'МИГ', client: 'Клиент' } as const;
+const SIDE_LABEL = defineLabels('documents.side', ['mig', 'client'] as const);
 
 /** Demo key of E-IMZO: the real one comes from the local E-IMZO application on the user's computer. */
 function demoCertificate(owner: string) {
@@ -50,38 +51,38 @@ function EimzoDialog({ side, onClose, onSign, busy }: { side: 'mig' | 'client'; 
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Выберите ключ ЭЦП"
-      description={`Подпись за сторону «${SIDE_LABEL[side]}». Демо: имитация E-IMZO, ключ и пароль не проверяются`}
+      title={t('documents.eimzo.title')}
+      description={t('documents.eimzo.description', { side: SIDE_LABEL[side] })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             loading={busy}
             onClick={() => {
               if (!password.trim()) {
-                setError('Введите пароль ключа');
+                setError(t('documents.eimzo.passwordRequired'));
                 return;
               }
               onSign(cert.serial, password);
             }}
           >
-            Подписать
+            {t('documents.eimzo.sign')}
           </Button>
         </>
       }
     >
       <label className="flex cursor-pointer items-start gap-3 rounded-btn border border-accent bg-accent-soft/40 p-3">
-        <input type="radio" checked readOnly className="mt-1" aria-label={`Ключ ${cert.owner}`} />
+        <input type="radio" checked readOnly className="mt-1" aria-label={t('documents.eimzo.key', { owner: cert.owner })} />
         <span className="text-[13px]">
           <span className="block font-semibold">{cert.owner}</span>
           <span className="block text-muted">
-            Сертификат {cert.serial} · действует до {formatDate(cert.validTo)}
+            {t('documents.eimzo.certificate', { serial: cert.serial, date: formatDate(cert.validTo) })}
           </span>
         </span>
       </label>
-      <Field label="Пароль ключа" error={error} className="mt-3">
+      <Field label={t('documents.eimzo.password')} error={error} className="mt-3">
         {(a) => <Input {...a} type="password" autoComplete="off" maxLength={100} value={password} onChange={(e) => setPassword(e.target.value)} />}
       </Field>
     </Modal>
@@ -94,20 +95,20 @@ function EdoDialog({ onClose, onSend, busy }: { onClose: () => void; onSend: (pr
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Отправить через ЭДО"
-      description="Документ уйдёт оператору ЭДО с подписью МИГ; подпись клиента придёт событием от оператора"
+      title={t('documents.edo.title')}
+      description={t('documents.edo.description')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={busy} onClick={() => onSend(provider)}>
-            Отправить
+            {t('common.send')}
           </Button>
         </>
       }
     >
-      <Field label="Оператор ЭДО">
+      <Field label={t('documents.edo.provider')}>
         {(a) => (
           <Select {...a} value={provider} onChange={(e) => setProvider(e.target.value)}>
             {EDO_PROVIDERS.map((p) => (
@@ -131,27 +132,27 @@ function SideState({ doc, side }: { doc: SignableDoc; side: 'mig' | 'client' }) 
         <span className="font-semibold">{SIDE_LABEL[side]}</span>
         {state === 'signed' ? (
           <Chip kind="success">
-            <CheckCircle2 className="h-3 w-3" aria-hidden /> Подписано
+            <CheckCircle2 className="h-3 w-3" aria-hidden /> {t('documents.state.signed')}
           </Chip>
         ) : state === 'scan_pending' ? (
-          <Chip kind="warning">Скан на проверке</Chip>
+          <Chip kind="warning">{t('documents.state.scanPending')}</Chip>
         ) : state === 'edo_pending' ? (
           <Chip kind="warning">
-            <Clock className="h-3 w-3" aria-hidden /> Ждём ЭДО
+            <Clock className="h-3 w-3" aria-hidden /> {t('documents.state.edoPending')}
           </Chip>
         ) : (
-          <Chip kind="neutral">Не подписано</Chip>
+          <Chip kind="neutral">{t('documents.state.waiting')}</Chip>
         )}
       </div>
       {s ? (
         <p className="text-[12px] text-muted">
           {SIGN_METHOD_LABEL[s.method]} · {s.signerName} · {formatDateTime(s.signedAt)}
-          {s.certificate && ` · сертификат ${s.certificate.serial}`}
+          {s.certificate && t('documents.sig.certificate', { serial: s.certificate.serial })}
           {s.edoProvider && ` · ${s.edoProvider}`}
-          {s.scanVerifiedByName && ` · скан проверил ${s.scanVerifiedByName}`}
+          {s.scanVerifiedByName && t('documents.sig.scanVerifiedBy', { name: s.scanVerifiedByName })}
         </p>
       ) : state === 'edo_pending' ? (
-        <p className="text-[12px] text-muted">Отправлено в {doc.signing.edoPending?.provider}, ждём подписи клиента</p>
+        <p className="text-[12px] text-muted">{t('documents.sig.edoSent', { provider: doc.signing.edoPending?.provider ?? '' })}</p>
       ) : null}
     </div>
   );
@@ -187,19 +188,19 @@ export function SigningPanel({ kind, doc, mode, printInput }: { kind: DocKind; d
     if (!file) return;
     const prepared = await prepareScan(file);
     if ('error' in prepared) {
-      toast.error(prepared.error);
+      toast.error(tm(prepared.error));
       return;
     }
     const form = new FormData();
     form.set('side', scanSide);
     form.set('file', prepared.file);
-    await run('Скан загружен и ждёт проверки', { kind, id: doc.id, step: 'scan', body: form });
+    await run(t('documents.signing.scanUploaded'), { kind, id: doc.id, step: 'scan', body: form });
     if (fileRef.current) fileRef.current.value = '';
   };
 
   const pendingScans = s.pendingScans ?? [];
   return (
-    <Card title="Подписание" actions={<DocPrintButton input={printInput} label="Распечатать два экземпляра" aria-label="Распечатать два экземпляра" />}>
+    <Card title={t('documents.signing.title')} actions={<DocPrintButton input={printInput} label={t('documents.signing.printTwo')} aria-label={t('documents.signing.printTwo')} />}>
       <div className="grid gap-3 sm:grid-cols-2">
         <SideState doc={doc} side="mig" />
         <SideState doc={doc} side="client" />
@@ -208,40 +209,40 @@ export function SigningPanel({ kind, doc, mode, printInput }: { kind: DocKind; d
         {mode === 'staff' && canSignMig && !s.mig && openForMig && (
           <>
             <Button size="sm" onClick={() => setEimzo('mig')}>
-              <FileSignature className="h-3.5 w-3.5" aria-hidden /> Подписать ЭЦП за МИГ
+              <FileSignature className="h-3.5 w-3.5" aria-hidden /> {t('documents.signing.signMig')}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => void run('Подпись МИГ на бумаге отмечена', { kind, id: doc.id, step: 'sign', body: { side: 'mig', method: 'paper' } })}>
-              <Printer className="h-3.5 w-3.5" aria-hidden /> Подписано МИГ
+            <Button size="sm" variant="secondary" onClick={() => void run(t('documents.signing.paperMigDone'), { kind, id: doc.id, step: 'sign', body: { side: 'mig', method: 'paper' } })}>
+              <Printer className="h-3.5 w-3.5" aria-hidden /> {t('documents.signing.paperMig')}
             </Button>
           </>
         )}
         {mode === 'staff' && canSignMig && !s.client && !s.edoPending && openForMig && (
           <Button size="sm" variant="secondary" onClick={() => setEdo(true)}>
-            <Send className="h-3.5 w-3.5" aria-hidden /> Отправить через ЭДО
+            <Send className="h-3.5 w-3.5" aria-hidden /> {t('documents.signing.sendEdo')}
           </Button>
         )}
         {mode === 'hr' && !s.client && openForClient && (
           <Button size="sm" onClick={() => setEimzo('client')}>
-            <FileSignature className="h-3.5 w-3.5" aria-hidden /> Подписать ЭЦП
+            <FileSignature className="h-3.5 w-3.5" aria-hidden /> {t('documents.signing.signClient')}
           </Button>
         )}
         {((mode === 'hr' && !s.client && openForClient) || (mode === 'staff' && (canVerify || canDraft) && openForMig && (!s.client || !s.mig))) && (
           <span className="flex items-center gap-2">
             {mode === 'staff' && (
-              <Select aria-label="Чей скан" className="h-8 w-28" value={scanSide} onChange={(e) => setScanSide(e.target.value as 'mig' | 'client')}>
-                <option value="client">клиента</option>
-                <option value="mig">МИГ</option>
+              <Select aria-label={t('documents.signing.scanSide')} className="h-8 w-28" value={scanSide} onChange={(e) => setScanSide(e.target.value as 'mig' | 'client')}>
+                <option value="client">{t('documents.signing.scanSide.client')}</option>
+                <option value="mig">{t('documents.signing.scanSide.mig')}</option>
               </Select>
             )}
             <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()} loading={step.isPending && step.variables?.step === 'scan'}>
-              <Upload className="h-3.5 w-3.5" aria-hidden /> Загрузить скан
+              <Upload className="h-3.5 w-3.5" aria-hidden /> {t('documents.signing.uploadScan')}
             </Button>
             <input
               ref={fileRef}
               type="file"
               accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
               className="sr-only"
-              aria-label="Файл скана подписанного документа"
+              aria-label={t('documents.signing.scanFile')}
               onChange={(e) => void onFile(e.target.files?.[0])}
             />
           </span>
@@ -252,11 +253,11 @@ export function SigningPanel({ kind, doc, mode, printInput }: { kind: DocKind; d
           {pendingScans.map((p) => (
             <li key={p.side} className="flex flex-wrap items-center justify-between gap-2 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
               <span>
-                Скан подписи стороны «{SIDE_LABEL[p.side]}» загрузил {p.uploadedByName}, {formatDateTime(p.uploadedAt)}. Подпись засчитается после проверки.
+                {t('documents.signing.pendingScan', { side: SIDE_LABEL[p.side], name: p.uploadedByName, date: formatDateTime(p.uploadedAt) })}
               </span>
               {mode === 'staff' && canVerify && (
-                <Button size="sm" onClick={() => void run('Скан проверен, подпись засчитана', { kind, id: doc.id, step: 'scan/verify', body: { side: p.side } })}>
-                  Скан проверен
+                <Button size="sm" onClick={() => void run(t('documents.signing.scanVerified'), { kind, id: doc.id, step: 'scan/verify', body: { side: p.side } })}>
+                  {t('documents.signing.verifyScan')}
                 </Button>
               )}
             </li>
@@ -265,22 +266,26 @@ export function SigningPanel({ kind, doc, mode, printInput }: { kind: DocKind; d
       )}
       {(s.paperOriginal.required || (mode === 'staff' && s.mig?.method === 'paper')) && (
         <div className="mt-3 rounded-btn border border-border-soft p-3 text-[13px]" data-testid="paper-original">
-          <p className="mb-2 font-semibold">Бумажный оригинал</p>
+          <p className="mb-2 font-semibold">{t('documents.signing.paperOriginal')}</p>
           <p className="text-muted">
-            Экземпляр МИГ отправлен клиенту: {s.paperOriginal.migCopySentAt ? formatDate(s.paperOriginal.migCopySentAt) : 'нет'} · Оригинал клиента получен:{' '}
-            {s.paperOriginal.clientOriginalReceivedAt ? `${formatDate(s.paperOriginal.clientOriginalReceivedAt)}, ${s.paperOriginal.receivedByName ?? ''}` : 'нет'}
+            {t('documents.signing.paperStatus', {
+              sent: s.paperOriginal.migCopySentAt ? formatDate(s.paperOriginal.migCopySentAt) : t('documents.signing.no'),
+              received: s.paperOriginal.clientOriginalReceivedAt
+                ? `${formatDate(s.paperOriginal.clientOriginalReceivedAt)}, ${s.paperOriginal.receivedByName ?? ''}`
+                : t('documents.signing.no'),
+            })}
           </p>
           {mode === 'staff' && canOriginals && (
             <div className="mt-2 flex flex-wrap items-end gap-2">
-              <Field label="Дата">{(a) => <Input {...a} type="date" className="h-8 w-40" value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
+              <Field label={t('common.date')}>{(a) => <Input {...a} type="date" className="h-8 w-40" value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
               {s.mig && !s.paperOriginal.migCopySentAt && (
-                <Button size="sm" variant="secondary" onClick={() => void run('Отметка сохранена', { kind, id: doc.id, step: 'originals', body: { migCopySentAt: date } })}>
-                  Отправлено клиенту
+                <Button size="sm" variant="secondary" onClick={() => void run(t('documents.signing.markSaved'), { kind, id: doc.id, step: 'originals', body: { migCopySentAt: date } })}>
+                  {t('documents.signing.sentToClient')}
                 </Button>
               )}
               {!s.paperOriginal.clientOriginalReceivedAt && (
-                <Button size="sm" variant="secondary" onClick={() => void run('Оригинал клиента отмечен как полученный', { kind, id: doc.id, step: 'originals', body: { clientOriginalReceivedAt: date } })}>
-                  Оригинал клиента получен
+                <Button size="sm" variant="secondary" onClick={() => void run(t('documents.signing.clientReceivedDone'), { kind, id: doc.id, step: 'originals', body: { clientOriginalReceivedAt: date } })}>
+                  {t('documents.signing.clientReceived')}
                 </Button>
               )}
             </div>
@@ -293,7 +298,7 @@ export function SigningPanel({ kind, doc, mode, printInput }: { kind: DocKind; d
           busy={step.isPending}
           onClose={() => setEimzo(null)}
           onSign={async (serial, password) => {
-            if (await run('Документ подписан ЭЦП', { kind, id: doc.id, step: 'sign', body: { side: eimzo, method: 'eimzo', certificateSerial: serial, password } })) setEimzo(null);
+            if (await run(t('documents.signing.signed'), { kind, id: doc.id, step: 'sign', body: { side: eimzo, method: 'eimzo', certificateSerial: serial, password } })) setEimzo(null);
           }}
         />
       )}
@@ -302,7 +307,7 @@ export function SigningPanel({ kind, doc, mode, printInput }: { kind: DocKind; d
           busy={step.isPending}
           onClose={() => setEdo(false)}
           onSend={async (provider) => {
-            if (await run(`Отправлено через ${provider}. Ждём подписи клиента`, { kind, id: doc.id, step: 'edo', body: { provider } })) setEdo(false);
+            if (await run(t('documents.signing.edoSent', { provider }), { kind, id: doc.id, step: 'edo', body: { provider } })) setEdo(false);
           }}
         />
       )}

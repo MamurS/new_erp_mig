@@ -2,6 +2,7 @@
  * Панель решения по убытку (LIFECYCLE_SPEC §13): fraud flags, the doctor's opinion, the decision with a
  * clause reference, approval above authority, the reserve with its history, appeals and the letter.
  */
+import { defineLabels, msg, t, tm } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Flag, Mail } from 'lucide-react';
 import type { ClaimDecisionKind } from '@/shared/types';
@@ -25,7 +26,8 @@ import { Card } from '@/shared/ui/page';
 import { toast } from '@/shared/ui/toast';
 import { ReasonDialog } from '../lifecycle/common';
 
-const RECOMMENDATION_LABEL = { approve: 'Одобрить', partial: 'Одобрить частично', reject: 'Отказать' } as const;
+const RECOMMENDATIONS = ['approve', 'partial', 'reject'] as const;
+const RECOMMENDATION_LABEL = defineLabels('staffLc.settle.recommendation', RECOMMENDATIONS);
 
 async function attempt(fn: () => Promise<unknown>, ok: string): Promise<boolean> {
   try {
@@ -55,17 +57,17 @@ function DecisionForm({ claim, onDone }: { claim: ClaimDetail; onDone: () => voi
       return;
     }
     const next: Record<string, string> = {};
-    if (kind !== 'approve' && !parsed.data.clauseRef) next.clauseRef = 'Для отказа и частичного одобрения укажите пункт договора';
-    if (kind !== 'approve' && parsed.data.reason.length < 5) next.reason = 'Опишите причину простым языком: её увидит застрахованный';
-    if (kind === 'partial' && (value <= 0 || value >= claim.amountClaimed)) next.amount = 'Сумма больше нуля и меньше заявленной';
+    if (kind !== 'approve' && !parsed.data.clauseRef) next.clauseRef = msg('staffLc.settle.errClause');
+    if (kind !== 'approve' && parsed.data.reason.length < 5) next.reason = msg('staffLc.settle.errReason');
+    if (kind === 'partial' && (value <= 0 || value >= claim.amountClaimed)) next.amount = msg('staffLc.settle.errAmount');
     setErrors(next);
     if (Object.keys(next).length) return;
-    if (await attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'decide', body: parsed.data }), escalates ? 'Решение выше ваших полномочий — отправлено на согласование' : 'Решение принято')) onDone();
+    if (await attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'decide', body: parsed.data }), escalates ? t('staffLc.settle.escalated') : t('staffLc.settle.decided'))) onDone();
   };
   return (
     <div className="grid gap-3" data-testid="decision-form">
       <fieldset className="flex flex-wrap gap-3 text-[13px]">
-        <legend className="sr-only">Решение</legend>
+        <legend className="sr-only">{t('common.decision')}</legend>
         {(['approve', 'partial', 'reject'] as const).map((k) => (
           <label key={k} className="flex items-center gap-1.5">
             <input type="radio" name="decision-kind" checked={kind === k} onChange={() => setKind(k)} />
@@ -74,15 +76,15 @@ function DecisionForm({ claim, onDone }: { claim: ClaimDetail; onDone: () => voi
         ))}
       </fieldset>
       {kind === 'partial' && (
-        <Field label="Сумма к выплате, UZS" error={errors.amount} hint={`Заявлено ${formatMoney(claim.amountClaimed)}`}>
+        <Field label={t('staffLc.settle.payAmount')} error={tm(errors.amount) || undefined} hint={t('staffLc.settle.claimed', { amount: formatMoney(claim.amountClaimed) })}>
           {(a) => <MaskedInput {...a} mask="money" value={maskMoney(amount)} onChange={setAmount} />}
         </Field>
       )}
       {kind !== 'approve' && (
-        <Field label="Пункт договора" error={errors.clauseRef}>
+        <Field label={t('staffLc.settle.clause')} error={tm(errors.clauseRef) || undefined}>
           {(a) => (
             <Select {...a} value={clauseRef} onChange={(e) => setClauseRef(e.target.value)}>
-              <option value="">Выберите пункт</option>
+              <option value="">{t('staffLc.settle.chooseClause')}</option>
               {DECISION_CLAUSES.map((c) => (
                 <option key={c.ref} value={c.ref}>
                   {clauseLabel(c.ref)}
@@ -92,17 +94,17 @@ function DecisionForm({ claim, onDone }: { claim: ClaimDetail; onDone: () => voi
           )}
         </Field>
       )}
-      <Field label={kind === 'approve' ? 'Комментарий (необязательно)' : 'Причина простым языком'} error={errors.reason} hint={kind === 'approve' ? undefined : 'Её увидит застрахованный в приложении и в письме'}>
+      <Field label={kind === 'approve' ? t('staffLc.quote.commentOptional') : t('staffLc.settle.plainReason')} error={tm(errors.reason) || undefined} hint={kind === 'approve' ? undefined : t('staffLc.settle.plainReasonHint')}>
         {(a) => <Textarea {...a} rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />}
       </Field>
       {escalates && (
         <p className="rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" role="status">
-          Сумма выше ваших полномочий ({formatMoney(session?.user.authority?.claimDecisionMax ?? 0)}): решение уйдёт на согласование сотруднику с бо́льшими полномочиями.
+          {t('staffLc.settle.aboveAuthority', { max: formatMoney(session?.user.authority?.claimDecisionMax ?? 0) })}
         </p>
       )}
       <div>
         <Button loading={settle.isPending} onClick={() => void submit()}>
-          {escalates ? 'Отправить на согласование' : 'Принять решение'}
+          {escalates ? t('staffLc.quote.submitForApproval') : t('staffLc.settle.decide')}
         </Button>
       </div>
     </div>
@@ -116,19 +118,19 @@ function OpinionForm({ claim }: { claim: ClaimDetail }) {
   const [error, setError] = useState<string>();
   const submit = async () => {
     const parsed = opinionSchema.safeParse({ text, recommendation: rec });
-    if (!parsed.success) return setError(parsed.error.issues[0]?.message);
+    if (!parsed.success) return setError(tm(parsed.error.issues[0]?.message) || undefined);
     setError(undefined);
-    await attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'opinion', body: parsed.data }), 'Заключение отправлено специалисту по убыткам');
+    await attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'opinion', body: parsed.data }), t('staffLc.settle.opinionSent'));
   };
   return (
     <div className="mt-2 grid gap-2">
-      <Field label="Медицинское заключение" error={error}>
+      <Field label={t('staffLc.settle.medicalOpinion')} error={error}>
         {(a) => <Textarea {...a} rows={4} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} />}
       </Field>
-      <Field label="Рекомендация">
+      <Field label={t('staffLc.settle.recommendationLabel')}>
         {(a) => (
           <Select {...a} value={rec} onChange={(e) => setRec(e.target.value as typeof rec)}>
-            {(Object.keys(RECOMMENDATION_LABEL) as (keyof typeof RECOMMENDATION_LABEL)[]).map((k) => (
+            {RECOMMENDATIONS.map((k) => (
               <option key={k} value={k}>
                 {RECOMMENDATION_LABEL[k]}
               </option>
@@ -136,10 +138,10 @@ function OpinionForm({ claim }: { claim: ClaimDetail }) {
           </Select>
         )}
       </Field>
-      <p className="text-[12px] text-muted">Заключение — не решение: решение принимает специалист по убыткам.</p>
+      <p className="text-[12px] text-muted">{t('staffLc.settle.opinionNote')}</p>
       <div>
         <Button loading={settle.isPending} onClick={() => void submit()}>
-          Дать заключение
+          {t('staffLc.settle.giveOpinion')}
         </Button>
       </div>
     </div>
@@ -154,17 +156,17 @@ function LetterButton({ claim }: { claim: ClaimDetail }) {
   return (
     <>
       <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-        <Mail className="h-3.5 w-3.5" aria-hidden /> Письмо застрахованному
+        <Mail className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.settle.letterToInsured')}
       </Button>
       {open && (
-        <Modal open wide onOpenChange={setOpen} title="Письмо о решении" description="Формируется по шаблону-заглушке после решения.">
+        <Modal open wide onOpenChange={setOpen} title={t('staffLc.settle.letterTitle')} description={t('staffLc.settle.letterDesc')}>
           {doc ? (
             <>
-              <DocPreview doc={doc} label="Письмо о решении" height="h-[60vh]" />
+              <DocPreview doc={doc} label={t('staffLc.settle.letterTitle')} height="h-[60vh]" />
               <div className="mt-2">{input && <DocPrintButton input={() => input} />}</div>
             </>
           ) : (
-            <p className="text-muted">{q.isError ? errorMessage(q.error) : 'Загрузка…'}</p>
+            <p className="text-muted">{q.isError ? errorMessage(q.error) : t('common.loading')}</p>
           )}
         </Modal>
       )}
@@ -185,10 +187,10 @@ export function SettlementPanel({ claim }: { claim: ClaimDetail }) {
   const reopening = claim.appeal?.status === 'open';
 
   return (
-    <Card title="Урегулирование" bodyClassName="flex flex-col gap-4">
+    <Card title={t('staffLc.settle.title')} bodyClassName="flex flex-col gap-4">
       {flags.length > 0 && (
-        <section aria-label="Флаги проверки">
-          <p className="mb-1 text-[12px] font-semibold uppercase text-muted">Признаки для проверки</p>
+        <section aria-label={t('staffLc.settle.flagsAria')}>
+          <p className="mb-1 text-[12px] font-semibold uppercase text-muted">{t('staffLc.settle.flags')}</p>
           <ul className="flex flex-col gap-1.5">
             {flags.map((f) => (
               <li key={f.id} className={f.dismissed ? 'rounded-btn bg-rail px-3 py-2 text-[13px] text-muted' : 'rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text'} data-testid="flag">
@@ -196,73 +198,73 @@ export function SettlementPanel({ claim }: { claim: ClaimDetail }) {
                   <span className="flex items-start gap-1.5">
                     <Flag className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
                     <span>
-                      <span className="font-semibold">{FLAG_LABEL[f.code]}.</span> {f.message}
+                      <span className="font-semibold">{FLAG_LABEL[f.code]}.</span> {tm(f.message)}
                     </span>
                   </span>
                   {!f.dismissed && s.canDecide && (
                     <Button size="sm" variant="secondary" onClick={() => setDialog({ flagId: f.id })}>
-                      Снять флаг
+                      {t('staffLc.settle.dismissFlag')}
                     </Button>
                   )}
                 </div>
                 {f.dismissed && (
                   <p className="mt-1 text-[12px]">
-                    Снят: {f.dismissed.byName}, {formatDateTime(f.dismissed.at)} — {f.dismissed.comment}
+                    {t('staffLc.settle.dismissed', { name: f.dismissed.byName, at: formatDateTime(f.dismissed.at), comment: f.dismissed.comment })}
                   </p>
                 )}
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-[12px] text-muted">Флаги — повод проверить, а не автоматический отказ.</p>
+          <p className="mt-1 text-[12px] text-muted">{t('staffLc.settle.flagsNote')}</p>
         </section>
       )}
 
       {(claim.opinion || s.canRequestOpinion) && (
-        <section aria-label="Заключение врача">
-          <p className="mb-1 text-[12px] font-semibold uppercase text-muted">Заключение врача</p>
+        <section aria-label={t('staffLc.settle.doctorOpinion')}>
+          <p className="mb-1 text-[12px] font-semibold uppercase text-muted">{t('staffLc.settle.doctorOpinion')}</p>
           {claim.opinion ? (
             <div className="rounded-btn border border-border-soft px-3 py-2 text-[13px]" data-testid="opinion">
               <p className="text-muted">
-                Запрошено {formatDateTime(claim.opinion.requestedAt)}, {claim.opinion.requestedByName}
+                {t('staffLc.settle.requested', { at: formatDateTime(claim.opinion.requestedAt), name: claim.opinion.requestedByName })}
                 {claim.opinion.question && `: ${claim.opinion.question}`}
               </p>
               {claim.opinion.text ? (
                 <>
                   <p className="mt-1">{claim.opinion.text}</p>
                   <p className="mt-1 text-[12px] text-muted">
-                    Рекомендация: <span className="font-medium text-text">{RECOMMENDATION_LABEL[claim.opinion.recommendation ?? 'approve']}</span> · {claim.opinion.byName}, {claim.opinion.at && formatDateTime(claim.opinion.at)}
+                    {t('staffLc.settle.recommendationPrefix')} <span className="font-medium text-text">{RECOMMENDATION_LABEL[claim.opinion.recommendation ?? 'approve']}</span> · {claim.opinion.byName}, {claim.opinion.at && formatDateTime(claim.opinion.at)}
                   </p>
                 </>
               ) : (
-                <p className="mt-1 font-medium">Ждём заключения</p>
+                <p className="mt-1 font-medium">{t('staffLc.settle.awaitingOpinion')}</p>
               )}
               {s.canGiveOpinion && <OpinionForm claim={claim} />}
             </div>
           ) : (
             <Button size="sm" variant="secondary" onClick={() => setDialog('opinion')}>
-              Запросить заключение врача
+              {t('staffLc.settle.requestOpinion')}
             </Button>
           )}
         </section>
       )}
 
       {claim.pendingDecision && (
-        <section aria-label="Решение на согласовании" className="rounded-btn border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="pending-decision">
+        <section aria-label={t('staffLc.settle.pendingAria')} className="rounded-btn border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="pending-decision">
           <p className="font-semibold">
-            На согласовании: {DECISION_KIND_LABEL[claim.pendingDecision.kind]}, {formatMoney(claim.pendingDecision.amount)}
+            {t('staffLc.settle.pending', { kind: DECISION_KIND_LABEL[claim.pendingDecision.kind], amount: formatMoney(claim.pendingDecision.amount) })}
           </p>
           <p>
-            Предложил {claim.pendingDecision.byName}, {formatDateTime(claim.pendingDecision.at)}. Нужны полномочия от {formatMoney(claim.pendingDecision.required)}.
+            {t('staffLc.settle.proposedBy', { name: claim.pendingDecision.byName, at: formatDateTime(claim.pendingDecision.at), required: formatMoney(claim.pendingDecision.required) })}
           </p>
-          {claim.pendingDecision.clauseId && <p>Основание: {clauseLabel(claim.pendingDecision.clauseId)}</p>}
-          {claim.pendingDecision.reason && <p>Причина: {claim.pendingDecision.reason}</p>}
+          {claim.pendingDecision.clauseId && <p>{t('staffLc.settle.basis', { clause: clauseLabel(claim.pendingDecision.clauseId) })}</p>}
+          {claim.pendingDecision.reason && <p>{t('staffLc.deal.lostReason', { reason: claim.pendingDecision.reason })}</p>}
           {s.canApprovePending && (
             <div className="mt-2 flex gap-2">
-              <Button size="sm" loading={settle.isPending} onClick={() => void attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'decision/approve' }), 'Решение согласовано')}>
-                Согласовать
+              <Button size="sm" loading={settle.isPending} onClick={() => void attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'decision/approve' }), t('staffLc.settle.approvedToast'))}>
+                {t('staffLc.quote.agree')}
               </Button>
               <Button size="sm" variant="secondary" onClick={() => setDialog('pending-reject')}>
-                Не согласовывать
+                {t('staffLc.settle.disapprove')}
               </Button>
             </div>
           )}
@@ -270,15 +272,15 @@ export function SettlementPanel({ claim }: { claim: ClaimDetail }) {
       )}
 
       {claim.decision && (
-        <section aria-label="Решение" className="rounded-btn border border-border-soft px-3 py-2 text-[13px]" data-testid="claim-decision">
+        <section aria-label={t('common.decision')} className="rounded-btn border border-border-soft px-3 py-2 text-[13px]" data-testid="claim-decision">
           <p className="font-semibold">
             {DECISION_KIND_LABEL[claim.decision.kind]}: {formatMoney(claim.decision.amount)}
           </p>
-          {claim.decision.clauseId && <p>Основание: {clauseLabel(claim.decision.clauseId)}</p>}
+          {claim.decision.clauseId && <p>{t('staffLc.settle.basis', { clause: clauseLabel(claim.decision.clauseId) })}</p>}
           {claim.decision.reason && <p className="text-muted">{claim.decision.reason}</p>}
           <p className="mt-1 text-[12px] text-muted">
             {claim.decision.byName}, {formatDateTime(claim.decision.at)}
-            {claim.decision.approvedByName && ` · согласовал ${claim.decision.approvedByName}`}
+            {claim.decision.approvedByName && t('staffLc.settle.approvedBy', { name: claim.decision.approvedByName })}
           </p>
           <div className="mt-2">
             <LetterButton claim={claim} />
@@ -287,19 +289,20 @@ export function SettlementPanel({ claim }: { claim: ClaimDetail }) {
       )}
 
       {claim.appeal && (
-        <section aria-label="Апелляция" className={reopening ? 'rounded-btn border border-danger/40 bg-danger-soft px-3 py-2 text-[13px] text-danger-text' : 'rounded-btn bg-rail px-3 py-2 text-[13px]'} data-testid="appeal">
+        <section aria-label={t('staffLc.settle.appeal')} className={reopening ? 'rounded-btn border border-danger/40 bg-danger-soft px-3 py-2 text-[13px] text-danger-text' : 'rounded-btn bg-rail px-3 py-2 text-[13px]'} data-testid="appeal">
           <p className="font-semibold">
-            Апелляция {claim.appeal.by === 'insured' ? 'застрахованного' : 'клиники'} · {formatDateTime(claim.appeal.at)} <Chip>{reopening ? 'открыта' : 'рассмотрена'}</Chip>
+            {claim.appeal.by === 'insured' ? t('staffLc.settle.appealInsured', { at: formatDateTime(claim.appeal.at) }) : t('staffLc.settle.appealClinic', { at: formatDateTime(claim.appeal.at) })}{' '}
+            <Chip>{reopening ? t('staffLc.settle.appealOpen') : t('staffLc.settle.appealClosed')}</Chip>
           </p>
           <p className="mt-1">{claim.appeal.text}</p>
-          {claim.appeal.resolution && <p className="mt-1">Решение: {claim.appeal.resolution}</p>}
+          {claim.appeal.resolution && <p className="mt-1">{t('staffLc.settle.resolution', { text: claim.appeal.resolution })}</p>}
           {reopening && s.canDecide && (
             <div className="mt-2 flex flex-wrap gap-2">
               <Button size="sm" onClick={() => setDeciding(true)}>
-                Пересмотреть решение
+                {t('staffLc.settle.reconsider')}
               </Button>
               <Button size="sm" variant="secondary" onClick={() => setDialog('appeal-keep')}>
-                Оставить решение в силе
+                {t('staffLc.settle.keepDecision')}
               </Button>
             </div>
           )}
@@ -307,23 +310,23 @@ export function SettlementPanel({ claim }: { claim: ClaimDetail }) {
       )}
 
       {s.canDecide && (!reopening || deciding) && (
-        <section aria-label="Принять решение">
-          <p className="mb-1 text-[12px] font-semibold uppercase text-muted">Решение</p>
-          {s.authorityMax !== null && <p className="mb-2 text-[12px] text-muted">Ваши полномочия: до {formatMoney(s.authorityMax)}.</p>}
+        <section aria-label={t('staffLc.settle.decide')}>
+          <p className="mb-1 text-[12px] font-semibold uppercase text-muted">{t('common.decision')}</p>
+          {s.authorityMax !== null && <p className="mb-2 text-[12px] text-muted">{t('staffLc.settle.authority', { max: formatMoney(s.authorityMax) })}</p>}
           <DecisionForm claim={claim} onDone={() => setDeciding(false)} />
         </section>
       )}
 
-      <section aria-label="Резерв">
+      <section aria-label={t('staffLc.reserves.colReserve')}>
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[12px] font-semibold uppercase text-muted">Резерв</p>
+          <p className="text-[12px] font-semibold uppercase text-muted">{t('staffLc.reserves.colReserve')}</p>
           <p className="num font-semibold" data-testid="claim-reserve">
             {formatMoney(claim.reserve ?? 0)}
           </p>
         </div>
         {s.canChangeReserve && (
           <Button size="sm" variant="secondary" className="mt-1" onClick={() => setDialog('reserve')}>
-            Изменить резерв
+            {t('staffLc.settle.changeReserve')}
           </Button>
         )}
         {(claim.reserveHistory ?? []).length > 0 && (
@@ -340,59 +343,59 @@ export function SettlementPanel({ claim }: { claim: ClaimDetail }) {
       <ReasonDialog
         open={dialog === 'opinion'}
         onClose={() => setDialog(null)}
-        title="Запросить заключение врача"
-        description="Врач-эксперт даст медицинское заключение и рекомендацию. Решение останется за вами."
-        label="Вопрос врачу (необязательно)"
+        title={t('staffLc.settle.requestOpinion')}
+        description={t('staffLc.settle.requestOpinionDesc')}
+        label={t('staffLc.settle.questionLabel')}
         field="question"
         optional
         schema={opinionRequestSchema}
-        confirmLabel="Запросить"
+        confirmLabel={t('staffLc.settle.request')}
         onSubmit={(question) => settle.mutateAsync({ claimId: claim.id, step: 'request-opinion', body: { question: question || undefined } })}
       />
       <ReasonDialog
         open={dialog === 'pending-reject'}
         onClose={() => setDialog(null)}
-        title="Не согласовывать решение"
-        description="Решение вернётся автору, убыток останется на рассмотрении."
-        label="Комментарий"
+        title={t('staffLc.settle.disapproveTitle')}
+        description={t('staffLc.settle.disapproveDesc')}
+        label={t('common.comment')}
         field="comment"
         schema={decisionRejectSchema}
-        confirmLabel="Не согласовывать"
+        confirmLabel={t('staffLc.settle.disapprove')}
         danger
         onSubmit={(comment) => settle.mutateAsync({ claimId: claim.id, step: 'decision/reject', body: { comment } })}
       />
       <ReasonDialog
         open={dialog === 'appeal-keep'}
         onClose={() => setDialog(null)}
-        title="Оставить решение в силе"
-        description="Застрахованный увидит ответ на апелляцию в приложении."
-        label="Ответ на апелляцию"
+        title={t('staffLc.settle.keepDecision')}
+        description={t('staffLc.settle.keepDesc')}
+        label={t('staffLc.settle.appealAnswer')}
         field="resolution"
         schema={appealResolveSchema}
-        confirmLabel="Ответить"
+        confirmLabel={t('staffLc.settle.answer')}
         onSubmit={(resolution) => settle.mutateAsync({ claimId: claim.id, step: 'appeal/resolve', body: { resolution } })}
       />
       <ReasonDialog
         open={typeof dialog === 'object' && dialog !== null}
         onClose={() => setDialog(null)}
-        title="Снять флаг"
-        description="Флаг останется в истории с вашим комментарием."
-        label="Комментарий"
+        title={t('staffLc.settle.dismissFlag')}
+        description={t('staffLc.settle.dismissDesc')}
+        label={t('common.comment')}
         field="comment"
         schema={flagDismissSchema}
-        confirmLabel="Снять флаг"
+        confirmLabel={t('staffLc.settle.dismissFlag')}
         onSubmit={(comment) => settle.mutateAsync({ claimId: claim.id, step: `flags/${(dialog as { flagId: string }).flagId}/dismiss`, body: { comment } })}
       />
       {dialog === 'reserve' && (
         <Modal
           open
           onOpenChange={(o) => !o && setDialog(null)}
-          title="Изменить резерв"
-          description="Изменение попадёт в историю резерва с вашим именем."
+          title={t('staffLc.settle.changeReserve')}
+          description={t('staffLc.settle.reserveDesc')}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDialog(null)}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button
                 loading={settle.isPending}
@@ -400,19 +403,19 @@ export function SettlementPanel({ claim }: { claim: ClaimDetail }) {
                   const parsed = reserveSchema.safeParse({ amount: parseMoney(reserveAmount), reason: reserveReason });
                   if (!parsed.success) return setReserveError(Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.'), i.message])));
                   setReserveError({});
-                  void attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'reserve', method: 'PATCH', body: parsed.data }), 'Резерв изменён').then((ok) => ok && setDialog(null));
+                  void attempt(() => settle.mutateAsync({ claimId: claim.id, step: 'reserve', method: 'PATCH', body: parsed.data }), t('staffLc.settle.reserveChanged')).then((ok) => ok && setDialog(null));
                 }}
               >
-                Сохранить
+                {t('common.save')}
               </Button>
             </>
           }
         >
           <div className="grid gap-3">
-            <Field label="Резерв, UZS" error={reserveError.amount}>
+            <Field label={t('staffLc.settle.reserveUzs')} error={tm(reserveError.amount) || undefined}>
               {(a) => <MaskedInput {...a} mask="money" value={maskMoney(reserveAmount)} onChange={setReserveAmount} />}
             </Field>
-            <Field label="Причина" error={reserveError.reason}>
+            <Field label={t('common.reason')} error={tm(reserveError.reason) || undefined}>
               {(a) => <Textarea {...a} rows={2} maxLength={300} value={reserveReason} onChange={(e) => setReserveReason(e.target.value)} />}
             </Field>
           </div>

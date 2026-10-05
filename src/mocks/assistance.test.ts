@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { SessionResponse } from '@/shared/types/dto';
 import * as I from '@/shared/integration/schemas';
 import { assistanceOn } from '@/shared/domain/assistance';
+import { tm, translate } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 import { requireAssistanceScope } from './assistance-core';
@@ -58,7 +59,8 @@ describe('scope on the date of the event (§3, §13.1–13.2)', () => {
     const after = today();
     expect(requireAssistanceScope(d, A1().id, m.policyId, after, 'write')).toBe('full');
     expect(requireAssistanceScope(d, A2().id, m.policyId, before)).toBe('read');
-    expect(() => requireAssistanceScope(d, A2().id, m.policyId, before, 'write')).toThrow(/только на чтение/);
+    expect(() => requireAssistanceScope(d, A2().id, m.policyId, before, 'write')).toThrow(expect.objectContaining({ key: 'srv.assist.readOnly' }));
+    expect(translate('ru', 'srv.assist.readOnly')).toMatch(/только на чтение/);
     expect(() => requireAssistanceScope(d, A2().id, m.policyId, after)).toThrow();
     expect(() => requireAssistanceScope(d, A1().id, m.policyId, before)).toThrow();
     expect(() => requireAssistanceScope(d, db().assistances[2]!.id, m.policyId, after)).toThrow();
@@ -200,7 +202,7 @@ describe('rebills (§5.5, §13.4–13.5)', () => {
 
     const draft = await call<{ id: string; lines: { id: string; registryLineId: string; checks: unknown[] }[]; fee: { formula: string } }>('/assist/rebills', { method: 'POST', sid: billing, json: { period } });
     expect(draft.status).toBe(200);
-    expect(draft.data.fee.formula).toMatch(/застрахованных × 15 000 UZS/);
+    expect(tm(draft.data.fee.formula)).toMatch(/застрахованных × 15 000 UZS/);
     for (const l of unpaid) expect(draft.data.lines.map((x) => x.registryLineId)).toContain(l.id);
     expect((await call(`/assist/rebills/${draft.data.id}/submit`, { method: 'POST', sid: billing })).status).toBe(200);
 

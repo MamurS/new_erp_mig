@@ -13,18 +13,19 @@ import { Chip } from '@/shared/ui/chips';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 import { Panel } from '../components';
+import { t, tm, msg, defineLabels } from '@/i18n';
 
-const secretSchema = z.object({ clientId: z.string().trim().min(1, 'Выберите ключ').max(80), clientSecret: z.string().trim().min(8, 'Вставьте client_secret').max(200) });
+const secretSchema = z.object({ clientId: z.string().trim().min(1, msg('clinic.sandbox.pickKey')).max(80), clientSecret: z.string().trim().min(8, msg('clinic.sandbox.pasteSecret')).max(200) });
 function statusKind(status: number) {
   return status < 300 ? 'success' : status < 500 ? 'warning' : 'danger';
 }
 
-const WHERE = { path: 'путь', query: 'query', body: 'тело' } as const;
+const WHERE = defineLabels('clinic.sandbox.where', ['path', 'query', 'body'] as const);
 
 function ParamField({ param: p, value, error, onChange }: { param: SandboxParam; value: string; error?: string; onChange: (v: string) => void }) {
-  const label = `${p.name} · ${WHERE[p.in]}${p.required ? ' · обязательный' : ''}`;
+  const label = t(p.required ? 'clinic.sandbox.paramRequired' : 'clinic.sandbox.param', { name: p.name, where: WHERE[p.in] });
   return (
-    <Field label={label} error={error} hint={p.hint}>
+    <Field label={label} error={tm(error)} hint={p.hint}>
       {(a) =>
         p.kind === 'select' ? (
           <Select {...a} value={value} onChange={(e) => onChange(e.target.value)}>
@@ -43,7 +44,7 @@ function ParamField({ param: p, value, error, onChange }: { param: SandboxParam;
             spellCheck={false}
             maxLength={p.kind === 'uuid' ? 36 : 1000}
             inputMode={p.kind === 'number' ? 'numeric' : undefined}
-            placeholder={p.kind === 'uuid' ? 'UUID' : p.kind === 'date' ? 'ГГГГ-ММ-ДД' : undefined}
+            placeholder={p.kind === 'uuid' ? 'UUID' : p.kind === 'date' ? t('clinic.sandbox.datePlaceholder') : undefined}
             value={value}
             onChange={(e) => onChange(e.target.value)}
           />
@@ -74,21 +75,21 @@ export function SandboxTab() {
   const getToken = async () => {
     const parsed = secretSchema.safeParse({ clientId: selectedId, clientSecret: secret });
     if (!parsed.success) {
-      setTokenError(parsed.error.issues[0]?.message ?? 'Проверьте данные');
+      setTokenError(parsed.error.issues[0]?.message ?? t('clinic.sandbox.checkData'));
       return;
     }
     setBusy(true);
     setTokenError(null);
     try {
       const r = await integrationCall('POST', '/oauth/token', { form: true, body: { grant_type: 'client_credentials', client_id: parsed.data.clientId, client_secret: parsed.data.clientSecret } });
-      const t = (r.body as { access_token?: unknown } | null)?.access_token;
-      if (r.status === 200 && typeof t === 'string') {
-        setToken(t);
+      const tok = (r.body as { access_token?: unknown } | null)?.access_token;
+      if (r.status === 200 && typeof tok === 'string') {
+        setToken(tok);
         setSecret('');
-        toast.success('Токен получен на 15 минут');
+        toast.success(t('clinic.sandbox.tokenToast'));
       } else {
         setToken(null);
-        setTokenError((r.body as { detail?: string } | null)?.detail ?? `Ошибка ${r.status}`);
+        setTokenError((r.body as { detail?: string } | null)?.detail ?? t('clinic.sandbox.httpError', { status: r.status }));
       }
     } finally {
       setBusy(false);
@@ -131,13 +132,13 @@ export function SandboxTab() {
   return (
     <div className="grid gap-4 lg:grid-cols-2" data-testid="sandbox">
       <div className="flex flex-col gap-4">
-        <Panel title="1. Токен">
+        <Panel title={t('clinic.sandbox.step1')}>
           <div className="flex flex-col gap-3 p-4">
             {active.length === 0 ? (
-              <p className="text-[14px] text-muted">Создайте ключ на вкладке «Ключи API».</p>
+              <p className="text-[14px] text-muted">{t('clinic.sandbox.noKeys')}</p>
             ) : (
               <>
-                <Field label="Ключ">
+                <Field label={t('clinic.logs.key')}>
                   {(a) => (
                     <Select {...a} value={selectedId} onChange={(e) => setClientId(e.target.value)}>
                       {active.map((k) => (
@@ -148,22 +149,22 @@ export function SandboxTab() {
                     </Select>
                   )}
                 </Field>
-                <Field label="client_secret" error={tokenError ?? undefined} hint="Секрет не сохраняется — вставьте его из менеджера паролей">
+                <Field label="client_secret" error={tokenError ? tm(tokenError) : undefined} hint={t('clinic.sandbox.secretHint')}>
                   {(a) => <Input {...a} type="password" autoComplete="off" maxLength={200} value={secret} onChange={(e) => setSecret(e.target.value)} />}
                 </Field>
                 <div className="flex items-center gap-2">
                   <Button loading={busy && !token} onClick={() => void getToken()}>
-                    Получить токен
+                    {t('clinic.sandbox.getToken')}
                   </Button>
-                  {token && <Chip kind="success">Токен получен</Chip>}
+                  {token && <Chip kind="success">{t('clinic.sandbox.tokenReceived')}</Chip>}
                 </div>
               </>
             )}
           </div>
         </Panel>
-        <Panel title="2. Запрос">
+        <Panel title={t('clinic.sandbox.step2')}>
           <div className="flex flex-col gap-3 p-4">
-            <Field label="Метод">
+            <Field label={t('clinic.logs.method')}>
               {(a) => (
                 <Select {...a} value={methodId} onChange={(e) => pick(e.target.value)}>
                   {METHODS.map((m) => (
@@ -178,17 +179,17 @@ export function SandboxTab() {
               <ParamField key={`${methodId}-${p.name}`} param={p} value={values[p.name] ?? ''} error={errors[p.name]} onChange={(v) => setValues((s) => ({ ...s, [p.name]: v }))} />
             ))}
             {method.method === 'POST' && (
-              <Field label="Idempotency-Key (заголовок, необязательно)">{(a) => <Input {...a} autoComplete="off" maxLength={128} value={idemKey} onChange={(e) => setIdemKey(e.target.value)} />}</Field>
+              <Field label={t('clinic.sandbox.idempotency')}>{(a) => <Input {...a} autoComplete="off" maxLength={128} value={idemKey} onChange={(e) => setIdemKey(e.target.value)} />}</Field>
             )}
             <div>
               <Button loading={busy && !!token} disabled={!token} onClick={() => void send()}>
-                Выполнить
+                {t('clinic.sandbox.run')}
               </Button>
             </div>
           </div>
         </Panel>
       </div>
-      <Panel title="Ответ">
+      <Panel title={t('clinic.logs.response')}>
         {result ? (
           <div className="flex flex-col gap-3 p-4" data-testid="sandbox-result">
             <pre className="overflow-x-auto rounded-btn bg-rail p-3 font-mono text-[12px]">{result.request}</pre>
@@ -207,7 +208,7 @@ export function SandboxTab() {
             </pre>
           </div>
         ) : (
-          <p className="p-4 text-[14px] text-muted">Получите токен, выберите метод и отправьте запрос — здесь появится ответ.</p>
+          <p className="p-4 text-[14px] text-muted">{t('clinic.sandbox.placeholder')}</p>
         )}
       </Panel>
     </div>

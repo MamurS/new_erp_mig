@@ -53,7 +53,7 @@ function ClinicSlots({ clinic, day, picked, onPick }: { clinic: Clinic; day: str
           </p>
         </div>
         {clinic.distanceKm !== undefined && (
-          <span className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-[12px] font-bold text-sky-text">{t('clinics.km', { km: clinic.distanceKm })}</span>
+          <span className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-[12px] font-bold text-sky-text">{t('app.clinics.km', { km: clinic.distanceKm })}</span>
         )}
       </div>
       <div className="mt-3">
@@ -66,7 +66,7 @@ function ClinicSlots({ clinic, day, picked, onPick }: { clinic: Clinic; day: str
         ) : slots.isError ? (
           <LoadError error={slots.error} onRetry={() => void slots.refetch()} />
         ) : slots.data && slots.data.length > 0 ? (
-          <div role="group" aria-label={t('booking.slotsLabel', { clinic: clinic.name })} className="flex flex-wrap gap-2">
+          <div role="group" aria-label={t('app.booking.slotsLabel', { clinic: clinic.name })} className="flex flex-wrap gap-2">
             {slots.data.slice(0, MAX_SLOTS).map((s) => {
               const selected = picked?.clinicId === clinic.id && picked.startsAt === s.startsAt;
               return (
@@ -80,10 +80,10 @@ function ClinicSlots({ clinic, day, picked, onPick }: { clinic: Clinic; day: str
                 </ChoiceChip>
               );
             })}
-            {slots.data.some((s) => s.fromClinicSystem) && <p className="w-full text-[12px] text-muted">{t('booking.fromClinic')}</p>}
+            {slots.data.some((s) => s.fromClinicSystem) && <p className="w-full text-[12px] text-muted">{t('app.booking.fromClinic')}</p>}
           </div>
         ) : (
-          <p className="text-[14px] text-muted">{t('booking.noSlots')}</p>
+          <p className="text-[14px] text-muted">{t('app.booking.noSlots')}</p>
         )}
       </div>
     </li>
@@ -92,7 +92,7 @@ function ClinicSlots({ clinic, day, picked, onPick }: { clinic: Clinic; day: str
 
 export default function BookingPage() {
   const { t } = useI18n();
-  useDocumentTitle(t('booking.title'));
+  useDocumentTitle(t('app.booking.title'));
   const navigate = useNavigate();
   const entry = useEntry();
   const [step, setStep] = useState<0 | 1 | 2 | 3>(entry.specialty ? 1 : 0);
@@ -104,7 +104,7 @@ export default function BookingPage() {
   const [error, setError] = useState<string | null>(null);
   const book = useBookAppointment();
 
-  const labels = [t('booking.step1'), t('booking.step2'), t('booking.step3')];
+  const labels = [t('app.booking.step1'), t('app.booking.step2'), t('app.booking.step3')];
 
   const goBack = () => {
     setError(null);
@@ -117,7 +117,7 @@ export default function BookingPage() {
     setError(null);
     try {
       await book.mutateAsync({ clinicId: picked.clinicId, specialty, startsAt: picked.startsAt });
-      toast.success(t('booking.booked'));
+      toast.success(t('app.booking.booked'));
       setStep(3);
     } catch (e) {
       setError(errorMessage(e));
@@ -130,16 +130,16 @@ export default function BookingPage() {
         <span className="flex h-20 w-20 items-center justify-center rounded-full bg-accent-soft text-accent">
           <CheckCircle2 className="h-10 w-10" aria-hidden />
         </span>
-        <h1 className="mt-5 font-heading text-[26px] font-semibold">{t('booking.successTitle')}</h1>
+        <h1 className="mt-5 font-heading text-[26px] font-semibold">{t('app.booking.successTitle')}</h1>
         <p className="mt-2 text-[16px]" role="status">
-          {t('booking.success')}
+          {t('app.booking.success')}
         </p>
         <div className="mt-8 flex w-full flex-col gap-3">
           <Button asChild className={BIG}>
-            <Link to="/app/appointments">{t('booking.toAppointments')}</Link>
+            <Link to="/app/appointments">{t('app.booking.toAppointments')}</Link>
           </Button>
           <Button asChild variant="secondary" className={BIG}>
-            <Link to="/app">{t('booking.toHome')}</Link>
+            <Link to="/app">{t('app.booking.toHome')}</Link>
           </Button>
         </div>
       </div>
@@ -148,7 +148,7 @@ export default function BookingPage() {
 
   return (
     <div>
-      <ScreenHeader title={t('booking.title')} back={goBack} />
+      <ScreenHeader title={t('app.booking.title')} back={goBack} />
       <WizardSteps labels={labels} current={step} />
       <div key={step} className="animate-step">
         {step === 0 && (
@@ -178,19 +178,19 @@ export default function BookingPage() {
         )}
         {step === 2 && specialty && picked && (
           <div>
-            <h2 className="font-heading text-[20px] font-semibold">{t('booking.confirmTitle')}</h2>
+            <h2 className="font-heading text-[20px] font-semibold">{t('app.booking.confirmTitle')}</h2>
             <dl className="mt-3 divide-y divide-border-soft rounded-card border border-border bg-surface px-4">
               <div className="py-3">
-                <dt className="text-[13px] text-muted">{t('booking.doctor')}</dt>
-                <dd className="font-bold">{t(`specialty.${specialty}`)}</dd>
+                <dt className="text-[13px] text-muted">{t('app.booking.doctor')}</dt>
+                <dd className="font-bold">{t(`app.specialty.${specialty}`)}</dd>
               </div>
               <div className="py-3">
-                <dt className="text-[13px] text-muted">{t('booking.clinic')}</dt>
+                <dt className="text-[13px] text-muted">{t('app.booking.clinic')}</dt>
                 <dd className="font-bold">{picked.clinicName}</dd>
                 <dd className="text-[14px] text-muted">{picked.clinicAddress}</dd>
               </div>
               <div className="py-3">
-                <dt className="text-[13px] text-muted">{t('booking.when')}</dt>
+                <dt className="text-[13px] text-muted">{t('app.booking.when')}</dt>
                 <dd className="font-bold">
                   {dayLabel(day, t)}, {formatTime(picked.startsAt)}
                 </dd>
@@ -202,7 +202,7 @@ export default function BookingPage() {
               </p>
             )}
             <Button onClick={() => void submit()} loading={book.isPending} className={cn(BIG, 'mt-5')}>
-              {t('booking.submit')}
+              {t('app.booking.submit')}
             </Button>
           </div>
         )}
@@ -215,7 +215,7 @@ function StepDoctor({ value, onPick }: { value: Specialty | null; onPick: (s: Sp
   const { t } = useI18n();
   return (
     <div>
-      <h2 className="font-heading text-[20px] font-semibold">{t('booking.chooseDoctor')}</h2>
+      <h2 className="font-heading text-[20px] font-semibold">{t('app.booking.chooseDoctor')}</h2>
       <ul className="mt-3 grid grid-cols-2 gap-3">
         {SPECIALTIES.map((s) => {
           const Icon = SPECIALTY_ICON[s];
@@ -233,7 +233,7 @@ function StepDoctor({ value, onPick }: { value: Specialty | null; onPick: (s: Sp
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sky text-sky-text">
                   <Icon className="h-5 w-5" aria-hidden />
                 </span>
-                {t(`specialty.${s}`)}
+                {t(`app.specialty.${s}`)}
               </button>
             </li>
           );
@@ -274,26 +274,26 @@ function StepWhere(p: {
         <div role="note" className="mb-4 flex gap-2 rounded-card bg-peach px-4 py-3 text-[14px] font-semibold text-peach-text">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            {t('booking.limitWarn', { category: t(`limitAcc.${cat}`), amount: formatMoney(limitLeft(usage.limit, usage.used, usage.reserved ?? 0)) })}
+            {t('app.booking.limitWarn', { category: t(`app.limitAcc.${cat}`), amount: formatMoney(limitLeft(usage.limit, usage.used, usage.reserved ?? 0)) })}
           </span>
         </div>
       )}
-      <h2 className="font-heading text-[18px] font-semibold">{t('booking.chooseDay')}</h2>
-      <div role="group" aria-label={t('booking.chooseDay')} className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
+      <h2 className="font-heading text-[18px] font-semibold">{t('app.booking.chooseDay')}</h2>
+      <div role="group" aria-label={t('app.booking.chooseDay')} className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
         {p.days.map((d) => (
           <ChoiceChip key={d} selected={p.day === d} onClick={() => p.onDay(d)}>
             {dayLabel(d, t)}
           </ChoiceChip>
         ))}
       </div>
-      <h2 className="mt-5 font-heading text-[18px] font-semibold">{t('booking.clinicsNearby')}</h2>
+      <h2 className="mt-5 font-heading text-[18px] font-semibold">{t('app.booking.clinicsNearby')}</h2>
       <div className="mt-2">
         {clinics.isLoading ? (
           <CardSkeletons count={3} />
         ) : clinics.isError ? (
           <LoadError error={clinics.error} onRetry={() => void clinics.refetch()} />
         ) : list.length === 0 ? (
-          <Empty title={t('clinics.empty')} />
+          <Empty title={t('app.clinics.empty')} />
         ) : (
           <ul className="flex flex-col gap-3">
             {list.map((c) => (
@@ -305,11 +305,11 @@ function StepWhere(p: {
       <div className="sticky bottom-[76px] mt-4 rounded-card border border-border bg-surface p-3 shadow-lg">
         <p className="mb-2 truncate text-center text-[14px] font-semibold" aria-live="polite" data-testid="booking-summary">
           {p.picked
-            ? t('booking.summary', { clinic: p.picked.clinicName, time: formatTime(p.picked.startsAt), day: dayLabel(p.day, t).toLowerCase() })
-            : t('booking.pickSlot')}
+            ? t('app.booking.summary', { clinic: p.picked.clinicName, time: formatTime(p.picked.startsAt), day: dayLabel(p.day, t).toLowerCase() })
+            : t('app.booking.pickSlot')}
         </p>
         <Button disabled={!p.picked} onClick={p.onContinue} className={BIG}>
-          {t('common.continue')}
+          {t('app.common.continue')}
         </Button>
       </div>
     </div>

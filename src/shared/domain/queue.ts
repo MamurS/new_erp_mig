@@ -3,6 +3,7 @@
  * The mock server drops every item the role has no rights for; the dashboard builds its tabs from
  * the same table, so a tab never shows up without the right behind it.
  */
+import { tKey } from '@/i18n';
 import type { QueueType } from '@/shared/types/dto';
 import { can, type Action, type MinimalUser, type PermissionContext } from '@/shared/auth/permissions';
 
@@ -52,38 +53,52 @@ export interface QueueTypeMeta {
   rights: Right[];
 }
 
+/** Label and tab are read in the current language (labels.queue.*, labels.queueTab.*). */
+function meta(type: QueueType, chip: string, rights: Right[]): QueueTypeMeta {
+  return {
+    get label() {
+      return tKey(`labels.queue.${type}`);
+    },
+    get tab() {
+      return tKey(`labels.queueTab.${type}`);
+    },
+    chip,
+    rights,
+  };
+}
+
 export const QUEUE_TYPE_META: Record<QueueType, QueueTypeMeta> = {
-  appointment: { label: 'Запись', tab: 'Записи', chip: 'appointment', rights: [{ action: 'appointments.manage' }] },
-  clinic_no_response: { label: 'Клиника не ответила', tab: 'Клиника не ответила', chip: 'danger', rights: [{ action: 'appointments.manage' }] },
-  claim: { label: 'Убыток', tab: 'Убытки', chip: 'claim', rights: [{ action: 'claims.read' }] },
-  renewal: { label: 'Продление', tab: 'Продления', chip: 'renewal', rights: [{ action: 'kp.create' }] },
-  guarantee: { label: 'ГП', tab: 'ГП', chip: 'sky', rights: [{ action: 'guarantees.decide' }] },
-  escalation: { label: 'Эскалация ГП', tab: 'Эскалации ГП', chip: 'warning', rights: [{ action: 'guarantees.decide' }] },
-  registry: { label: 'Реестр', tab: 'Реестры', chip: 'peach', rights: [{ action: 'registries.review' }, { action: 'registries.pay' }] },
-  policy_change: { label: 'Состав полиса', tab: 'Состав', chip: 'accent', rights: [{ action: 'policy_changes.decide' }] },
-  rebill: { label: 'Счёт ассистанса', tab: 'Счета ассистансов', chip: 'peach', rights: [{ action: 'rebills.review' }, { action: 'rebills.pay' }] },
-  assistance_sla: { label: 'SLA ассистанса нарушен', tab: 'SLA ассистансов', chip: 'danger', rights: [{ action: 'assist.cases.manage', ctx: { sub: 'complaint' } }] },
-  complaint: { label: 'Жалоба', tab: 'Жалобы', chip: 'danger', rights: [{ action: 'assist.cases.manage', ctx: { sub: 'complaint' } }] },
-  deal: { label: 'Сделка', tab: 'Сделки', chip: 'accent', rights: [{ action: 'deals.manage' }] },
-  quote: { label: 'Котировка', tab: 'Котировки', chip: 'warning', rights: [{ action: 'quotes.approve' }, { action: 'quotes.calculate' }] },
-  contract: { label: 'Договор', tab: 'Договоры', chip: 'sky', rights: [{ action: 'contracts.legal_approve' }, { action: 'quotes.approve' }, { action: 'deals.manage' }] },
-  endorsement: { label: 'Доп. соглашение', tab: 'Доп. соглашения', chip: 'sky', rights: [{ action: 'contracts.legal_approve' }, { action: 'quotes.approve' }] },
-  invoice: { label: 'Взнос', tab: 'Взносы', chip: 'peach', rights: [{ action: 'payments.record' }, { action: 'deals.manage' }] },
-  appeal: { label: 'Апелляция', tab: 'Апелляции', chip: 'danger', rights: [{ action: 'claims.decide' }] },
-  lead: { label: 'Лид', tab: 'Лиды', chip: 'accent', rights: [{ action: 'leads.manage' }] },
-  kp: { label: 'КП без ответа', tab: 'КП', chip: 'warning', rights: [{ action: 'deals.manage' }] },
-  limit_request: { label: 'Изменение лимита', tab: 'Лимиты', chip: 'sun', rights: [{ action: 'limits.approve_change' }] },
-  loss_ratio: { label: 'Убыточность', tab: 'Убыточность', chip: 'danger', rights: [{ action: 'quotes.approve' }] },
-  fraud_flag: { label: 'Флаг проверки', tab: 'Флаги', chip: 'danger', rights: [{ action: 'claims.decide' }] },
-  opinion: { label: 'Заключение', tab: 'Заключения', chip: 'claim', rights: [{ action: 'claims.medical_opinion' }] },
-  qa_sample: { label: 'Контрольная выборка', tab: 'Выборка', chip: 'sky', rights: [{ action: 'qa.review' }] },
-  bank_payment: { label: 'Ручная разноска', tab: 'Разноска', chip: 'warning', rights: [{ action: 'payments.record' }] },
-  payout: { label: 'Выплата', tab: 'Выплаты', chip: 'success', rights: [{ action: 'registries.pay' }] },
-  scan: { label: 'Скан на проверке', tab: 'Сканы', chip: 'sky', rights: [{ action: 'contracts.verify_scan' }] },
-  param_change: { label: 'Параметр ДМС', tab: 'Параметры', chip: 'accent', rights: [{ action: 'dms_params.approve' }] },
-  authority_change: { label: 'Полномочия', tab: 'Полномочия', chip: 'warning', rights: [{ action: 'staff.authority.manage' }] },
-  ai_change: { label: 'Настройки ИИ', tab: 'ИИ', chip: 'sky', rights: [{ action: 'ai.admin' }] },
-  integration_error: { label: 'Ошибка интеграции', tab: 'Интеграции', chip: 'danger', rights: [{ action: 'audit.read' }] },
+  appointment: meta('appointment', 'appointment', [{ action: 'appointments.manage' }]),
+  clinic_no_response: meta('clinic_no_response', 'danger', [{ action: 'appointments.manage' }]),
+  claim: meta('claim', 'claim', [{ action: 'claims.read' }]),
+  renewal: meta('renewal', 'renewal', [{ action: 'kp.create' }]),
+  guarantee: meta('guarantee', 'sky', [{ action: 'guarantees.decide' }]),
+  escalation: meta('escalation', 'warning', [{ action: 'guarantees.decide' }]),
+  registry: meta('registry', 'peach', [{ action: 'registries.review' }, { action: 'registries.pay' }]),
+  policy_change: meta('policy_change', 'accent', [{ action: 'policy_changes.decide' }]),
+  rebill: meta('rebill', 'peach', [{ action: 'rebills.review' }, { action: 'rebills.pay' }]),
+  assistance_sla: meta('assistance_sla', 'danger', [{ action: 'assist.cases.manage', ctx: { sub: 'complaint' } }]),
+  complaint: meta('complaint', 'danger', [{ action: 'assist.cases.manage', ctx: { sub: 'complaint' } }]),
+  deal: meta('deal', 'accent', [{ action: 'deals.manage' }]),
+  quote: meta('quote', 'warning', [{ action: 'quotes.approve' }, { action: 'quotes.calculate' }]),
+  contract: meta('contract', 'sky', [{ action: 'contracts.legal_approve' }, { action: 'quotes.approve' }, { action: 'deals.manage' }]),
+  endorsement: meta('endorsement', 'sky', [{ action: 'contracts.legal_approve' }, { action: 'quotes.approve' }]),
+  invoice: meta('invoice', 'peach', [{ action: 'payments.record' }, { action: 'deals.manage' }]),
+  appeal: meta('appeal', 'danger', [{ action: 'claims.decide' }]),
+  lead: meta('lead', 'accent', [{ action: 'leads.manage' }]),
+  kp: meta('kp', 'warning', [{ action: 'deals.manage' }]),
+  limit_request: meta('limit_request', 'sun', [{ action: 'limits.approve_change' }]),
+  loss_ratio: meta('loss_ratio', 'danger', [{ action: 'quotes.approve' }]),
+  fraud_flag: meta('fraud_flag', 'danger', [{ action: 'claims.decide' }]),
+  opinion: meta('opinion', 'claim', [{ action: 'claims.medical_opinion' }]),
+  qa_sample: meta('qa_sample', 'sky', [{ action: 'qa.review' }]),
+  bank_payment: meta('bank_payment', 'warning', [{ action: 'payments.record' }]),
+  payout: meta('payout', 'success', [{ action: 'registries.pay' }]),
+  scan: meta('scan', 'sky', [{ action: 'contracts.verify_scan' }]),
+  param_change: meta('param_change', 'accent', [{ action: 'dms_params.approve' }]),
+  authority_change: meta('authority_change', 'warning', [{ action: 'staff.authority.manage' }]),
+  ai_change: meta('ai_change', 'sky', [{ action: 'ai.admin' }]),
+  integration_error: meta('integration_error', 'danger', [{ action: 'audit.read' }]),
 };
 
 /** Whether items of this type may be shown to the user at all (the server checks each item). */

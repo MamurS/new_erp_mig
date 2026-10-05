@@ -1,3 +1,4 @@
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import Papa from 'papaparse';
 import { hrEmployeeSchema, hrExcludeSchema, hrInviteSchema } from '@/shared/schemas/forms';
@@ -54,7 +55,7 @@ function requestAdd(user: SessionUser & { companyId: string }, input: ReturnType
   const d = db();
   const client = clientOfHr(user);
   if (d.insured.some((i) => i.pinfl === input.pinfl && i.clientId === client.id && i.status === 'active')) {
-    throw new HttpError(409, 'conflict', 'Сотрудник с таким ПИНФЛ уже застрахован', { pinfl: 'Уже есть в списке' });
+    throw new HttpError(409, 'conflict', 'srv.hr.pinflInsured', { fields: { pinfl: msg('srv.hr.alreadyListed') } });
   }
   return requestChange(d, user, client, 'add', {
     effectiveDate: input.startDate,
@@ -190,7 +191,7 @@ export const hrHandlers = [
       const user = requireHr(ctx.request);
       const i = ownEmployee(user, param(ctx, 'id'));
       const { excludeFrom } = await body(ctx.request, hrExcludeSchema);
-      if (i.status === 'excluded') throw new HttpError(409, 'conflict', 'Сотрудник уже исключён');
+      if (i.status === 'excluded') throw new HttpError(409, 'conflict', 'srv.hr.alreadyExcluded');
       const d = db();
       const row = requestChange(d, user, clientOfHr(user), 'exclude', { effectiveDate: excludeFrom, fullName: i.fullName, position: i.position, familyMembers: i.familyMembersCount, insured: i });
       audit(user, 'policy_change_requested', { targetType: 'policy', targetId: row.policyId, targetLabel: `${row.policyNumber}: исключение ${insuredLabel(i.id)}` });
@@ -202,13 +203,13 @@ export const hrHandlers = [
     route(async ({ request, url }) => {
       const user = requireHr(request);
       const text = await request.text();
-      if (text.length > CSV_MAX_BYTES) throw new HttpError(413, 'validation', 'Файл больше 2 МБ');
+      if (text.length > CSV_MAX_BYTES) throw new HttpError(413, 'validation', 'srv.file.tooLarge2mb');
       const parsed = Papa.parse<Record<string, string>>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: true });
-      if (parsed.data.length > CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'В файле больше 1000 строк');
+      if (parsed.data.length > CSV_MAX_ROWS) throw new HttpError(422, 'validation', 'srv.hr.over1000Rows');
       const header = parsed.meta.fields ?? [];
       const required = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'startDate'];
       const missing = required.filter((h) => !header.includes(h));
-      if (missing.length) throw new HttpError(422, 'validation', `В файле нет колонок: ${missing.join(', ')}. Скачайте шаблон`);
+      if (missing.length) throw new HttpError(422, 'validation', 'srv.hr.missingColumns', { params: { columns: missing.join(', ') } });
       const errors: HrImportError[] = [];
       const valid: ReturnType<typeof hrEmployeeSchema.parse>[] = [];
       const seen = new Set<string>();
@@ -219,7 +220,7 @@ export const hrHandlers = [
           return;
         }
         if (seen.has(r.data.pinfl)) {
-          errors.push({ row: idx + 2, field: 'pinfl', message: 'ПИНФЛ повторяется в файле' });
+          errors.push({ row: idx + 2, field: 'pinfl', message: msg('srv.census.pinflRepeated') });
           return;
         }
         seen.add(r.data.pinfl);
@@ -291,9 +292,9 @@ export const hrHandlers = [
       const client = d.clients.find((c) => c.id === user.companyId)!;
       const year = new Date(now).getFullYear();
       const groups: [string, number, number][] = [
-        ['до 30 лет', 0, 29],
-        ['30–44 года', 30, 44],
-        ['45 лет и старше', 45, 200],
+        [msg('srv.hrStats.ageUnder30'), 0, 29],
+        [msg('srv.hrStats.age30to44'), 30, 44],
+        [msg('srv.hrStats.age45plus'), 45, 200],
       ];
       const ageOf = (b: string) => year - Number(b.slice(0, 4));
       const out: HrStats = {
@@ -303,9 +304,9 @@ export const hrHandlers = [
         budgetUsedPct: client.lossRatio === null || employees.length < K_ANON ? null : Math.round(client.lossRatio * 100),
         byAgeGroup: groups.map(([label, a, b]) => ({ label, value: kAnon(employees.filter((e) => ageOf(e.birthDate) >= a && ageOf(e.birthDate) <= b).length) })),
         byAppStatus: [
-          { label: 'Пользуются приложением', value: kAnon(appUsers) },
-          { label: 'Приглашены', value: kAnon(employees.filter((e) => e.appStatus === 'invited').length) },
-          { label: 'Не приглашены', value: kAnon(employees.filter((e) => e.appStatus === 'not_invited').length) },
+          { label: msg('srv.hrStats.appActive'), value: kAnon(appUsers) },
+          { label: msg('srv.hrStats.appInvited'), value: kAnon(employees.filter((e) => e.appStatus === 'invited').length) },
+          { label: msg('srv.hrStats.appNotInvited'), value: kAnon(employees.filter((e) => e.appStatus === 'not_invited').length) },
         ],
         k: K_ANON,
       };

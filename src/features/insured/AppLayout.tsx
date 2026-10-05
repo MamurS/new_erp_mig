@@ -5,10 +5,10 @@ import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { cn } from '@/shared/lib/cn';
 
 const TABS: { to: string; label: I18nKey; icon: LucideIcon; end?: boolean }[] = [
-  { to: '/app', label: 'nav.home', icon: House, end: true },
-  { to: '/app/claims', label: 'nav.claims', icon: Receipt },
-  { to: '/app/clinics', label: 'nav.clinics', icon: Building2 },
-  { to: '/app/profile', label: 'nav.profile', icon: User },
+  { to: '/app', label: 'app.nav.home', icon: House, end: true },
+  { to: '/app/claims', label: 'app.nav.claims', icon: Receipt },
+  { to: '/app/clinics', label: 'app.nav.clinics', icon: Building2 },
+  { to: '/app/profile', label: 'app.nav.profile', icon: User },
 ];
 
 /** Authenticated layout: content + bottom tab bar fixed to the mobile column. */
@@ -20,7 +20,7 @@ export default function AppLayout() {
         <Outlet />
       </main>
       <nav
-        aria-label={t('nav.label')}
+        aria-label={t('app.nav.label')}
         className="fixed bottom-0 left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm"
       >
         <ul className="grid grid-cols-4">

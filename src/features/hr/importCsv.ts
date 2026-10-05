@@ -2,7 +2,8 @@
 import Papa from 'papaparse';
 import type { HrImportError } from '@/shared/types/dto';
 import { toCsv } from '@/shared/lib/csv';
-import { formatFileSize, plural } from '@/shared/lib/format';
+import { formatFileSize } from '@/shared/lib/format';
+import { t, tp, defineLabels } from '@/i18n';
 
 export const CSV_COLUMNS = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'startDate'] as const;
 export type CsvColumn = (typeof CSV_COLUMNS)[number];
@@ -10,28 +11,22 @@ export const CSV_MAX_BYTES = 2 * 1024 * 1024;
 export const CSV_MAX_ROWS = 1000;
 const CSV_MIME = ['text/csv', 'application/vnd.ms-excel', ''];
 
-export const CSV_COLUMN_LABEL: Record<CsvColumn, string> = {
-  fullName: 'ФИО',
-  birthDate: 'Дата рождения',
-  pinfl: 'ПИНФЛ',
-  phone: 'Телефон',
-  position: 'Должность',
-  startDate: 'Начало страхования',
-};
+export const CSV_COLUMN_LABEL: Readonly<Record<CsvColumn, string>> = defineLabels('hr.csv.column', CSV_COLUMNS);
 
 /** Template with the header row and one example row of fictional data. */
 export function templateCsv(): string {
+  // eslint-disable-next-line mig/no-cyrillic-ui -- fictional sample data of the file format, not interface text
   return toCsv(CSV_COLUMNS, [['Тестов Тест Тестович', '15.03.1990', '31503901234567', '998 90 123 45 67', 'Менеджер', '01.11.2026']]);
 }
 
 /** Returns a human-readable problem with the chosen file, or null when it can be read. */
 export function checkCsvFile(file: { name: string; type: string; size: number }): string | null {
   if (!file.name.toLowerCase().endsWith('.csv') || !CSV_MIME.includes(file.type)) {
-    return 'Можно загрузить только файл .csv. Сохраните таблицу в формате CSV (UTF-8) и выберите его снова';
+    return t('hr.csv.notCsv');
   }
-  if (file.size === 0) return 'Файл пустой. Заполните шаблон и загрузите его снова';
+  if (file.size === 0) return t('hr.csv.empty');
   if (file.size > CSV_MAX_BYTES) {
-    return `Файл весит ${formatFileSize(file.size)}, а можно не больше 2 МБ. Разделите список на несколько файлов`;
+    return t('hr.csv.tooBig', { size: formatFileSize(file.size) });
   }
   return null;
 }
@@ -49,12 +44,12 @@ export function parseCsv(text: string): ParsedCsv {
 
 /** Local checks before upload: row count and required columns. */
 export function checkParsedCsv(p: ParsedCsv): string | null {
-  if (p.rows.length === 0) return 'В файле нет строк с сотрудниками. Заполните шаблон и загрузите его снова';
+  if (p.rows.length === 0) return t('hr.csv.noRows');
   if (p.rows.length > CSV_MAX_ROWS) {
-    return `В файле ${p.rows.length} строк, а можно не больше ${CSV_MAX_ROWS}. Разделите список на несколько файлов`;
+    return t('hr.csv.tooManyRows', { n: p.rows.length, max: CSV_MAX_ROWS });
   }
   const missing = CSV_COLUMNS.filter((c) => !p.fields.includes(c));
-  if (missing.length) return `В файле нет колонок: ${missing.join(', ')}. Скачайте шаблон и заполните его`;
+  if (missing.length) return t('hr.csv.missingColumns', { columns: missing.join(', ') });
   return null;
 }
 
@@ -70,7 +65,7 @@ export function fieldLabel(field: string): string {
 }
 
 /** «Добавить 1 сотрудника / 3 сотрудника / 5 сотрудников» */
-export const employeesAcc = (n: number) => `${n} ${plural(n, ['сотрудника', 'сотрудника', 'сотрудников'])}`;
+export const employeesAcc = (n: number) => tp('hr.employeesAcc', n);
 /** «1 сотрудник / 3 сотрудника / 5 сотрудников» */
-export const employeesNom = (n: number) => `${n} ${plural(n, ['сотрудник', 'сотрудника', 'сотрудников'])}`;
-export const rowsNom = (n: number) => `${n} ${plural(n, ['строка', 'строки', 'строк'])}`;
+export const employeesNom = (n: number) => tp('hr.employeesNom', n);
+export const rowsNom = (n: number) => tp('common.rows', n);

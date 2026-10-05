@@ -3,6 +3,7 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { approvalOutcome, limitState, parseCardInput, registryLineProblems, coverageStatus } from '@/shared/domain/clinics';
 import { hmacSha256Hex, parseSignatureHeader, signWebhook, verifyWebhook } from './webhook';
+import { tm } from '@/i18n';
 import { keyCreateRequest, webhookUrl, webhookUrlProblem } from './schemas';
 import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 
@@ -84,13 +85,13 @@ describe('clinic domain rules', () => {
     const item = { code: 'TH-101', name: 'x', category: 'outpatient' as const, price: 100, requiresGuarantee: false };
     const gpItem = { ...item, code: 'IP-602', requiresGuarantee: true };
     expect(registryLineProblems(base, { priceItem: item })).toEqual([]);
-    expect(registryLineProblems({ ...base, price: 101 }, { priceItem: item })[0]).toContain('Цена выше прайса');
-    expect(registryLineProblems(base, { priceItem: undefined })[0]).toContain('нет в прайсе');
-    expect(registryLineProblems(base, { priceItem: gpItem })[0]).toContain('нужен номер гарантийного письма');
-    expect(registryLineProblems({ ...base, guaranteeNumber: 'ГП-2026-000001' }, { priceItem: gpItem, guarantee: { status: 'requested', visitId: 'v1', serviceCode: 'IP-602' } })[0]).toContain('не одобрено');
+    expect(tm(registryLineProblems({ ...base, price: 101 }, { priceItem: item })[0])).toContain('Цена выше прайса');
+    expect(tm(registryLineProblems(base, { priceItem: undefined })[0])).toContain('нет в прайсе');
+    expect(tm(registryLineProblems(base, { priceItem: gpItem })[0])).toContain('нужен номер гарантийного письма');
+    expect(tm(registryLineProblems({ ...base, guaranteeNumber: 'ГП-2026-000001' }, { priceItem: gpItem, guarantee: { status: 'requested', visitId: 'v1', serviceCode: 'IP-602' } })[0])).toContain('не одобрено');
     expect(registryLineProblems({ ...base, guaranteeNumber: 'ГП-2026-000001' }, { priceItem: gpItem, guarantee: { status: 'approved', approvedAmount: 100, visitId: 'v1', serviceCode: 'IP-602' } })).toEqual([]);
-    expect(registryLineProblems(base, { priceItem: item, policyFrom: '2026-10-01', policyTo: '2027-09-30' })[0]).toContain('полиса');
-    expect(registryLineProblems(base, { priceItem: item, visitFrom: '2026-09-11', visitTo: '2026-09-12' })[0]).toContain('визита');
+    expect(tm(registryLineProblems(base, { priceItem: item, policyFrom: '2026-10-01', policyTo: '2027-09-30' })[0])).toContain('полиса');
+    expect(tm(registryLineProblems(base, { priceItem: item, visitFrom: '2026-09-11', visitTo: '2026-09-12' })[0])).toContain('визита');
   });
 
   it('four-eyes: above the threshold the same doctor cannot give the second approval', () => {

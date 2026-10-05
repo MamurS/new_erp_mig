@@ -1,4 +1,5 @@
 /* «Доп. соглашения» (LIFECYCLE_SPEC §11): change requests accumulate, then become endorsements. */
+import { defineLabels, t, tm } from '@/i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
@@ -24,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
-const REQUEST_STATUS = { pending: 'Ждёт ДС', included: 'В доп. соглашении', cancelled: 'Отменена' } as const;
+const REQUEST_STATUS = defineLabels('staffLc.changeRequestStatus', ['pending', 'included', 'cancelled'] as const);
 const REQUEST_CHIP = { pending: 'warning', included: 'success', cancelled: 'neutral' } as const;
 const PROGRAMS: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
 
@@ -46,7 +47,7 @@ function NewRequestDialog({ onClose }: { onClose: () => void }) {
     }
     try {
       await create.mutateAsync(parsed.data);
-      toast.success('Заявка на изменение создана');
+      toast.success(t('staffLc.endorsements.requestCreated'));
       onClose();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -56,24 +57,24 @@ function NewRequestDialog({ onClose }: { onClose: () => void }) {
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Заявка на изменение"
-      description="Изменение от МИГ: смена программы или прочие условия. Включение и исключение сотрудников оформляет HR."
+      title={t('staffLc.endorsements.request')}
+      description={t('staffLc.endorsements.requestDesc')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={create.isPending} onClick={() => void submit()}>
-            Создать заявку
+            {t('staffLc.endorsements.createRequest')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3">
-        <Field label="Договор" error={errors.contractId}>
+        <Field label={t('common.contract')} error={tm(errors.contractId) || undefined}>
           {(a) => (
             <Select {...a} value={v.contractId} onChange={(e) => setV({ ...v, contractId: e.target.value })}>
-              <option value="">Выберите договор</option>
+              <option value="">{t('staffLc.endorsements.chooseContract')}</option>
               {(contracts.data ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.number} · {c.clientName}
@@ -82,7 +83,7 @@ function NewRequestDialog({ onClose }: { onClose: () => void }) {
             </Select>
           )}
         </Field>
-        <Field label="Изменение" error={errors.type}>
+        <Field label={t('staffLc.endorsements.change')} error={tm(errors.type) || undefined}>
           {(a) => (
             <Select {...a} value={v.type} onChange={(e) => setV({ ...v, type: e.target.value as 'change_program' | 'other' })}>
               <option value="change_program">{CHANGE_TYPE_LABEL.change_program}</option>
@@ -90,11 +91,11 @@ function NewRequestDialog({ onClose }: { onClose: () => void }) {
             </Select>
           )}
         </Field>
-        <Field label="Дата изменения" error={errors.effectiveDate}>
+        <Field label={t('staffLc.endorsements.effectiveDate')} error={tm(errors.effectiveDate) || undefined}>
           {(a) => <Input {...a} type="date" value={v.effectiveDate} onChange={(e) => setV({ ...v, effectiveDate: e.target.value })} />}
         </Field>
         {v.type === 'change_program' ? (
-          <Field label="Новая программа" error={errors.program}>
+          <Field label={t('staffLc.endorsements.newProgram')} error={tm(errors.program) || undefined}>
             {(a) => (
               <Select {...a} value={v.program} onChange={(e) => setV({ ...v, program: e.target.value as ProgramCode })}>
                 {PROGRAMS.map((p) => (
@@ -107,10 +108,10 @@ function NewRequestDialog({ onClose }: { onClose: () => void }) {
           </Field>
         ) : (
           <>
-            <Field label="Описание" error={errors.description}>
+            <Field label={t('staffLc.endorsements.description')} error={tm(errors.description) || undefined}>
               {(a) => <Input {...a} maxLength={300} value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} />}
             </Field>
-            <Field label="Сумма (минус — возврат)" hint="Сумму утверждает андеррайтер" error={errors.amount}>
+            <Field label={t('staffLc.endorsements.amountLabel')} hint={t('staffLc.endorsements.amountHint')} error={tm(errors.amount) || undefined}>
               {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value })} />}
             </Field>
           </>
@@ -121,8 +122,8 @@ function NewRequestDialog({ onClose }: { onClose: () => void }) {
 }
 
 export default function EndorsementsPage() {
-  useDocumentTitle('Доп. соглашения');
-  useTopbar([{ label: 'Доп. соглашения' }]);
+  useDocumentTitle(t('staffLc.contract.endorsements'));
+  useTopbar([{ label: t('staffLc.contract.endorsements') }]);
   const navigate = useNavigate();
   const [f, setF] = useUrlFilters(['tab'] as const);
   const tab = f.tab === 'requests' ? 'requests' : 'endorsements';
@@ -139,7 +140,7 @@ export default function EndorsementsPage() {
   const form = async (contractId: string) => {
     try {
       const out = await createEnd.mutateAsync({ contractId });
-      toast.success(out.length === 1 ? `Сформировано ${out[0]!.number}` : `Сформировано доп. соглашений: ${out.length}`);
+      toast.success(out.length === 1 ? t('staffLc.endorsements.formedOne', { number: out[0]!.number }) : t('staffLc.endorsements.formedMany', { n: out.length }));
       if (out.length === 1) navigate(`/staff/endorsements/${out[0]!.id}`);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -147,32 +148,32 @@ export default function EndorsementsPage() {
   };
 
   const reqColumns: Column<ChangeRequestView>[] = [
-    { key: 'date', header: 'Дата изменения', cell: (r) => <span className="num">{formatDate(r.effectiveDate)}</span> },
-    { key: 'contract', header: 'Договор', cell: (r) => <span className="num">{r.contractNumber}</span> },
-    { key: 'client', header: 'Клиент', cell: (r) => r.clientName },
-    { key: 'type', header: 'Тип', cell: (r) => CHANGE_TYPE_LABEL[r.type] },
-    { key: 'desc', header: 'Описание', cell: (r) => r.description ?? '—' },
-    { key: 'by', header: 'Заявитель', cell: (r) => r.requestedBy.name ?? (r.requestedBy.role === 'hr' ? 'HR клиента' : 'МИГ') },
-    { key: 'status', header: 'Статус', cell: (r) => <Chip kind={REQUEST_CHIP[r.status]}>{r.endorsementNumber ?? REQUEST_STATUS[r.status]}</Chip> },
+    { key: 'date', header: t('staffLc.endorsements.effectiveDate'), cell: (r) => <span className="num">{formatDate(r.effectiveDate)}</span> },
+    { key: 'contract', header: t('common.contract'), cell: (r) => <span className="num">{r.contractNumber}</span> },
+    { key: 'client', header: t('common.client'), cell: (r) => r.clientName },
+    { key: 'type', header: t('common.type'), cell: (r) => CHANGE_TYPE_LABEL[r.type] },
+    { key: 'desc', header: t('staffLc.endorsements.description'), cell: (r) => r.description ?? '—' },
+    { key: 'by', header: t('staffLc.endorsements.requester'), cell: (r) => r.requestedBy.name ?? (r.requestedBy.role === 'hr' ? t('staffLc.endorsements.clientHr') : t('common.mig')) },
+    { key: 'status', header: t('common.status'), cell: (r) => <Chip kind={REQUEST_CHIP[r.status]}>{r.endorsementNumber ?? REQUEST_STATUS[r.status]}</Chip> },
   ];
   const endColumns: Column<EndorsementView>[] = [
-    { key: 'num', header: 'Доп. соглашение', cell: (e) => <span className="num font-medium">{e.number}</span> },
-    { key: 'client', header: 'Клиент', cell: (e) => e.clientName },
-    { key: 'kind', header: 'Вид', cell: (e) => (e.kind === 'termination' ? 'Расторжение' : `Изменения: ${e.lines.length}`) },
-    { key: 'total', header: 'Сумма', align: 'right', cell: (e) => <span className={e.total < 0 ? 'num text-success-text' : 'num'}>{e.total < 0 ? `возврат ${formatMoney(-e.total)}` : formatMoney(e.total)}</span> },
-    { key: 'status', header: 'Статус', cell: (e) => <Chip kind={e.status === 'signed' ? 'success' : e.status === 'draft' ? 'neutral' : 'warning'}>{ENDORSEMENT_STATUS_LABEL[e.status]}</Chip> },
-    { key: 'date', header: 'Создано', cell: (e) => (e.createdAt ? <span className="num">{formatDate(e.createdAt)}</span> : '—') },
+    { key: 'num', header: t('staffLc.endorsements.endorsement'), cell: (e) => <span className="num font-medium">{e.number}</span> },
+    { key: 'client', header: t('common.client'), cell: (e) => e.clientName },
+    { key: 'kind', header: t('staffLc.endorsements.kind'), cell: (e) => (e.kind === 'termination' ? t('staffLc.endorsements.termination') : t('staffLc.endorsements.changesCount', { n: e.lines.length })) },
+    { key: 'total', header: t('common.amount'), align: 'right', cell: (e) => <span className={e.total < 0 ? 'num text-success-text' : 'num'}>{e.total < 0 ? t('staffLc.endorsements.refund', { amount: formatMoney(-e.total) }) : formatMoney(e.total)}</span> },
+    { key: 'status', header: t('common.status'), cell: (e) => <Chip kind={e.status === 'signed' ? 'success' : e.status === 'draft' ? 'neutral' : 'warning'}>{ENDORSEMENT_STATUS_LABEL[e.status]}</Chip> },
+    { key: 'date', header: t('common.created'), cell: (e) => (e.createdAt ? <span className="num">{formatDate(e.createdAt)}</span> : '—') },
   ];
 
   return (
     <>
       <PageHeader
-        title="Доп. соглашения"
-        subtitle={`Заявки на изменение копятся и оформляются доп. соглашением: ${periodicity === 'monthly' ? 'одно ДС по итогам месяца' : 'ДС на каждое изменение'} (параметр ДМС)`}
+        title={t('staffLc.contract.endorsements')}
+        subtitle={periodicity === 'monthly' ? t('staffLc.endorsements.subtitleMonthly') : t('staffLc.endorsements.subtitleEach')}
         actions={
           canManage && (
             <Button onClick={() => setNewReq(true)}>
-              <Plus className="h-4 w-4" aria-hidden /> Заявка на изменение
+              <Plus className="h-4 w-4" aria-hidden /> {t('staffLc.endorsements.request')}
             </Button>
           )
         }
@@ -182,28 +183,28 @@ export default function EndorsementsPage() {
           {[...pendingByContract].map(([contractId, list]) => (
             <div key={contractId} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
               <span>
-                <span className="num font-medium">{list[0]!.contractNumber}</span> · {list[0]!.clientName}: заявок без доп. соглашения — {list.length}
+                <span className="num font-medium">{list[0]!.contractNumber}</span> {t('staffLc.endorsements.pendingLine', { client: list[0]!.clientName, n: list.length })}
               </span>
               <Button size="sm" loading={createEnd.isPending && createEnd.variables?.contractId === contractId} onClick={() => void form(contractId)}>
-                Сформировать ДС
+                {t('staffLc.endorsements.form')}
               </Button>
             </div>
           ))}
         </div>
       )}
-      <Tabs value={tab} onValueChange={(t) => setF({ tab: t === 'requests' ? 'requests' : null })}>
+      <Tabs value={tab} onValueChange={(v) => setF({ tab: v === 'requests' ? 'requests' : null })}>
         <TabsList>
-          <TabsTrigger value="endorsements">Доп. соглашения</TabsTrigger>
-          <TabsTrigger value="requests">Заявки на изменение</TabsTrigger>
+          <TabsTrigger value="endorsements">{t('staffLc.contract.endorsements')}</TabsTrigger>
+          <TabsTrigger value="requests">{t('staffLc.endorsements.requests')}</TabsTrigger>
         </TabsList>
         <TabsContent value="endorsements">
           <div className="rounded-card border border-border bg-surface">
-            <DataTable caption="Доп. соглашения" columns={endColumns} rows={endorsements.data} loading={endorsements.isLoading} error={endorsements.error} rowKey={(e) => e.id} onRowClick={(e) => navigate(`/staff/endorsements/${e.id}`)} empty="Доп. соглашений нет" />
+            <DataTable caption={t('staffLc.contract.endorsements')} columns={endColumns} rows={endorsements.data} loading={endorsements.isLoading} error={endorsements.error} rowKey={(e) => e.id} onRowClick={(e) => navigate(`/staff/endorsements/${e.id}`)} empty={t('staffLc.endorsements.empty')} />
           </div>
         </TabsContent>
         <TabsContent value="requests">
           <div className="rounded-card border border-border bg-surface">
-            <DataTable caption="Заявки на изменение" columns={reqColumns} rows={requests.data} loading={requests.isLoading} error={requests.error} rowKey={(r) => r.id} empty="Заявок нет" />
+            <DataTable caption={t('staffLc.endorsements.requests')} columns={reqColumns} rows={requests.data} loading={requests.isLoading} error={requests.error} rowKey={(r) => r.id} empty={t('staffLc.endorsements.requestsEmpty')} />
           </div>
         </TabsContent>
       </Tabs>

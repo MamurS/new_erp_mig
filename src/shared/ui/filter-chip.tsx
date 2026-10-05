@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { ChevronDown, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { Menu, MenuCheckbox, MenuContent, MenuTrigger } from './dropdown';
@@ -39,7 +40,7 @@ export function FilterChip({ label, options, selected, onChange }: FilterChipPro
         </MenuContent>
       </Menu>
       {active && (
-        <button type="button" aria-label={`Сбросить фильтр «${label}»`} onClick={() => onChange([])} className="px-1.5">
+        <button type="button" aria-label={t('shell.filter.reset', { label })} onClick={() => onChange([])} className="px-1.5">
           <X className="h-3 w-3" />
         </button>
       )}

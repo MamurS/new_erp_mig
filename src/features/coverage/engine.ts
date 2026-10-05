@@ -7,6 +7,7 @@
  * reserves of approved guarantee letters → guarantee letter. For several codes the strictest verdict wins.
  */
 import type { CoverageRule, CoverageVerdict, CoverageVerdictDecision, ISODate, LimitCategory, LimitUsage, Money, ProgramCode, ServiceCatalogItem, UUID } from '@/shared/types';
+import { t } from '@/i18n';
 
 export interface CoverageInput {
   policyId: UUID;
@@ -44,27 +45,27 @@ export function remainingOf(limits: readonly LimitUsage[], category: LimitCatego
 
 function one(code: string, input: CoverageInput, ctx: CoverageContext): CoverageVerdict {
   const item = ctx.catalog(code);
-  if (!item) return { decision: 'unknown', clauseIds: [], limit: null, notes: [`Услуга ${code} не найдена в каталоге`] };
+  if (!item) return { decision: 'unknown', clauseIds: [], limit: null, notes: [t('coverage.note.unknownCode', { code })] };
   const rule = ruleFor(ctx.rules, ctx.program, item);
-  if (!rule) return { decision: 'unknown', clauseIds: [], limit: null, notes: [`Для «${item.name}» нет правила в таблице покрытия`] };
+  if (!rule) return { decision: 'unknown', clauseIds: [], limit: null, notes: [t('coverage.note.noRule', { name: item.name })] };
   const notes: string[] = [];
-  if (rule.decision === 'excluded') return { decision: 'excluded', clauseIds: rule.clauseIds, limit: null, notes: [`«${item.name}» — исключение программы`] };
+  if (rule.decision === 'excluded') return { decision: 'excluded', clauseIds: rule.clauseIds, limit: null, notes: [t('coverage.note.excluded', { name: item.name })] };
   if (rule.waitingDays) {
     const from = addDays(ctx.insured.insuredFrom, rule.waitingDays);
     if (input.serviceDate < from) {
-      return { decision: 'excluded', clauseIds: [...rule.clauseIds, 'program:7.2'], limit: null, notes: [`Период ожидания ${rule.waitingDays} дн.: покрытие с ${from}`] };
+      return { decision: 'excluded', clauseIds: [...rule.clauseIds, 'program:7.2'], limit: null, notes: [t('coverage.note.waiting', { days: rule.waitingDays, from })] };
     }
   }
   const remaining = remainingOf(ctx.limits, item.limitCategory);
   let limit: CoverageVerdict['limit'] = null;
   if (remaining !== null) {
     limit = { category: item.limitCategory, remaining };
-    if (remaining <= 0) return { decision: 'limit_exhausted', clauseIds: ['program:7.1', 'contract:4.6'], limit, notes: ['Лимит по этому виду помощи исчерпан'] };
+    if (remaining <= 0) return { decision: 'limit_exhausted', clauseIds: ['program:7.1', 'contract:4.6'], limit, notes: [t('coverage.note.limitExhausted')] };
     if (input.amount !== undefined) {
       const payable = Math.min(input.amount, rule.subLimit ?? Infinity);
       limit.afterThis = remaining - Math.min(payable, remaining);
-      if (rule.subLimit !== undefined && input.amount > rule.subLimit) notes.push(`Подлимит ${rule.subLimit}: сверх него не покрывается`);
-      if (payable > remaining) notes.push(`Остаток лимита ${remaining}: покрывается частично`);
+      if (rule.subLimit !== undefined && input.amount > rule.subLimit) notes.push(t('coverage.note.subLimit', { limit: rule.subLimit }));
+      if (payable > remaining) notes.push(t('coverage.note.partly', { remaining }));
     }
   }
   const guarantee = rule.decision === 'needs_guarantee' || item.requiresGuarantee;
@@ -77,9 +78,9 @@ export function evaluateCoverage(input: CoverageInput, ctx: CoverageContext): Co
   const outOfPolicy = p.status !== 'active' || input.serviceDate < p.startDate || input.serviceDate > p.endDate;
   const outOfPerson = input.serviceDate < person.insuredFrom || (!!person.excludedFrom && input.serviceDate >= person.excludedFrom) || person.status === 'excluded' && !person.excludedFrom;
   if (outOfPolicy || outOfPerson) {
-    return { decision: 'policy_inactive', clauseIds: ['contract:6.1', 'program:7.3'], limit: null, notes: [outOfPolicy ? 'Полис не действует на дату услуги' : 'Застрахованный не покрыт на дату услуги'] };
+    return { decision: 'policy_inactive', clauseIds: ['contract:6.1', 'program:7.3'], limit: null, notes: [outOfPolicy ? t('coverage.note.policyInactive') : t('coverage.note.personInactive')] };
   }
-  if (!input.serviceCodes.length) return { decision: 'unknown', clauseIds: [], limit: null, notes: ['Услуга не распознана'] };
+  if (!input.serviceCodes.length) return { decision: 'unknown', clauseIds: [], limit: null, notes: [t('coverage.note.unrecognized')] };
   const verdicts = input.serviceCodes.map((c) => one(c, input, ctx));
   const worst = verdicts.reduce((a, b) => (RANK[b.decision] > RANK[a.decision] ? b : a));
   return {

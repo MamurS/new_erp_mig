@@ -1,8 +1,16 @@
 /* Pure helpers for the insured app (no React). */
-import type { I18nKey } from '@/i18n';
+import type { I18nKey, Lang } from '@/i18n';
 import type { LimitCategory, MyClaim, Specialty } from '@/shared/types';
 import { addDaysISO, todayISO } from '@/shared/lib/format';
 import { isSafeHttpUrl, safeUrl } from '@/shared/lib/safeUrl';
+
+/**
+ * Language of the AI coverage explanation: the check API speaks ru and uz only, so English falls
+ * back to Russian (clause names and catalog matches are Russian anyway).
+ */
+export function aiLang(lang: Lang): 'ru' | 'uz' {
+  return lang === 'uz-Latn' ? 'uz' : 'ru';
+}
 
 export const SPECIALTIES: readonly Specialty[] = [
   'therapist',
@@ -45,10 +53,10 @@ type T = (key: I18nKey, vars?: Record<string, string | number>) => string;
 /** «Сегодня», «Завтра», or «Чт, 01.10». */
 export function dayLabel(iso: string, t: T, now: Date = new Date()): string {
   const today = todayISO(now);
-  if (iso === today) return t('common.today');
-  if (iso === addDaysISO(today, 1)) return t('common.tomorrow');
+  if (iso === today) return t('app.common.today');
+  if (iso === addDaysISO(today, 1)) return t('app.common.tomorrow');
   const [, m, d] = iso.split('-');
-  return `${t(`weekday.${weekdayOf(iso)}` as I18nKey)}, ${d}.${m}`;
+  return `${t(`app.weekday.${weekdayOf(iso)}` as I18nKey)}, ${d}.${m}`;
 }
 
 export const CLAIM_STEP_KEYS: readonly MyClaim['steps'][number]['key'][] = ['received', 'checked', 'approved', 'paid'];

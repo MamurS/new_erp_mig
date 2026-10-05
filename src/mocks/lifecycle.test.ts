@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ClaimDetail, ContractView, DealCard, DealView, EndorsementView, QuoteView, ReserveReport, SessionResponse } from '@/shared/types/dto';
 import type { Claim, KpDocument, MyClaim } from '@/shared/types';
+import { tm } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 import { currentReserve, refreshFlags } from './settlement-core';
@@ -84,7 +85,7 @@ async function toApprovedContract(): Promise<{ sales: string; head: string; hr: 
   expect((await call('/quotes', { method: 'POST', sid: sales, json: { dealId: deal.data.id, program: 'standard' } })).status).toBe(403);
   const q = await call<QuoteView>('/quotes', { method: 'POST', sid: uw, json: { dealId: deal.data.id, program: 'standard', adjustments: [{ label: 'Скидка', pct: -0.15, comment: 'Переход от конкурента' }] } });
   expect(q.status).toBe(201);
-  expect(q.data.authorityProblem).toMatch(/выше ваших полномочий/);
+  expect(tm(q.data.authorityProblem)).toMatch(/выше ваших полномочий/);
   // A KP cannot go out on an unapproved quote.
   expect((await call(`/deals/${deal.data.id}/kp`, { method: 'POST', sid: sales })).status).toBe(409);
   const submitted = await call<QuoteView>(`/quotes/${q.data.id}/submit`, { method: 'POST', sid: uw });
@@ -237,10 +238,10 @@ describe('endorsements (§11)', () => {
     const addLine = e.lines.find((l) => l.description.startsWith('Включение: Добавлен'))!;
     const days = addLine.days;
     expect(addLine.amount).toBe(Math.round((contract.params.premiumEmployee * days) / (Math.round((Date.parse(contract.params.endDate) - Date.parse(contract.params.startDate)) / 86_400_000) + 1)));
-    expect(addLine.formula).toMatch(/× \d+ \/ \d+ =/);
+    expect(tm(addLine.formula)).toMatch(/× \d+ \/ \d+ =/);
     const exLine = e.lines.find((l) => l.description.includes(leaver.fullName.split(' ')[0]!))!;
     expect(exLine.amount).toBeLessThanOrEqual(0);
-    expect(exLine.formula).toMatch(/выплаты/); // pro_rata_minus_claims by default
+    expect(tm(exLine.formula)).toMatch(/выплаты/); // pro_rata_minus_claims by default
     await call(`/endorsements/${e.id}/submit-legal`, { method: 'POST', sid: sales });
     await call(`/endorsements/${e.id}/send`, { method: 'POST', sid: sales });
     expect((await call(`/endorsements/${e.id}/scan`, { method: 'POST', sid: hr, form: scan('client') })).status).toBe(200);
@@ -402,9 +403,9 @@ describe('duplicate receipts by fiscal data', () => {
     expect(row.receiptFiscal).toEqual(rec.data.fiscal);
     const flag = row.flags!.find((x) => x.code === 'duplicate_receipt')!;
     const firstNumber = db().claims.find((c) => c.id === first.data.id)!.number;
-    expect(flag.message).toContain(firstNumber);
-    expect(flag.message).toContain('другого застрахованного');
-    expect(flag.message).toContain('изображение чека тоже совпадает');
+    expect(tm(flag.message)).toContain(firstNumber);
+    expect(tm(flag.message)).toContain('другого застрахованного');
+    expect(tm(flag.message)).toContain('изображение чека тоже совпадает');
 
     // The staff card shows the fiscal data; the insured person never sees the flags.
     const officer = await login('claims@demo.mig.uz');
@@ -424,7 +425,7 @@ describe('duplicate receipts by fiscal data', () => {
     original.receiptFiscal = { ...other.receiptFiscal };
     original.flags = [];
     const flags = refreshFlags(db(), original);
-    expect(flags.find((x) => x.code === 'duplicate_receipt')?.message).toBe(`Фискальный номер чека совпадает с чеком обращения ${other.number} другого застрахованного`);
+    expect(tm(flags.find((x) => x.code === 'duplicate_receipt')?.message)).toBe(`Фискальный номер чека совпадает с чеком обращения ${other.number} другого застрахованного`);
   });
 });
 

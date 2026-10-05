@@ -13,15 +13,15 @@ import { dmsParam } from '../params';
 const CHALLENGE_TTL = 5 * 60_000;
 const NIL = '00000000-0000-4000-8000-000000000000';
 
-const invalidCreds = () => new HttpError(401, 'unauthorized', 'Неверный email или пароль');
-const invalidCode = () => new HttpError(401, 'unauthorized', 'Неверный или устаревший код');
+const invalidCreds = () => new HttpError(401, 'unauthorized', 'srv.auth.invalidCreds');
+const invalidCode = () => new HttpError(401, 'unauthorized', 'srv.auth.invalidCode');
 
 function checkLock(key: string): void {
   const d = db();
   const now = Date.now();
   d.lockouts = d.lockouts.filter((l) => l.until > now);
   if (d.lockouts.some((l) => l.key === key)) {
-    throw new HttpError(429, 'rate_limited', `Слишком много попыток. Вход заблокирован на ${dmsParam('loginLockMinutes')} мин`);
+    throw new HttpError(429, 'rate_limited', 'srv.auth.locked', { params: { minutes: dmsParam('loginLockMinutes') } });
   }
 }
 

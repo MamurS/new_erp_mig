@@ -28,6 +28,7 @@ import {
   visit as visitSchema,
   type Problem,
 } from '@/shared/integration/schemas';
+import { hasKey, translate, unpack, type I18nKey } from '@/i18n/core';
 import { sha256Hex } from '@/shared/integration/webhook';
 import { ACCESS_TOKEN_TTL_SEC, API_RATE_PER_MINUTE, IDEMPOTENCY_TTL_MS } from '@/shared/domain/clinics';
 import { db, type Db, type IntegrationClientRow } from '../db';
@@ -79,9 +80,19 @@ export class ApiProblem extends Error {
   }
 }
 
+/** A packed message (msg()) as Russian text; anything else is returned as is. */
+function ruText(packed: string): string {
+  const { key, params } = unpack(packed);
+  return hasKey(key) ? translate('ru', key as I18nKey, params) : packed;
+}
+
 function problemOf(e: unknown): ApiProblem {
   if (e instanceof ApiProblem) return e;
-  if (e instanceof HttpError) return new ApiProblem(e.status, e.code, e.message, e.fields);
+  if (e instanceof HttpError) {
+    // The partner API is not localized: problem details are in Russian (the default locale).
+    const fields = e.fields ? Object.fromEntries(Object.entries(e.fields).map(([k, v]) => [k, ruText(v)])) : undefined;
+    return new ApiProblem(e.status, e.code, translate('ru', e.key, e.params), fields);
+  }
   return new ApiProblem(500, 'server', 'Внутренняя ошибка сервера');
 }
 
@@ -395,7 +406,7 @@ export const integrationHandlers = [
         try {
           const line = buildLine(d, actor.clinicId, l);
           const problems = lineProblems(d, actor.clinicId, line);
-          if (problems.length) errors[`lines[${i}]`] = problems.join('; ');
+          if (problems.length) errors[`lines[${i}]`] = problems.map(ruText).join('; ');
           return [line];
         } catch {
           errors[`lines[${i}]`] = 'Визит не найден в вашей клинике';

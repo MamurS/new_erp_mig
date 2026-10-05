@@ -1,3 +1,4 @@
+import { msg, t } from '@/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/shared/ui/dialog';
 import { Button } from '@/shared/ui/button';
@@ -25,13 +26,13 @@ export function IdleWatcher() {
     };
     window.addEventListener('pointerdown', onActivity);
     window.addEventListener('keydown', onActivity);
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       const idle = Date.now() - lastActivity();
       if (idle >= timeoutMs) {
-        clearInterval(t);
+        clearInterval(timer);
         warning.current = false;
         setLeft(null);
-        void logout('Сессия завершена из-за неактивности. Войдите снова');
+        void logout(msg('auth.notice.idle'));
       } else if (warnMs !== null && idle >= warnMs) {
         warning.current = true;
         setLeft(Math.ceil((timeoutMs - idle) / 1000));
@@ -41,7 +42,7 @@ export function IdleWatcher() {
       }
     }, 1000);
     return () => {
-      clearInterval(t);
+      clearInterval(timer);
       window.removeEventListener('pointerdown', onActivity);
       window.removeEventListener('keydown', onActivity);
     };
@@ -60,14 +61,14 @@ export function IdleWatcher() {
       onOpenChange={(o) => {
         if (!o) stay();
       }}
-      title="Вы ещё здесь?"
-      description="Из-за неактивности сессия скоро завершится. Несохранённые данные будут потеряны."
+      title={t('auth.idle.title')}
+      description={t('auth.idle.description')}
       footer={
         <>
           <Button variant="secondary" onClick={() => void logout()}>
-            Выйти
+            {t('shell.user.logout')}
           </Button>
-          <Button onClick={stay}>Продолжить работу</Button>
+          <Button onClick={stay}>{t('auth.idle.stay')}</Button>
         </>
       }
     >

@@ -20,6 +20,7 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
+import { t, tm } from '@/i18n';
 
 type Mode = 'approve' | 'reject' | 'request_info' | 'escalate';
 
@@ -27,8 +28,8 @@ export default function GuaranteePage() {
   const { guaranteeId = '' } = useParams();
   const q = useAssistGuarantee(guaranteeId);
   const overview = useAssistOverview();
-  useDocumentTitle('Гарантийное письмо');
-  useTopbar([{ label: 'Гарантийные письма', to: '/assist/guarantees' }, { label: q.data?.number ?? 'Письмо' }]);
+  useDocumentTitle(t('assist.guarantee.docTitle'));
+  useTopbar([{ label: t('assist.nav.guarantees'), to: '/assist/guarantees' }, { label: q.data?.number ?? t('assist.guarantee.crumb') }]);
   const canDecide = useCan('assist.guarantees.decide');
   const decide = useAssistDecideGuarantee();
   const validityDays = useDmsParam('guaranteeValidityDays');
@@ -52,17 +53,17 @@ export default function GuaranteePage() {
           const raw = current === 'approve' ? { action: current, amount: amountNum, validUntil } : { action: current, reason };
           const parsed = assistGuaranteeDecisionSchema.safeParse(raw);
           if (!parsed.success) {
-            setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])));
+            setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), tm(i.message)])));
             return;
           }
           if (parsed.data.action === 'approve' && needsEscalation(parsed.data.amount, limit)) {
-            setErrors({ amount: `Выше полномочий (${formatMoney(limit)}): эскалируйте в МИГ` });
+            setErrors({ amount: t('assist.guarantee.overAuthority', { amount: formatMoney(limit) }) });
             return;
           }
           setErrors({});
           try {
             const res = await decide.mutateAsync({ id: g.id, body: parsed.data });
-            toast.success(res.escalated ? 'Письмо передано на решение в МИГ' : res.status === 'approved' ? 'Письмо одобрено, лимит зарезервирован' : res.status === 'rejected' ? 'Письмо отклонено' : 'Клинике отправлен запрос документов');
+            toast.success(res.escalated ? t('assist.guarantee.toastEscalated') : res.status === 'approved' ? t('assist.guarantee.toastApproved') : res.status === 'rejected' ? t('assist.guarantee.toastRejected') : t('assist.guarantee.toastInfo'));
           } catch (e) {
             toast.error(errorMessage(e));
           }
@@ -71,36 +72,34 @@ export default function GuaranteePage() {
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="flex flex-col gap-4 lg:col-span-2">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-[22px] font-bold">
-                  Гарантийное письмо <span className="num">{g.number}</span>
-                </h1>
+                <h1 className="text-[22px] font-bold">{t('assist.guarantee.heading', { number: g.number })}</h1>
                 <Chip kind={GUARANTEE_STATUS_CHIP[g.status]}>{GUARANTEE_STATUS_LABEL[g.status]}</Chip>
-                {g.escalated && <Chip kind="warning">{g.status === 'requested' ? 'Передано в МИГ' : 'Решение МИГ'}</Chip>}
+                {g.escalated && <Chip kind="warning">{g.status === 'requested' ? t('assist.guarantee.sentToMig') : t('assist.guarantee.migDecision')}</Chip>}
               </div>
-              <Card title="Запрос клиники">
+              <Card title={t('assist.guarantee.clinicRequest')}>
                 <dl className="grid gap-x-6 sm:grid-cols-2">
-                  <Kv label="Пациент">{g.insuredName}</Kv>
-                  <Kv label="Клиника">{g.clinicName}</Kv>
-                  <Kv label="Услуга">
+                  <Kv label={t('common.patient')}>{g.insuredName}</Kv>
+                  <Kv label={t('common.clinic')}>{g.clinicName}</Kv>
+                  <Kv label={t('common.service')}>
                     {g.serviceCode} · {g.serviceName}
                   </Kv>
-                  <Kv label="МКБ-10">{g.icd10}</Kv>
-                  <Kv label="Оценка стоимости">
+                  <Kv label={t('assist.guarantee.icd10')}>{g.icd10}</Kv>
+                  <Kv label={t('assist.guarantee.estimatedCost')}>
                     <span className="num">{formatMoney(g.estimatedCost)}</span>
                   </Kv>
-                  <Kv label="Запрошено">
+                  <Kv label={t('assist.guarantee.requested')}>
                     <span className="num">{formatDateTime(g.createdAt)}</span>
                   </Kv>
                   {g.approvedAmount !== undefined && (
-                    <Kv label="Одобрено">
+                    <Kv label={t('assist.guarantee.approved')}>
                       <span className="num">{formatMoney(g.approvedAmount)}</span>
-                      {g.validUntil ? ` до ${formatDate(g.validUntil)}` : ''}
+                      {g.validUntil ? t('assist.guarantee.validUntil', { date: formatDate(g.validUntil) }) : ''}
                     </Kv>
                   )}
                 </dl>
-                {g.comment && <p className="mt-3 rounded-btn bg-rail px-3 py-2 text-[13px]">Комментарий клиники: {g.comment}</p>}
-                {g.assistanceOpinion && <p className="mt-2 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text">Заключение врача ассистанса: {g.assistanceOpinion}</p>}
-                {g.reason && <p className="mt-2 text-[13px] text-muted">Причина решения: {g.reason}</p>}
+                {g.comment && <p className="mt-3 rounded-btn bg-rail px-3 py-2 text-[13px]">{t('assist.guarantee.clinicComment', { text: g.comment })}</p>}
+                {g.assistanceOpinion && <p className="mt-2 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text">{t('assist.guarantee.doctorOpinion', { text: g.assistanceOpinion })}</p>}
+                {g.reason && <p className="mt-2 text-[13px] text-muted">{t('assist.guarantee.decisionReason', { text: g.reason })}</p>}
                 {g.attachments.length > 0 && (
                   <ul className="mt-3 flex flex-wrap gap-2">
                     {g.attachments.map((a) => (
@@ -115,19 +114,19 @@ export default function GuaranteePage() {
               </Card>
               <AiHint subject={{ type: 'guarantee', id: g.id }} />
               {open && (
-                <Card title="Решение">
+                <Card title={t('common.decision')}>
                   {over && (
                     <p className="mb-3 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="over-authority">
-                      Сумма выше полномочий ассистанса ({formatMoney(limit)}). Дайте заключение и передайте решение в МИГ.
+                      {t('assist.guarantee.overAuthorityNote', { amount: formatMoney(limit) })}
                     </p>
                   )}
-                  <div className="mb-3 flex flex-wrap gap-3" role="radiogroup" aria-label="Решение">
+                  <div className="mb-3 flex flex-wrap gap-3" role="radiogroup" aria-label={t('common.decision')}>
                     {(
                       [
-                        ['approve', 'Одобрить'],
-                        ['reject', 'Отклонить'],
-                        ['request_info', 'Запросить документы'],
-                        ['escalate', 'Эскалировать в МИГ'],
+                        ['approve', t('common.approve')],
+                        ['reject', t('common.reject')],
+                        ['request_info', t('assist.guarantee.requestDocs')],
+                        ['escalate', t('assist.guarantee.escalate')],
                       ] as const
                     ).map(([m, label]) => (
                       <label key={m} className="flex items-center gap-1.5">
@@ -138,27 +137,27 @@ export default function GuaranteePage() {
                   </div>
                   {current === 'approve' ? (
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="Сумма, UZS" error={errors.amount} hint={`Полномочия ассистанса — до ${formatMoney(limit)}`}>
+                      <Field label={t('assist.guarantee.amountUzs')} error={errors.amount} hint={t('assist.guarantee.authorityHint', { amount: formatMoney(limit) })}>
                         {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={amount || String(g.estimatedCost)} onChange={(e) => setAmount(e.target.value)} />}
                       </Field>
-                      <Field label="Действует до" error={errors.validUntil}>
+                      <Field label={t('common.validUntil')} error={errors.validUntil}>
                         {(a) => <Input {...a} type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />}
                       </Field>
                     </div>
                   ) : (
-                    <Field label={current === 'escalate' ? 'Заключение врача для МИГ' : current === 'reject' ? 'Причина отказа' : 'Какие документы нужны'} error={errors.reason}>
+                    <Field label={current === 'escalate' ? t('assist.guarantee.opinionForMig') : current === 'reject' ? t('assist.guarantee.rejectReason') : t('assist.guarantee.whichDocs')} error={errors.reason}>
                       {(a) => <Textarea {...a} rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />}
                     </Field>
                   )}
                   <Button className="mt-3" loading={decide.isPending} onClick={() => void submit()}>
-                    {current === 'approve' ? 'Одобрить' : current === 'reject' ? 'Отклонить' : current === 'escalate' ? 'Передать в МИГ' : 'Запросить документы'}
+                    {current === 'approve' ? t('common.approve') : current === 'reject' ? t('common.reject') : current === 'escalate' ? t('assist.guarantee.sendToMig') : t('assist.guarantee.requestDocs')}
                   </Button>
                 </Card>
               )}
             </div>
-            <Card title="История решений">
+            <Card title={t('assist.guarantee.history')}>
               {g.approvals.length === 0 ? (
-                <p className="text-muted">Решений пока нет</p>
+                <p className="text-muted">{t('assist.guarantee.noDecisions')}</p>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {g.approvals.map((a) => (

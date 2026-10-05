@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Download } from 'lucide-react';
+import { t } from '@/i18n';
 import { cn } from '@/shared/lib/cn';
 import { Button, type ButtonProps } from '@/shared/ui/button';
 import { toast } from '@/shared/ui/toast';
@@ -11,7 +12,8 @@ import { errorMessage } from '@/shared/api/client';
 import { DocFrame, printDocFrame } from './DocFrame';
 import { DOC_PAGE_GAP, DOC_PAGE_HEIGHT, DOC_PAGE_WIDTH, docPreviewHeight, docSrcdoc, renderStubDocument, type StubRenderInput } from './render';
 
-export const PRINT_HINT = 'В окне печати выберите «Сохранить как PDF»';
+/** Toast shown before the print dialog. */
+export const printHint = (): string => t('documents.print.hint');
 
 export function useStubDocument(input: StubRenderInput | null): { html: string; title: string; pages: number } | null {
   return useMemo(() => {
@@ -59,9 +61,9 @@ export function DocPreview({
   return (
     <section aria-label={label} className={cn('relative flex min-w-0 flex-col rounded-card border border-border bg-[#E9E9E7]', className)}>
       <div className="flex items-center justify-between border-b border-border px-4 py-2 text-[12px] text-muted">
-        <span>Предпросмотр · страниц A4: {doc.pages}</span>
+        <span>{t('documents.preview.pages', { n: doc.pages })}</span>
         <span className="num" aria-live="polite" data-testid="doc-page-counter">
-          Страница {pageNo} из {doc.pages}
+          {t('documents.preview.pageOf', { n: pageNo, total: doc.pages })}
         </span>
       </div>
       <div ref={box} onScroll={onScroll} className={cn('min-h-[420px] overflow-y-auto overflow-x-hidden p-4', height)}>
@@ -79,10 +81,10 @@ export function DocPreview({
   );
 }
 
-/** «Скачать PDF»: renders the document (or several, one after another) into a hidden frame and opens the print dialog. */
+/** «Download PDF»: renders the document (or several, one after another) into a hidden frame and opens the print dialog. */
 export function DocPrintButton({
   input,
-  label = 'Скачать PDF',
+  label,
   title,
   onPrinted,
   ...props
@@ -98,7 +100,7 @@ export function DocPrintButton({
   };
   const onLoad = async () => {
     try {
-      toast.info(PRINT_HINT);
+      toast.info(printHint());
       await printDocFrame(frame.current);
       onPrinted?.();
     } catch (e) {
@@ -111,7 +113,7 @@ export function DocPrintButton({
     <>
       <Button variant="secondary" size="sm" onClick={start} {...props}>
         <Download className="h-3.5 w-3.5" aria-hidden />
-        {label}
+        {label ?? t('documents.print.pdf')}
       </Button>
       {doc && (
         <DocFrame

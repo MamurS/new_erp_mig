@@ -11,36 +11,37 @@ import { PageHeader } from '@/shared/ui/page';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { useTopbar } from '@/features/staff/topbar';
 import { SlaBadge } from '../components';
+import { t, type I18nKey } from '@/i18n';
 
-const TABS: [string, string][] = [
-  ['requested', 'Ждут решения'],
-  ['info_requested', 'Ждут документы'],
-  ['approved,used', 'Одобрены'],
-  ['rejected,expired', 'Отклонены и истекли'],
-  ['all', 'Все'],
+const TABS: [string, I18nKey][] = [
+  ['requested', 'assist.guarantees.tab.requested'],
+  ['info_requested', 'assist.guarantees.tab.info'],
+  ['approved,used', 'assist.guarantees.tab.approved'],
+  ['rejected,expired', 'assist.guarantees.tab.closed'],
+  ['all', 'common.all'],
 ];
 
 export default function GuaranteesPage() {
-  useDocumentTitle('Гарантийные письма');
-  useTopbar([{ label: 'Гарантийные письма' }]);
+  useDocumentTitle(t('assist.nav.guarantees'));
+  useTopbar([{ label: t('assist.nav.guarantees') }]);
   const navigate = useNavigate();
   const [f, setF] = useUrlFilters(['status'] as const);
   const status = TABS.some(([k]) => k === f.status) ? f.status! : 'requested';
   const q = useAssistGuarantees(status === 'all' ? '' : status);
   const columns: Column<GuaranteeView>[] = [
-    { key: 'num', header: 'Номер', cell: (g) => <span className="num font-medium">{g.number}</span> },
-    { key: 'created', header: 'Запрошено', cell: (g) => <span className="num text-muted">{formatDateTime(g.createdAt)}</span> },
-    { key: 'clinic', header: 'Клиника', cell: (g) => g.clinicName },
-    { key: 'patient', header: 'Пациент', cell: (g) => g.insuredName },
-    { key: 'service', header: 'Услуга', cell: (g) => <span className="line-clamp-1">{g.serviceName}</span> },
-    { key: 'cost', header: 'Сумма', align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
+    { key: 'num', header: t('common.number'), cell: (g) => <span className="num font-medium">{g.number}</span> },
+    { key: 'created', header: t('assist.guarantee.requested'), cell: (g) => <span className="num text-muted">{formatDateTime(g.createdAt)}</span> },
+    { key: 'clinic', header: t('common.clinic'), cell: (g) => g.clinicName },
+    { key: 'patient', header: t('common.patient'), cell: (g) => g.insuredName },
+    { key: 'service', header: t('common.service'), cell: (g) => <span className="line-clamp-1">{g.serviceName}</span> },
+    { key: 'cost', header: t('common.amount'), align: 'right', cell: (g) => <span className="num whitespace-nowrap">{formatMoney(g.approvedAmount ?? g.estimatedCost)}</span> },
     {
       key: 'status',
-      header: 'Статус',
+      header: t('common.status'),
       cell: (g) => (
         <span className="flex flex-wrap items-center gap-1">
           <Chip kind={GUARANTEE_STATUS_CHIP[g.status]}>{GUARANTEE_STATUS_LABEL[g.status]}</Chip>
-          {g.escalated && <Chip kind="warning">{g.status === 'requested' ? 'В МИГ' : `Решил ${g.decidedBy === 'mig' ? 'МИГ' : 'ассистанс'}`}</Chip>}
+          {g.escalated && <Chip kind="warning">{g.status === 'requested' ? t('assist.guarantees.atMig') : g.decidedBy === 'mig' ? t('assist.guarantees.decidedByMig') : t('assist.guarantees.decidedByAssist')}</Chip>}
         </span>
       ),
     },
@@ -48,19 +49,19 @@ export default function GuaranteesPage() {
   ];
   return (
     <>
-      <PageHeader title="Гарантийные письма" subtitle="В пределах полномочий решает врач ассистанса, выше — заключение и эскалация в МИГ" />
+      <PageHeader title={t('assist.nav.guarantees')} subtitle={t('assist.guarantees.subtitle')} />
       <Tabs value={status} onValueChange={(v) => setF({ status: v === 'requested' ? null : v })}>
         <TabsList>
           {TABS.map(([k, label]) => (
             <TabsTrigger key={k} value={k}>
-              {label}
+              {t(label)}
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
       <div className="mt-3 rounded-card border border-border bg-surface">
         <DataTable
-          caption="Гарантийные письма"
+          caption={t('assist.nav.guarantees')}
           columns={columns}
           rows={q.data}
           loading={q.isLoading}
@@ -69,7 +70,7 @@ export default function GuaranteesPage() {
           rowKey={(g) => g.id}
           onRowClick={(g) => navigate(`/assist/guarantees/${g.id}`)}
           onRowOpen={(g) => navigate(`/assist/guarantees/${g.id}`)}
-          empty="Писем нет"
+          empty={t('assist.guarantees.empty')}
         />
       </div>
     </>

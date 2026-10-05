@@ -329,7 +329,7 @@ export function nextEndorsementNumber(d: Db, c: Contract): string {
 }
 
 export function createEndorsement(d: Db, c: Contract, requests: ChangeRequestRow[], kind: 'changes' | 'termination', terminationDate?: string): Endorsement {
-  if (c.status !== 'active') throw conflict('Доп. соглашение оформляется к действующему договору');
+  if (c.status !== 'active') throw conflict('srv.endorsement.activeContractOnly');
   const lines =
     kind === 'termination'
       ? [

@@ -3,6 +3,7 @@
  * another admin or an underwriter confirms it, and only then it applies. Every step is audited
  * with the old and the new value.
  */
+import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { DmsParamChange, DmsParameter, DmsParamKey } from '@/shared/types';
 import type { DmsParamsView } from '@/shared/types/dto';
@@ -26,7 +27,7 @@ const changeLabel = (c: Pick<DmsParamChange, 'key' | 'from' | 'to'>) => `${DMS_P
 function pendingChange(id: string): DmsParamChange {
   const c = db().dmsParams.changes.find((x) => x.id === id);
   if (!c) throw notFound();
-  if (c.status !== 'pending') throw conflict('Изменение уже рассмотрено');
+  if (c.status !== 'pending') throw conflict('srv.change.alreadyReviewed');
   return c;
 }
 
@@ -57,9 +58,9 @@ export const paramHandlers = [
       const input = await body(request, dmsParamChangeSchema);
       const key = input.key as DmsParamKey;
       const d = db();
-      if (d.dmsParams.changes.some((c) => c.key === key && c.status === 'pending')) throw conflict('По этому параметру уже есть изменение на подтверждении');
+      if (d.dmsParams.changes.some((c) => c.key === key && c.status === 'pending')) throw conflict('srv.params.alreadyPending');
       const from = dmsParam(key);
-      if (from === input.value) throw new HttpError(422, 'validation', 'Новое значение совпадает с текущим', { value: 'Значение не изменилось' });
+      if (from === input.value) throw new HttpError(422, 'validation', 'srv.params.sameValue', { fields: { value: msg('srv.params.valueUnchanged') } });
       const change: DmsParamChange = {
         id: randomId(),
         key,
@@ -83,11 +84,11 @@ export const paramHandlers = [
       requirePermission(user, 'dms_params.approve');
       const c = pendingChange(param(ctx, 'id'));
       if (!can(user, 'dms_params.approve', { createdById: c.proposedById })) {
-        throw new HttpError(403, 'forbidden', 'Изменение подтверждает другой сотрудник: правило четырёх глаз');
+        throw new HttpError(403, 'forbidden', 'srv.params.fourEyes');
       }
       const d = db();
       // The value changed after the proposal (another change applied): the proposal is stale.
-      if (dmsParam(c.key) !== c.from) throw conflict('Текущее значение уже изменилось. Отклоните предложение и создайте новое');
+      if (dmsParam(c.key) !== c.from) throw conflict('srv.params.stale');
       const at = tzIso(Date.now());
       c.status = 'applied';
       c.decidedById = user.id;

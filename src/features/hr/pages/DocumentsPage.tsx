@@ -12,45 +12,34 @@ import { toast } from '@/shared/ui/toast';
 import { KpDownloadButton } from '@/features/kp/KpDownloadButton';
 import { documentPdf, downloadPdf, invoicePdf, pdfFileName } from '../pdf';
 import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
+import { t, defineLabels } from '@/i18n';
 
-const INVOICE_STATUS: Record<Invoice['status'], { label: string; kind: string }> = {
-  unpaid: { label: 'Ожидает оплаты', kind: 'sun' },
-  paid: { label: 'Оплачен', kind: 'success' },
-  overdue: { label: 'Просрочен', kind: 'danger' },
-};
+const INVOICE_STATUS_KIND: Record<Invoice['status'], string> = { unpaid: 'sun', paid: 'success', overdue: 'danger' };
+const INVOICE_STATUS_LABEL: Readonly<Record<Invoice['status'], string>> = defineLabels('hr.docs.invoiceStatus', ['unpaid', 'paid', 'overdue'] as const);
 
-const DOC_KIND: Record<ClientDocument['kind'], string> = {
-  policy: 'Полис',
-  contract: 'Договор',
-  invoice: 'Счёт',
-  act: 'Акт',
-  program: 'Программа',
-  kp: 'Коммерческое предложение',
-  endorsement: 'Допсоглашение',
-  insured_list: 'Список застрахованных',
-};
+const DOC_KIND: Readonly<Record<ClientDocument['kind'], string>> = defineLabels('hr.docs.kind', ['policy', 'contract', 'invoice', 'act', 'program', 'kp', 'endorsement', 'insured_list'] as const);
 
 export default function DocumentsPage() {
-  useDocumentTitle('Счета и документы');
+  useDocumentTitle(t('hr.nav.documents'));
   const invoices = useHrInvoices();
   const documents = useHrDocuments();
   const company = useHrOverview().data?.companyName;
 
   const downloadInvoice = (inv: Invoice) => {
     downloadPdf(invoicePdf(inv, company), pdfFileName('invoice'));
-    toast.success('Счёт скачан');
+    toast.success(t('hr.docs.invoiceDownloaded'));
   };
   const downloadDocument = (doc: ClientDocument) => {
     downloadPdf(documentPdf(doc, company), pdfFileName('document'));
-    toast.success('Документ скачан');
+    toast.success(t('hr.docs.documentDownloaded'));
   };
 
   const columns: Column<Invoice>[] = [
-    { key: 'number', header: 'Номер', cell: (i) => <span className="font-semibold num">{i.number}</span> },
-    { key: 'amount', header: 'Сумма', align: 'right', cell: (i) => <span className="num">{formatMoney(i.amount)}</span> },
+    { key: 'number', header: t('common.number'), cell: (i) => <span className="font-semibold num">{i.number}</span> },
+    { key: 'amount', header: t('common.amount'), align: 'right', cell: (i) => <span className="num">{formatMoney(i.amount)}</span> },
     {
       key: 'due',
-      header: 'Срок оплаты',
+      header: t('hr.docs.due'),
       cell: (i) => (
         <span>
           <span className="num">{formatDate(i.dueDate)}</span>
@@ -58,15 +47,15 @@ export default function DocumentsPage() {
         </span>
       ),
     },
-    { key: 'status', header: 'Статус', cell: (i) => <Chip kind={INVOICE_STATUS[i.status].kind}>{INVOICE_STATUS[i.status].label}</Chip> },
+    { key: 'status', header: t('common.status'), cell: (i) => <Chip kind={INVOICE_STATUS_KIND[i.status]}>{INVOICE_STATUS_LABEL[i.status]}</Chip> },
     {
       key: 'dl',
       header: '',
       align: 'right',
       cell: (i) => (
-        <Button variant="secondary" className="h-11 px-4 text-[14px] font-semibold" onClick={() => downloadInvoice(i)} aria-label={`Скачать счёт ${i.number}`}>
+        <Button variant="secondary" className="h-11 px-4 text-[14px] font-semibold" onClick={() => downloadInvoice(i)} aria-label={t('hr.docs.downloadInvoice', { number: i.number })}>
           <Download className="h-4 w-4" aria-hidden />
-          Скачать
+          {t('common.download')}
         </Button>
       ),
     },
@@ -74,16 +63,16 @@ export default function DocumentsPage() {
 
   return (
     <>
-      <HrHeader title="Счета и документы" subtitle="Документы формируются без персональных данных сотрудников" />
+      <HrHeader title={t('hr.nav.documents')} subtitle={t('hr.docs.subtitle')} />
 
       <section className="mb-8 rounded-card border border-border bg-surface" aria-labelledby="hr-invoices">
         <div className="border-b border-border-soft p-5">
           <HrSectionTitle>
-            <span id="hr-invoices">Счета</span>
+            <span id="hr-invoices">{t('hr.docs.invoices')}</span>
           </HrSectionTitle>
         </div>
         <DataTable
-          caption="Счета компании"
+          caption={t('hr.docs.invoicesCaption')}
           density="client"
           columns={columns}
           rows={invoices.data}
@@ -91,21 +80,21 @@ export default function DocumentsPage() {
           loading={invoices.isLoading}
           error={invoices.isError ? invoices.error : undefined}
           onRetry={() => void invoices.refetch()}
-          empty={<EmptyState title="Счетов пока нет" description="Счета появятся здесь после начала действия полиса. Вопросы можно задать менеджеру МИГ" action={<HelpLink />} />}
+          empty={<EmptyState title={t('hr.docs.noInvoices')} description={t('hr.docs.noInvoicesHint')} action={<HelpLink />} />}
         />
       </section>
 
       <HrCard className="mb-8 p-0">
         <div className="border-b border-border-soft p-5">
-          <HrSectionTitle>Коммерческие предложения</HrSectionTitle>
+          <HrSectionTitle>{t('hr.docs.offers')}</HrSectionTitle>
         </div>
         <QueryState query={documents} skeleton={<SkeletonRows rows={2} className="p-5" />}>
           {(docs) => {
             const offers = docs.filter((d) => d.kind === 'kp' && d.kpId);
             return offers.length === 0 ? (
-              <EmptyState title="Предложений пока нет" description="Здесь появятся коммерческие предложения, которые отправит МИГ" />
+              <EmptyState title={t('hr.docs.noOffers')} description={t('hr.docs.noOffersHint')} />
             ) : (
-              <ul className="divide-y divide-border-soft" aria-label="Коммерческие предложения">
+              <ul className="divide-y divide-border-soft" aria-label={t('hr.docs.offers')}>
                 {offers.map((d) => (
                   <li key={d.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-peach text-peach-text" aria-hidden>
@@ -113,10 +102,10 @@ export default function DocumentsPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold">{d.title}</p>
-                      <p className="text-[13px] text-muted">Программа GOLD · {formatDate(d.createdAt)}</p>
+                      <p className="text-[13px] text-muted">{t('hr.docs.offerMeta', { date: formatDate(d.createdAt) })}</p>
                     </div>
                     <Button asChild variant="secondary" className="h-11 px-4 text-[14px] font-semibold">
-                      <Link to={`/hr/kp/${d.kpId}`}>Открыть</Link>
+                      <Link to={`/hr/kp/${d.kpId}`}>{t('common.open')}</Link>
                     </Button>
                     <KpDownloadButton kpId={d.kpId!} number={d.title} className="h-11 px-4 text-[14px] font-semibold" />
                   </li>
@@ -129,13 +118,13 @@ export default function DocumentsPage() {
 
       <HrCard className="p-0">
         <div className="border-b border-border-soft p-5">
-          <HrSectionTitle>Документы полиса</HrSectionTitle>
+          <HrSectionTitle>{t('hr.docs.policyDocs')}</HrSectionTitle>
         </div>
         <QueryState query={documents} skeleton={<SkeletonRows rows={4} className="p-5" />}>
           {(all) => {
             const docs = all.filter((d) => d.kind !== 'kp');
             return docs.length === 0 ? (
-              <EmptyState title="Документов пока нет" description="Запросите документы у менеджера МИГ" action={<HelpLink />} />
+              <EmptyState title={t('hr.docs.noDocs')} description={t('hr.docs.noDocsHint')} action={<HelpLink />} />
             ) : (
               <ul className="divide-y divide-border-soft">
                 {docs.map((d) => (
@@ -151,7 +140,7 @@ export default function DocumentsPage() {
                     </div>
                     <Button variant="secondary" className="h-11 px-4 text-[14px] font-semibold" onClick={() => downloadDocument(d)}>
                       <Download className="h-4 w-4" aria-hidden />
-                      Скачать
+                      {t('common.download')}
                     </Button>
                   </li>
                 ))}
@@ -167,7 +156,7 @@ export default function DocumentsPage() {
 function HelpLink() {
   return (
     <Button asChild variant="secondary" className={HR_BTN}>
-      <Link to="/hr/help">Связаться с менеджером</Link>
+      <Link to="/hr/help">{t('hr.docs.contactManager')}</Link>
     </Button>
   );
 }

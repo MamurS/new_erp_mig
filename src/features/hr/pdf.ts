@@ -4,7 +4,7 @@
  * xref offsets can be computed directly. Stubs never contain employee personal data.
  */
 import type { ClientDocument, Invoice } from '@/shared/types';
-import { formatDate, formatMoney, todayISO } from '@/shared/lib/format';
+import { formatDate, formatMoneyDoc, todayISO } from '@/shared/lib/format';
 import { downloadText } from '@/shared/lib/csv';
 
 const TRANSLIT: Record<string, string> = {
@@ -91,7 +91,7 @@ export function invoicePdf(inv: Invoice, companyName?: string): string {
       '',
       `Invoice No ${inv.number}`,
       ...(companyName ? [`Customer: ${companyName}`] : []),
-      `Amount: ${formatMoney(inv.amount)}`,
+      `Amount: ${formatMoneyDoc(inv.amount)}`,
       `Issued: ${formatDate(inv.issuedAt)}`,
       `Due date: ${formatDate(inv.dueDate)}`,
       `Status: ${INVOICE_STATUS_EN[inv.status]}`,

@@ -1,0 +1,20 @@
+/* Staff sign-in (login, OTP), session notices and the idle warning. */
+export const auth = {
+  'auth.card.tagline': 'ДМС · портал сотрудников и клиентов',
+  'auth.login.title': 'Вход',
+  'auth.login.subtitle': 'Для сотрудников MIG и HR компаний-клиентов',
+  'auth.login.password': 'Пароль',
+  'auth.login.submit': 'Войти',
+  'auth.otp.docTitle': 'Код подтверждения',
+  'auth.otp.title': 'Второй фактор',
+  'auth.otp.subtitle': 'Введите 6-значный код из приложения-аутентификатора или SMS',
+  'auth.otp.footer': 'Вход защищён MFA. Все входы записываются в журнал аудита.',
+  'auth.otp.resendIn': 'Отправить код повторно через {n} с',
+  'auth.otp.resend': 'Отправить код повторно',
+  'auth.otp.resent': 'Код отправлен повторно',
+  'auth.notice.otherTab': 'Вы вышли в другой вкладке',
+  'auth.notice.idle': 'Сессия завершена из-за неактивности. Войдите снова',
+  'auth.idle.title': 'Вы ещё здесь?',
+  'auth.idle.description': 'Из-за неактивности сессия скоро завершится. Несохранённые данные будут потеряны.',
+  'auth.idle.stay': 'Продолжить работу',
+} satisfies Record<string, string>;

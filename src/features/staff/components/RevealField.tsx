@@ -1,3 +1,4 @@
+import { defineLabels, t } from '@/i18n';
 import { useEffect, useState } from 'react';
 import { Copy, Eye } from 'lucide-react';
 import type { PiiField } from '@/shared/types';
@@ -11,7 +12,7 @@ import { Field, Textarea } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 
 export const REVEAL_SECONDS = 30;
-const FIELD_LABEL: Record<PiiField, string> = { pinfl: 'ПИНФЛ', phone: 'Телефон', birthDate: 'Дата рождения', email: 'Email' };
+const FIELD_LABEL: Readonly<Record<PiiField, string>> = defineLabels('staff.reveal.field', ['pinfl', 'phone', 'birthDate', 'email']);
 
 export interface RevealFieldProps {
   insuredId: string;
@@ -37,11 +38,11 @@ export function RevealField({ insuredId, field, masked, canReveal, claimNumber, 
 
   useEffect(() => {
     if (until === null) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setValue(null);
       setUntil(null);
     }, until - Date.now());
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [until]);
 
   const label = FIELD_LABEL[field];
@@ -54,13 +55,13 @@ export function RevealField({ insuredId, field, masked, canReveal, claimNumber, 
             <span className="font-semibold num" data-testid={`revealed-${field}`}>
               {value}
             </span>
-            <span className="rounded-sm bg-warning-soft px-1.5 text-[11px] text-warning-text num" aria-live="polite" aria-label={`Скроется через ${left} секунд`}>
+            <span className="rounded-sm bg-warning-soft px-1.5 text-[11px] text-warning-text num" aria-live="polite" aria-label={t('staff.reveal.hidesIn', { n: left })}>
               {formatCountdown(left)}
             </span>
             <Button
               size="icon"
               variant="ghost"
-              aria-label={`Копировать ${label}`}
+              aria-label={t('staff.reveal.copyAria', { label })}
               onClick={async () => {
                 try {
                   await navigator.clipboard?.writeText(value);
@@ -68,7 +69,7 @@ export function RevealField({ insuredId, field, masked, canReveal, claimNumber, 
                   /* clipboard may be unavailable */
                 }
                 copied.mutate({ insuredId, field });
-                toast.success('Скопировано. Копирование записано в журнал');
+                toast.success(t('staff.reveal.copied'));
               }}
             >
               <Copy className="h-3.5 w-3.5" />
@@ -80,8 +81,8 @@ export function RevealField({ insuredId, field, masked, canReveal, claimNumber, 
               {masked}
             </span>
             {canReveal && (
-              <Button size="sm" variant="secondary" onClick={() => setOpen(true)} aria-label={`Показать ${label}`}>
-                <Eye className="h-3.5 w-3.5" aria-hidden /> Показать
+              <Button size="sm" variant="secondary" onClick={() => setOpen(true)} aria-label={t('staff.reveal.showAria', { label })}>
+                <Eye className="h-3.5 w-3.5" aria-hidden /> {t('staff.reveal.show')}
               </Button>
             )}
           </>
@@ -124,8 +125,12 @@ export function RevealModal({
   const [touched, setTouched] = useState(false);
   const reveal = useReveal(apiBase);
   const trimmed = reason.trim();
-  const error = trimmed.length < 10 ? 'Опишите причину: минимум 10 символов' : undefined;
-  const quick = [claimNumber ? `Обработка убытка №${claimNumber}` : 'Обработка убытка №', 'Звонок застрахованного', 'Запрос клиники'];
+  const error = trimmed.length < 10 ? t('staff.medical.reasonMin') : undefined;
+  const quick = [
+    claimNumber ? t('staff.reveal.quickClaim', { number: claimNumber }) : t('staff.reveal.quickClaimEmpty'),
+    t('staff.reveal.quickCall'),
+    t('staff.reveal.quickClinic'),
+  ];
 
   useEffect(() => {
     if (open) {
@@ -141,7 +146,7 @@ export function RevealModal({
       const res = await reveal.mutateAsync({ insuredId, field, reason: trimmed });
       onRevealed(res.value, Math.min(res.expiresInSec, REVEAL_SECONDS));
       onOpenChange(false);
-      toast.success('Данные показаны на 30 секунд');
+      toast.success(t('staff.reveal.shown'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -151,15 +156,15 @@ export function RevealModal({
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title={`Показать: ${FIELD_LABEL[field]}`}
-      description="Значение будет видно 30 секунд. Просмотр и причина попадут в журнал аудита."
+      title={t('staff.reveal.title', { label: FIELD_LABEL[field] })}
+      description={t('staff.reveal.description')}
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} loading={reveal.isPending}>
-            Показать
+            {t('staff.reveal.show')}
           </Button>
         </>
       }
@@ -182,7 +187,7 @@ export function RevealModal({
             </button>
           ))}
         </div>
-        <Field label="Причина просмотра" error={touched ? error : undefined} hint="Минимум 10 символов">
+        <Field label={t('staff.reveal.reasonLabel')} error={touched ? error : undefined} hint={t('staff.reveal.reasonHint')}>
           {(a) => (
             <Textarea
               {...a}

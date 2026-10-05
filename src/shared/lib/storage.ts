@@ -11,8 +11,11 @@ export interface NavPrefs {
   width?: number;
 }
 
+/** Interface languages (src/i18n/locales.ts). */
+export type UiLang = 'ru' | 'uz-Latn' | 'en';
+
 export type UiPrefs = {
-  lang: 'ru' | 'uz';
+  lang: UiLang;
   nav: Partial<Record<NavPortal, NavPrefs>>;
 };
 
@@ -43,12 +46,19 @@ function parseNav(parsed: unknown): UiPrefs['nav'] | null {
   return out;
 }
 
+function parseLang(parsed: unknown): UiLang | null {
+  if (parsed === 'ru' || parsed === 'uz-Latn' || parsed === 'en') return parsed;
+  // Before English was added the Uzbek choice was stored as 'uz'.
+  if (parsed === 'uz') return 'uz-Latn';
+  return null;
+}
+
 export function getPref<K extends keyof UiPrefs>(key: K, fallback: UiPrefs[K]): UiPrefs[K] {
   try {
     const raw = localStorage.getItem(KEYS[key]);
     if (raw === null) return fallback;
     const parsed: unknown = JSON.parse(raw);
-    if (key === 'lang') return (parsed === 'ru' || parsed === 'uz' ? parsed : fallback) as UiPrefs[K];
+    if (key === 'lang') return (parseLang(parsed) ?? fallback) as UiPrefs[K];
     if (key === 'nav') return (parseNav(parsed) ?? fallback) as UiPrefs[K];
     return fallback;
   } catch {

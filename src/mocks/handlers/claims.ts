@@ -7,22 +7,7 @@ import { isStaffRole } from '@/shared/domain/labels';
 import type { Appointment, SessionUser } from '@/shared/types';
 import { currentAssistance } from '../assistance-core';
 import { db, type ClaimRow } from '../db';
-import {
-  API,
-  HttpError,
-  audit,
-  body,
-  conflict,
-  forbidden,
-  notFound,
-  paginate,
-  param,
-  q,
-  requirePermission,
-  requireSession,
-  route,
-  sortBy,
-} from '../http';
+import { API, audit, body, conflict, forbidden, HttpError, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { toClaimDetail, toClaimListItem } from '../views';
@@ -113,12 +98,12 @@ export const claimHandlers = [
       if (!can(user, 'claims.transition')) throw forbidden();
       const t = claimTransitions(user, claim);
       const blocked = t.blocked.find((b) => b.to === input.to);
-      if (blocked) throw conflict(blocked.reason);
-      if (!t.allowed.includes(input.to)) throw conflict('Этот переход недоступен из текущего статуса');
+      if (blocked) throw httpErrorOf(409, 'conflict', blocked.reason);
+      if (!t.allowed.includes(input.to)) throw conflict('srv.claim.transitionUnavailable');
       if (input.to === 'approved') {
         const amount = input.amountApproved ?? claim.amountClaimed;
         if (amount > claim.amountClaimed) {
-          throw conflict('Сумма одобрения не может превышать заявленную');
+          throw conflict('srv.claim.amountOverClaimed');
         }
         claim.amountApproved = amount;
         claim.approvedById = user.id;
@@ -245,7 +230,7 @@ export const claimHandlers = [
       const a = db().appointments.find((x) => x.id === param(ctx, 'id'));
       if (!a) throw notFound();
       requireMigAppointment(user, a.insuredId);
-      if (a.status !== 'requested') throw conflict('Запись уже обработана');
+      if (a.status !== 'requested') throw conflict('srv.appointment.alreadyHandled');
       // The operator answers as a fallback when the clinic does not (CLINIC_SPEC §4.3).
       a.status = 'confirmed';
       a.respondedBy = 'operator';
@@ -264,7 +249,7 @@ export const claimHandlers = [
       if (!a) throw notFound();
       requireMigAppointment(user, a.insuredId);
       const { reason } = await body(ctx.request, declineAppointmentSchema);
-      if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('Запись уже обработана');
+      if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('srv.appointment.alreadyHandled');
       a.status = 'declined';
       a.declineReason = reason;
       a.respondedBy = 'operator';
@@ -292,7 +277,7 @@ export const claimHandlers = [
       const clinic = db().clinics.find((c) => c.id === input.clinicId);
       if (!clinic) throw notFound();
       const starts = parseIso(input.startsAt);
-      if (Number.isNaN(starts) || starts < startOfDay(Date.now())) throw conflict('Выберите время в будущем');
+      if (Number.isNaN(starts) || starts < startOfDay(Date.now())) throw conflict('srv.time.chooseFuture');
       const a: Appointment = {
         id: randomId(),
         insuredId: i.id,
@@ -316,6 +301,6 @@ function requireMigAppointment(user: SessionUser, insuredId: string): void {
   const i = db().insured.find((x) => x.id === insuredId);
   const assistanceId = i ? currentAssistance(db(), i.policyId) : null;
   if (!can(user, 'assist.appointments.manage', { assistanceId })) {
-    throw new HttpError(403, 'forbidden', 'Запись ведёт ассистанс застрахованного');
+    throw new HttpError(403, 'forbidden', 'srv.appointment.byAssistance');
   }
 }

@@ -20,6 +20,7 @@ import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { Panel } from '../components';
 import { SecretReveal } from './SecretReveal';
+import { t, tm } from '@/i18n';
 
 type KeyForm = z.input<typeof keyCreateRequest>;
 
@@ -40,24 +41,24 @@ function CreateKeyDialog({ onClose, onCreated }: { onClose: () => void; onCreate
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title="Новый ключ API"
+      title={t('clinic.keys.newTitle')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={create.isPending} onClick={() => void submit()}>
-            Создать ключ
+            {t('clinic.keys.create')}
           </Button>
         </>
       }
     >
       <form className="flex flex-col gap-3" onSubmit={(ev) => void submit(ev)} noValidate>
-        <Field label="Название" error={e.name?.message} hint="Например, «МИС регистратуры»">
+        <Field label={t('common.name')} error={tm(e.name?.message)} hint={t('clinic.keys.nameHint')}>
           {(a) => <Input {...a} autoComplete="off" maxLength={60} {...form.register('name')} />}
         </Field>
         <fieldset>
-          <legend className="mb-1 text-[12px] font-medium text-muted">Области доступа</legend>
+          <legend className="mb-1 text-[12px] font-medium text-muted">{t('clinic.keys.scopes')}</legend>
           <div className="grid gap-1.5 sm:grid-cols-2">
             {(partner.scopes as IntegrationScope[]).map((s) => (
               <label key={s} className="flex items-center gap-2">
@@ -70,11 +71,11 @@ function CreateKeyDialog({ onClose, onCreated }: { onClose: () => void; onCreate
           </div>
           {e.scopes?.message && (
             <p role="alert" className="mt-1 text-[12px] text-danger-text">
-              {e.scopes.message}
+              {tm(e.scopes.message)}
             </p>
           )}
         </fieldset>
-        <Field label="Разрешённые IP (необязательно)" error={e.ipAllowlist ? (e.ipAllowlist.message ?? 'Проверьте адреса: IP или подсеть, например 203.0.113.0/24') : undefined} hint="Через запятую или с новой строки: 203.0.113.10, 198.51.100.0/24">
+        <Field label={t('clinic.keys.ip')} error={e.ipAllowlist ? (e.ipAllowlist.message ? tm(e.ipAllowlist.message) : t('clinic.keys.ipError')) : undefined} hint={t('clinic.keys.ipHint')}>
           {(a) => <Textarea {...a} rows={2} maxLength={1000} {...form.register('ipAllowlist')} />}
         </Field>
       </form>
@@ -94,7 +95,7 @@ export function KeysTab() {
     if (!revoking) return;
     try {
       await revoke.mutateAsync(revoking.id);
-      toast.success('Ключ отозван');
+      toast.success(t('clinic.keys.revoked'));
       setRevoking(null);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -102,22 +103,22 @@ export function KeysTab() {
   };
 
   const columns: Column<IntegrationClient>[] = [
-    { key: 'name', header: 'Название', cell: (k) => <span className="font-medium">{k.name}</span> },
+    { key: 'name', header: t('common.name'), cell: (k) => <span className="font-medium">{k.name}</span> },
     { key: 'id', header: 'client_id', cell: (k) => <code className="text-[12px]">{k.clientId}</code> },
-    { key: 'secret', header: 'Секрет', cell: (k) => <code className="text-[12px] text-muted">••••{k.secretLast4}</code> },
-    { key: 'scopes', header: 'Области', cell: (k) => <span className="text-[12px] text-muted">{k.scopes.length === partner.scopes.length ? 'все' : k.scopes.join(', ')}</span> },
-    { key: 'created', header: 'Создан', cell: (k) => <span className="num text-muted">{formatDateTime(k.createdAt)}</span> },
-    { key: 'used', header: 'Последнее использование', cell: (k) => <span className="num text-muted">{k.lastUsedAt ? formatDateTime(k.lastUsedAt) : '—'}</span> },
+    { key: 'secret', header: t('clinic.keys.secret'), cell: (k) => <code className="text-[12px] text-muted">••••{k.secretLast4}</code> },
+    { key: 'scopes', header: t('clinic.keys.scopesShort'), cell: (k) => <span className="text-[12px] text-muted">{k.scopes.length === partner.scopes.length ? t('clinic.keys.allScopes') : k.scopes.join(', ')}</span> },
+    { key: 'created', header: t('clinic.keys.created'), cell: (k) => <span className="num text-muted">{formatDateTime(k.createdAt)}</span> },
+    { key: 'used', header: t('clinic.keys.lastUsed'), cell: (k) => <span className="num text-muted">{k.lastUsedAt ? formatDateTime(k.lastUsedAt) : '—'}</span> },
     {
       key: 'actions',
       header: '',
       align: 'right',
       cell: (k) =>
         k.revokedAt ? (
-          <Chip kind="neutral">Отозван {formatDateTime(k.revokedAt)}</Chip>
+          <Chip kind="neutral">{t('clinic.keys.revokedAt', { at: formatDateTime(k.revokedAt) })}</Chip>
         ) : (
-          <Button size="sm" variant="secondary" onClick={() => setRevoking(k)} aria-label={`Отозвать ${k.name}`}>
-            Отозвать
+          <Button size="sm" variant="secondary" onClick={() => setRevoking(k)} aria-label={t('clinic.keys.revokeAria', { name: k.name })}>
+            {t('common.revoke')}
           </Button>
         ),
     },
@@ -125,11 +126,11 @@ export function KeysTab() {
   return (
     <>
       <Panel
-        title="Ключи API"
-        actions={<Button onClick={() => setCreating(true)}>Создать ключ</Button>}
+        title={t('clinic.integration.tab.keys')}
+        actions={<Button onClick={() => setCreating(true)}>{t('clinic.keys.create')}</Button>}
       >
-        <p className="px-4 pt-3 text-[12px] text-muted">Ротация: создайте новый ключ, переключите МИС на него, затем отзовите старый.</p>
-        <DataTable caption="Ключи API" columns={columns} rows={q.data} rowKey={(k) => k.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty={<EmptyState title="Ключей пока нет" />} />
+        <p className="px-4 pt-3 text-[12px] text-muted">{t('clinic.keys.rotation')}</p>
+        <DataTable caption={t('clinic.integration.tab.keys')} columns={columns} rows={q.data} rowKey={(k) => k.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty={<EmptyState title={t('clinic.keys.empty')} />} />
       </Panel>
       {creating && (
         <CreateKeyDialog
@@ -142,7 +143,7 @@ export function KeysTab() {
       )}
       {created && (
         <SecretReveal
-          title="Ключ создан"
+          title={t('clinic.keys.createdTitle')}
           items={[
             { label: 'client_id', value: created.clientId, testId: 'new-client-id' },
             { label: 'client_secret', value: created.clientSecret, testId: 'new-client-secret' },
@@ -153,9 +154,9 @@ export function KeysTab() {
       <ConfirmDialog
         open={!!revoking}
         onOpenChange={(o) => !o && setRevoking(null)}
-        title="Отозвать ключ?"
-        description="Ключ сразу перестанет выдавать токены, а уже выданные токены перестанут работать"
-        confirmLabel="Отозвать"
+        title={t('clinic.keys.revokeTitle')}
+        description={t('clinic.keys.revokeDescription')}
+        confirmLabel={t('common.revoke')}
         danger
         loading={revoke.isPending}
         onConfirm={() => void doRevoke()}

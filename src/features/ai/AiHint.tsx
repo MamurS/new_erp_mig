@@ -17,6 +17,7 @@ import { Field, Textarea } from '@/shared/ui/input';
 import { Card } from '@/shared/ui/page';
 import { toast } from '@/shared/ui/toast';
 import { VERDICT_CHIP, VERDICT_SHORT } from './labels';
+import { t, tm } from '@/i18n';
 
 export function AiHint({ subject }: { subject: { type: 'claim' | 'guarantee' | 'registry_line'; id: string } }) {
   const user = useUser();
@@ -37,12 +38,12 @@ export function AiHint({ subject }: { subject: { type: 'claim' | 'guarantee' | '
   const send = async (agree: boolean) => {
     if (!item) return;
     const parsed = aiFeedbackSchema.safeParse({ logId: item.logId, agree, comment: agree ? undefined : comment });
-    if (!parsed.success) return setError(parsed.error.issues[0]?.message);
+    if (!parsed.success) return setError(tm(parsed.error.issues[0]?.message));
     try {
       await feedback.mutateAsync(parsed.data);
       setRated(agree);
       setDisagree(false);
-      toast.success('Спасибо, оценка учтена');
+      toast.success(t('ai.hint.thanks'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -52,24 +53,24 @@ export function AiHint({ subject }: { subject: { type: 'claim' | 'guarantee' | '
     <Card
       title={
         <span className="flex items-center gap-1.5">
-          <Sparkles className="h-4 w-4 text-accent" aria-hidden /> Подсказка ИИ
+          <Sparkles className="h-4 w-4 text-accent" aria-hidden /> {t('ai.hint.title')}
         </span>
       }
       bodyClassName="flex flex-col gap-2 text-[13px]"
     >
-      <section data-testid="ai-hint" aria-label="Подсказка ИИ" className="flex flex-col gap-2">
+      <section data-testid="ai-hint" aria-label={t('ai.hint.title')} className="flex flex-col gap-2">
         {q.isLoading ? (
-          <p className="text-muted">ИИ сопоставляет услугу с каталогом…</p>
+          <p className="text-muted">{t('ai.hint.loading')}</p>
         ) : q.isError || !item ? (
-          <p className="text-muted">Подсказка недоступна</p>
+          <p className="text-muted">{t('ai.hint.unavailable')}</p>
         ) : (
           <>
             <p className="flex flex-wrap items-center gap-2">
-              Предлагаемый вердикт: <Chip kind={VERDICT_CHIP[item.needsSpecialist ? 'unknown' : item.verdict.decision]}>{VERDICT_SHORT[item.needsSpecialist ? 'unknown' : item.verdict.decision]}</Chip>
+              {t('ai.hint.proposed')} <Chip kind={VERDICT_CHIP[item.needsSpecialist ? 'unknown' : item.verdict.decision]}>{VERDICT_SHORT[item.needsSpecialist ? 'unknown' : item.verdict.decision]}</Chip>
             </p>
             {item.matches.length > 0 && (
               <p className="text-muted">
-                Коды:{' '}
+                {t('ai.hint.codes')}{' '}
                 {item.matches.map((m) => (
                   <span key={m.code} className="mr-2 whitespace-nowrap">
                     <span className="num">{m.code}</span> {m.name} · {Math.round(m.confidence * 100)}%
@@ -77,21 +78,21 @@ export function AiHint({ subject }: { subject: { type: 'claim' | 'guarantee' | '
                 ))}
               </p>
             )}
-            {item.clauses.length > 0 && <p className="text-muted">Пункты: {item.clauses.map((c) => c.label).join('; ')}</p>}
+            {item.clauses.length > 0 && <p className="text-muted">{t('ai.hint.clauses', { list: item.clauses.map((c) => c.label).join('; ') })}</p>}
             <p>{item.explanation}</p>
-            <p className="text-[12px] text-muted">Подсказка не заполняет решение: решение принимаете вы.</p>
+            <p className="text-[12px] text-muted">{t('ai.hint.note')}</p>
             {rated === null ? (
               <div className="flex gap-2">
                 <Button size="sm" variant="secondary" loading={feedback.isPending && !disagree} onClick={() => void send(true)}>
-                  Согласен
+                  {t('ai.hint.agree')}
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => setDisagree(true)}>
-                  Не согласен
+                  {t('ai.hint.disagree')}
                 </Button>
               </div>
             ) : (
               <p className="text-[12px] text-muted" data-testid="ai-rated">
-                Ваша оценка: {rated ? 'согласен' : 'не согласен'}
+                {rated ? t('ai.hint.ratedAgree') : t('ai.hint.ratedDisagree')}
               </p>
             )}
           </>
@@ -101,20 +102,20 @@ export function AiHint({ subject }: { subject: { type: 'claim' | 'guarantee' | '
         <Modal
           open
           onOpenChange={(o) => !o && setDisagree(false)}
-          title="Не согласен с подсказкой"
-          description="Комментарий поможет улучшить проверку покрытия."
+          title={t('ai.hint.disagreeTitle')}
+          description={t('ai.hint.disagreeDescription')}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDisagree(false)}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button loading={feedback.isPending} onClick={() => void send(false)}>
-                Отправить
+                {t('common.send')}
               </Button>
             </>
           }
         >
-          <Field label="Комментарий" error={error}>
+          <Field label={t('common.comment')} error={error}>
             {(a) => <Textarea {...a} rows={3} maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} />}
           </Field>
         </Modal>

@@ -7,7 +7,7 @@ import { useExport } from '@/shared/api/queries/staff';
 import { errorMessage } from '@/shared/api/client';
 import { hrExcludeSchema } from '@/shared/schemas/forms';
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
-import { formatDate, formatMoney, formatNumber, formatRelativeDays, plural, todayISO } from '@/shared/lib/format';
+import { formatDate, formatMoney, formatNumber, formatRelativeDays, todayISO } from '@/shared/lib/format';
 import { downloadText, exportFileName } from '@/shared/lib/csv';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Button, buttonVariants } from '@/shared/ui/button';
@@ -23,18 +23,19 @@ import { toast } from '@/shared/ui/toast';
 import { cn } from '@/shared/lib/cn';
 import { invoicePdf, downloadPdf, pdfFileName } from '../pdf';
 import { AppStatusChip, HR_BTN, HrCard, HrHeader } from '../ui';
+import { t, tp, tm } from '@/i18n';
 
 const PAGE_SIZE = 25;
 const FILTER_KEYS = ['filter', 'page', 'sort'] as const;
 const FILTERS = [
-  { value: '', label: 'Все' },
-  { value: 'not_in_app', label: 'Не в приложении' },
-  { value: 'recent', label: 'Добавлены недавно' },
-  { value: 'requests', label: 'Заявки' },
+  { value: '', get label() { return t('common.all'); } },
+  { value: 'not_in_app', get label() { return t('hr.employees.filter.notInApp'); } },
+  { value: 'recent', get label() { return t('hr.employees.filter.recent'); } },
+  { value: 'requests', get label() { return t('hr.contracts.requests'); } },
 ] as const;
 
 export default function EmployeesPage() {
-  useDocumentTitle('Сотрудники');
+  useDocumentTitle(t('hr.nav.employees'));
   const overview = useHrOverview();
   const [filters, setFilters] = useUrlFilters(FILTER_KEYS);
   const [search, setSearch] = useState('');
@@ -50,7 +51,7 @@ export default function EmployeesPage() {
 
   const onInvite = (e: HrEmployee) =>
     invite.mutate([e.id], {
-      onSuccess: () => toast.success('Приглашение отправлено'),
+      onSuccess: () => toast.success(t('hr.employees.invited')),
       onError: (err) => toast.error(errorMessage(err)),
     });
 
@@ -58,7 +59,7 @@ export default function EmployeesPage() {
     exporter.mutate('hr_employees', {
       onSuccess: (csv) => {
         downloadText(csv, exportFileName('employees'));
-        toast.success('Список экспортирован в CSV');
+        toast.success(t('hr.employees.exported'));
       },
       onError: (err) => toast.error(errorMessage(err)),
     });
@@ -66,7 +67,7 @@ export default function EmployeesPage() {
   const columns: Column<HrEmployee>[] = [
     {
       key: 'name',
-      header: 'Сотрудник',
+      header: t('common.employee'),
       sortKey: 'fullName',
       cell: (e) => (
         <div className={cn('flex items-center gap-3 py-2', e.status === 'excluded' && 'opacity-60')}>
@@ -74,43 +75,43 @@ export default function EmployeesPage() {
           <div className="min-w-0">
             <p className="truncate font-semibold">{e.fullName}</p>
             <p className="truncate text-[13px] text-muted">
-              {e.status === 'excluded' && e.excludedFrom ? `Исключён с ${formatDate(e.excludedFrom)}` : e.position}
+              {e.status === 'excluded' && e.excludedFrom ? t('hr.employees.excludedFrom', { date: formatDate(e.excludedFrom) }) : e.position}
             </p>
             {e.pendingExclusionFrom && (
               <p className="text-[13px] font-medium text-warning-text" data-testid="pending-exclusion">
-                Исключение с {formatDate(e.pendingExclusionFrom)} ждёт подтверждения МИГ
+                {t('hr.employees.pendingExclusion', { date: formatDate(e.pendingExclusionFrom) })}
               </p>
             )}
-            {e.status === 'rejected' && e.rejectionReason && <p className="text-[13px] text-danger-text">Причина: {e.rejectionReason}</p>}
+            {e.status === 'rejected' && e.rejectionReason && <p className="text-[13px] text-danger-text">{t('hr.employees.reason', { reason: e.rejectionReason })}</p>}
             {e.status === 'active' && e.rejectionReason && (
               <p className="text-[13px] text-danger-text" data-testid="exclusion-rejected">
-                МИГ отклонил исключение: {e.rejectionReason}
+                {t('hr.employees.exclusionRejected', { reason: e.rejectionReason })}
               </p>
             )}
           </div>
         </div>
       ),
     },
-    { key: 'program', header: 'Программа', cell: (e) => <span className={cn(e.status === 'excluded' && 'text-muted')}>{PROGRAM_LABEL[e.program]}</span> },
-    { key: 'from', header: 'Застрахован с', sortKey: 'insuredFrom', cell: (e) => <span className="num">{formatDate(e.insuredFrom)}</span> },
+    { key: 'program', header: t('common.program'), cell: (e) => <span className={cn(e.status === 'excluded' && 'text-muted')}>{PROGRAM_LABEL[e.program]}</span> },
+    { key: 'from', header: t('hr.employees.insuredFrom'), sortKey: 'insuredFrom', cell: (e) => <span className="num">{formatDate(e.insuredFrom)}</span> },
     {
       key: 'family',
-      header: 'Семья',
+      header: t('hr.employees.family'),
       sortKey: 'familyMembersCount',
       cell: (e) =>
-        e.familyMembersCount > 0 ? `${e.familyMembersCount} ${plural(e.familyMembersCount, ['человек', 'человека', 'человек'])}` : <span className="text-muted">—</span>,
+        e.familyMembersCount > 0 ? tp('hr.employees.people', e.familyMembersCount) : <span className="text-muted">—</span>,
     },
     {
       key: 'app',
-      header: 'Приложение',
+      header: t('hr.employees.app'),
       sortKey: 'appStatus',
       cell: (e) =>
         e.status === 'excluded' ? (
-          <span className="text-muted">Исключён</span>
+          <span className="text-muted">{t('hr.employees.excluded')}</span>
         ) : e.status === 'pending' ? (
-          <Chip kind="sun">Ждёт подтверждения МИГ</Chip>
+          <Chip kind="sun">{t('hr.employees.pending')}</Chip>
         ) : e.status === 'rejected' ? (
-          <Chip kind="danger">Отклонено МИГ</Chip>
+          <Chip kind="danger">{t('hr.employees.rejected')}</Chip>
         ) : (
           <AppStatusChip status={e.appStatus} />
         ),
@@ -124,18 +125,18 @@ export default function EmployeesPage() {
         e.status !== 'active' ? null : (
           <Menu>
             <MenuTrigger asChild>
-              <Button variant="ghost" size="icon-lg" aria-label="Действия с сотрудником">
+              <Button variant="ghost" size="icon-lg" aria-label={t('hr.employees.actions')}>
                 <MoreHorizontal className="h-5 w-5" aria-hidden />
               </Button>
             </MenuTrigger>
             <MenuContent>
               <MenuItem className="min-h-11" disabled={e.appStatus === 'active'} onSelect={() => onInvite(e)}>
                 <Send className="h-4 w-4" aria-hidden />
-                Пригласить
+                {t('hr.employees.invite')}
               </MenuItem>
               <MenuItem className="min-h-11" danger disabled={!!e.pendingExclusionFrom} onSelect={() => setExcluding(e)}>
                 <UserMinus className="h-4 w-4" aria-hidden />
-                Исключить с даты…
+                {t('hr.employees.exclude')}
               </MenuItem>
             </MenuContent>
           </Menu>
@@ -148,10 +149,10 @@ export default function EmployeesPage() {
   return (
     <>
       <HrHeader
-        title="Сотрудники"
+        title={t('hr.nav.employees')}
         subtitle={
           overview.data ? (
-            `${formatNumber(overview.data.insuredCount)} застрахованы · ${formatNumber(overview.data.notInApp)} ещё не установили приложение`
+            t('hr.employees.subtitle', { insured: formatNumber(overview.data.insuredCount), notInApp: formatNumber(overview.data.notInApp) })
           ) : (
             <Skeleton className="h-4 w-72" />
           )
@@ -160,11 +161,11 @@ export default function EmployeesPage() {
           <>
             <Link to="/hr/import" className={cn(buttonVariants({ variant: 'secondary' }), HR_BTN)}>
               <Upload className="h-4 w-4" aria-hidden />
-              Загрузить из CSV
+              {t('hr.employees.importCsv')}
             </Link>
             <Link to="/hr/employees/new" className={cn(buttonVariants({ variant: 'primary' }), HR_BTN)}>
               <Plus className="h-4 w-4" aria-hidden />
-              Добавить сотрудника
+              {t('hr.add.title')}
             </Link>
           </>
         }
@@ -174,12 +175,12 @@ export default function EmployeesPage() {
 
       <div className="mb-6 flex items-start gap-3 rounded-card bg-sky p-4 text-sky-text">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-        <p>Вы видите, кто застрахован, но не видите диагнозы, визиты и возмещения сотрудников. Это медицинская тайна, и доступа к ней у работодателя нет</p>
+        <p>{t('hr.employees.privacy')}</p>
       </div>
 
-      <section className="rounded-card border border-border bg-surface" aria-label="Список сотрудников">
+      <section className="rounded-card border border-border bg-surface" aria-label={t('hr.employees.listAria')}>
         <div className="flex flex-wrap items-center gap-3 border-b border-border-soft p-4">
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Фильтр">
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t('common.filter')}>
             {FILTERS.map((f) => (
               <button
                 key={f.value || 'all'}
@@ -201,16 +202,16 @@ export default function EmployeesPage() {
               setSearch(v);
               if (filters.page) setFilters({ page: null });
             }}
-            placeholder="Поиск по ФИО или должности"
+            placeholder={t('hr.employees.searchPlaceholder')}
             className="min-w-[220px] flex-1 [&_input]:h-11 [&_input]:rounded-btn"
           />
           <Button variant="secondary" className={HR_BTN} loading={exporter.isPending} onClick={onExport}>
             <Download className="h-4 w-4" aria-hidden />
-            Экспорт в CSV
+            {t('hr.employees.exportCsv')}
           </Button>
         </div>
         <DataTable
-          caption="Сотрудники компании"
+          caption={t('hr.employees.caption')}
           density="client"
           columns={columns}
           rows={list.data?.items}
@@ -227,8 +228,8 @@ export default function EmployeesPage() {
           empty={
             hasFilters ? (
               <EmptyState
-                title="Никого не нашли"
-                description="Измените запрос или сбросьте фильтр"
+                title={t('hr.employees.notFound')}
+                description={t('hr.employees.notFoundHint')}
                 action={
                   <Button
                     variant="secondary"
@@ -238,17 +239,17 @@ export default function EmployeesPage() {
                       setFilters({ filter: null });
                     }}
                   >
-                    Сбросить фильтры
+                    {t('hr.employees.resetFilters')}
                   </Button>
                 }
               />
             ) : (
               <EmptyState
-                title="Сотрудников пока нет"
-                description="Добавьте сотрудников по одному или загрузите список из CSV"
+                title={t('hr.employees.empty')}
+                description={t('hr.employees.emptyHint')}
                 action={
                   <Link to="/hr/employees/new" className={cn(buttonVariants({ variant: 'primary' }), HR_BTN)}>
-                    Добавить сотрудника
+                    {t('hr.add.title')}
                   </Link>
                 }
               />
@@ -266,7 +267,7 @@ function OverviewCards({ overview }: { overview: ReturnType<typeof useHrOverview
   const invite = useInvite();
   if (overview.isLoading) {
     return (
-      <div className="mb-6 grid gap-4 md:grid-cols-3" role="status" aria-label="Загрузка">
+      <div className="mb-6 grid gap-4 md:grid-cols-3" role="status" aria-label={t('hr.stats.loading')}>
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} className="h-[168px] rounded-card" />
         ))}
@@ -279,39 +280,39 @@ function OverviewCards({ overview }: { overview: ReturnType<typeof useHrOverview
   const o: HrOverview = overview.data;
   const remind = () =>
     invite.mutate('all_not_in_app', {
-      onSuccess: () => toast.success('Напоминание отправлено'),
+      onSuccess: () => toast.success(t('hr.employees.reminded')),
       onError: (err) => toast.error(errorMessage(err)),
     });
 
   return (
     <div className="mb-6 grid gap-4 md:grid-cols-3">
       <HrCard className="flex flex-col gap-3">
-        <p className="text-muted">Следующий счёт</p>
+        <p className="text-muted">{t('hr.employees.nextInvoice')}</p>
         {o.nextInvoice ? (
           <>
             <p className="font-heading text-[26px] font-semibold num">{formatMoney(o.nextInvoice.amount)}</p>
             <p className="text-muted">
-              Оплатить до {formatDate(o.nextInvoice.dueDate)} · {formatRelativeDays(o.nextInvoice.dueDate)}
+              {t('hr.employees.payBy', { date: formatDate(o.nextInvoice.dueDate), relative: formatRelativeDays(o.nextInvoice.dueDate) })}
             </p>
             <Button
               variant="secondary"
               className={cn(HR_BTN, 'mt-auto self-start')}
               onClick={() => {
                 downloadPdf(invoicePdf(o.nextInvoice!, o.companyName), pdfFileName('invoice'));
-                toast.success('Счёт скачан');
+                toast.success(t('hr.docs.invoiceDownloaded'));
               }}
             >
               <Download className="h-4 w-4" aria-hidden />
-              Скачать
+              {t('common.download')}
             </Button>
           </>
         ) : (
-          <p className="font-heading text-[20px] font-semibold">Неоплаченных счетов нет</p>
+          <p className="font-heading text-[20px] font-semibold">{t('hr.employees.noUnpaid')}</p>
         )}
       </HrCard>
 
       <HrCard className="flex flex-col gap-3">
-        <p className="text-muted">Полис компании</p>
+        <p className="text-muted">{t('hr.employees.companyPolicy')}</p>
         {o.policy ? (
           <>
             <p className="font-heading text-[26px] font-semibold">{o.policy.programName}</p>
@@ -320,20 +321,20 @@ function OverviewCards({ overview }: { overview: ReturnType<typeof useHrOverview
             </p>
           </>
         ) : (
-          <p className="font-heading text-[20px] font-semibold">Действующего полиса нет</p>
+          <p className="font-heading text-[20px] font-semibold">{t('hr.employees.noPolicy')}</p>
         )}
         <Link to="/hr/documents" className={cn(buttonVariants({ variant: 'secondary' }), HR_BTN, 'mt-auto self-start')}>
           <FileText className="h-4 w-4" aria-hidden />
-          Документы
+          {t('common.documents')}
         </Link>
       </HrCard>
 
       <HrCard tone="peach" className="flex flex-col gap-3">
-        <p className="font-semibold">Приложение</p>
+        <p className="font-semibold">{t('hr.employees.app')}</p>
         <p className="font-heading text-[22px] font-semibold leading-snug">
           {o.notInApp > 0
-            ? `${formatNumber(o.notInApp)} ${plural(o.notInApp, ['сотрудник', 'сотрудника', 'сотрудников'])} ещё не в приложении`
-            : 'Все сотрудники уже в приложении'}
+            ? tp('hr.employees.notInApp', o.notInApp)
+            : t('hr.employees.allInApp')}
         </p>
         <Button
           className={cn(HR_BTN, 'mt-auto self-start bg-peach-text text-white')}
@@ -342,7 +343,7 @@ function OverviewCards({ overview }: { overview: ReturnType<typeof useHrOverview
           onClick={remind}
         >
           <BellRing className="h-4 w-4" aria-hidden />
-          Напомнить всем
+          {t('hr.employees.remindAll')}
         </Button>
       </HrCard>
     </div>
@@ -357,7 +358,7 @@ function ExcludeDialog({ employee, onClose }: { employee: HrEmployee; onClose: (
   const submit = () => {
     const parsed = hrExcludeSchema.safeParse({ excludeFrom: date });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Дата в формате ДД.ММ.ГГГГ');
+      setError(parsed.error.issues[0]?.message ?? t('hr.employees.dateFormat'));
       return;
     }
     setError(undefined);
@@ -365,7 +366,7 @@ function ExcludeDialog({ employee, onClose }: { employee: HrEmployee; onClose: (
       { id: employee.id, excludeFrom: parsed.data.excludeFrom },
       {
         onSuccess: () => {
-          toast.success('Заявка на исключение отправлена в МИГ');
+          toast.success(t('hr.employees.excludeSent'));
           onClose();
         },
         onError: (err) => setError(errorMessage(err)),
@@ -379,19 +380,14 @@ function ExcludeDialog({ employee, onClose }: { employee: HrEmployee; onClose: (
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title="Исключить сотрудника?"
-      description={
-        <>
-          Заявка уйдёт в МИГ. После подтверждения {employee.fullName} перестанет быть застрахованным с выбранной даты: полис и карточка для клиники
-          перестанут действовать, записи к врачу и новые возмещения станут недоступны. Возврат премии за оставшийся срок МИГ оформит допсоглашением.
-        </>
-      }
-      confirmLabel="Отправить заявку"
+      title={t('hr.employees.excludeTitle')}
+      description={t('hr.employees.excludeText', { name: employee.fullName })}
+      confirmLabel={t('hr.employees.sendRequest')}
       danger
       loading={exclude.isPending}
       onConfirm={submit}
     >
-      <Field label="Дата исключения" error={error}>
+      <Field label={t('hr.employees.excludeDate')} error={tm(error) || undefined}>
         {(f) => <MaskedInput mask="date" {...f} value={date} onChange={setDate} className="h-12" />}
       </Field>
     </ConfirmDialog>

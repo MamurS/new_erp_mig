@@ -2,6 +2,7 @@
  * Редактор договора (LIFECYCLE_SPEC §7.3–7.4): parameters and clauses on the left, preview of all pages on
  * the right; status, version and actions on top; signing, invoices, endorsements and versions below.
  */
+import { t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Pencil, RotateCcw } from 'lucide-react';
@@ -82,19 +83,19 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
       return;
     }
     setErrors({});
-    await attempt(() => patch.mutateAsync({ id: c.id, body: { params: parsed.data } }), 'Параметры сохранены');
+    await attempt(() => patch.mutateAsync({ id: c.id, body: { params: parsed.data } }), t('staffLc.contract.paramsSaved'));
   };
   const dis = !editable;
   return (
-    <Card title="Параметры договора" actions={editable && <Button size="sm" loading={patch.isPending} onClick={() => void save()}>Сохранить</Button>}>
+    <Card title={t('staffLc.contract.params')} actions={editable && <Button size="sm" loading={patch.isPending} onClick={() => void save()}>{t('common.save')}</Button>}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Начало" error={errors.startDate}>
+        <Field label={t('common.start')} error={tm(errors.startDate) || undefined}>
           {(a) => <Input {...a} type="date" disabled={dis} value={v.startDate} onChange={set('startDate')} />}
         </Field>
-        <Field label="Окончание" error={errors.endDate}>
+        <Field label={t('common.end')} error={tm(errors.endDate) || undefined}>
           {(a) => <Input {...a} type="date" disabled={dis} value={v.endDate} onChange={set('endDate')} />}
         </Field>
-        <Field label="Программа" error={errors.program}>
+        <Field label={t('common.program')} error={tm(errors.program) || undefined}>
           {(a) => (
             <Select {...a} disabled={dis} value={v.program} onChange={set('program')}>
               {PROGRAMS.map((p) => (
@@ -105,7 +106,7 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
             </Select>
           )}
         </Field>
-        <Field label="Вступление в силу" error={errors.activationRule}>
+        <Field label={t('staffLc.contract.activation')} error={tm(errors.activationRule) || undefined}>
           {(a) => (
             <Select {...a} disabled={dis} value={v.activationRule} onChange={set('activationRule')}>
               {(Object.keys(ACTIVATION_RULE_LABEL) as ActivationRule[]).map((r) => (
@@ -116,13 +117,13 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
             </Select>
           )}
         </Field>
-        <Field label={`Премия за сотрудника (${c.params.employees} чел.)`} error={errors.premiumEmployee}>
+        <Field label={t('staffLc.contract.premiumEmployee', { n: c.params.employees })} error={tm(errors.premiumEmployee) || undefined}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={13} disabled={dis} value={v.premiumEmployee} onChange={set('premiumEmployee')} />}
         </Field>
-        <Field label={`Премия за члена семьи (${c.params.familyMembers} чел.)`} error={errors.premiumFamily}>
+        <Field label={t('staffLc.contract.premiumFamily', { n: c.params.familyMembers })} error={tm(errors.premiumFamily) || undefined}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={13} disabled={dis} value={v.premiumFamily} onChange={set('premiumFamily')} />}
         </Field>
-        <Field label="Порядок оплаты" error={errors.paymentFrequency}>
+        <Field label={t('staffLc.contract.paymentFrequency')} error={tm(errors.paymentFrequency) || undefined}>
           {(a) => (
             <Select {...a} disabled={dis} value={v.paymentFrequency} onChange={set('paymentFrequency')}>
               {(Object.keys(PAYMENT_FREQUENCY_LABEL) as PaymentFrequency[]).map((r) => (
@@ -133,7 +134,7 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
             </Select>
           )}
         </Field>
-        <Field label="Подписант МИГ" error={errors.migSignatoryId}>
+        <Field label={t('staffLc.contract.migSignatory')} error={tm(errors.migSignatoryId) || undefined}>
           {(a) => (
             <Select {...a} disabled={dis} value={v.migSignatoryId} onChange={set('migSignatoryId')}>
               {c.signatories.map((s) => (
@@ -144,28 +145,28 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
             </Select>
           )}
         </Field>
-        <Field label="Подписант клиента" error={errors['clientSignatory.name']}>
+        <Field label={t('staffLc.contract.clientSignatory')} error={tm(errors['clientSignatory.name']) || undefined}>
           {(a) => <Input {...a} maxLength={120} disabled={dis} value={v.signName} onChange={set('signName')} />}
         </Field>
-        <Field label="Должность" error={errors['clientSignatory.position']}>
+        <Field label={t('common.position')} error={tm(errors['clientSignatory.position']) || undefined}>
           {(a) => <Input {...a} maxLength={120} disabled={dis} value={v.signPosition} onChange={set('signPosition')} />}
         </Field>
-        <Field label="Основание полномочий" className="sm:col-span-2" error={errors['clientSignatory.basis']}>
+        <Field label={t('staffLc.deals.directorBasis')} className="sm:col-span-2" error={tm(errors['clientSignatory.basis']) || undefined}>
           {(a) => <Input {...a} maxLength={120} disabled={dis} value={v.signBasis} onChange={set('signBasis')} />}
         </Field>
       </div>
       <dl className="mt-3 border-t border-border-soft pt-2 text-[13px]">
-        <Kv label="Общая премия">
+        <Kv label={t('staffLc.contract.totalPremium')}>
           <span className="num font-semibold">{formatMoney(c.params.total)}</span>
         </Kv>
         {c.quote && (
-          <Kv label="По котировке">
+          <Kv label={t('staffLc.contract.byQuote')}>
             <span className="num">
               {formatMoney(c.quote.premiumEmployee)} / {formatMoney(c.quote.premiumFamily)}
             </span>
           </Kv>
         )}
-        <Kv label="График (приложение 3)">
+        <Kv label={t('staffLc.contract.schedule')}>
           <span className="num">{c.params.paymentSchedule.map((p) => `${formatDate(p.dueDate)} — ${formatMoney(p.amount)}`).join('; ')}</span>
         </Kv>
       </dl>
@@ -185,22 +186,22 @@ function Clauses({ c, editable }: { c: ContractView; editable: boolean }) {
     if (!edit) return;
     const parsed = clauseOverrideSchema.safeParse({ clauseId: edit.id, text: edit.text });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message);
+      setError(tm(parsed.error.issues[0]?.message) || undefined);
       return;
     }
     const next = current();
     next.set(parsed.data.clauseId, parsed.data.text);
-    if (await attempt(() => patch.mutateAsync({ id: c.id, body: body(next) }), `Пункт ${edit.id} изменён`)) setEdit(null);
+    if (await attempt(() => patch.mutateAsync({ id: c.id, body: body(next) }), t('staffLc.contract.clauseChanged', { id: edit.id }))) setEdit(null);
   };
   const reset = async (id: string) => {
     const next = current();
     next.delete(id);
-    await attempt(() => patch.mutateAsync({ id: c.id, body: body(next) }), `Пункт ${id}: исходный текст`);
+    await attempt(() => patch.mutateAsync({ id: c.id, body: body(next) }), t('staffLc.contract.clauseReset', { id }));
   };
   const all = clausesOf('contract');
   return (
-    <Card title={`Пункты договора${c.clauseOverrides.length ? ` · изменено: ${c.clauseOverrides.length}` : ''}`} bodyClassName="p-0">
-      <p className="border-b border-border-soft px-4 py-2 text-[12px] text-muted">Если изменён хотя бы один пункт, договор проходит согласование юриста. Без изменений этап юриста пропускается.</p>
+    <Card title={c.clauseOverrides.length ? t('staffLc.contract.clausesChanged', { n: c.clauseOverrides.length }) : t('staffLc.contract.clauses')} bodyClassName="p-0">
+      <p className="border-b border-border-soft px-4 py-2 text-[12px] text-muted">{t('staffLc.contract.clausesNote')}</p>
       <div className="max-h-[520px] overflow-y-auto">
         {sections.map((s) => (
           <div key={s.id}>
@@ -214,25 +215,25 @@ function Clauses({ c, editable }: { c: ContractView; editable: boolean }) {
                       <p>
                         <span className="num mr-1.5 text-muted">{cl.id}</span>
                         {cl.title}
-                        {o && <Chip kind="warning" className="ml-2">изменён</Chip>}
+                        {o && <Chip kind="warning" className="ml-2">{t('staffLc.contract.changedChip')}</Chip>}
                       </p>
                       {editable && (
                         <span className="flex shrink-0 gap-1">
                           {o && (
-                            <Button size="sm" variant="ghost" aria-label={`Вернуть исходный текст пункта ${cl.id}`} onClick={() => void reset(cl.id)}>
+                            <Button size="sm" variant="ghost" aria-label={t('staffLc.contract.resetClauseAria', { id: cl.id })} onClick={() => void reset(cl.id)}>
                               <RotateCcw className="h-3.5 w-3.5" aria-hidden />
                             </Button>
                           )}
                           <Button
                             size="sm"
                             variant="ghost"
-                            aria-label={`Изменить формулировку пункта ${cl.id}`}
+                            aria-label={t('staffLc.contract.editClauseAria', { id: cl.id })}
                             onClick={() => {
                               setError(undefined);
                               setEdit({ id: cl.id, title: cl.title, text: o?.text ?? all.find((x) => x.id === cl.id)?.text ?? '' });
                             }}
                           >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden /> Изменить формулировку
+                            <Pencil className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.contract.editClause')}
                           </Button>
                         </span>
                       )}
@@ -240,10 +241,10 @@ function Clauses({ c, editable }: { c: ContractView; editable: boolean }) {
                     {o && (
                       <div className="mt-1 grid gap-1 text-[12px]">
                         <p>
-                          <span className="font-medium">Новая редакция:</span> {o.text}
+                          <span className="font-medium">{t('staffLc.contract.newWording')}</span> {o.text}
                         </p>
                         <p className="text-muted">
-                          <span className="font-medium">Исходный текст:</span> {o.original}
+                          <span className="font-medium">{t('staffLc.contract.originalText')}</span> {o.original}
                         </p>
                         <p className="text-muted">
                           {o.byName ?? '—'}, {formatDateTime(o.at)}
@@ -262,20 +263,20 @@ function Clauses({ c, editable }: { c: ContractView; editable: boolean }) {
           open
           wide
           onOpenChange={(o) => !o && setEdit(null)}
-          title={`Пункт ${edit.id}. ${edit.title}`}
-          description="Изменённый пункт подсвечивается в документе, исходный текст показывается рядом."
+          title={t('staffLc.contract.clauseTitle', { id: edit.id, title: edit.title })}
+          description={t('staffLc.contract.clauseDesc')}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEdit(null)}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button loading={patch.isPending} onClick={() => void save()}>
-                Сохранить формулировку
+                {t('staffLc.contract.saveWording')}
               </Button>
             </>
           }
         >
-          <Field label="Формулировка" error={error}>
+          <Field label={t('staffLc.contract.wording')} error={error}>
             {(a) => <Textarea {...a} rows={8} maxLength={4000} value={edit.text} onChange={(e) => setEdit({ ...edit, text: e.target.value })} />}
           </Field>
         </Modal>
@@ -287,18 +288,18 @@ function Clauses({ c, editable }: { c: ContractView; editable: boolean }) {
 function InsuredList({ c, editable }: { c: ContractView; editable: boolean }) {
   const upload = useUploadInsuredList();
   return (
-    <Card title={`Приложение 2 — застрахованные${c.insuredCount ? `: ${c.insuredCount}` : ''}`}>
+    <Card title={c.insuredCount ? t('staffLc.contract.annex2Count', { n: c.insuredCount }) : t('staffLc.contract.annex2')}>
       <p className="text-[13px] text-muted">
-        Список в формате HR-импорта: <code>{POLICY_CSV_HEADER.join(', ')}</code>. В документ попадают ФИО, должность и число членов семьи; ПИНФЛ и телефоны в договор не печатаются.
+        {t('staffLc.contract.annex2Help', { columns: POLICY_CSV_HEADER.join(', ') })}
       </p>
       {editable && (
         <div className="mt-2">
           <CsvFileButton
-            label={c.insuredCount ? 'Заменить список' : 'Загрузить список'}
-            ariaLabel="Файл приложения 2"
+            label={c.insuredCount ? t('staffLc.contract.replaceList') : t('staffLc.contract.uploadList')}
+            ariaLabel={t('staffLc.contract.annex2File')}
             busy={upload.isPending}
             maxBytes={5 * 1024 * 1024}
-            onText={(csv) => void attempt(() => upload.mutateAsync({ id: c.id, csv }), 'Приложение 2 загружено')}
+            onText={(csv) => void attempt(() => upload.mutateAsync({ id: c.id, csv }), t('staffLc.contract.annex2Uploaded'))}
           />
         </div>
       )}
@@ -310,16 +311,16 @@ function Finance({ c }: { c: ContractView }) {
   const navigate = useNavigate();
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="Счета" bodyClassName="p-0">
+      <Card title={t('staffLc.contract.invoices')} bodyClassName="p-0">
         {c.invoices.length ? (
           <table className="w-full text-[13px]" data-testid="contract-invoices">
-            <caption className="sr-only">Счета по договору</caption>
+            <caption className="sr-only">{t('staffLc.contract.invoicesCaption')}</caption>
             <thead>
               <tr className="border-b border-border text-left text-[12px] text-muted">
-                <th className="px-4 py-2 font-medium">Счёт</th>
-                <th className="px-2 py-2 font-medium">Срок</th>
-                <th className="px-2 py-2 text-right font-medium">Сумма</th>
-                <th className="px-4 py-2 font-medium">Статус</th>
+                <th className="px-4 py-2 font-medium">{t('staffLc.contract.invoice')}</th>
+                <th className="px-2 py-2 font-medium">{t('staffLc.contract.due')}</th>
+                <th className="px-2 py-2 text-right font-medium">{t('common.amount')}</th>
+                <th className="px-4 py-2 font-medium">{t('common.status')}</th>
               </tr>
             </thead>
             <tbody>
@@ -329,7 +330,7 @@ function Finance({ c }: { c: ContractView }) {
                   <td className="num px-2 py-1.5">{formatDate(i.dueDate)}</td>
                   <td className="num px-2 py-1.5 text-right">
                     {formatMoney(i.amount)}
-                    {!!i.paid && i.paid < i.amount && <span className="block text-[12px] text-muted">оплачено {formatMoney(i.paid)}</span>}
+                    {!!i.paid && i.paid < i.amount && <span className="block text-[12px] text-muted">{t('staffLc.contract.paid', { amount: formatMoney(i.paid) })}</span>}
                   </td>
                   <td className="px-4 py-1.5">{INVOICE_STATUS_LABEL[i.status]}</td>
                 </tr>
@@ -337,16 +338,16 @@ function Finance({ c }: { c: ContractView }) {
             </tbody>
           </table>
         ) : (
-          <p className="px-4 py-3 text-[13px] text-muted">Счета формируются после подписания по графику платежей.</p>
+          <p className="px-4 py-3 text-[13px] text-muted">{t('staffLc.contract.invoicesNote')}</p>
         )}
       </Card>
-      <Card title="Доп. соглашения" bodyClassName="p-0">
+      <Card title={t('staffLc.contract.endorsements')} bodyClassName="p-0">
         {c.endorsements.length ? (
           <ul className="divide-y divide-border-soft text-[13px]">
             {c.endorsements.map((e) => (
               <li key={e.id} className="flex items-center justify-between gap-2 px-4 py-2">
                 <button type="button" className="text-left text-accent-text hover:underline" onClick={() => navigate(`/staff/endorsements/${e.id}`)}>
-                  {e.number} {e.kind === 'termination' && '· расторжение'}
+                  {e.number} {e.kind === 'termination' && t('staffLc.contract.terminationSuffix')}
                 </button>
                 <span className="flex items-center gap-2">
                   <span className="num">{formatMoney(e.total)}</span>
@@ -356,7 +357,7 @@ function Finance({ c }: { c: ContractView }) {
             ))}
           </ul>
         ) : (
-          <p className="px-4 py-3 text-[13px] text-muted">Нет</p>
+          <p className="px-4 py-3 text-[13px] text-muted">{t('staffLc.contract.none')}</p>
         )}
       </Card>
     </div>
@@ -377,7 +378,7 @@ function TerminateDialog({ c, onClose }: { c: ContractView; onClose: () => void 
     }
     try {
       const e = await terminate.mutateAsync({ id: c.id, ...parsed.data });
-      toast.success(`Подготовлено соглашение о расторжении ${e.number}`);
+      toast.success(t('staffLc.contract.terminationPrepared', { number: e.number }));
       navigate(`/staff/endorsements/${e.id}`);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -387,24 +388,24 @@ function TerminateDialog({ c, onClose }: { c: ContractView; onClose: () => void 
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Расторжение договора"
-      description="Готовится соглашение о расторжении: возврат премии за оставшийся срок по правилу из «Параметров ДМС». Подписывается теми же способами, что и договор."
+      title={t('staffLc.contract.terminateTitle')}
+      description={t('staffLc.contract.terminateDesc')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button variant="danger" loading={terminate.isPending} onClick={() => void submit()}>
-            Подготовить соглашение
+            {t('staffLc.contract.prepareAgreement')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3">
-        <Field label="Дата расторжения" error={errors.date}>
+        <Field label={t('staffLc.contract.terminationDate')} error={tm(errors.date) || undefined}>
           {(a) => <Input {...a} type="date" value={date} min={c.params.startDate} max={c.params.endDate} onChange={(e) => setDate(e.target.value)} />}
         </Field>
-        <Field label="Причина" error={errors.reason}>
+        <Field label={t('common.reason')} error={tm(errors.reason) || undefined}>
           {(a) => <Textarea {...a} rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />}
         </Field>
       </div>
@@ -431,9 +432,9 @@ function ContractEditor({ c }: { c: ContractView }) {
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-2">
-            Договор <span className="num">{c.number}</span>
+            {t('common.contract')} <span className="num">{c.number}</span>
             <Chip kind={CONTRACT_STATUS_CHIP[c.status]}>{CONTRACT_STATUS_LABEL[c.status]}</Chip>
-            <Chip>версия {c.version}</Chip>
+            <Chip>{t('staffLc.contract.versionChip', { n: c.version })}</Chip>
           </span>
         }
         subtitle={
@@ -441,7 +442,7 @@ function ContractEditor({ c }: { c: ContractView }) {
             <Link to={`/staff/clients/${c.clientId}`} className="text-accent-text hover:underline">
               {c.clientName}
             </Link>{' '}
-            · сделка{' '}
+            {t('staffLc.contract.dealSep')}{' '}
             <Link to={`/staff/deals/${c.dealId}`} className="num text-accent-text hover:underline">
               {c.dealNumber}
             </Link>
@@ -450,7 +451,7 @@ function ContractEditor({ c }: { c: ContractView }) {
                 {' '}
                 ·{' '}
                 <Link to={`/staff/policies/${c.policyId}`} className="text-accent-text hover:underline">
-                  полис
+                  {t('staffLc.contract.policyLink')}
                 </Link>
               </>
             )}
@@ -460,8 +461,8 @@ function ContractEditor({ c }: { c: ContractView }) {
           <>
             <DocPrintButton input={() => contractDocument(c)} />
             {canFinance && financePending && (
-              <Button variant="secondary" loading={action.isPending} onClick={() => void attempt(() => action.mutateAsync({ id: c.id, action: 'finance-approve' }), 'Финансовые условия утверждены')}>
-                Утвердить финансовые условия
+              <Button variant="secondary" loading={action.isPending} onClick={() => void attempt(() => action.mutateAsync({ id: c.id, action: 'finance-approve' }), t('staffLc.contract.financeApproved'))}>
+                {t('staffLc.contract.approveFinance')}
               </Button>
             )}
             {canDraft && c.status === 'draft' && (
@@ -471,34 +472,34 @@ function ContractEditor({ c }: { c: ContractView }) {
                 onClick={() =>
                   void attempt(
                     () => step.mutateAsync({ kind: 'contracts', id: c.id, step: 'submit-legal' }),
-                    c.clauseOverrides.length ? 'Договор отправлен юристу' : 'Пункты не менялись — договор согласован без юриста',
+                    c.clauseOverrides.length ? t('staffLc.contract.sentToLawyer') : t('staffLc.contract.approvedWithoutLawyer'),
                   )
                 }
               >
-                Отправить на согласование
+                {t('staffLc.quote.submitForApproval')}
               </Button>
             )}
             {canLegal && c.status === 'legal_review' && (
               <>
                 <Button variant="secondary" onClick={() => setDialog('legal-return')}>
-                  Вернуть с комментарием
+                  {t('staffLc.contract.returnWithComment')}
                 </Button>
-                <Button onClick={() => setDialog('legal-approve')}>Согласовать</Button>
+                <Button onClick={() => setDialog('legal-approve')}>{t('staffLc.quote.agree')}</Button>
               </>
             )}
             {canDraft && c.status === 'approved' && (
-              <Button loading={step.isPending} onClick={() => void attempt(() => step.mutateAsync({ kind: 'contracts', id: c.id, step: 'send' }), 'Договор отправлен клиенту')}>
-                Отправить клиенту
+              <Button loading={step.isPending} onClick={() => void attempt(() => step.mutateAsync({ kind: 'contracts', id: c.id, step: 'send' }), t('staffLc.contract.sentToClient'))}>
+                {t('staffLc.contract.sendToClient')}
               </Button>
             )}
             {canDraft && ['approved', 'sent', 'signing'].includes(c.status) && (
-              <Button variant="secondary" loading={action.isPending} onClick={() => void attempt(() => action.mutateAsync({ id: c.id, action: 'new-version' }), 'Создана новая версия')}>
-                Новая версия
+              <Button variant="secondary" loading={action.isPending} onClick={() => void attempt(() => action.mutateAsync({ id: c.id, action: 'new-version' }), t('staffLc.contract.newVersionCreated'))}>
+                {t('staffLc.contract.newVersion')}
               </Button>
             )}
             {canTerminate && c.status === 'active' && (
               <Button variant="secondary" onClick={() => setDialog('terminate')}>
-                Расторгнуть
+                {t('staffLc.contract.terminate')}
               </Button>
             )}
           </>
@@ -506,22 +507,22 @@ function ContractEditor({ c }: { c: ContractView }) {
       />
       {financePending && (
         <p role="status" className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
-          Премии отличаются от утверждённой котировки: финансовые условия утверждает андеррайтер.
+          {t('staffLc.contract.financeDiffers')}
         </p>
       )}
       {c.legalComment && c.status === 'draft' && (
         <p role="status" className="mb-3 rounded-card bg-danger-soft px-3 py-2 text-[13px] text-danger-text" data-testid="legal-comment">
-          Юрист вернул договор: {c.legalComment}
+          {t('staffLc.contract.lawyerReturned', { comment: c.legalComment })}
         </p>
       )}
-      {c.originalOverdue && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">Оригинал договора от клиента не получен в срок.</p>}
+      {c.originalOverdue && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">{t('staffLc.contract.originalOverdue')}</p>}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <ParamsForm c={c} editable={editable} />
           <Clauses c={c} editable={editable} />
           <InsuredList c={c} editable={editable} />
         </div>
-        <div className="min-w-0">{doc && <DocPreview doc={doc} label="Предпросмотр договора" className="sticky top-16" />}</div>
+        <div className="min-w-0">{doc && <DocPreview doc={doc} label={t('staffLc.contract.preview')} className="sticky top-16" />}</div>
       </div>
       {signingStage && (
         <div className="mt-4">
@@ -532,13 +533,13 @@ function ContractEditor({ c }: { c: ContractView }) {
         <Finance c={c} />
       </div>
       <div className="mt-4">
-        <Card title="История версий" bodyClassName="p-0">
+        <Card title={t('staffLc.contract.versions')} bodyClassName="p-0">
           <ol className="divide-y divide-border-soft text-[13px]" data-testid="contract-versions">
             {[...c.versions].reverse().map((v, i) => (
               <li key={`${v.at}-${i}`} className="flex flex-wrap justify-between gap-2 px-4 py-2">
                 <span>
-                  <span className="num mr-2 text-muted">в{v.version}</span>
-                  {v.changes}
+                  <span className="num mr-2 text-muted">{t('staffLc.contract.versionShort', { n: v.version })}</span>
+                  {tm(v.changes)}
                 </span>
                 <span className="text-muted">
                   {v.byName} · <span className="num">{formatDateTime(v.at)}</span>
@@ -551,24 +552,24 @@ function ContractEditor({ c }: { c: ContractView }) {
       <ReasonDialog
         open={dialog === 'legal-approve'}
         onClose={() => setDialog(null)}
-        title="Согласовать договор"
-        description="Изменённые пункты проверены. После согласования менеджер отправит договор клиенту."
-        label="Комментарий (необязательно)"
+        title={t('staffLc.contract.legalApproveTitle')}
+        description={t('staffLc.contract.legalApproveDesc')}
+        label={t('staffLc.quote.commentOptional')}
         field="comment"
         optional
         schema={legalApproveSchema}
-        confirmLabel="Согласовать"
+        confirmLabel={t('staffLc.quote.agree')}
         onSubmit={(comment) => step.mutateAsync({ kind: 'contracts', id: c.id, step: 'legal-approve', body: { comment: comment || undefined } })}
       />
       <ReasonDialog
         open={dialog === 'legal-return'}
         onClose={() => setDialog(null)}
-        title="Вернуть договор"
-        description="Договор вернётся менеджеру в черновик с вашим комментарием."
-        label="Комментарий"
+        title={t('staffLc.contract.legalReturnTitle')}
+        description={t('staffLc.contract.legalReturnDesc')}
+        label={t('common.comment')}
         field="comment"
         schema={legalReturnSchema}
-        confirmLabel="Вернуть"
+        confirmLabel={t('staffLc.contract.return')}
         danger
         onSubmit={(comment) => step.mutateAsync({ kind: 'contracts', id: c.id, step: 'legal-return', body: { comment } })}
       />
@@ -582,7 +583,7 @@ export default function ContractPage() {
   const [poll, setPoll] = useState(false);
   const q = useContract(contractId, { poll });
   useEffect(() => setPoll(!!q.data?.signing.edoPending), [q.data?.signing.edoPending]);
-  useDocumentTitle(q.data ? `Договор ${q.data.number}` : 'Договор');
-  useTopbar([{ label: 'Договоры', to: '/staff/contracts' }, { label: q.data?.number ?? 'Договор' }]);
+  useDocumentTitle(q.data ? t('staffLc.contract.titleNumber', { number: q.data.number }) : t('common.contract'));
+  useTopbar([{ label: t('staffLc.contracts.title'), to: '/staff/contracts' }, { label: q.data?.number ?? t('common.contract') }]);
   return <QueryState query={q}>{(c) => <ContractEditor c={c} />}</QueryState>;
 }

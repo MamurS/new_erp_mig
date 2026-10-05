@@ -24,6 +24,7 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 import { ClinicCoverage } from '@/features/ai/ClinicCoverage';
+import { t, tm } from '@/i18n';
 
 export function PageTitle({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
@@ -65,31 +66,31 @@ export function CoverageCard({ result, actions }: { result: CoverageCheckResult;
       title={
         <span className="flex flex-wrap items-center gap-2">
           {result.person.fullName}
-          <span className="text-[14px] font-normal text-muted">{result.person.birthYear} г. р.</span>
+          <span className="text-[14px] font-normal text-muted">{t('clinic.coverage.birthYear', { year: result.person.birthYear })}</span>
         </span>
       }
       actions={
         <Chip kind={result.policy.active ? 'success' : 'danger'} className="text-[13px]">
-          {result.policy.active ? 'Полис действует' : 'Полис не действует'}
+          {result.policy.active ? t('clinic.coverage.policyActive') : t('clinic.coverage.policyInactive')}
         </Chip>
       }
     >
       <div className="grid gap-4 p-4 md:grid-cols-[280px_minmax(0,1fr)]">
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[14px]" data-testid="coverage-policy">
-          <dt className="text-muted">Программа</dt>
+          <dt className="text-muted">{t('common.program')}</dt>
           <dd className="font-semibold">{result.policy.programName}</dd>
-          <dt className="text-muted">Полис</dt>
+          <dt className="text-muted">{t('common.policy')}</dt>
           <dd className="num">{result.policy.number}</dd>
-          <dt className="text-muted">Действует до</dt>
+          <dt className="text-muted">{t('common.validUntil')}</dt>
           <dd className="num">{formatDate(result.policy.validTo)}</dd>
         </dl>
         <table className="w-full text-[14px]" data-testid="coverage-table">
-          <caption className="sr-only">Покрытие по категориям услуг</caption>
+          <caption className="sr-only">{t('clinic.coverage.caption')}</caption>
           <thead>
             <tr className="border-b border-border text-left text-[12px] text-muted">
-              <th className="py-1.5 pr-2 font-normal">Категория</th>
-              <th className="py-1.5 pr-2 font-normal">Покрытие</th>
-              <th className="py-1.5 font-normal">Лимит</th>
+              <th className="py-1.5 pr-2 font-normal">{t('common.category')}</th>
+              <th className="py-1.5 pr-2 font-normal">{t('clinic.coverage.coverage')}</th>
+              <th className="py-1.5 font-normal">{t('clinic.coverage.limit')}</th>
             </tr>
           </thead>
           <tbody>
@@ -112,7 +113,7 @@ export function CoverageCard({ result, actions }: { result: CoverageCheckResult;
   );
 }
 
-export function FilesPicker({ files, onChange, label = 'Вложения (направление, заключение)' }: { files: File[]; onChange: (f: File[]) => void; label?: string }) {
+export function FilesPicker({ files, onChange, label }: { files: File[]; onChange: (f: File[]) => void; label?: string }) {
   const [error, setError] = useState<string | null>(null);
   const add = async (list: FileList | null) => {
     if (!list) return;
@@ -120,23 +121,23 @@ export function FilesPicker({ files, onChange, label = 'Вложения (нап
     const out = [...files];
     for (const f of [...list]) {
       if (out.length >= ATTACHMENT_MAX_FILES) {
-        setError(`Не больше ${ATTACHMENT_MAX_FILES} файлов`);
+        setError(t('clinic.files.tooMany', { max: ATTACHMENT_MAX_FILES }));
         break;
       }
       const r = await prepareAttachment(f, out.length);
-      if ('error' in r) setError(r.error);
+      if ('error' in r) setError(tm(r.error));
       else out.push(r.file);
     }
     onChange(out);
   };
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[12px] font-medium text-muted">{label}</span>
+      <span className="text-[12px] font-medium text-muted">{label ?? t('clinic.files.label')}</span>
       <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-btn border border-dashed border-border px-3 py-2 text-[14px] hover:bg-rail">
-        <Paperclip className="h-4 w-4" aria-hidden /> Добавить файлы
-        <input type="file" multiple accept={ATTACHMENT_ACCEPT} className="sr-only" onChange={(e) => void add(e.target.files)} aria-label="Добавить файлы" />
+        <Paperclip className="h-4 w-4" aria-hidden /> {t('clinic.files.add')}
+        <input type="file" multiple accept={ATTACHMENT_ACCEPT} className="sr-only" onChange={(e) => void add(e.target.files)} aria-label={t('clinic.files.add')} />
       </label>
-      <span className="text-[12px] text-muted">PDF, JPEG или PNG до 10 МБ. Фото очищаются от метаданных.</span>
+      <span className="text-[12px] text-muted">{t('clinic.files.hint')}</span>
       {error && (
         <p role="alert" className="text-[12px] text-danger-text">
           {error}
@@ -147,7 +148,7 @@ export function FilesPicker({ files, onChange, label = 'Вложения (нап
           {files.map((f, i) => (
             <li key={`${f.name}-${i}`} className="inline-flex items-center gap-1 rounded-btn bg-rail px-2 py-1 text-[12px]">
               {f.name}
-              <button type="button" aria-label={`Убрать ${f.name}`} onClick={() => onChange(files.filter((_, k) => k !== i))}>
+              <button type="button" aria-label={t('clinic.files.remove', { name: f.name })} onClick={() => onChange(files.filter((_, k) => k !== i))}>
                 <X className="h-3 w-3" aria-hidden />
               </button>
             </li>
@@ -182,7 +183,7 @@ export function GuaranteeRequestDialog({ visitId, open, onOpenChange, onDone }: 
   const submit = form.handleSubmit(async (values) => {
     try {
       const g = await requestGp.mutateAsync({ input: values, files });
-      toast.success(`Гарантийное письмо ${g.number} запрошено`);
+      toast.success(t('clinic.gpRequest.done', { number: g.number }));
       onOpenChange(false);
       onDone?.();
     } catch (e) {
@@ -195,21 +196,21 @@ export function GuaranteeRequestDialog({ visitId, open, onOpenChange, onDone }: 
       open={open}
       onOpenChange={onOpenChange}
       wide
-      title="Запросить гарантийное письмо"
-      description="Запрос уйдёт врачу ассистанса пациента или врачу-эксперту МИГ. Ответ появится в разделе «Гарантийные письма»."
+      title={t('clinic.gpRequest.title')}
+      description={t('clinic.gpRequest.description')}
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={requestGp.isPending} onClick={() => void submit()}>
-            Отправить запрос
+            {t('clinic.gpRequest.submit')}
           </Button>
         </>
       }
     >
       <form className="grid gap-3 md:grid-cols-2" onSubmit={(e) => void submit(e)} noValidate>
-        <Field label="Услуга из прайса" error={errors.serviceCode?.message} className="md:col-span-2">
+        <Field label={t('clinic.gpRequest.service')} error={tm(errors.serviceCode?.message)} className="md:col-span-2">
           {(a) => (
             <Select
               {...a}
@@ -220,31 +221,31 @@ export function GuaranteeRequestDialog({ visitId, open, onOpenChange, onDone }: 
                 },
               })}
             >
-              <option value="">Выберите услугу</option>
+              <option value="">{t('clinic.gpRequest.pickService')}</option>
               {list.map((p) => (
                 <option key={p.code} value={p.code}>
                   {p.code} · {p.name}
-                  {p.requiresGuarantee ? ' · нужно ГП' : ''}
+                  {p.requiresGuarantee ? t('clinic.gpRequest.needsGp') : ''}
                 </option>
               ))}
             </Select>
           )}
         </Field>
-        <Field label="Код МКБ-10" error={errors.icd10?.message} hint="Например, K35.8">
+        <Field label={t('clinic.gpRequest.icd10')} error={tm(errors.icd10?.message)} hint={t('clinic.gpRequest.icd10Hint')}>
           {(a) => <Input {...a} autoComplete="off" maxLength={8} {...form.register('icd10')} />}
         </Field>
         <ClinicCoverage visitId={visitId} serviceCode={form.watch('serviceCode')} icd10={form.watch('icd10')} />
-        <Field label="Предполагаемая стоимость, UZS" error={errors.estimatedCost?.message}>
+        <Field label={t('clinic.gpRequest.cost')} error={tm(errors.estimatedCost?.message)}>
           {(a) => <Input {...a} inputMode="numeric" {...form.register('estimatedCost', { setValueAs: (v: string | number) => Number(String(v).replace(/\s/g, '')) })} />}
         </Field>
-        <Field label="Комментарий врача" error={errors.comment?.message} className="md:col-span-2">
+        <Field label={t('clinic.gpRequest.comment')} error={tm(errors.comment?.message)} className="md:col-span-2">
           {(a) => <Textarea {...a} rows={3} maxLength={1000} {...form.register('comment')} />}
         </Field>
         <div className="md:col-span-2">
           <FilesPicker files={files} onChange={setFiles} />
         </div>
         {errors.estimatedCost === undefined && form.watch('estimatedCost') > 0 && (
-          <p className="text-[12px] text-muted md:col-span-2">Сумма к согласованию: {formatMoney(form.watch('estimatedCost'))}</p>
+          <p className="text-[12px] text-muted md:col-span-2">{t('clinic.gpRequest.toApprove', { amount: formatMoney(form.watch('estimatedCost')) })}</p>
         )}
       </form>
     </Modal>
@@ -255,12 +256,12 @@ export function GuaranteeRequestDialog({ visitId, open, onOpenChange, onDone }: 
 export function useTimeLeft(iso: string): string {
   const [, tick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => tick((x) => x + 1), 30_000);
-    return () => clearInterval(t);
+    const id = setInterval(() => tick((x) => x + 1), 30_000);
+    return () => clearInterval(id);
   }, []);
   const ms = Date.parse(iso) - Date.now();
-  if (ms <= 0) return 'истёк';
+  if (ms <= 0) return t('clinic.timeLeft.expired');
   const h = Math.floor(ms / 3600_000);
   const m = Math.floor((ms % 3600_000) / 60_000);
-  return h ? `${h} ч ${m} мин` : `${m} мин`;
+  return h ? t('clinic.timeLeft.hm', { h, m }) : t('clinic.timeLeft.m', { m });
 }

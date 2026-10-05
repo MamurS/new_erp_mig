@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
-import { LangSwitch } from './components';
+import { t } from '@/i18n';
+import { LanguageSwitch } from '@/shared/ui/language-switch';
 
 /** Frame for /app/login, /app/login/code and /app/consent. */
 export function AuthShell({ title, subtitle, children, top }: { title: string; subtitle?: ReactNode; children: ReactNode; top?: ReactNode }) {
@@ -13,10 +14,10 @@ export function AuthShell({ title, subtitle, children, top }: { title: string; s
             <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-accent text-white">
               <ShieldCheck className="h-5 w-5" aria-hidden />
             </span>
-            MIG ДМС
+            {t('app.brand')}
           </span>
         )}
-        <LangSwitch />
+        <LanguageSwitch />
       </div>
       <h1 className="font-heading text-[26px] font-semibold leading-tight">{title}</h1>
       {subtitle && <p className="mt-2 text-[15px] text-muted">{subtitle}</p>}

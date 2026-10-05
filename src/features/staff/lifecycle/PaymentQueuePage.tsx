@@ -3,11 +3,12 @@
  * invoices with the same amount, a third-party payer, a partial amount). The accountant splits a payment
  * across invoices; a payer with another INN needs a comment.
  */
+import { msg, t, tm } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { BankPaymentView } from '@/shared/types/dto';
 import { useAllocatePayment, useInvoices, usePaymentQueue } from '@/shared/api/queries/lifecycle';
-import { errorMessage } from '@/shared/api/client';
+import { ApiRequestError, errorMessage } from '@/shared/api/client';
 import { PAYMENT_CANDIDATE_WHY_LABEL, PAYMENT_QUEUE_REASON_LABEL } from '@/shared/domain/payments';
 import { paymentAllocationSchema } from '@/shared/schemas/forms';
 import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
@@ -91,20 +92,19 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
       return;
     }
     if (foreign && (parsed.data.comment ?? '').length < 5) {
-      setErrors({ comment: 'Плательщик — другой ИНН: укажите комментарий (минимум 5 символов)' });
+      setErrors({ comment: msg('staffLc.queue.foreignComment') });
       return;
     }
     setErrors({});
     try {
       const r = await allocate.mutateAsync({ id: payment.id, ...parsed.data });
       toast.success(
-        r.status === 'allocated' ? 'Платёж разнесён' : `Разнесено, остаток ${formatMoney(r.remaining)}`,
+        r.status === 'allocated' ? t('staffLc.queue.allocated') : t('staffLc.queue.partlyAllocated', { rest: formatMoney(r.remaining) }),
       );
       onClose();
     } catch (e) {
-      const msg = errorMessage(e);
-      if (/комментарий/.test(msg)) setErrors({ comment: msg });
-      else toast.error(msg);
+      if (e instanceof ApiRequestError && e.fields?.comment) setErrors({ comment: e.fields.comment });
+      else toast.error(errorMessage(e));
     }
   };
 
@@ -115,28 +115,32 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title="Разнести платёж"
-      description={`${formatDate(payment.date)} · ИНН плательщика ${payment.payerInn}${payment.payerName ? ` (${payment.payerName})` : ''} · к разноске ${formatMoney(payment.remaining)}`}
+      title={t('staffLc.queue.allocateTitle')}
+      description={
+        payment.payerName
+          ? t('staffLc.queue.allocateDescNamed', { date: formatDate(payment.date), inn: payment.payerInn, name: payment.payerName, rest: formatMoney(payment.remaining) })
+          : t('staffLc.queue.allocateDesc', { date: formatDate(payment.date), inn: payment.payerInn, rest: formatMoney(payment.remaining) })
+      }
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={allocate.isPending} onClick={() => void submit()}>
-            Разнести {total > 0 ? formatMoney(total) : ''}
+            {total > 0 ? t('staffLc.queue.allocateAmount', { amount: formatMoney(total) }) : t('staffLc.queue.allocate')}
           </Button>
         </>
       }
     >
       <p className="mb-3 rounded-card bg-rail px-3 py-2 text-[13px]">
-        <span className="text-muted">Назначение: </span>
+        <span className="text-muted">{t('staffLc.queue.purposeLabel')} </span>
         {payment.purpose || '—'}
       </p>
       <fieldset>
         <legend className="mb-1 text-[13px] font-medium">
           {payment.candidates.length
-            ? 'Подходящие счета'
-            : 'Подходящих счетов не найдено — выберите счёт ниже'}
+            ? t('staffLc.queue.candidates')
+            : t('staffLc.queue.noCandidates')}
         </legend>
         <ul
           className="divide-y divide-border rounded-card border border-border"
@@ -156,21 +160,21 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
                     type="checkbox"
                     checked={on}
                     onChange={(e) => toggle(r, e.target.checked)}
-                    aria-label={`Счёт ${r.number}`}
+                    aria-label={t('staffLc.queue.invoiceAria', { number: r.number })}
                   />
                   <span className="min-w-0">
                     <span className="num font-medium">{r.number}</span> · {r.clientName}
                     {r.contractNumber && <span className="num text-muted"> · {r.contractNumber}</span>}
                     <span className="block text-[12px] text-muted">
-                      Остаток {formatMoney(r.remaining)}
-                      {r.hint && ` · совпадение: ${r.hint}`}
-                      {other && ' · другой ИНН'}
+                      {t('staffLc.queue.remaining', { amount: formatMoney(r.remaining) })}
+                      {r.hint && t('staffLc.queue.matchHint', { hint: r.hint })}
+                      {other && t('staffLc.queue.otherInn')}
                     </span>
                   </span>
                 </label>
                 {on && (
                   <Input
-                    aria-label={`Сумма по счёту ${r.number}`}
+                    aria-label={t('staffLc.queue.amountAria', { number: r.number })}
                     className="h-8 w-36"
                     inputMode="numeric"
                     maxLength={14}
@@ -181,18 +185,18 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
               </li>
             );
           })}
-          {rows.length === 0 && <li className="px-3 py-2 text-[13px] text-muted">Нет счетов</li>}
+          {rows.length === 0 && <li className="px-3 py-2 text-[13px] text-muted">{t('staffLc.queue.noInvoices')}</li>}
         </ul>
-        {errors.lines && <p className="mt-1 text-[12px] text-danger-text">{errors.lines}</p>}
+        {errors.lines && <p className="mt-1 text-[12px] text-danger-text">{tm(errors.lines)}</p>}
       </fieldset>
       <div className="mt-3 flex items-end gap-2">
-        <Field label="Другой неоплаченный счёт" className="flex-1">
+        <Field label={t('staffLc.queue.otherInvoice')} className="flex-1">
           {(a) => (
             <Select {...a} value={extra} onChange={(e) => setExtra(e.target.value)}>
               <option value="">—</option>
               {others.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.number} · {i.clientName} · остаток {formatMoney(i.amount - (i.paid ?? 0))}
+                  {t('staffLc.queue.otherOption', { number: i.number, client: i.clientName, rest: formatMoney(i.amount - (i.paid ?? 0)) })}
                 </option>
               ))}
             </Select>
@@ -211,12 +215,12 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
             setExtra('');
           }}
         >
-          Добавить
+          {t('common.add')}
         </Button>
       </div>
       <Field
-        label={foreign ? 'Комментарий (обязательно: плательщик — другой ИНН)' : 'Комментарий'}
-        error={errors.comment}
+        label={foreign ? t('staffLc.queue.commentRequired') : t('common.comment')}
+        error={tm(errors.comment) || undefined}
         className="mt-3"
       >
         {(a) => (
@@ -226,16 +230,16 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
             maxLength={500}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder={foreign ? 'Например: оплата за клиента по письму от 01.10' : undefined}
+            placeholder={foreign ? t('staffLc.queue.commentPlaceholder') : undefined}
           />
         )}
       </Field>
       {total > payment.remaining && (
-        <p className="mt-2 text-[12px] text-danger-text">Сумма разноски больше остатка платежа</p>
+        <p className="mt-2 text-[12px] text-danger-text">{t('staffLc.queue.overAllocated')}</p>
       )}
       {total > 0 && total < payment.remaining && (
         <p className="mt-2 text-[12px] text-muted">
-          Остаток {formatMoney(payment.remaining - total)} останется в очереди
+          {t('staffLc.queue.restStays', { amount: formatMoney(payment.remaining - total) })}
         </p>
       )}
     </Modal>
@@ -243,8 +247,8 @@ function AllocateDialog({ payment, onClose }: { payment: BankPaymentView; onClos
 }
 
 export default function PaymentQueuePage() {
-  useDocumentTitle('Ручная разноска');
-  useTopbar([{ label: 'Счета и оплаты', to: '/staff/invoices' }, { label: 'Ручная разноска' }]);
+  useDocumentTitle(t('staffLc.invoices.manualMatching'));
+  useTopbar([{ label: t('staffLc.invoices.title'), to: '/staff/invoices' }, { label: t('staffLc.invoices.manualMatching') }]);
   const [f, setF] = useUrlFilters(['status'] as const);
   const status = f.status === 'allocated' ? 'allocated' : 'pending';
   const q = usePaymentQueue(status);
@@ -253,38 +257,38 @@ export default function PaymentQueuePage() {
   const columns: Column<BankPaymentView>[] = [
     {
       key: 'date',
-      header: 'Дата',
+      header: t('common.date'),
       cell: (b) => (
         <span>
           <span className="num">{formatDate(b.date)}</span>
-          {b.docNumber && <span className="num block text-[12px] text-muted">п/п № {b.docNumber}</span>}
+          {b.docNumber && <span className="num block text-[12px] text-muted">{t('staffLc.queue.docNumber', { number: b.docNumber })}</span>}
         </span>
       ),
     },
     {
       key: 'payer',
-      header: 'Плательщик',
+      header: t('staffLc.queue.payer'),
       cell: (b) => (
         <span>
-          <span className="num">ИНН {b.payerInn || '—'}</span>
+          <span className="num">{t('staffLc.queue.inn', { inn: b.payerInn || '—' })}</span>
           {b.payerName && <span className="block text-[12px] text-muted">{b.payerName}</span>}
         </span>
       ),
     },
     {
       key: 'purpose',
-      header: 'Назначение',
+      header: t('staffLc.queue.purpose'),
       cell: (b) => <span className="line-clamp-2 max-w-88 text-[13px]">{b.purpose || '—'}</span>,
     },
     {
       key: 'amount',
-      header: 'Сумма',
+      header: t('common.amount'),
       align: 'right',
       cell: (b) => <span className="num whitespace-nowrap">{formatMoney(b.amount)}</span>,
     },
     {
       key: 'rest',
-      header: status === 'pending' ? 'К разноске' : 'Разнесено',
+      header: status === 'pending' ? t('staffLc.queue.toAllocate') : t('staffLc.queue.allocatedCol'),
       align: 'right',
       cell: (b) => (
         <span className="num whitespace-nowrap">
@@ -294,13 +298,13 @@ export default function PaymentQueuePage() {
     },
     {
       key: 'why',
-      header: status === 'pending' ? 'Почему не сопоставлен' : 'Счета',
+      header: status === 'pending' ? t('staffLc.queue.whyUnmatched') : t('staffLc.contract.invoices'),
       cell: (b) =>
         status === 'pending' ? (
           <span>
             <Chip kind="warning">{PAYMENT_QUEUE_REASON_LABEL[b.reason]}</Chip>
             {b.candidates.length > 0 && (
-              <span className="block text-[12px] text-muted">Кандидатов: {b.candidates.length}</span>
+              <span className="block text-[12px] text-muted">{t('staffLc.queue.candidatesCount', { n: b.candidates.length })}</span>
             )}
           </span>
         ) : (
@@ -328,7 +332,7 @@ export default function PaymentQueuePage() {
               setActive(b);
             }}
           >
-            Разнести
+            {t('staffLc.queue.allocate')}
           </Button>
         ) : null,
     },
@@ -337,35 +341,35 @@ export default function PaymentQueuePage() {
   return (
     <>
       <PageHeader
-        title="Ручная разноска"
-        subtitle="Платежи выписки 1С, которые не удалось сопоставить по номеру счёта в назначении или по ИНН и точной сумме"
+        title={t('staffLc.invoices.manualMatching')}
+        subtitle={t('staffLc.queue.subtitle')}
         actions={
           <Link className="text-[13px] text-accent-text hover:underline" to="/staff/invoices">
-            Счета и оплаты
+            {t('staffLc.invoices.title')}
           </Link>
         }
       />
       <div className="mb-3">
         <Select
-          aria-label="Статус"
+          aria-label={t('common.status')}
           className="h-8 w-56"
           value={status}
           onChange={(e) => setF({ status: e.target.value === 'allocated' ? 'allocated' : null })}
         >
-          <option value="pending">Ждут разноски</option>
-          <option value="allocated">Разнесённые</option>
+          <option value="pending">{t('staffLc.queue.pending')}</option>
+          <option value="allocated">{t('staffLc.queue.allocatedFilter')}</option>
         </Select>
       </div>
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Платежи для ручной разноски"
+          caption={t('staffLc.queue.caption')}
           columns={columns}
           rows={q.data}
           loading={q.isLoading}
           error={q.error}
           onRetry={() => void q.refetch()}
           rowKey={(b) => b.id}
-          empty={status === 'pending' ? 'Все платежи разнесены' : 'Разнесённых вручную платежей нет'}
+          empty={status === 'pending' ? t('staffLc.queue.emptyPending') : t('staffLc.queue.emptyAllocated')}
         />
       </div>
       {active && <AllocateDialog payment={active} onClose={() => setActive(null)} />}

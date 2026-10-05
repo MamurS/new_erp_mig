@@ -20,6 +20,7 @@ import { Field, Input, Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
+import { t, tm } from '@/i18n';
 
 type Invite = z.input<typeof assistUserInviteSchema>;
 
@@ -30,7 +31,7 @@ function InviteDialog({ onClose }: { onClose: () => void }) {
   const submit = form.handleSubmit(async (v) => {
     try {
       await invite.mutateAsync(v);
-      toast.success('Пользователь приглашён');
+      toast.success(t('assist.users.invited'));
       onClose();
     } catch (err) {
       toast.error(errorMessage(err));
@@ -40,27 +41,27 @@ function InviteDialog({ onClose }: { onClose: () => void }) {
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Пригласить пользователя"
-      description="Вход по email и паролю с кодом подтверждения (MFA)"
+      title={t('assist.users.inviteTitle')}
+      description={t('assist.users.inviteDescription')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={invite.isPending} onClick={() => void submit()}>
-            Пригласить
+            {t('assist.users.invite')}
           </Button>
         </>
       }
     >
       <form className="flex flex-col gap-3" onSubmit={(ev) => void submit(ev)} noValidate>
-        <Field label="ФИО" error={e.fullName?.message}>
+        <Field label={t('common.fullName')} error={tm(e.fullName?.message)}>
           {(a) => <Input {...a} maxLength={120} {...form.register('fullName')} />}
         </Field>
-        <Field label="Email" error={e.email?.message}>
+        <Field label={t('common.email')} error={tm(e.email?.message)}>
           {(a) => <Input {...a} type="email" maxLength={254} {...form.register('email')} />}
         </Field>
-        <Field label="Роль" error={e.role?.message}>
+        <Field label={t('common.role')} error={tm(e.role?.message)}>
           {(a) => (
             <Select {...a} {...form.register('role')}>
               {ASSISTANCE_ROLES.map((r) => (
@@ -77,8 +78,8 @@ function InviteDialog({ onClose }: { onClose: () => void }) {
 }
 
 export default function UsersPage() {
-  useDocumentTitle('Пользователи');
-  useTopbar([{ label: 'Пользователи' }]);
+  useDocumentTitle(t('assist.users.title'));
+  useTopbar([{ label: t('assist.users.title') }]);
   const me = useUser();
   const q = useAssistUsers();
   const patch = usePatchAssistUser();
@@ -86,22 +87,22 @@ export default function UsersPage() {
   const change = async (u: AssistUserView, body: { role?: AssistanceRole; active?: boolean }) => {
     try {
       await patch.mutateAsync({ id: u.id, ...body });
-      toast.success('Сохранено');
+      toast.success(t('assist.users.saved'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
   };
   const columns: Column<AssistUserView>[] = [
-    { key: 'name', header: 'ФИО', cell: (u) => <span className="font-medium">{u.fullName}</span> },
-    { key: 'email', header: 'Email', cell: (u) => u.email },
+    { key: 'name', header: t('common.fullName'), cell: (u) => <span className="font-medium">{u.fullName}</span> },
+    { key: 'email', header: t('common.email'), cell: (u) => u.email },
     {
       key: 'role',
-      header: 'Роль',
+      header: t('common.role'),
       cell: (u) =>
         u.id === me?.id ? (
           ROLE_LABEL[u.role]
         ) : (
-          <Select aria-label={`Роль ${u.fullName}`} value={u.role} onChange={(e) => void change(u, { role: e.target.value as AssistanceRole })}>
+          <Select aria-label={t('assist.users.roleAria', { name: u.fullName })} value={u.role} onChange={(e) => void change(u, { role: e.target.value as AssistanceRole })}>
             {ASSISTANCE_ROLES.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABEL[r]}
@@ -110,8 +111,8 @@ export default function UsersPage() {
           </Select>
         ),
     },
-    { key: 'login', header: 'Последний вход', cell: (u) => (u.lastLoginAt ? <span className="num">{formatDateTime(u.lastLoginAt)}</span> : '—') },
-    { key: 'status', header: 'Статус', cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? 'Активен' : 'Отключён'}</Chip> },
+    { key: 'login', header: t('assist.users.lastLogin'), cell: (u) => (u.lastLoginAt ? <span className="num">{formatDateTime(u.lastLoginAt)}</span> : '—') },
+    { key: 'status', header: t('common.status'), cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('assist.users.active') : t('assist.users.disabled')}</Chip> },
     {
       key: 'actions',
       header: '',
@@ -119,16 +120,16 @@ export default function UsersPage() {
       cell: (u) =>
         u.id === me?.id ? null : (
           <Button size="sm" variant="ghost" onClick={() => void change(u, { active: !u.active })}>
-            {u.active ? 'Отключить' : 'Включить'}
+            {u.active ? t('assist.users.disable') : t('assist.users.enable')}
           </Button>
         ),
     },
   ];
   return (
     <>
-      <PageHeader title="Пользователи ассистанса" actions={<Button onClick={() => setInviting(true)}>Пригласить</Button>} />
+      <PageHeader title={t('assist.users.pageTitle')} actions={<Button onClick={() => setInviting(true)}>{t('assist.users.invite')}</Button>} />
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption="Пользователи" columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(u) => u.id} />
+        <DataTable caption={t('assist.users.title')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(u) => u.id} />
       </div>
       {inviting && <InviteDialog onClose={() => setInviting(false)} />}
     </>

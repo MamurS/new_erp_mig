@@ -3,6 +3,7 @@
  * deliveries and the call log. The same handlers serve clinics (/api/clinic/integration) and
  * assistance companies (/api/assist/integration); keys, webhooks and logs belong to the partner.
  */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import type { IntegrationClient, IntegrationMode, PartnerType, Role, WebhookEndpoint } from '@/shared/types';
 import type { IntegrationOverview } from '@/shared/types/dto';
@@ -61,7 +62,7 @@ export function partnerIntegrationHandlers(base: string, resolve: (request: Requ
       const { actor, partnerId, partnerType, d } = resolve(request);
       const input = await body(request, keyCreateRequest);
       const allowed: readonly string[] = partnerType === 'assistance' ? ASSIST_SCOPES : INTEGRATION_SCOPES;
-      if (input.scopes.some((x) => !allowed.includes(x))) throw new HttpError(422, 'validation', 'Эта область доступа не выдаётся партнёрам такого типа', { scopes: 'Недоступная область доступа' });
+      if (input.scopes.some((x) => !allowed.includes(x))) throw new HttpError(422, 'validation', 'srv.partners.scopeNotAllowed', { fields: { scopes: msg('srv.partners.scopeUnavailable') } });
       const clientId = `mig_${randomToken(12).replace(/[^A-Za-z0-9]/g, '').slice(0, 16).toLowerCase()}`;
       const clientSecret = randomToken(32);
       const row: IntegrationClientRow = {
@@ -105,7 +106,7 @@ export function partnerIntegrationHandlers(base: string, resolve: (request: Requ
       const { actor, partnerId, partnerType, d } = resolve(request);
       const input = await body(request, webhookCreateRequest);
       const events: readonly string[] = partnerType === 'assistance' ? ASSIST_WEBHOOK_EVENTS : WEBHOOK_EVENTS;
-      if (input.events.some((x) => !events.includes(x))) throw new HttpError(422, 'validation', 'Это событие не отправляется партнёрам такого типа', { events: 'Недоступное событие' });
+      if (input.events.some((x) => !events.includes(x))) throw new HttpError(422, 'validation', 'srv.partners.eventNotAllowed', { fields: { events: msg('srv.partners.eventUnavailable') } });
       const signingSecret = `whsec_${randomToken(24)}`;
       const row: WebhookEndpointRow = {
         id: randomId(),
@@ -150,7 +151,7 @@ export function partnerIntegrationHandlers(base: string, resolve: (request: Requ
       const { partnerId, d } = resolve(ctx.request);
       const delivery = d.webhookDeliveries.find((x) => x.id === param(ctx, 'id') && x.clinicId === partnerId);
       if (!delivery) throw notFound();
-      if (delivery.status === 'delivered') throw conflict('Событие уже доставлено');
+      if (delivery.status === 'delivered') throw conflict('srv.partners.alreadyDelivered');
       const ep = d.webhooks.find((w) => w.id === delivery.endpointId);
       if (!ep) throw notFound();
       if (delivery.status === 'failed') delivery.attempts = Math.min(delivery.attempts, 5); // manual retry gets one more attempt

@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link, isRouteErrorResponse, useRouteError } from 'react-router-dom';
 import { ShieldX, Compass, Bug } from 'lucide-react';
@@ -19,24 +20,24 @@ function Shell({ icon, title, text, children }: { icon: ReactNode; title: string
 }
 
 export function ForbiddenPage() {
-  useDocumentTitle('Нет доступа');
+  useDocumentTitle(t('shell.forbidden.title'));
   const session = useSession();
   return (
-    <Shell icon={<ShieldX className="h-10 w-10" />} title="Нет доступа" text="У вашей роли нет прав на этот раздел. Если доступ нужен для работы, обратитесь к администратору.">
+    <Shell icon={<ShieldX className="h-10 w-10" />} title={t('shell.forbidden.title')} text={t('shell.forbidden.text')}>
       <Button asChild>
-        <Link to={session ? homeFor(session.user.role) : '/login'}>На главную</Link>
+        <Link to={session ? homeFor(session.user.role) : '/login'}>{t('shell.home')}</Link>
       </Button>
     </Shell>
   );
 }
 
 export function NotFoundPage() {
-  useDocumentTitle('Страница не найдена');
+  useDocumentTitle(t('shell.notFound.title'));
   const session = useSession();
   return (
-    <Shell icon={<Compass className="h-10 w-10" />} title="Страница не найдена" text="Возможно, ссылка устарела или в адресе опечатка.">
+    <Shell icon={<Compass className="h-10 w-10" />} title={t('shell.notFound.title')} text={t('shell.notFound.text')}>
       <Button asChild>
-        <Link to={session ? homeFor(session.user.role) : '/login'}>На главную</Link>
+        <Link to={session ? homeFor(session.user.role) : '/login'}>{t('shell.home')}</Link>
       </Button>
     </Shell>
   );
@@ -51,8 +52,8 @@ export function RouteErrorPage() {
 
 function CrashScreen() {
   return (
-    <Shell icon={<Bug className="h-10 w-10" />} title="Что-то пошло не так" text="Произошла ошибка в интерфейсе. Обновите страницу — данные не потеряются.">
-      <Button onClick={() => window.location.reload()}>Обновить страницу</Button>
+    <Shell icon={<Bug className="h-10 w-10" />} title={t('shell.crash.title')} text={t('shell.crash.text')}>
+      <Button onClick={() => window.location.reload()}>{t('shell.crash.reload')}</Button>
     </Shell>
   );
 }

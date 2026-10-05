@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AssistanceAssignment } from '@/shared/types';
 import { assistanceOn, assistanceScope, feeFor, inQaSample, limitLeft, payerOn, qaSample, rebillChecks, splitByPayer, type RebillLineFacts } from './assistance';
+import { tm } from '@/i18n';
+
+const withText = <T extends { formula: string }>(r: T) => ({ ...r, formula: tm(r.formula) });
 import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
 
 const P = 'pol';
@@ -45,9 +48,9 @@ describe('registry lines by payer (§5.3)', () => {
 describe('fee by the three models (§4)', () => {
   const base = { insuredCount: 1200, claimsAmount: 48_500_000, casesCount: 37 };
   it('PEPM, percent of claims and per case, with a readable formula', () => {
-    expect(feeFor('pepm', 15_000, base)).toMatchObject({ amount: 18_000_000, base: 1200, formula: '1 200 застрахованных × 15 000 UZS = 18 000 000 UZS' });
-    expect(feeFor('percent_of_claims', 0.07, base)).toMatchObject({ amount: 3_395_000, formula: '48 500 000 UZS × 7% = 3 395 000 UZS' });
-    expect(feeFor('per_case', 50_000, base)).toMatchObject({ amount: 1_850_000, formula: '37 обращений × 50 000 UZS = 1 850 000 UZS' });
+    expect(withText(feeFor('pepm', 15_000, base))).toMatchObject({ amount: 18_000_000, base: 1200, formula: '1 200 застрахованных × 15 000 UZS = 18 000 000 UZS' });
+    expect(withText(feeFor('percent_of_claims', 0.07, base))).toMatchObject({ amount: 3_395_000, formula: '48 500 000 UZS × 7% = 3 395 000 UZS' });
+    expect(withText(feeFor('per_case', 50_000, base))).toMatchObject({ amount: 1_850_000, formula: '37 обращений × 50 000 UZS = 1 850 000 UZS' });
   });
 });
 
@@ -69,7 +72,7 @@ describe('automatic checks of a rebill line (§5.5)', () => {
     expect(codes({ contractPrice: null })).toEqual(['price_mismatch']);
   });
   it('messages explain the flag', () => {
-    expect(rebillChecks({ ...ok, limitLeft: 100_000 })[0]!.message).toBe('Сумма 180 000 больше остатка лимита 100 000');
+    expect(tm(rebillChecks({ ...ok, limitLeft: 100_000 })[0]!.message)).toBe('Сумма 180 000 больше остатка лимита 100 000');
   });
 });
 

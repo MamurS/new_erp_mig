@@ -1,4 +1,5 @@
 /* Policy issuance and the queue of insured-list changes (POLICY_SPEC §4, §5.2, §7). */
+import { msg } from '@/i18n/core';
 import { http } from 'msw';
 import type { Policy } from '@/shared/types';
 import type { PolicyChangeDecisionResult, PolicyListCheck } from '@/shared/types/dto';
@@ -9,7 +10,7 @@ import { certificateNumber } from '@/shared/domain/contracts';
 import { COVERAGE_START_RULES, PERIODICITIES } from '@/shared/domain/endorsements';
 import { dmsParam } from '../params';
 import { createEndorsement } from '../lifecycle-core';
-import { API, audit, body, conflict, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
+import { API, audit, body, conflict, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { DEMO_PASSWORD } from '../credentials';
 import { activePolicyOf, createInsured, endorsementDoc, nextPolicyNumber, parsePolicyList, refreshPolicyTotals, toPolicyChange } from '../policy-core';
 import { currentAssistance, notifyAssistance } from '../assistance-core';
@@ -41,14 +42,14 @@ export const policyHandlers = [
       requirePermission(user, 'policies.write');
       const d = db();
       const client = clientOf(param(ctx, 'id'));
-      if (activePolicyOf(d, client)) throw conflict('У клиента уже есть действующий полис');
+      if (activePolicyOf(d, client)) throw conflict('srv.policy.alreadyActive');
       const input = await body(ctx.request, policyIssueSchema);
       const period = policyPeriodProblem(input.startDate, input.endDate);
-      if (period) throw new HttpError(422, 'validation', period, { endDate: period });
+      if (period) throw httpErrorOf(422, 'validation', period, { endDate: period });
       const { rows } = parsePolicyList(input.csv);
-      if (!rows.length) throw new HttpError(422, 'validation', 'В списке нет ни одной корректной строки', { csv: 'Нет корректных строк' });
+      if (!rows.length) throw new HttpError(422, 'validation', 'srv.policy.noValidRows', { fields: { csv: msg('srv.policy.noValidRowsShort') } });
       if (input.hr && d.hrUsers.some((h) => h.email === input.hr!.email && h.companyId !== client.id)) {
-        throw new HttpError(409, 'conflict', 'Этот email уже используется другой компанией', { email: 'Email уже используется' });
+        throw new HttpError(409, 'conflict', 'srv.policy.emailOtherCompany', { fields: { email: msg('srv.users.emailInUse') } });
       }
       const now = Date.now();
       const family = rows.reduce((s, r) => s + r.familyMembers, 0);
@@ -108,14 +109,14 @@ export const policyHandlers = [
       const d = db();
       const rows = input.ids.map((id) => d.policyChanges.find((c) => c.id === id));
       if (rows.some((r) => !r)) throw notFound();
-      if (rows.some((r) => r!.status !== 'pending')) throw conflict('По части заявок уже принято решение — обновите список');
+      if (rows.some((r) => r!.status !== 'pending')) throw conflict('srv.policyChanges.someDecided');
       // Validate everything before changing anything (atomic batch).
       for (const r of rows) {
         const policy = d.policies.find((p) => p.id === r!.policyId);
-        if (!policy || (policy.status !== 'active' && policy.status !== 'draft')) throw conflict(`Полис ${r!.policyNumber} не действует`);
+        if (!policy || (policy.status !== 'active' && policy.status !== 'draft')) throw conflict('srv.policyChanges.policyInactive', { number: r!.policyNumber });
         if (input.decision === 'approve' && r!.kind === 'exclude') {
           const person = d.insured.find((i) => i.id === r!.insuredId);
-          if (!person || person.status !== 'active') throw conflict(`${r!.fullName}: сотрудник уже исключён`);
+          if (!person || person.status !== 'active') throw conflict('srv.policyChanges.personExcluded', { name: r!.fullName });
         }
       }
       const at = tzIso(Date.now());

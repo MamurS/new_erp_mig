@@ -33,9 +33,11 @@ describe('insured app screens', () => {
     expect(await screen.findByText(/^Добрый день, .+!$/)).toBeInTheDocument();
     expect(await screen.findByText(/^Вы застрахованы через /)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Карточка для клиники/ })).toHaveAttribute('href', '/app/card');
-    await user.click(screen.getByRole('button', { name: 'UZ' }));
-    expect(await screen.findByText(/^Salom, .+!$/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'RU' }));
+    await user.click(screen.getByRole('button', { name: 'Oʻzbekcha' }));
+    expect(await screen.findByText(/^Xayrli kun, .+!$/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'English' }));
+    expect(await screen.findByText(/^Good afternoon, .+!$/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Русский' }));
   });
 
   it('claims list links to a status page; a foreign id is a friendly not-found', async () => {

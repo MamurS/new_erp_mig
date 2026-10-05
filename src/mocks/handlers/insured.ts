@@ -194,7 +194,7 @@ export const insuredHandlers = [
       const grantId = ctx.request.headers.get('x-medical-grant') ?? '';
       const g = db().grants.find((x) => x.id === grantId);
       if (!g || g.userId !== user.id || g.insuredId !== i.id || g.expiresAt < Date.now()) {
-        throw new HttpError(403, 'forbidden', 'Доступ к медкарте истёк. Укажите причину ещё раз');
+        throw new HttpError(403, 'forbidden', 'srv.medcard.accessExpired');
       }
       return medicalRecords(i);
     }),

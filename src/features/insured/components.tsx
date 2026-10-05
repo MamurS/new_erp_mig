@@ -15,7 +15,7 @@ import {
   Stethoscope,
   type LucideIcon,
 } from 'lucide-react';
-import { useI18n, type Lang } from '@/i18n';
+import { useI18n } from '@/i18n';
 import type { MyClaim, Specialty } from '@/shared/types';
 import { errorMessage } from '@/shared/api/client';
 import { cn } from '@/shared/lib/cn';
@@ -37,29 +37,6 @@ export const SPECIALTY_ICON: Record<Specialty, LucideIcon> = {
   ophthalmologist: Eye,
 };
 
-export function LangSwitch({ className }: { className?: string }) {
-  const { lang, setLang, t } = useI18n();
-  const opts: Lang[] = ['ru', 'uz'];
-  return (
-    <div role="group" aria-label={t('lang.label')} className={cn('inline-flex rounded-btn border border-border bg-surface p-0.5', className)}>
-      {opts.map((l) => (
-        <button
-          key={l}
-          type="button"
-          aria-pressed={lang === l}
-          onClick={() => setLang(l)}
-          className={cn(
-            'min-h-[40px] min-w-[44px] rounded-[11px] px-2.5 text-[13px] font-bold',
-            lang === l ? 'bg-accent text-white' : 'text-muted hover:text-text',
-          )}
-        >
-          {t(l === 'ru' ? 'lang.ru' : 'lang.uz')}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** Screen title with an optional back button. */
 export function ScreenHeader({ title, back, right }: { title: string; back?: string | (() => void); right?: ReactNode }) {
   const { t } = useI18n();
@@ -69,7 +46,7 @@ export function ScreenHeader({ title, back, right }: { title: string; back?: str
       {back !== undefined && (
         <button
           type="button"
-          aria-label={t('common.back')}
+          aria-label={t('app.common.back')}
           onClick={() => (typeof back === 'function' ? back() : navigate(back))}
           className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text hover:bg-rail"
         >
@@ -88,7 +65,7 @@ export function ClaimStepBar({ claim, className }: { claim: Pick<MyClaim, 'steps
   const done = doneSteps(claim);
   const rejected = claim.status === 'rejected';
   return (
-    <div className={cn('flex gap-1.5', className)} role="img" aria-label={`${t('claims.steps')}: ${done} / 4`}>
+    <div className={cn('flex gap-1.5', className)} role="img" aria-label={`${t('app.claims.steps')}: ${done} / 4`}>
       {CLAIM_STEP_KEYS.map((k, i) => (
         <span
           key={k}
@@ -118,7 +95,7 @@ export function StatusPill({ status }: { status: MyClaim['status'] }) {
   const { t } = useI18n();
   return (
     <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-bold', claimTone(status))}>
-      {t(`claimStatus.${status}`)}
+      {t(`app.claimStatus.${status}`)}
     </span>
   );
 }
@@ -128,7 +105,7 @@ export function WizardSteps({ labels, current }: { labels: string[]; current: nu
   const { t } = useI18n();
   return (
     <div className="mb-5">
-      <p className="mb-2 text-[13px] font-semibold text-muted">{t('common.stepOf', { n: current + 1, total: labels.length })}</p>
+      <p className="mb-2 text-[13px] font-semibold text-muted">{t('app.common.stepOf', { n: current + 1, total: labels.length })}</p>
       <ol className="flex gap-2">
         {labels.map((l, i) => (
           <li key={l} className="flex-1" aria-current={i === current ? 'step' : undefined}>
@@ -146,11 +123,11 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry?: () => 
   return (
     <div role="alert" className="flex flex-col items-center gap-2 rounded-card border border-border bg-surface px-5 py-8 text-center">
       <AlertCircle className="h-8 w-8 text-danger" aria-hidden />
-      <p className="font-bold">{t('common.loadErrorTitle')}</p>
-      <p className="text-muted">{error ? errorMessage(error) : t('common.loadError')}</p>
+      <p className="font-bold">{t('app.common.loadErrorTitle')}</p>
+      <p className="text-muted">{error ? errorMessage(error) : t('app.common.loadError')}</p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry} className="mt-2 h-11 rounded-btn px-5 text-[15px]">
-          {t('common.retry')}
+          {t('app.common.retry')}
         </Button>
       )}
     </div>
@@ -170,7 +147,7 @@ export function Empty({ title, action, icon }: { title: string; action?: ReactNo
 export function CardSkeletons({ count = 3, className }: { count?: number; className?: string }) {
   const { t } = useI18n();
   return (
-    <div role="status" aria-label={t('common.loading')} className={cn('flex flex-col gap-3', className)}>
+    <div role="status" aria-label={t('app.common.loading')} className={cn('flex flex-col gap-3', className)}>
       {Array.from({ length: count }, (_, i) => (
         <Skeleton key={i} className="h-24 w-full rounded-card" />
       ))}

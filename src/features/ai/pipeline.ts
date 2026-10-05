@@ -12,6 +12,7 @@ import { normalizePrompt, PROMPT_VERSION } from './prompts';
 import type { AiProvider } from './provider';
 import { redactForAi } from './redact';
 import { checkExplainOutput, checkNormalizeOutput } from './schemas';
+import { t } from '@/i18n';
 
 export interface CheckInput {
   scenario: AiScenario;
@@ -89,5 +90,5 @@ export async function runCoverageCheck(
   } catch {
     explanation = '';
   }
-  return { matches, confidence, needsSpecialist, verdict, clauses, explanation: explanation || 'Нужна проверка специалиста', suspicious, redacted, promptVersion: PROMPT_VERSION };
+  return { matches, confidence, needsSpecialist, verdict, clauses, explanation: explanation || t('ai.verdict.unknown'), suspicious, redacted, promptVersion: PROMPT_VERSION };
 }

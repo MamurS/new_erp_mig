@@ -8,20 +8,7 @@ import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims
 import { FOUR_EYES_LIMIT_HINT } from '@/shared/domain/limits';
 import { exportFileName, toCsv } from '@/shared/lib/csv';
 import { db } from '../db';
-import {
-  API,
-  audit,
-  body,
-  conflict,
-  forbidden,
-  notFound,
-  paginate,
-  param,
-  q,
-  requirePermission,
-  requireSession,
-  route,
-} from '../http';
+import { API, audit, body, conflict, forbidden, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route } from '../http';
 import { hashString, mulberry32, randomId } from '../rng';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
@@ -163,7 +150,7 @@ export const staffMiscHandlers = [
       if (!policy) throw notFound();
       if (input.insuredId && !d.insured.some((i) => i.id === input.insuredId && i.policyId === policy.id)) throw notFound();
       const from = PROGRAMS[policy.program].limits[input.category];
-      if (input.to === from) throw conflict('Новый лимит совпадает с текущим');
+      if (input.to === from) throw conflict('srv.limits.sameValue');
       const req: LimitChangeRequest = {
         id: randomId(),
         policyId: policy.id,
@@ -193,8 +180,8 @@ export const staffMiscHandlers = [
         if (!req) throw notFound();
         let comment: string | undefined;
         if (kind === 'reject') comment = (await body(ctx.request, rejectLimitSchema)).comment;
-        if (req.requestedById === user.id) throw conflict(FOUR_EYES_LIMIT_HINT);
-        if (req.status !== 'pending') throw conflict('Запрос уже рассмотрен');
+        if (req.requestedById === user.id) throw httpErrorOf(409, 'conflict', FOUR_EYES_LIMIT_HINT);
+        if (req.status !== 'pending') throw conflict('srv.limits.alreadyReviewed');
         req.status = kind === 'approve' ? 'approved' : 'rejected';
         req.decidedById = user.id;
         req.decidedByName = user.displayName;
@@ -329,8 +316,8 @@ export const staffMiscHandlers = [
       const target = d.staff.find((s) => s.id === param(ctx, 'id'));
       if (!target) throw notFound();
       const patch = await body(ctx.request, adminUserPatchSchema);
-      if (target.id === user.id && patch.role && patch.role !== 'admin') throw conflict('Нельзя снять роль администратора с самого себя');
-      if (target.id === user.id && patch.active === false) throw conflict('Нельзя деактивировать самого себя');
+      if (target.id === user.id && patch.role && patch.role !== 'admin') throw conflict('srv.staffUsers.selfRole');
+      if (target.id === user.id && patch.active === false) throw conflict('srv.staffUsers.selfDeactivate');
       if (patch.role && patch.role !== target.role) {
         audit(user, 'role_change', { targetType: 'user', targetId: target.id, targetLabel: `${target.fullName}: ${target.role} → ${patch.role}` });
         target.role = patch.role;

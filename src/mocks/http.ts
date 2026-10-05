@@ -10,27 +10,52 @@ import { mockConfig } from './config';
 import { saveSessions, scheduleSaveDb } from './persist';
 import { randomId } from './rng';
 import { tzIso } from './time';
+import { hasKey, unpack, type I18nKey, type Params } from '@/i18n/core';
 
 export const API = '*/api';
 
+/**
+ * Errors carry only a code, a message key and its params (no text): the client picks the text in its
+ * language. Field errors are packed keys, see msg() in src/i18n/core.ts.
+ */
 export class HttpError extends Error {
+  readonly params?: Params;
+  readonly fields?: Record<string, string>;
   constructor(
     readonly status: number,
     readonly code: ApiError['code'],
-    message: string,
-    readonly fields?: Record<string, string>,
+    readonly key: I18nKey,
+    opts: { params?: Params; fields?: Record<string, string> } = {},
   ) {
-    super(message);
+    super(key);
+    this.params = opts.params;
+    this.fields = opts.fields;
   }
 }
 
-export const unauthorized = () => new HttpError(401, 'unauthorized', 'Сессия завершена, войдите снова');
-export const forbidden = () => new HttpError(403, 'forbidden', 'Недостаточно прав для этого действия');
-export const notFound = () => new HttpError(404, 'not_found', 'Не найдено');
-export const conflict = (message: string) => new HttpError(409, 'conflict', message);
+export const unauthorized = () => new HttpError(401, 'unauthorized', 'errors.unauthorized');
+export const forbidden = () => new HttpError(403, 'forbidden', 'errors.forbidden');
+export const notFound = () => new HttpError(404, 'not_found', 'errors.notFound');
+export const conflict = (key: I18nKey, params?: Params) => new HttpError(409, 'conflict', key, { params });
+
+/**
+ * A message produced by shared code (src/shared/domain): a packed key from msg(), or plain text while
+ * that code still returns text (sent as `srv.text` with the text as a param).
+ */
+export function messageKey(message: string): { key: I18nKey; params?: Params } {
+  const { key, params } = unpack(message);
+  return hasKey(key) ? { key: key as I18nKey, params } : { key: 'srv.text', params: { text: message } };
+}
+
+/** HttpError from a shared-code message (see messageKey). */
+export function httpErrorOf(status: number, code: ApiError['code'], message: string, fields?: Record<string, string>): HttpError {
+  const { key, params } = messageKey(message);
+  return new HttpError(status, code, key, { params, fields });
+}
 
 export function errorResponse(e: HttpError): Response {
-  const body: ApiError = { code: e.code, message: e.message };
+  const body: ApiError = { code: e.code, key: e.key };
+  if (e.params) body.params = e.params;
   if (e.fields) body.fields = e.fields;
   return HttpResponse.json(body, { status: e.status });
 }
@@ -59,7 +84,7 @@ export function route(
     const url = new URL(request.url);
     if (mockConfig.failures && !opts.noFailures && Math.random() < 0.1) {
       return HttpResponse.json(
-        { code: 'server', message: 'Сервис временно недоступен. Повторите попытку' } satisfies ApiError,
+        { code: 'server', key: 'errors.server' } satisfies ApiError,
         { status: 500 },
       );
     }
@@ -71,7 +96,7 @@ export function route(
     } catch (e) {
       if (e instanceof HttpError) return errorResponse(e);
       return HttpResponse.json(
-        { code: 'server', message: 'Внутренняя ошибка сервера' } satisfies ApiError,
+        { code: 'server', key: 'errors.internal' } satisfies ApiError,
         { status: 500 },
       );
     } finally {
@@ -155,11 +180,11 @@ export function requireOwn(user: SessionUser, action: Action, ctx: PermissionCon
 export async function readJson(request: Request): Promise<unknown> {
   try {
     const text = await request.text();
-    if (text.length > 1_000_000) throw new HttpError(413 as number, 'validation', 'Слишком большой запрос');
+    if (text.length > 1_000_000) throw new HttpError(413 as number, 'validation', 'errors.tooLarge');
     return text ? (JSON.parse(text) as unknown) : {};
   } catch (e) {
     if (e instanceof HttpError) throw e;
-    throw new HttpError(400, 'validation', 'Некорректный JSON');
+    throw new HttpError(400, 'validation', 'errors.badJson');
   }
 }
 
@@ -171,7 +196,7 @@ export function validate<S extends ZodTypeAny>(schema: S, data: unknown): z.outp
     const key = issue.path.join('.') || '_';
     if (!fields[key]) fields[key] = issue.message;
   }
-  throw new HttpError(422, 'validation', 'Проверьте заполнение полей', fields);
+  throw new HttpError(422, 'validation', 'errors.validation', { fields });
 }
 
 export async function body<S extends ZodTypeAny>(request: Request, schema: S): Promise<z.output<S>> {

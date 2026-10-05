@@ -1,10 +1,11 @@
 /*
- * «Скачать PDF» for a saved offer outside the KP screen (client documents, HR cabinet).
+ * «Download PDF» for a saved offer outside the KP screen (client documents, HR cabinet).
  * The heavy renderer and templates are loaded on click; the document is printed from a hidden frame.
  */
 import { useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { t } from '@/i18n';
 import { useKpDownloaded } from '@/shared/api/queries/kp';
 import { qk } from '@/shared/api/queries/keys';
 import { errorMessage, request } from '@/shared/api/client';
@@ -13,10 +14,12 @@ import { Button, type ButtonProps } from '@/shared/ui/button';
 import { toast } from '@/shared/ui/toast';
 import { DocFrame, printDocFrame } from '@/features/documents/DocFrame';
 
-export const PRINT_HINT = 'В окне печати выберите «Сохранить как PDF»';
+/** Toast and hint shown before the print dialog. */
+export const printHint = (): string => t('documents.print.hint');
 
 /** Works with the id only: the saved document is fetched (and access checked by the server) on click. */
-export function KpDownloadButton({ kpId, number, label = 'Скачать PDF', ...props }: { kpId: string; number: string; label?: string } & Omit<ButtonProps, 'onClick'>) {
+export function KpDownloadButton({ kpId, number, label: labelProp, ...props }: { kpId: string; number: string; label?: string } & Omit<ButtonProps, 'onClick'>) {
+  const label = labelProp ?? t('kp.download');
   const [doc, setDoc] = useState<{ title: string; html: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -40,7 +43,7 @@ export function KpDownloadButton({ kpId, number, label = 'Скачать PDF', .
   const onLoad = async () => {
     try {
       await downloaded.mutateAsync(kpId);
-      toast.info(PRINT_HINT);
+      toast.info(printHint());
       await printDocFrame(frame.current);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -52,7 +55,7 @@ export function KpDownloadButton({ kpId, number, label = 'Скачать PDF', .
 
   return (
     <>
-      <Button variant="secondary" size="sm" loading={busy} onClick={() => void start()} aria-label={`${label}: ${number}`} {...props}>
+      <Button variant="secondary" size="sm" loading={busy} onClick={() => void start()} aria-label={t('kp.downloadNumber', { label, number })} {...props}>
         <Download className="h-3.5 w-3.5" aria-hidden />
         {label}
       </Button>

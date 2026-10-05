@@ -12,7 +12,8 @@ import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@
 import { Breadcrumbs } from '@/shared/ui/page';
 import { Skeleton } from '@/shared/ui/states';
 import { useTopbarState } from '@/features/staff/topbar';
-import { ASSIST_NAV_GROUPS, ASSIST_SECTIONS } from './nav';
+import { ASSIST_NAV_GROUP_LABEL, ASSIST_NAV_GROUPS, ASSIST_SECTIONS } from './nav';
+import { t } from '@/i18n';
 
 export default function AssistLayout() {
   const user = useUser();
@@ -28,7 +29,7 @@ export default function AssistLayout() {
     ? { '/assist/cases': c.openCases, '/assist/guarantees': c.guaranteesPending, '/assist/registries': c.linesPending, '/assist/rebills': c.rebillsInReview }
     : {};
   const groups: SidebarGroup[] = ASSIST_NAV_GROUPS.map((g) => ({
-    label: g,
+    label: ASSIST_NAV_GROUP_LABEL[g],
     items: sections.filter((s) => s.group === g).map((s) => ({ path: s.path, label: s.label, icon: s.icon, count: counts[s.path] })),
   })).filter((g) => g.items.length > 0);
 
@@ -36,11 +37,11 @@ export default function AssistLayout() {
     <SidebarProvider portal="assist">
       <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]">
         <AppSidebar
-          title="MIG · Ассистанс"
-          ariaLabel="Разделы портала ассистанса"
+          title={t('shell.title.assist')}
+          ariaLabel={t('assist.layout.navAria')}
           groups={groups}
           activePath={current}
-          user={{ name: user.displayName, role: ROLE_LABEL[user.role], portal: name ? `Портал партнёра · ${name}` : 'Портал партнёра' }}
+          user={{ name: user.displayName, role: ROLE_LABEL[user.role], portal: name ? t('assist.layout.partnerPortalOf', { name }) : t('assist.layout.partnerPortal') }}
           onLogout={() => void logout()}
         />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -54,10 +55,10 @@ export default function AssistLayout() {
               ) : (
                 <Skeleton className="h-4 w-32" />
               )}
-              <span className="hidden rounded-btn bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent-text sm:inline">Портал партнёра</span>
+              <span className="hidden rounded-btn bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent-text sm:inline">{t('assist.layout.partnerPortal')}</span>
             </div>
             <div className="min-w-0 flex-1">
-              <Breadcrumbs items={crumbs.length ? crumbs : [{ label: 'Рабочий стол' }]} />
+              <Breadcrumbs items={crumbs.length ? crumbs : [{ label: t('assist.nav.dashboard') }]} />
             </div>
             {action}
           </header>

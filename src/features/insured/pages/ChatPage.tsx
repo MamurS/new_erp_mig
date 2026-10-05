@@ -38,7 +38,7 @@ function Bubble({ m }: { m: ChatMessage }) {
   return (
     <li className={cn('flex flex-col', mine ? 'items-end' : 'items-start')}>
       <span className="mb-0.5 px-1 text-[12px] text-muted">
-        {mine ? t('chat.you') : t('chat.operator')} · {formatTime(m.at)}
+        {mine ? t('app.chat.you') : t('app.chat.operator')} · {formatTime(m.at)}
       </span>
       <p
         className={cn(
@@ -54,7 +54,7 @@ function Bubble({ m }: { m: ChatMessage }) {
 
 export default function ChatPage() {
   const { t } = useI18n();
-  useDocumentTitle(t('chat.title'));
+  useDocumentTitle(t('app.chat.title'));
   const q = useChat();
   const send = useSendChat();
   const assistance = useMyAssistance();
@@ -81,10 +81,10 @@ export default function ChatPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-var(--banner-h,0px)-140px)] flex-col">
-      <ScreenHeader title={t('chat.title')} back="/app" />
+      <ScreenHeader title={t('app.chat.title')} back="/app" />
       {assistance.data?.assistance && (
         <p className="-mt-2 mb-3 text-[13px] text-muted" data-testid="chat-assistance">
-          {t('chat.assistance', { name: assistance.data.assistance.name })}
+          {t('app.chat.assistance', { name: assistance.data.assistance.name })}
         </p>
       )}
       <div className="flex-1">
@@ -93,9 +93,9 @@ export default function ChatPage() {
         ) : q.isError ? (
           <LoadError error={q.error} onRetry={() => void q.refetch()} />
         ) : count === 0 ? (
-          <Empty title={t('chat.empty')} />
+          <Empty title={t('app.chat.empty')} />
         ) : (
-          <ul aria-label={t('chat.messages')} aria-live="polite" className="flex flex-col gap-3">
+          <ul aria-label={t('app.chat.messages')} aria-live="polite" className="flex flex-col gap-3">
             {q.data?.map((m) => <Bubble key={m.id} m={m} />)}
           </ul>
         )}
@@ -110,14 +110,14 @@ export default function ChatPage() {
       >
         <div className="flex items-end gap-2">
           <label htmlFor="chat-input" className="sr-only">
-            {t('chat.placeholder')}
+            {t('app.chat.placeholder')}
           </label>
           <textarea
             id="chat-input"
             value={text}
             maxLength={CHAT_MAX}
             rows={1}
-            placeholder={t('chat.placeholder')}
+            placeholder={t('app.chat.placeholder')}
             onChange={(e) => setText(e.target.value.slice(0, CHAT_MAX))}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -127,12 +127,12 @@ export default function ChatPage() {
             }}
             className="max-h-32 min-h-[48px] flex-1 resize-none rounded-btn border border-border bg-bg px-3 py-3 text-[15px] focus-visible:outline-2 focus-visible:outline-accent"
           />
-          <Button type="submit" aria-label={t('chat.send')} loading={send.isPending} disabled={!text.trim()} className="h-12 w-12 shrink-0 rounded-btn p-0">
+          <Button type="submit" aria-label={t('app.chat.send')} loading={send.isPending} disabled={!text.trim()} className="h-12 w-12 shrink-0 rounded-btn p-0">
             {!send.isPending && <Send className="h-5 w-5" aria-hidden />}
           </Button>
         </div>
         <p className="mt-1 px-1 text-right text-[12px] text-muted" aria-live="off">
-          {t('chat.limit', { n: text.length })}
+          {t('app.chat.limit', { n: text.length })}
         </p>
       </form>
     </div>

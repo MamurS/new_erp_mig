@@ -4,6 +4,7 @@
  */
 export const PROMPT_VERSION = 'coverage-normalize-v1';
 
+/* eslint-disable mig/no-cyrillic-ui -- the versioned model prompt (coverage-normalize-v1), not an interface string */
 export const DATA_OPEN = '<<<ДАННЫЕ';
 export const DATA_CLOSE = 'ДАННЫЕ>>>';
 
@@ -23,3 +24,4 @@ export function normalizePrompt(text: string): string {
     DATA_CLOSE,
   ].join('\n');
 }
+/* eslint-enable mig/no-cyrillic-ui */

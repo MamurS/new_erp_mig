@@ -1,6 +1,7 @@
 /* Assistance companies for MIG (ASSISTANCE_SPEC §7): insured, KPI, rebills to review, SLA breaches. */
 import { useNavigate } from 'react-router-dom';
 import type { AssistanceListItem } from '@/shared/types/dto';
+import type { FeeModel } from '@/shared/types';
 import { useState } from 'react';
 import { useAssistances, useCreateAssistance } from '@/shared/api/queries/assist';
 import { errorMessage } from '@/shared/api/client';
@@ -12,6 +13,7 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 import { INTEGRATION_MODE_LABEL } from '@/shared/domain/clinics';
+import { t, tm } from '@/i18n';
 import { formatNumber, formatPercent } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Chip } from '@/shared/ui/chips';
@@ -50,7 +52,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
     setErrors({});
     try {
       const a = await create.mutateAsync(parsed.data);
-      toast.success('Ассистанс добавлен, первый администратор приглашён');
+      toast.success(t('staffOps.assistances.created'));
       onClose();
       navigate(`/staff/assistance/${a.id}`);
     } catch (e) {
@@ -62,27 +64,27 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title="Новый ассистанс"
-      description="Компания, договор и первый администратор ассистанса: остальных пользователей он пригласит сам"
+      title={t('staffOps.assistances.newTitle')}
+      description={t('staffOps.assistances.newText')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button loading={create.isPending} onClick={() => void submit()}>
-            Добавить
+            {t('common.add')}
           </Button>
         </>
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Название" error={errors.name}>
+        <Field label={t('common.name')} error={tm(errors.name) || undefined}>
           {(a) => <Input {...a} maxLength={120} value={v.name} onChange={set('name')} />}
         </Field>
-        <Field label="Телефон 24/7" error={errors.phone24x7}>
+        <Field label={t('staffOps.assistances.phone247')} error={tm(errors.phone24x7) || undefined}>
           {(a) => <Input {...a} maxLength={30} value={v.phone24x7} onChange={set('phone24x7')} placeholder="+998 71 200 00 00" />}
         </Field>
-        <Field label="Подключение" error={errors.integrationMode}>
+        <Field label={t('staffOps.assistances.connection')} error={tm(errors.integrationMode) || undefined}>
           {(a) => (
             <Select {...a} value={v.integrationMode} onChange={set('integrationMode')}>
               {Object.entries(INTEGRATION_MODE_LABEL).map(([k, label]) => (
@@ -93,33 +95,33 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
             </Select>
           )}
         </Field>
-        <Field label="Номер договора" error={errors.contractNumber}>
+        <Field label={t('staffOps.clinicCard.contractNumber')} error={tm(errors.contractNumber) || undefined}>
           {(a) => <Input {...a} maxLength={40} value={v.contractNumber} onChange={set('contractNumber')} />}
         </Field>
-        <Field label="Модель вознаграждения" error={errors['contract.feeModel']}>
+        <Field label={t('staffOps.assistances.feeModel')} error={tm(errors['contract.feeModel']) || undefined}>
           {(a) => (
             <Select {...a} value={v.feeModel} onChange={set('feeModel')}>
-              {Object.entries(FEE_MODEL_LABEL).map(([k, label]) => (
+              {(Object.keys(FEE_MODEL_LABEL) as FeeModel[]).map((k) => (
                 <option key={k} value={k}>
-                  {label}
+                  {FEE_MODEL_LABEL[k]}
                 </option>
               ))}
             </Select>
           )}
         </Field>
-        <Field label={v.feeModel === 'percent_of_claims' ? 'Доля (0,07 = 7%)' : 'Сумма, UZS'} error={errors['contract.feeValue']}>
+        <Field label={v.feeModel === 'percent_of_claims' ? t('staffOps.assistances.share') : t('staffOps.guarantees.amountUzs')} error={tm(errors['contract.feeValue']) || undefined}>
           {(a) => <Input {...a} inputMode="decimal" maxLength={14} value={v.feeValue} onChange={set('feeValue')} />}
         </Field>
-        <Field label="Полномочия по ГП, UZS" error={errors['contract.guaranteeAuthorityLimit']} hint={`Пусто — по параметру ДМС (${formatMoney(defaultLimit)})`}>
+        <Field label={t('staffOps.assistances.authority')} error={tm(errors['contract.guaranteeAuthorityLimit']) || undefined} hint={t('staffOps.assistances.authorityHint', { amount: formatMoney(defaultLimit) })}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={14} value={v.limit} onChange={set('limit')} />}
         </Field>
-        <Field label="Срок оплаты счёта, дней" error={errors['contract.rebillPaymentDays']}>
+        <Field label={t('staffOps.assistances.paymentDays')} error={tm(errors['contract.rebillPaymentDays']) || undefined}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={3} value={v.days} onChange={set('days')} />}
         </Field>
-        <Field label="ФИО администратора" error={errors['admin.fullName']}>
+        <Field label={t('staffOps.assistances.adminName')} error={tm(errors['admin.fullName']) || undefined}>
           {(a) => <Input {...a} maxLength={120} value={v.adminName} onChange={set('adminName')} />}
         </Field>
-        <Field label="Email администратора" error={errors['admin.email']}>
+        <Field label={t('staffOps.assistances.adminEmail')} error={tm(errors['admin.email']) || undefined}>
           {(a) => <Input {...a} type="email" maxLength={254} value={v.adminEmail} onChange={set('adminEmail')} />}
         </Field>
       </div>
@@ -128,33 +130,33 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
 }
 
 export default function AssistancesPage() {
-  useDocumentTitle('Ассистансы');
-  useTopbar([{ label: 'Ассистансы' }]);
+  useDocumentTitle(t('staffOps.assistances.title'));
+  useTopbar([{ label: t('staffOps.assistances.title') }]);
   const navigate = useNavigate();
   const q = useAssistances();
   const canManage = useCan('assistance.manage');
   const [creating, setCreating] = useState(false);
   const columns: Column<AssistanceListItem>[] = [
-    { key: 'name', header: 'Ассистанс', cell: (a) => <span className="font-medium">{a.name}</span> },
-    { key: 'mode', header: 'Подключение', cell: (a) => INTEGRATION_MODE_LABEL[a.integrationMode] },
-    { key: 'clients', header: 'Клиентов', align: 'right', cell: (a) => <span className="num">{a.clientsCount}</span> },
-    { key: 'insured', header: 'Застрахованных', align: 'right', cell: (a) => <span className="num">{formatNumber(a.insuredCount)}</span> },
-    { key: 'gp', header: 'ГП в срок', align: 'right', cell: (a) => <span className="num">{formatPercent(a.kpi.guaranteesOnTimeShare)}</span> },
-    { key: 'qa', header: 'Согласие КК', align: 'right', cell: (a) => <span className={a.kpi.qaAgreementShare < 0.9 ? 'num text-warning-text' : 'num'}>{formatPercent(a.kpi.qaAgreementShare)}</span> },
-    { key: 'loss', header: 'Убыточность', align: 'right', cell: (a) => <span className="num">{a.kpi.lossRatio === null ? '—' : formatPercent(a.kpi.lossRatio)}</span> },
-    { key: 'rebills', header: 'Счета к проверке', align: 'right', cell: (a) => (a.rebillsToReview ? <Chip kind="warning">{a.rebillsToReview}</Chip> : <span className="text-muted">0</span>) },
-    { key: 'sla', header: 'Нарушения SLA', align: 'right', cell: (a) => (a.slaBreaches ? <Chip kind="danger">{a.slaBreaches}</Chip> : <span className="text-muted">0</span>) },
+    { key: 'name', header: t('staffOps.rebills.col.assistance'), cell: (a) => <span className="font-medium">{a.name}</span> },
+    { key: 'mode', header: t('staffOps.assistances.connection'), cell: (a) => INTEGRATION_MODE_LABEL[a.integrationMode] },
+    { key: 'clients', header: t('staffOps.assistances.col.clients'), align: 'right', cell: (a) => <span className="num">{a.clientsCount}</span> },
+    { key: 'insured', header: t('staffOps.assistances.col.insured'), align: 'right', cell: (a) => <span className="num">{formatNumber(a.insuredCount)}</span> },
+    { key: 'gp', header: t('staffOps.assistances.col.glOnTime'), align: 'right', cell: (a) => <span className="num">{formatPercent(a.kpi.guaranteesOnTimeShare)}</span> },
+    { key: 'qa', header: t('staffOps.assistances.col.qa'), align: 'right', cell: (a) => <span className={a.kpi.qaAgreementShare < 0.9 ? 'num text-warning-text' : 'num'}>{formatPercent(a.kpi.qaAgreementShare)}</span> },
+    { key: 'loss', header: t('staffOps.assistances.col.lossRatio'), align: 'right', cell: (a) => <span className="num">{a.kpi.lossRatio === null ? '—' : formatPercent(a.kpi.lossRatio)}</span> },
+    { key: 'rebills', header: t('staffOps.assistances.col.rebills'), align: 'right', cell: (a) => (a.rebillsToReview ? <Chip kind="warning">{a.rebillsToReview}</Chip> : <span className="text-muted">0</span>) },
+    { key: 'sla', header: t('staffOps.assistances.col.sla'), align: 'right', cell: (a) => (a.slaBreaches ? <Chip kind="danger">{a.slaBreaches}</Chip> : <span className="text-muted">0</span>) },
   ];
   return (
     <>
       <PageHeader
-        title="Ассистанс-компании"
-        subtitle="Каждый ассистанс обслуживает своих клиентов. МИГ контролирует: эскалации, выборочный контроль качества, проверку и оплату счетов"
-        actions={canManage && <Button onClick={() => setCreating(true)}>Добавить ассистанс</Button>}
+        title={t('staffOps.assistances.pageTitle')}
+        subtitle={t('staffOps.assistances.subtitle')}
+        actions={canManage && <Button onClick={() => setCreating(true)}>{t('staffOps.assistances.add')}</Button>}
       />
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Ассистансы"
+          caption={t('staffOps.assistances.title')}
           columns={columns}
           rows={q.data}
           loading={q.isLoading}

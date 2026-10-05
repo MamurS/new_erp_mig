@@ -5,48 +5,31 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Avatar } from '@/shared/ui/chips';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
 import { HrCard, HrHeader, HrSectionTitle } from '../ui';
+import { t } from '@/i18n';
 
-const FAQ: { q: string; a: string }[] = [
-  {
-    q: 'Как добавить нового сотрудника в полис?',
-    a: 'На странице «Сотрудники» нажмите «+ Добавить сотрудника» и заполните форму. Если сотрудников много, скачайте шаблон и загрузите их списком через «Загрузить из CSV». После добавления сотрудник получит SMS с приглашением в приложение.',
-  },
-  {
-    q: 'С какой даты сотрудник застрахован?',
-    a: 'С даты начала страхования, которую вы указали при добавлении. Если дата уже прошла, полис начинает действовать со следующего рабочего дня после обработки.',
-  },
-  {
-    q: 'Как исключить уволившегося сотрудника?',
-    a: 'В списке сотрудников откройте меню в строке сотрудника и выберите «Исключить с даты…». С этой даты полис сотрудника перестанет действовать, а перерасчёт премии появится в следующем счёте.',
-  },
-  {
-    q: 'Почему я не вижу, к каким врачам обращались сотрудники?',
-    a: 'Диагнозы, визиты и возмещения — это медицинская тайна. Работодатель видит только, кто застрахован, и общие обезличенные цифры в разделе «Статистика».',
-  },
-  {
-    q: 'Сотрудник не получил приглашение в приложение',
-    a: 'Проверьте номер телефона у менеджера МИГ и отправьте приглашение повторно: меню в строке сотрудника → «Пригласить». Чтобы напомнить всем, кто ещё не в приложении, нажмите «Напомнить всем».',
-  },
-  {
-    q: 'Где взять счёт и закрывающие документы?',
-    a: 'В разделе «Счета и документы». Если нужного документа нет, напишите менеджеру МИГ.',
-  },
+const faq = (): { q: string; a: string }[] => [
+  { q: t('hr.help.q1'), a: t('hr.help.a1') },
+  { q: t('hr.help.q2'), a: t('hr.help.a2') },
+  { q: t('hr.help.q3'), a: t('hr.help.a3') },
+  { q: t('hr.help.q4'), a: t('hr.help.a4') },
+  { q: t('hr.help.q5'), a: t('hr.help.a5') },
+  { q: t('hr.help.q6'), a: t('hr.help.a6') },
 ];
 
 export default function HelpPage() {
-  useDocumentTitle('Помощь');
+  useDocumentTitle(t('hr.nav.help'));
   const overview = useHrOverview();
 
   return (
     <>
-      <HrHeader title="Помощь" subtitle="Ответы на частые вопросы и контакт вашего менеджера" />
+      <HrHeader title={t('hr.nav.help')} subtitle={t('hr.help.subtitle')} />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section aria-labelledby="hr-faq">
           <HrSectionTitle className="mb-3">
-            <span id="hr-faq">Частые вопросы</span>
+            <span id="hr-faq">{t('hr.help.faq')}</span>
           </HrSectionTitle>
           <div className="flex flex-col gap-3">
-            {FAQ.map((f) => (
+            {faq().map((f) => (
               <details key={f.q} className="group rounded-card border border-border bg-surface">
                 <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 font-semibold [&::-webkit-details-marker]:hidden">
                   {f.q}
@@ -58,7 +41,7 @@ export default function HelpPage() {
           </div>
         </section>
 
-        <aside aria-label="Менеджер МИГ">
+        <aside aria-label={t('hr.help.managerAria')}>
           <HrCard tone="accent">
             <QueryState query={overview} skeleton={<SkeletonRows rows={3} />}>
               {(o) => (
@@ -66,7 +49,7 @@ export default function HelpPage() {
                   <div className="flex items-center gap-3">
                     <Avatar name={o.manager.name} className="h-12 w-12 bg-surface text-[15px]" />
                     <div>
-                      <p className="text-[13px] text-muted">Ваш менеджер в МИГ</p>
+                      <p className="text-[13px] text-muted">{t('hr.help.yourManager')}</p>
                       <p className="font-heading text-[18px] font-semibold">{o.manager.name}</p>
                     </div>
                   </div>
@@ -84,7 +67,7 @@ export default function HelpPage() {
                     <Mail className="h-4 w-4 text-accent" aria-hidden />
                     {o.manager.email}
                   </a>
-                  <p className="text-[13px] text-muted">Пн–Пт, 9:00–18:00 по Ташкенту</p>
+                  <p className="text-[13px] text-muted">{t('hr.help.hours')}</p>
                 </div>
               )}
             </QueryState>

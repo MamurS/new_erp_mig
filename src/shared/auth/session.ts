@@ -2,6 +2,7 @@
  * Client session: kept in memory and mirrored to sessionStorage so a tab reload keeps the user
  * signed in. The only module allowed to touch sessionStorage for auth. Never localStorage/cookies.
  */
+import { msg } from '@/i18n';
 import { useSyncExternalStore } from 'react';
 import type { SessionUser } from '@/shared/types';
 
@@ -50,7 +51,7 @@ function getChannel(): BroadcastChannel | null {
   channel.onmessage = (ev: MessageEvent<unknown>) => {
     const data = ev.data as { type?: string } | null;
     if (data?.type === 'logout' && current) {
-      logoutNotice = 'Вы вышли в другой вкладке';
+      logoutNotice = msg('auth.notice.otherTab');
       current = null;
       persist();
       emit();

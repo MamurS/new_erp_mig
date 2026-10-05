@@ -9,30 +9,31 @@ import { PageHeader } from '@/shared/ui/page';
 import { SearchInput } from '@/shared/ui/search-input';
 import { StatusDot } from '@/shared/ui/chips';
 import { useTopbar } from '@/features/staff/topbar';
+import { t } from '@/i18n';
 
 export default function InsuredSearchPage() {
-  useDocumentTitle('Застрахованные');
-  useTopbar([{ label: 'Застрахованные' }]);
+  useDocumentTitle(t('assist.insured.title'));
+  useTopbar([{ label: t('assist.insured.title') }]);
   const navigate = useNavigate();
   const [term, setTerm] = useState('');
   const q = useAssistInsured(useDebounced(term.trim(), 300));
   const columns: Column<AssistInsuredItem>[] = [
-    { key: 'name', header: 'ФИО', cell: (i) => <span className="font-medium">{i.fullName}</span> },
-    { key: 'client', header: 'Компания', cell: (i) => i.clientName },
-    { key: 'policy', header: 'Полис', cell: (i) => <span className="num">{i.policyNumber}</span> },
-    { key: 'program', header: 'Программа', cell: (i) => i.programName },
-    { key: 'phone', header: 'Телефон', cell: (i) => <span className="num">{i.phoneMasked}</span> },
-    { key: 'status', header: 'Статус', cell: (i) => <StatusDot tone={i.status === 'active' ? 'success' : 'muted'}>{i.status === 'active' ? 'Застрахован' : 'Исключён'}</StatusDot> },
+    { key: 'name', header: t('common.fullName'), cell: (i) => <span className="font-medium">{i.fullName}</span> },
+    { key: 'client', header: t('assist.insured.company'), cell: (i) => i.clientName },
+    { key: 'policy', header: t('common.policy'), cell: (i) => <span className="num">{i.policyNumber}</span> },
+    { key: 'program', header: t('common.program'), cell: (i) => i.programName },
+    { key: 'phone', header: t('common.phone'), cell: (i) => <span className="num">{i.phoneMasked}</span> },
+    { key: 'status', header: t('common.status'), cell: (i) => <StatusDot tone={i.status === 'active' ? 'success' : 'muted'}>{i.status === 'active' ? t('assist.insured.active') : t('assist.insured.excluded')}</StatusDot> },
   ];
   return (
     <>
-      <PageHeader title="Застрахованные" subtitle="Только клиенты, закреплённые за вашим ассистансом. ПИНФЛ скрыт, показать можно по причине" />
+      <PageHeader title={t('assist.insured.title')} subtitle={t('assist.insured.subtitle')} />
       <div className="mb-3 max-w-md">
-        <SearchInput value={term} onChange={setTerm} placeholder="ФИО, номер полиса или телефон" aria-label="Поиск застрахованного" />
+        <SearchInput value={term} onChange={setTerm} placeholder={t('assist.insured.searchPlaceholder')} aria-label={t('assist.insured.searchAria')} />
       </div>
       <div className="rounded-card border border-border bg-surface">
         <DataTable
-          caption="Застрахованные ассистанса"
+          caption={t('assist.insured.caption')}
           columns={columns}
           rows={q.data}
           loading={q.isLoading}
@@ -41,7 +42,7 @@ export default function InsuredSearchPage() {
           rowKey={(i) => i.id}
           onRowClick={(i) => navigate(`/assist/insured/${i.id}`)}
           onRowOpen={(i) => navigate(`/assist/insured/${i.id}`)}
-          empty="Никого не нашли среди ваших застрахованных"
+          empty={t('assist.insured.empty')}
         />
       </div>
     </>
