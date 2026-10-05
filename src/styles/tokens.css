@@ -89,7 +89,7 @@
   --scroll-thumb-hover: #c4bcae;
 }
 
-/* Height of the portal top bar; the shell sets --app-top = demo banner + top bar on its root. */
+/* Height of the portal top bar (the content area with the pinned table headers starts below it). */
 :root {
   --topbar-h: 52px;
 }

@@ -214,17 +214,22 @@
 }
 
 /*
- * Tables with a pinned header (and a pinned totals row). One approach for every table: the wrapper
- * (.table-scroll, <TableScroll>) is the only scroll container of the table on both axes, at most as
- * tall as the content area below the portal's top bar (--app-top, set by the portal shell from the
- * top bar and the demo banner); the header cells stick to its top (top: 0) and the totals row to its
- * bottom. No other ancestor of a table may scroll it. See docs/DECISIONS.md.
+ * Tables with a pinned header, totals row and pagination (as in GitHub and Notion). A portal page has
+ * exactly one scroll container: the content area under the top bar (<ContentScroll>, both axes). The
+ * table wrapper (.table-scroll, <TableScroll>) does not scroll on either axis, so the header cells
+ * stick to the top of the content area (right under the top bar) until the table ends, and the
+ * totals row and the pagination (.table-pager) stick to its bottom while the table is on screen.
+ * A wide table makes the whole content area scroll sideways; its card grows with it (min-width:
+ * min-content). Inside a side panel, dialog or card that scrolls by itself, the same cells stick to
+ * that container instead. See docs/DECISIONS.md.
  */
 @layer components {
   .table-scroll {
     position: relative;
-    overflow: auto;
-    max-height: calc(100dvh - var(--app-top, 0px));
+    min-width: min-content;
+  }
+  .rounded-card:has(.table-scroll) {
+    min-width: min-content;
   }
   .table-scroll :is(thead > tr > th, [data-sticky-head]) {
     position: sticky;
@@ -241,19 +246,29 @@
   }
   .table-scroll :is(tfoot > tr > :is(td, th), [data-sticky-foot]) {
     position: sticky;
-    bottom: 0;
+    /* Above the pagination bar of the same table, if any (its height is measured into --pager-h). */
+    bottom: var(--pager-h, 0px);
     z-index: 2;
     background: var(--color-surface);
     box-shadow: inset 0 1px 0 var(--color-border);
   }
+  .table-pager {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--color-surface);
+  }
 }
 
 @media print {
-  .table-scroll {
+  /* The page prints whole: the shell and the content area do not clip it. */
+  .portal-shell,
+  [data-content-scroll] {
+    height: auto;
     overflow: visible;
-    max-height: none;
   }
-  .table-scroll :is(thead > tr > th, [data-sticky-head], tfoot > tr > :is(td, th), [data-sticky-foot]) {
+  .table-scroll :is(thead > tr > th, [data-sticky-head], tfoot > tr > :is(td, th), [data-sticky-foot]),
+  .table-pager {
     position: static;
     box-shadow: none;
   }

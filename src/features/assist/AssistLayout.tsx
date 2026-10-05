@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { ContentScroll } from '@/shared/ui/content-scroll';
 /*
  * Assistance portal shell (ASSISTANCE_SPEC §6): the dense `staff` theme for the call centre, a rail of
  * collapsible side navigation grouped by work and a top bar with the assistance name and the «Портал партнёра» mark.
@@ -37,7 +37,7 @@ export default function AssistLayout() {
 
   return (
     <SidebarProvider portal="assist">
-      <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]" style={{ '--app-top': 'calc(var(--banner-h, 0px) + var(--topbar-h))' } as CSSProperties}>
+      <div data-theme="staff" className="portal-shell flex h-[calc(100dvh-var(--banner-h,0px))] overflow-hidden">
         <AppSidebar
           title={t('shell.title.assist')}
           ariaLabel={t('assist.layout.navAria')}
@@ -46,8 +46,8 @@ export default function AssistLayout() {
           user={{ name: user.displayName, role: ROLE_LABEL[user.role], portal: name ? t('assist.layout.partnerPortalOf', { name }) : t('assist.layout.partnerPortal') }}
           onLogout={() => void logout()}
         />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header data-testid="topbar" className="sticky top-(--banner-h,0px) z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header data-testid="topbar" className="relative z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="flex min-w-0 shrink-0 items-center gap-2 border-r border-border pr-3">
               {name ? (
@@ -65,9 +65,9 @@ export default function AssistLayout() {
             <LanguageButton />
             {action}
           </header>
-          <main className="min-w-0 flex-1 p-4 lg:p-5">
+          <ContentScroll className="p-4 lg:p-5">
             <Outlet />
-          </main>
+          </ContentScroll>
         </div>
         <IdleWatcher />
       </div>
