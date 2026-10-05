@@ -95,7 +95,7 @@ describe('dashboard by role', () => {
     const row = (await call<QueueItem[]>('/queue?type=loss_ratio', sid)).data[0]!;
     const res = await call<Record<string, unknown>>(`/clients/${row.entityId}/loss-stats`, sid);
     expect(res.status).toBe(200);
-    expect(Object.keys(res.data).sort()).toEqual(['byCategory', 'byMonth', 'claimsAmount', 'claimsCount', 'clientId', 'clientName', 'lossRatio', 'lossRatioWarn', 'premium']);
+    expect(Object.keys(res.data).sort()).toEqual(['byCategory', 'byMonth', 'claimsAmount', 'claimsCount', 'clientId', 'clientLegalForm', 'clientName', 'lossRatio', 'lossRatioWarn', 'premium']);
     const text = JSON.stringify(res.data);
     const claims = db().claims.filter((c) => c.clientId === row.entityId);
     expect(claims.length).toBeGreaterThan(0);

@@ -11,6 +11,9 @@ import { createSeed } from './seed';
 import { clearSnapshot, loadSnapshot, MOCK_DB_VERSION } from './persist';
 
 const CYRILLIC = /[Ѐ-ӿ]/;
+/** The mock server's own storage (persist.ts emulates the server database there). */
+// eslint-disable-next-line no-restricted-properties -- the test plants a saved server database, like persist.ts does
+const store = (): Storage => window.sessionStorage;
 
 initMockDb({ restore: false });
 beforeEach(() => {
@@ -135,16 +138,16 @@ describe('saved mock database', () => {
 
   it('a snapshot of another or no version is discarded', () => {
     const { sessions: _s, ...rest } = db();
-    sessionStorage.setItem('mig.mock.db', JSON.stringify(rest));
+    store().setItem('mig.mock.db', JSON.stringify(rest));
     expect(loadSnapshot()).toBeNull();
-    expect(sessionStorage.getItem('mig.mock.db')).toBeNull();
-    sessionStorage.setItem('mig.mock.db', JSON.stringify({ ...rest, schemaVersion: MOCK_DB_VERSION - 1 }));
+    expect(store().getItem('mig.mock.db')).toBeNull();
+    store().setItem('mig.mock.db', JSON.stringify({ ...rest, schemaVersion: MOCK_DB_VERSION - 1 }));
     expect(loadSnapshot()).toBeNull();
   });
 
   it('a snapshot of the current version is restored', () => {
     const { sessions: _s, ...rest } = db();
-    sessionStorage.setItem('mig.mock.db', JSON.stringify({ ...rest, schemaVersion: MOCK_DB_VERSION }));
+    store().setItem('mig.mock.db', JSON.stringify({ ...rest, schemaVersion: MOCK_DB_VERSION }));
     const got = loadSnapshot();
     expect(got?.clients[0]?.name).toBe(rest.clients[0]?.name);
     expect(got).not.toHaveProperty('schemaVersion');

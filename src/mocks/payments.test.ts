@@ -162,7 +162,8 @@ describe('payment matching (1C statement)', () => {
 
     const queue = (await call<BankPaymentView[]>('/payments/queue', { sid: acc })).data;
     const third = queue.find((b) => b.payerInn === holding.inn)!;
-    expect(third).toMatchObject({ reason: 'third_party', payerName: 'Холдинг' });
+    // A payer known by its INN is shown as that client (name and legal form), not as the statement wrote it.
+    expect(third).toMatchObject({ reason: 'third_party', payerName: holding.name, payerLegalForm: holding.legalForm });
     expect(third.candidates).toEqual([
       expect.objectContaining({ invoiceId: inv.id, why: 'number', clientInn: c.inn }),
     ]);
