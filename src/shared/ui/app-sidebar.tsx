@@ -3,8 +3,9 @@
  * - Docked: on the left, 288 px by default, the person drags its right edge (224–400 px; double click
  *   resets; arrows ±16 px on the focused separator).
  * - Hidden: it disappears completely; the toggle stays at the top left of the content. Hovering the
- *   toggle slides the panel over the content (preview) until the mouse has been away for 300 ms; a
- *   click pins it. Ctrl/⌘+B toggles it, except while typing.
+ *   toggle for 200 ms slides the panel over the content (preview) until the mouse has been away for
+ *   300 ms; a click pins it. Right after hiding, the preview waits until the pointer has left the toggle
+ *   and come back. Ctrl/⌘+B toggles it, except while typing.
  * - Below 1024 px it is hidden and opens over the content with a dimmed backdrop (dialog: Esc, outside
  *   click, focus trap, closes on navigation).
  * State and width are remembered per portal. The look does not depend on the staff/client theme.
@@ -59,7 +60,11 @@ export interface AppSidebarProps {
   onSearch?: () => void;
 }
 
+const PREVIEW_OPEN_MS = 200;
 const PREVIEW_CLOSE_MS = 300;
+const TOGGLE_ATTR = 'data-sidebar-toggle';
+/** Longer than the 150 ms width transition: until then the toggle is still moving under the pointer. */
+const SETTLE_MS = 250;
 const STEP = 16;
 
 // ---------------------------------------------------------------- state
@@ -120,35 +125,82 @@ export function SidebarProvider({ portal, children }: { portal: NavPortal; child
   const [prefs, setPrefs] = useState(() => getNavPrefs(portal));
   const [preview, setPreview] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const timer = useRef<number | undefined>(undefined);
+  const openTimer = useRef<number | undefined>(undefined);
+  const closeTimer = useRef<number | undefined>(undefined);
+  // Set when the panel is shown or hidden: the toggle may now sit under a pointer that did not move to it.
+  const suppressed = useRef(false);
+  const toggledAt = useRef(0);
+  const settleTimer = useRef<number | undefined>(undefined);
+  const lastPointer = useRef<{ x: number; y: number } | null>(null);
+  const movedAway = useRef(false);
+  const release = useCallback(() => {
+    if (Date.now() - toggledAt.current >= SETTLE_MS) suppressed.current = false;
+  }, []);
+  const overToggle = (el: Element | null | undefined) => !!el?.closest(`[${TOGGLE_ATTR}]`);
   const panelId = useId();
   const mobileId = useId();
   const loc = useLocation();
 
-  const keepPreview = useCallback(() => window.clearTimeout(timer.current), []);
+  const clearTimers = useCallback(() => {
+    window.clearTimeout(openTimer.current);
+    window.clearTimeout(closeTimer.current);
+    window.clearTimeout(settleTimer.current);
+  }, []);
+  const keepPreview = useCallback(() => window.clearTimeout(closeTimer.current), []);
   const openPreview = useCallback(() => {
-    window.clearTimeout(timer.current);
-    setPreview(true);
+    window.clearTimeout(closeTimer.current);
+    if (suppressed.current) return;
+    window.clearTimeout(openTimer.current);
+    openTimer.current = window.setTimeout(() => setPreview(true), PREVIEW_OPEN_MS);
   }, []);
   const closePreviewSoon = useCallback(() => {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setPreview(false), PREVIEW_CLOSE_MS);
-  }, []);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+    release();
+    window.clearTimeout(openTimer.current);
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setPreview(false), PREVIEW_CLOSE_MS);
+  }, [release]);
+  useEffect(() => clearTimers, [clearTimers]);
+  // Once the layout has settled, a pointer moving anywhere but over the toggle has left it: the next hover is a new one.
+  useEffect(() => {
+    // Before then, a move elsewhere followed by a move onto the toggle is a real hover too.
+    const onMove = (e: PointerEvent) => {
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      if (!suppressed.current) return;
+      if (!overToggle(e.target instanceof Element ? e.target : null)) {
+        movedAway.current = true;
+        release();
+      } else if (movedAway.current) {
+        suppressed.current = false;
+        openPreview();
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, [release, openPreview]);
 
   const toggle = useCallback(() => {
     if (!isDesktopNow()) {
       setMobileOpen((v) => !v);
       return;
     }
-    window.clearTimeout(timer.current);
+    clearTimers();
+    suppressed.current = true;
+    movedAway.current = false;
+    toggledAt.current = Date.now();
+    // When the layout has settled, a pointer that is not over the toggle needs no fresh leave.
+    settleTimer.current = window.setTimeout(() => {
+      const p = lastPointer.current;
+      const under =
+        p && typeof document.elementFromPoint === 'function' ? document.elementFromPoint(p.x, p.y) : null;
+      if (!overToggle(under)) suppressed.current = false;
+    }, SETTLE_MS);
     setPreview(false);
     setPrefs((p) => {
       const next = { ...p, collapsed: !p.collapsed };
       setNavPrefs(portal, { collapsed: next.collapsed });
       return next;
     });
-  }, [portal]);
+  }, [portal, clearTimers]);
 
   const setWidth = useCallback(
     (w: number, persist = true) => {
@@ -180,7 +232,8 @@ export function SidebarProvider({ portal, children }: { portal: NavPortal; child
   useEffect(() => {
     setMobileOpen(false);
     setPreview(false);
-  }, [loc.pathname, loc.search]);
+    clearTimers();
+  }, [loc.pathname, loc.search, clearTimers]);
   // A wide window has no overlay panel.
   useEffect(() => {
     if (desktop) setMobileOpen(false);
@@ -234,6 +287,7 @@ export function SidebarToggle() {
       <button
         type="button"
         data-testid="sidebar-toggle"
+        {...{ [TOGGLE_ATTR]: '' }}
         aria-label={label}
         aria-expanded={s.desktop ? s.preview : s.mobileOpen}
         aria-controls={s.desktop ? s.panelId : s.mobileId}
