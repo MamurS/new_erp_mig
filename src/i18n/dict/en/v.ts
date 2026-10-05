@@ -137,4 +137,7 @@ export const v: Translation<typeof Ru> = {
   'v.scopesRequired': 'Select at least one access scope',
   'v.maxAddresses': 'No more than 20 addresses',
   'v.eventsRequired': 'Select at least one event',
+  'v.file.types': 'Only PDF, JPEG or PNG files can be uploaded',
+  'v.file.tooLarge': 'The file is larger than {mb} MB',
+  'v.file.mismatch': 'The file content does not match its type',
 };

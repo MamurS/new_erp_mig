@@ -135,4 +135,7 @@ export const v = {
   'v.scopesRequired': 'Выберите хотя бы одну область доступа',
   'v.maxAddresses': 'Не больше 20 адресов',
   'v.eventsRequired': 'Выберите хотя бы одно событие',
+  'v.file.types': 'Можно загрузить только PDF, JPEG или PNG',
+  'v.file.tooLarge': 'Файл больше {mb} МБ',
+  'v.file.mismatch': 'Содержимое файла не совпадает с его типом',
 } satisfies Record<string, string>;

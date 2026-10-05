@@ -26,6 +26,8 @@ import { toast } from '@/shared/ui/toast';
 import { PageTitle, Panel } from '../components';
 import { t, tm } from '@/i18n';
 
+// eslint-disable-next-line mig/no-cyrillic-ui -- the guarantee letter number format itself (data), the same in every language
+const GP_NUMBER_EXAMPLE = 'ГП-2026-000123';
 const LINE_CHIP = { pending: 'sky', accepted: 'success', rejected: 'danger', disputed: 'warning' } as const;
 
 type LineForm = z.input<typeof registryLineInput>;
@@ -102,7 +104,7 @@ function AddLine({ registryId, period }: { registryId: string; period: string })
         {(a) => <Input {...a} inputMode="numeric" {...form.register('price', { setValueAs: (v: string | number) => Number(String(v).replace(/\s/g, '')) })} />}
       </Field>
       <Field label={t('clinic.registry.gpNumber')} error={tm(e.guaranteeNumber?.message)} className="md:col-span-2">
-        {(a) => <Input {...a} placeholder={t('clinic.registry.gpPlaceholder')} maxLength={16} {...form.register('guaranteeNumber', { setValueAs: (v: string) => v.trim() || undefined })} />}
+        {(a) => <Input {...a} placeholder={GP_NUMBER_EXAMPLE} maxLength={16} {...form.register('guaranteeNumber', { setValueAs: (v: string) => v.trim() || undefined })} />}
       </Field>
       <div className="flex items-end md:col-span-2">
         <Button type="submit" variant="secondary" loading={add.isPending}>

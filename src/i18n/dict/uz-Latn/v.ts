@@ -137,4 +137,7 @@ export const v: Translation<typeof Ru> = {
   'v.scopesRequired': 'Kamida bitta ruxsat sohasini tanlang',
   'v.maxAddresses': 'Koʻpi bilan 20 ta manzil',
   'v.eventsRequired': 'Kamida bitta hodisani tanlang',
+  'v.file.types': 'Faqat PDF, JPEG yoki PNG yuklash mumkin',
+  'v.file.tooLarge': 'Fayl {mb} MB dan katta',
+  'v.file.mismatch': 'Fayl mazmuni uning turiga mos kelmaydi',
 };

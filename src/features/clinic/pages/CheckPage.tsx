@@ -17,6 +17,8 @@ import { QrScanner } from '../QrScanner';
 import { useDmsParam } from '@/shared/api/queries/params';
 import { t, defineLabels } from '@/i18n';
 
+// eslint-disable-next-line mig/no-cyrillic-ui -- the policy number format itself (data), the same in every language
+const POLICY_NUMBER_EXAMPLE = 'ДМС-2026-000101';
 const METHOD_LABEL = defineLabels('clinic.check.method', ['qr', 'policy', 'api'] as const);
 
 function VisitRow({ v }: { v: { id: string; insuredName: string; method: 'qr' | 'policy' | 'api'; openedAt: string; expiresAt: string } }) {
@@ -110,7 +112,7 @@ export default function CheckPage() {
             }}
           >
             <Field label={t('clinic.check.policyNumber')}>
-              {(a) => <Input {...a} autoComplete="off" placeholder={t('clinic.check.policyPlaceholder')} maxLength={20} value={policy} onChange={(e) => setPolicy(e.target.value)} />}
+              {(a) => <Input {...a} autoComplete="off" placeholder={POLICY_NUMBER_EXAMPLE} maxLength={20} value={policy} onChange={(e) => setPolicy(e.target.value)} />}
             </Field>
             <Field label={t('clinic.check.pinfl')}>
               {(a) => <Input {...a} autoComplete="off" inputMode="numeric" maxLength={14} value={pinfl} onChange={(e) => setPinfl(digitsOnly(e.target.value))} />}
