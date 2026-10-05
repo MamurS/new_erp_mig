@@ -375,11 +375,20 @@ export const assistHandlers = [
       const { assistanceId, d } = requireAssist(request, 'assist.cases.manage');
       const status = url.searchParams.get('status');
       const type = url.searchParams.get('type');
+      const [sortKey, sortDir] = (url.searchParams.get('sort') ?? '').split(':');
       return d.cases
         .map((c) => caseView(d, c, assistanceId))
         .filter((c): c is AssistCaseView => !!c)
         .filter((c) => (!status || status.split(',').includes(c.status)) && (!type || c.type === type))
-        .sort((a, b) => (a.status === 'resolved') === (b.status === 'resolved') ? (a.createdAt < b.createdAt ? 1 : -1) : a.status === 'resolved' ? 1 : -1);
+        .sort((a, b) => {
+          // Explicit sort by a column; otherwise open cases first, newest first.
+          if (sortKey === 'number' || sortKey === 'createdAt') {
+            const x = a[sortKey];
+            const y = b[sortKey];
+            return (x < y ? -1 : x > y ? 1 : 0) * (sortDir === 'desc' ? -1 : 1);
+          }
+          return (a.status === 'resolved') === (b.status === 'resolved') ? (a.createdAt < b.createdAt ? 1 : -1) : a.status === 'resolved' ? 1 : -1;
+        });
     }),
   ),
   http.get(

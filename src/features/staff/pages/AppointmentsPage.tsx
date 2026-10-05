@@ -20,6 +20,7 @@ import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { APPT_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const HOURS = Array.from({ length: 10 }, (_, i) => 9 + i);
 
@@ -170,11 +171,11 @@ function DayTimeline({ date, items, renderActions }: { date: string; items: Appo
   }, [items, date]);
   if (byClinic.length === 0) return <EmptyState title={t('staff.appts.dayEmpty', { date: formatDate(date) })} description={t('staff.appts.chooseOtherDay')} />;
   return (
-    <div className="overflow-x-auto rounded-card border border-border bg-surface">
+    <TableScroll className="rounded-card border border-border bg-surface">
       <table className="w-full min-w-[900px] table-fixed border-collapse">
         <caption className="sr-only">{t('staff.appts.dayCaption', { date: formatDate(date) })}</caption>
         <thead>
-          <tr className="border-b border-border text-[12px] text-muted">
+          <tr className="text-[12px] text-muted">
             <th scope="col" className="w-56 px-3 py-2 text-left font-normal">{t('common.clinic')}</th>
             {HOURS.map((h) => (
               <th key={h} scope="col" className="border-l border-border-soft px-1 py-2 text-left font-normal num">
@@ -205,7 +206,7 @@ function DayTimeline({ date, items, renderActions }: { date: string; items: Appo
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 

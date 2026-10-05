@@ -14,6 +14,7 @@ import { Field, Textarea } from '@/shared/ui/input';
 import { Card } from '@/shared/ui/page';
 import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 /**
  * Medical record block. Closed for roles without `medical.read`. The doctor states a reason and gets a
@@ -77,10 +78,11 @@ export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { i
       ) : records.data!.length === 0 ? (
         <EmptyState title={t('staff.medical.empty')} />
       ) : (
+        <TableScroll>
         <table className="w-full">
           <caption className="sr-only">{t('staff.medical.caption')}</caption>
           <thead>
-            <tr className="border-b border-border text-left text-[12px] text-muted">
+            <tr className="text-left text-[12px] text-muted">
               <th className="px-4 py-2 font-normal">{t('common.date')}</th>
               <th className="px-4 py-2 font-normal">{t('common.clinic')}</th>
               <th className="px-4 py-2 font-normal">{t('staff.medical.colDoctor')}</th>
@@ -100,6 +102,7 @@ export function MedicalCard({ insuredId, apiBase, action = 'medical.read' }: { i
             ))}
           </tbody>
         </table>
+        </TableScroll>
       )}
       <MedicalReasonModal
         open={open}

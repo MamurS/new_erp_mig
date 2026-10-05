@@ -25,6 +25,7 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { ReasonDialog } from '../lifecycle/common';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
 
@@ -76,10 +77,11 @@ function SettingsForm({ current, pending }: { current: AiSettings; pending: bool
         )
       }
     >
+      <TableScroll>
       <table className="w-full text-[13px]">
         <caption className="sr-only">{t('staffOps.ai.scenarios')}</caption>
         <thead>
-          <tr className="border-b border-border text-left text-[12px] text-muted">
+          <tr className="text-left text-[12px] text-muted">
             <th className="py-2 pr-3 font-medium">{t('staffOps.ai.scenario')}</th>
             <th className="py-2 pr-3 font-medium">{t('staffOps.ai.enabled')}</th>
             <th className="py-2 font-medium">{t('staffOps.ai.provider')}</th>
@@ -106,6 +108,7 @@ function SettingsForm({ current, pending }: { current: AiSettings; pending: bool
           ))}
         </tbody>
       </table>
+      </TableScroll>
       <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr]">
         <Field label={t('staffOps.ai.threshold')} error={tm(errors['to.confidenceThreshold']) || undefined} hint={t('staffOps.ai.thresholdHint')}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={3} value={threshold} onChange={(e) => setThreshold(e.target.value)} />}
@@ -236,10 +239,11 @@ export default function AiAdminPage() {
               </div>
               <div className="flex flex-col gap-4">
                 <Card title={t('staffOps.ai.metrics')} bodyClassName="p-0">
+                  <TableScroll>
                   <table className="w-full text-[13px]" data-testid="ai-metrics">
                     <caption className="sr-only">{t('staffOps.ai.metricsCaption')}</caption>
                     <thead>
-                      <tr className="border-b border-border text-left text-[12px] text-muted">
+                      <tr className="text-left text-[12px] text-muted">
                         <th className="px-4 py-2 font-medium">{t('staffOps.ai.scenario')}</th>
                         <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.calls')}</th>
                         <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.rated')}</th>
@@ -261,6 +265,7 @@ export default function AiAdminPage() {
                       ))}
                     </tbody>
                   </table>
+                  </TableScroll>
                 </Card>
                 <Card title={t('staffOps.ai.disagreements')} bodyClassName="p-0">
                   {v.disagreements.length ? (

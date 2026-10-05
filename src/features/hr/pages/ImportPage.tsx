@@ -9,6 +9,7 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { Breadcrumbs } from '@/shared/ui/page';
+import { TableScroll } from '@/shared/ui/table-scroll';
 import { toast } from '@/shared/ui/toast';
 import {
   CSV_COLUMNS,
@@ -214,11 +215,11 @@ function Preview({
           </Button>
         </div>
       </div>
-      <div className="max-h-[60vh] overflow-auto">
+      <TableScroll className="max-h-[60vh]">
         <table className="w-full border-collapse text-left text-[14px]">
           <caption className="sr-only">{t('hr.import.caption')}</caption>
-          <thead className="sticky top-0 bg-surface">
-            <tr className="border-b border-border">
+          <thead>
+            <tr>
               <th scope="col" className="h-10 px-3 font-normal text-muted">
                 {t('hr.import.row')}
               </th>
@@ -269,7 +270,7 @@ function Preview({
             })}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </HrCard>
   );
 }

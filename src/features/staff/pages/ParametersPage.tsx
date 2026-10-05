@@ -23,6 +23,7 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { Rich } from '../components/rich';
 import { useTopbar } from '../topbar';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 const STATUS_TONE: Record<DmsParamChange['status'], string> = { pending: 'warning', applied: 'success', rejected: 'neutral' };
 const STATUS_LABEL = defineLabels('staff.params.status', ['pending', 'applied', 'rejected']);
@@ -230,9 +231,10 @@ export default function ParametersPage() {
               <PendingCard changes={pending} />
               {DMS_PARAM_GROUPS.map((group) => (
                 <Card key={group} title={DMS_PARAM_GROUP_LABEL[group]} className="mb-4" bodyClassName="p-0">
+                  <TableScroll>
                   <table className="w-full text-[13px]">
                     <caption className="sr-only">{DMS_PARAM_GROUP_LABEL[group]}</caption>
-                    <thead className="border-b border-border-soft text-left text-[12px] text-muted">
+                    <thead className="text-left text-[12px] text-muted">
                       <tr>
                         <th className="px-4 py-2 font-medium">{t('staff.params.colParam')}</th>
                         <th className="px-4 py-2 text-right font-medium">{t('staff.params.colValue')}</th>
@@ -285,6 +287,7 @@ export default function ParametersPage() {
                         })}
                     </tbody>
                   </table>
+                  </TableScroll>
                 </Card>
               ))}
               {history.length > 0 && (

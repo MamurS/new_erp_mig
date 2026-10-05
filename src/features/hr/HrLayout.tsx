@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { BarChart3, CircleHelp, FileSignature, ReceiptText, Users } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
@@ -33,7 +34,7 @@ export default function HrLayout() {
 
   return (
     <SidebarProvider portal="hr">
-      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))' }}>
+      <div className="flex" style={{ minHeight: 'calc(100vh - var(--banner-h, 0px))', '--app-top': 'calc(var(--banner-h, 0px) + var(--topbar-h))' } as CSSProperties}>
         <AppSidebar
           title={t('shell.title.hr')}
           ariaLabel={t('hr.nav.aria')}
@@ -44,7 +45,7 @@ export default function HrLayout() {
         />
         <div data-theme="client" className="flex min-w-0 flex-1 flex-col bg-bg text-text">
           <IdleWatcher />
-          <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <header data-testid="topbar" className="sticky top-(--banner-h,0px) z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] text-muted">{t('shell.portal.hr')}</p>

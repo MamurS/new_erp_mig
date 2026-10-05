@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
@@ -51,7 +52,7 @@ export default function StaffLayout() {
 
   return (
     <SidebarProvider portal="staff">
-      <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]">
+      <div data-theme="staff" className="flex min-h-[calc(100vh-var(--banner-h,0px))]" style={{ '--app-top': 'calc(var(--banner-h, 0px) + var(--topbar-h))' } as CSSProperties}>
         <AppSidebar
           title={t('shell.title.staff')}
           ariaLabel={t('staff.layout.sections')}
@@ -62,7 +63,7 @@ export default function StaffLayout() {
           onSearch={() => setPaletteOpen(true)}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-(--banner-h,0px) z-30 flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+          <header data-testid="topbar" className="sticky top-(--banner-h,0px) z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
             <SidebarToggle />
             <div className="min-w-0 flex-1">
               <Breadcrumbs items={crumbs.length ? crumbs : [{ label: t('staff.layout.crumbRoot') }]} />

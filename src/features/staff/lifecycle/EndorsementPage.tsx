@@ -25,6 +25,7 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { ReasonDialog } from './common';
+import { TableScroll } from '@/shared/ui/table-scroll';
 
 async function attempt(fn: () => Promise<unknown>, ok: string): Promise<boolean> {
   try {
@@ -204,10 +205,11 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <Card title={t('staffLc.endorsement.calculation')} bodyClassName="p-0">
+            <TableScroll>
             <table className="w-full text-[13px]" data-testid="endorsement-lines">
               <caption className="sr-only">{t('staffLc.endorsement.linesCaption')}</caption>
               <thead>
-                <tr className="border-b border-border text-left text-[12px] text-muted">
+                <tr className="text-left text-[12px] text-muted">
                   <th className="px-4 py-2 font-medium">{t('staffLc.endorsements.change')}</th>
                   <th className="px-2 py-2 text-right font-medium">{t('staffLc.endorsement.days')}</th>
                   <th className="px-2 py-2 font-medium">{t('staffLc.endorsement.formula')}</th>
@@ -233,6 +235,7 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
                 </tr>
               </tfoot>
             </table>
+            </TableScroll>
             {e.kind === 'termination' && e.terminationDate && <p className="px-4 pb-3 text-[13px] text-muted">{t('staffLc.endorsement.terminationDate', { date: formatDate(e.terminationDate) })}</p>}
           </Card>
           <EndorsementClauses e={e} editable={canManage && e.status === 'draft'} />
