@@ -63,7 +63,7 @@ export default function FamilyPage() {
     { key: 'employee', header: t('common.employee'), cell: (m) => m.employeeName },
     { key: 'birth', header: t('hr.csv.column.birthDate'), cell: (m) => <span className="num">{m.birthDateMasked || '—'}</span> },
     { key: 'cert', header: t('hr.family.certificate'), cell: (m) => <span className="num whitespace-nowrap">{m.certificateNumber ?? '—'}</span> },
-    { key: 'from', header: t('hr.employees.insuredFrom'), cell: (m) => <span className="num">{formatDate(m.insuredFrom)}</span> },
+    { key: 'from', header: t('hr.employees.insuredFrom'), className: 'hidden 2xl:table-cell', cell: (m) => <span className="num">{formatDate(m.insuredFrom)}</span> },
     { key: 'status', header: t('common.status'), cell: (m) => <FamilyStatusChip member={m} /> },
   ];
 
