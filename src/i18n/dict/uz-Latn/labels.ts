@@ -401,4 +401,6 @@ export const labels: Translation<typeof Ru> = {
   'labels.queueTab.age_limit': 'Bolalar yoshi',
   'labels.censusRelation.parent': 'Ota-ona',
   'labels.censusRelation.other': 'Boshqa oila aʼzosi',
+  'labels.pricingBasis.flat_by_type': 'Turi boʻyicha (xodim / oila aʼzosi)',
+  'labels.pricingBasis.age_banded': 'Yosh guruhi boʻyicha',
 };

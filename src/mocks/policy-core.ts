@@ -188,9 +188,9 @@ export function requestChange(
   const principal = input.insured ? d.insured.find((i) => i.id === input.insured!.principalId) : input.principal;
   if (relation !== 'employee' && (!principal || principal.clientId !== client.id || principal.relation !== 'employee')) throw new HttpError(422, 'validation', 'srv.family.noEmployee', { fields: { employeeId: msg('srv.family.noEmployee') } });
   const birthDate = input.insured?.birthDate ?? input.newPerson?.birthDate ?? '';
-  // Each person has an own premium: an employee by the tariff, a family member by the age group; a transferred
+  // Each person has an own premium by the contract terms (by type or by the age band); a transferred
   // person carries the annual premium of the previous system (refunded on exclusion).
-  const annual = input.insured?.migratedPremium ? input.insured.migratedPremium.amount : annualPremiumOf(policy, { relation, birthDate }, input.effectiveDate);
+  const annual = input.insured?.migratedPremium ? input.insured.migratedPremium.amount : annualPremiumOf(d, policy, { relation, birthDate }, input.effectiveDate);
   const row: PolicyChangeRow = {
     id: randomId(),
     clientId: client.id,

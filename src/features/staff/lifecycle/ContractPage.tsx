@@ -6,7 +6,7 @@ import { t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Pencil, RotateCcw } from 'lucide-react';
-import type { ActivationRule, PaymentFrequency, ProgramCode } from '@/shared/types';
+import type { ActivationRule, PaymentFrequency, PricingBasis, ProgramCode } from '@/shared/types';
 import type { ContractView } from '@/shared/types/dto';
 import { useContract, useContractAction, useDocStep, usePatchContract, useTerminate, useUploadInsuredList } from '@/shared/api/queries/lifecycle';
 import { errorMessage } from '@/shared/api/client';
@@ -14,6 +14,7 @@ import { useCan } from '@/shared/auth/guards';
 import { ACTIVATION_RULE_LABEL, CONTRACT_STATUS_CHIP, CONTRACT_STATUS_LABEL, ENDORSEMENT_STATUS_LABEL, INVOICE_STATUS_LABEL, PAYMENT_FREQUENCY_LABEL } from '@/shared/domain/contracts';
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { POLICY_CSV_HEADER } from '@/shared/domain/policies';
+import { PRICING_BASES, PRICING_BASIS_LABEL, pricingProblem } from '@/shared/domain/pricing';
 import { clauseOverrideSchema, contractParamsSchema, legalApproveSchema, legalReturnSchema, terminateSchema } from '@/shared/schemas/forms';
 import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
@@ -35,6 +36,7 @@ import { CsvFileButton, ReasonDialog } from './common';
 import { MigratedBadge } from '../components/MigratedBadge';
 import { MigratedScanCard } from '../admin/migration/MigratedScanCard';
 import { TableScroll } from '@/shared/ui/table-scroll';
+import { AgeBandTable } from './AgeBandTable';
 
 const PROGRAMS: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
 
@@ -57,6 +59,7 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
     program: c.params.program,
     premiumEmployee: String(c.params.premiumEmployee),
     premiumFamily: String(c.params.premiumFamily),
+    pricingBasis: c.params.pricingBasis as PricingBasis,
     paymentFrequency: c.params.paymentFrequency,
     activationRule: c.params.activationRule,
     migSignatoryId: c.params.migSignatoryId,
@@ -77,6 +80,7 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
       program: v.program,
       premiumEmployee: money(v.premiumEmployee),
       premiumFamily: money(v.premiumFamily),
+      pricingBasis: v.pricingBasis,
       paymentFrequency: v.paymentFrequency,
       activationRule: v.activationRule,
       migSignatoryId: v.migSignatoryId,
@@ -84,6 +88,12 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
     });
     if (!parsed.success) {
       setErrors(Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.'), i.message])));
+      return;
+    }
+    // Age-banded pricing needs the band table of the contract (the server checks the same).
+    const pricing = pricingProblem({ pricingBasis: parsed.data.pricingBasis, ageBandRates: c.params.ageBandRates });
+    if (pricing) {
+      setErrors({ pricingBasis: pricing });
       return;
     }
     setErrors({});
@@ -127,6 +137,23 @@ function ParamsForm({ c, editable }: { c: ContractView; editable: boolean }) {
         <Field label={t('staffLc.contract.premiumFamily', { n: c.params.familyMembers })} error={tm(errors.premiumFamily) || undefined}>
           {(a) => <Input {...a} inputMode="numeric" maxLength={13} disabled={dis} value={v.premiumFamily} onChange={set('premiumFamily')} />}
         </Field>
+        <Field label={t('staffLc.pricing.basis')} hint={t('staffLc.pricing.basisHint')} className="sm:col-span-2" error={tm(errors.pricingBasis) || undefined}>
+          {(a) => (
+            <Select {...a} disabled={dis} value={v.pricingBasis} onChange={set('pricingBasis')} data-testid="pricing-basis">
+              {PRICING_BASES.map((b) => (
+                <option key={b} value={b}>
+                  {PRICING_BASIS_LABEL[b]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {v.pricingBasis === 'age_banded' && c.params.ageBandRates?.length ? (
+          <div className="sm:col-span-2">
+            <p className="mb-1 text-[12px] text-muted">{t('staffLc.pricing.tableTitle')}</p>
+            <AgeBandTable rates={c.params.ageBandRates} />
+          </div>
+        ) : null}
         <Field label={t('staffLc.contract.paymentFrequency')} error={tm(errors.paymentFrequency) || undefined}>
           {(a) => (
             <Select {...a} disabled={dis} value={v.paymentFrequency} onChange={set('paymentFrequency')}>

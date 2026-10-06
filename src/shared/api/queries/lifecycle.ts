@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import type { authorityChangeSchema, changeRequestCreateSchema, claimDecideSchema, contractPatchSchema, leadCreateSchema, quoteAdjustmentSchema } from '@/shared/schemas/forms';
-import type { ProgramCode } from '@/shared/types';
+import type { PricingBasis, ProgramCode } from '@/shared/types';
 import { request } from '../client';
 import * as S from '../schemas';
 import * as L from '../schemas-lifecycle';
@@ -75,7 +75,9 @@ export const useQuote = (id: string) => useQuery({ queryKey: lk.quote(id), query
 export const useCreateQuote = () =>
   useLifecycleMutation((v: { dealId: string; program: ProgramCode; adjustments: Adjustment[] }) => request('/quotes', { method: 'POST', body: v, schema: L.quoteView }));
 export const useSaveQuote = () =>
-  useLifecycleMutation((v: { id: string; program: ProgramCode; adjustments: Adjustment[] }) => request(`/quotes/${v.id}`, { method: 'PATCH', body: { program: v.program, adjustments: v.adjustments }, schema: L.quoteView }));
+  useLifecycleMutation((v: { id: string; program: ProgramCode; adjustments: Adjustment[]; pricingBasis?: PricingBasis }) =>
+    request(`/quotes/${v.id}`, { method: 'PATCH', body: { program: v.program, adjustments: v.adjustments, pricingBasis: v.pricingBasis }, schema: L.quoteView }),
+  );
 export const useQuoteAction = () =>
   useLifecycleMutation((v: { id: string; action: 'submit' | 'approve' | 'reject'; comment?: string; reason?: string }) =>
     request(`/quotes/${v.id}/${v.action}`, { method: 'POST', body: v.action === 'approve' ? { comment: v.comment } : v.action === 'reject' ? { reason: v.reason } : undefined, schema: L.quoteView }),

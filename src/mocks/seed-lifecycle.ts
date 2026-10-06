@@ -100,7 +100,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     event(deal.id, daysAgo, sales.fullName, `Загружены данные для оценки: ${c.rows.length} человек`);
     return c;
   };
-  const withQuote = (deal: Deal, c: Census, program: Quote['program'], adjustments: Quote['adjustments'], status: Quote['status'], daysAgo: number): Quote => {
+  const withQuote = (deal: Deal, c: Census, program: Quote['program'], adjustments: Quote['adjustments'], status: Quote['status'], daysAgo: number, pricingBasis: Quote['pricingBasis'] = 'flat_by_type'): Quote => {
     const calc = calculateQuote({ program, rows: c.rows, startDate: deal.expectedStart!, adjustments }, DMS_DEFAULTS);
     const q: Quote = {
       id: id(),
@@ -113,6 +113,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       premiumFamily: calc.premiumFamily,
       total: calc.total,
       discountFromTariffPct: calc.discountFromTariffPct,
+      pricingBasis,
+      ageBandRates: calc.ageBandRates,
       status,
       approvals: status === 'approved' ? [{ byId: underwriter.id, byName: underwriter.fullName, at: at(daysAgo), comment: 'В пределах полномочий' }] : [],
       createdById: underwriter.id,
@@ -188,6 +190,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
         employees: kp.params.employees,
         familyMembers: kp.params.familyMembers,
         total,
+        pricingBasis: q?.pricingBasis ?? 'flat_by_type',
+        ...(q?.ageBandRates.length ? { ageBandRates: q.ageBandRates.map((r) => ({ ...r })) } : {}),
         paymentFrequency: 'quarterly',
         paymentSchedule: buildPaymentSchedule(total, kp.params.coverageStart, 'quarterly'),
         activationRule: 'after_first_payment',
@@ -232,12 +236,12 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const q = withQuote(deal, c, 'standard_plus', [], 'approved', 15);
     withKp(deal, client, q, c, 'sent', 10);
   }
-  // ---- deal 3: the contract is at the lawyer with a changed clause ----
+  // ---- deal 3: the contract is at the lawyer with a changed clause; inclusions are priced by age band ----
   {
     const client = newClient(PROSPECTS[2]!, 'negotiation', 80, 40);
     const deal = newDeal(client, 'contract_review', 40);
     const c = withCensus(deal, 76, 36);
-    const q = withQuote(deal, c, 'standard', [{ label: 'Надбавка за отрасль', pct: 0.06, comment: 'Тяжёлые условия труда на складах' }], 'approved', 30);
+    const q = withQuote(deal, c, 'standard', [{ label: 'Надбавка за отрасль', pct: 0.06, comment: 'Тяжёлые условия труда на складах' }], 'approved', 30, 'age_banded');
     const kp = withKp(deal, client, q, c, 'accepted', 25);
     const contract = newContract(deal, client, kp, q, 15);
     contract.clauseOverrides = [
@@ -320,6 +324,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       employees,
       familyMembers: family,
       total,
+      // The demo HR company's contract prices inclusions by type (premium_employee / premium_family).
+      pricingBasis: 'flat_by_type',
       paymentFrequency: 'quarterly',
       paymentSchedule: buildPaymentSchedule(total, demoPolicy.startDate, 'quarterly'),
       activationRule: 'on_start_date',
@@ -395,6 +401,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   for (const b of d.bankPayments) d.statementKeys.push(statementLineKey({ docNumber: b.docNumber ?? '', date: b.date, amount: b.amount, payerInn: b.payerInn }));
   event(demoDeal.id, 1, 'Система', `Договор ${demoContract.number} действует: полис ${demoPolicy.number}`);
 
+  // The demo contract prices by type; the seed's requests are about employees.
+  const EMPLOYEE_RULE = { basis: 'flat_by_type', key: 'premium_employee' } as const;
   const request = (type: ChangeRequest['type'], insuredId: string, effective: string, status: ChangeRequest['status'], description: string): ChangeRequestRow => {
     const r: ChangeRequestRow = {
       id: id(),
@@ -402,7 +410,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       type,
       effectiveDate: effective,
       insuredId,
-      payload: { relation: members.find((m) => m.id === insuredId)?.relation ?? 'employee', annual: tariff.employee },
+      payload: { relation: members.find((m) => m.id === insuredId)?.relation ?? 'employee', annual: tariff.employee, rule: EMPLOYEE_RULE },
       requestedBy: { id: hr.id, role: 'hr', name: hr.fullName },
       status,
       createdAt: tzIso(parseIso(effective) - DAY),
@@ -421,7 +429,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const annual = tariff.employee;
     const calc =
       r.type === 'add_insured'
-        ? addLine(annual, r.effectiveDate, demoContract.params.startDate, demoContract.params.endDate)
+        ? addLine(annual, r.effectiveDate, demoContract.params.startDate, demoContract.params.endDate, EMPLOYEE_RULE)
         : excludeLine(annual, r.effectiveDate, demoContract.params.startDate, demoContract.params.endDate, refund, 0);
     return { changeRequestId: r.id, description: r.description!, ...calc };
   };

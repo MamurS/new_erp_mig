@@ -9,9 +9,11 @@
 import Papa from 'papaparse';
 import type { z } from 'zod';
 import { msg } from '@/i18n/core';
-import type { InsuredRelation, LimitCategory, Money, ProgramCode, UUID } from '@/shared/types';
+import type { AgeBandRate, InsuredRelation, LimitCategory, Money, PricingBasis, ProgramCode, UUID } from '@/shared/types';
 import type { MigrationContractPremium, MigrationIssue, MigrationMetric, MigrationPremiumSource, MigrationReconRow, MigrationStep, MigrationTotals } from '@/shared/types/migration';
 import { PROGRAMS } from './programs';
+import { ageOn } from './family';
+import { bandRateFor } from './pricing';
 import { toCsv } from '@/shared/lib/csv';
 import {
   MIGRATION_CSV_MAX_ROWS,
@@ -34,7 +36,7 @@ export const MIGRATION_STEPS = ['clients', 'contracts', 'insured', 'limits', 'cl
 /** Columns of each file, in the order of the template. */
 export const MIGRATION_COLUMNS: Record<MigrationStep, readonly string[]> = {
   clients: ['name', 'legalForm', 'stir', 'bank', 'account', 'mfo', 'director', 'directorBasis', 'address', 'hrName', 'hrPhone', 'hrEmail'],
-  contracts: ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'premium_employee', 'premium_family', 'paymentFrequency', 'assistance'],
+  contracts: ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'premium_employee', 'premium_family', 'paymentFrequency', 'assistance', 'pricing_basis', 'age_bands'],
   insured: ['fullName', 'birthDate', 'pinfl', 'phone', 'oldCertificate', 'inclusionDate', 'contractOldNumber', 'position', 'relation', 'principal_pinfl', 'premium'],
   limits: ['pinfl', 'oldCertificate', 'category', 'usedAmount'],
   claims: ['oldNumber', 'pinfl', 'oldCertificate', 'category', 'serviceDate', 'provider', 'amountClaimed', 'reserve', 'status'],
@@ -78,6 +80,8 @@ const EXAMPLE: Record<MigrationStep, Record<string, string>> = {
     premium_family: '2800000',
     paymentFrequency: 'quarterly',
     assistance: '',
+    pricing_basis: 'flat_by_type',
+    age_bands: '',
   },
   insured: {
     fullName: 'Rahimov Jasur Olimovich',
@@ -154,7 +158,7 @@ export interface MigrationDbRefs {
   /** Clients by STIR (ИНН). */
   clients: Map<string, { id: UUID; hasActivePolicy: boolean }>;
   /** Contracts transferred earlier, by their old number. */
-  contracts: Map<string, { id: UUID; program: ProgramCode; startDate: string; endDate: string; active: boolean; premiumEmployee: Money; premiumFamily: Money }>;
+  contracts: Map<string, { id: UUID; program: ProgramCode; startDate: string; endDate: string; active: boolean; premiumEmployee: Money; premiumFamily: Money; pricingBasis: PricingBasis; ageBandRates?: AgeBandRate[] }>;
   /** Active insured persons: by PINFL and by old certificate number (transferred ones). */
   insuredByPinfl: Map<string, InsuredFacts>;
   insuredByCertificate: Map<string, InsuredFacts>;
@@ -328,6 +332,8 @@ interface ContractFacts {
   endDate: string;
   premiumEmployee?: Money;
   premiumFamily?: Money;
+  pricingBasis?: PricingBasis;
+  ageBandRates?: readonly AgeBandRate[];
 }
 
 /** «1 234 567»: sums inside a message (messages are formatted without the locale). */
@@ -337,15 +343,19 @@ const groupDigits = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' 
 export const MIGRATION_PREMIUM_TOLERANCE = 1;
 
 /**
- * Annual premium of a person (a row per person), in this order: the row's individual premium; else by type
- * from the contract — `premium_employee` for an employee, `premium_family` for a family member; else none
- * (an error).
+ * Annual premium of a person (a row per person), in this order: the row's individual premium; else by the
+ * contract terms — an `age_banded` contract: the rate of the person's age band on the inclusion date; by type:
+ * `premium_employee` for an employee, `premium_family` for a family member; else none (an error).
  */
 export function insuredPremium(
-  row: Pick<MigrationInsuredRow, 'premium' | 'relation'>,
-  contract: { premiumEmployee?: Money; premiumFamily?: Money },
+  row: Pick<MigrationInsuredRow, 'premium' | 'relation'> & Partial<Pick<MigrationInsuredRow, 'birthDate' | 'inclusionDate'>>,
+  contract: { premiumEmployee?: Money; premiumFamily?: Money; pricingBasis?: PricingBasis; ageBandRates?: readonly AgeBandRate[] },
 ): { premium: Money; source: MigrationPremiumSource } | null {
   if (row.premium !== undefined) return { premium: row.premium, source: 'individual' };
+  if (contract.pricingBasis === 'age_banded') {
+    const band = contract.ageBandRates && row.birthDate && row.inclusionDate ? bandRateFor(contract.ageBandRates, ageOn(row.birthDate, row.inclusionDate)) : undefined;
+    return band ? { premium: band.annual, source: 'type' } : null;
+  }
   const byType = row.relation === 'employee' ? contract.premiumEmployee : contract.premiumFamily;
   return byType === undefined ? null : { premium: byType, source: 'type' };
 }
@@ -426,7 +436,7 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
   }
 
   // ---- insured
-  const batchContracts = new Map((out.contracts?.valid ?? []).map((v) => [v.data.oldNumber.toUpperCase(), { row: v.row, facts: { program: v.data.program, startDate: v.data.startDate, endDate: v.data.endDate, premiumEmployee: v.data.premium_employee, premiumFamily: v.data.premium_family } as ContractFacts }]));
+  const batchContracts = new Map((out.contracts?.valid ?? []).map((v) => [v.data.oldNumber.toUpperCase(), { row: v.row, facts: { program: v.data.program, startDate: v.data.startDate, endDate: v.data.endDate, premiumEmployee: v.data.premium_employee, premiumFamily: v.data.premium_family, pricingBasis: v.data.pricing_basis, ageBandRates: v.data.age_bands } as ContractFacts }]));
   const contractOf = (old: string): { ref: MigrationRef; facts: ContractFacts } | null => {
     const key = old.toUpperCase();
     const b = batchContracts.get(key);

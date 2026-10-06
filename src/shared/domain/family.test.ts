@@ -1,7 +1,6 @@
-/* Family members (FAMILY_SPEC): the age limit, who sees what in a family, the premium by age group, shared limits. */
+/* Family members (FAMILY_SPEC): the age limit, who sees what in a family, shared limits (the premium: pricing.test.ts). */
 import { describe, expect, it } from 'vitest';
-import { DMS_DEFAULTS } from '@/shared/config/dmsParameters';
-import { ageLimitDate, ageOn, allows, familyAccess, isAdultMember, isDependentChild, limitPoolOf, personAnnualPremium, reachedAgeLimit, type FamilyPerson } from './family';
+import { ageLimitDate, ageOn, allows, familyAccess, isAdultMember, isDependentChild, limitPoolOf, reachedAgeLimit, type FamilyPerson } from './family';
 
 const LIMITS = { maxChildAge: 18, studentMaxAge: 23 };
 const EMPLOYEE: FamilyPerson = { id: 'e1', relation: 'employee', birthDate: '1987-05-12' };
@@ -75,23 +74,6 @@ describe('who in the family sees what', () => {
     expect(familyAccess(OTHER_EMPLOYEE, SPOUSE, ctx([['s1', 'e2']]))).toBe('none');
     expect(familyAccess(EMPLOYEE, { ...CHILD, status: 'excluded' }, ctx())).toBe('none');
     expect(allows('none', 'card')).toBe(false);
-  });
-});
-
-describe('premium of a family member by age group', () => {
-  const tariff = { employee: 5_000_000, family: 4_000_000 };
-  it('an employee pays the employee tariff, a family member the family tariff times the age coefficient', () => {
-    expect(personAnnualPremium(tariff, EMPLOYEE, TODAY, DMS_DEFAULTS)).toBe(5_000_000);
-    // 10 years old: band 0–17, coefficient 0,6.
-    expect(personAnnualPremium(tariff, CHILD, TODAY, DMS_DEFAULTS)).toBe(2_400_000);
-    // 37 years old: band 30–39, coefficient 1.
-    expect(personAnnualPremium(tariff, SPOUSE, TODAY, DMS_DEFAULTS)).toBe(4_000_000);
-    // 66 years old: band 60+, coefficient 1,8.
-    expect(personAnnualPremium(tariff, PARENT, TODAY, DMS_DEFAULTS)).toBe(7_200_000);
-    // The age is counted on the date of the change: the 18th birthday moves the child to band 18–29 (0,85).
-    expect(personAnnualPremium(tariff, GROWN, '2026-10-05', DMS_DEFAULTS)).toBe(2_400_000);
-    expect(personAnnualPremium(tariff, GROWN, '2026-10-06', DMS_DEFAULTS)).toBe(3_400_000);
-    expect(personAnnualPremium(tariff, CHILD, TODAY, { ...DMS_DEFAULTS, tariffCoef0to17: 0.5 })).toBe(2_000_000);
   });
 });
 

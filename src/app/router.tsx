@@ -184,6 +184,7 @@ const appRoutes: RouteObject[] = [
   { path: 'chat', lazy: lazy(() => import('@/features/insured/pages/ChatPage')) },
   { path: 'profile', lazy: lazy(() => import('@/features/insured/pages/ProfilePage')) },
   { path: 'certificate', lazy: lazy(() => import('@/features/insured/pages/CertificatePage')) },
+  { path: 'family', lazy: lazy(() => import('@/features/insured/pages/FamilyPage')) },
   { path: 'coverage', lazy: lazy(() => import('@/features/insured/pages/CoveragePage')) },
 ];
 

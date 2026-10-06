@@ -47,6 +47,8 @@ export function dbRefs(d: Db): MigrationDbRefs {
       active: c.status === 'active',
       premiumEmployee: c.params.premiumEmployee,
       premiumFamily: c.params.premiumFamily,
+      pricingBasis: c.params.pricingBasis ?? 'flat_by_type',
+      ...(c.params.ageBandRates ? { ageBandRates: c.params.ageBandRates } : {}),
     });
   }
   for (const i of d.insured) {
@@ -303,6 +305,9 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
         employees,
         familyMembers: family,
         total: r.premium,
+        // Inclusions during the term follow the contract terms of the file (by type unless age_banded with a table).
+        pricingBasis: r.pricing_basis,
+        ...(r.age_bands ? { ageBandRates: r.age_bands } : {}),
         paymentFrequency: r.paymentFrequency,
         paymentSchedule: buildPaymentSchedule(r.premium, r.startDate, r.paymentFrequency),
         activationRule: 'on_start_date',

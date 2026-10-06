@@ -90,7 +90,7 @@ function quoteOf(d: Db, ctx: Ctx): Quote {
   return q;
 }
 
-function recalc(d: Db, q: Quote, program: Quote['program'], adjustments: Quote['adjustments']): void {
+function recalc(d: Db, q: Quote, program: Quote['program'], adjustments: Quote['adjustments'], pricingBasis: Quote['pricingBasis']): void {
   const deal = dealOf(d, q.dealId);
   const c = census(d, deal.id);
   if (!c) throw conflict('srv.deal.uploadCensusFirst');
@@ -104,6 +104,9 @@ function recalc(d: Db, q: Quote, program: Quote['program'], adjustments: Quote['
     premiumFamily: calc.premiumFamily,
     total: calc.total,
     discountFromTariffPct: calc.discountFromTariffPct,
+    // The band table is derived from the same tariff and factors; it becomes the contract's appendix.
+    pricingBasis,
+    ageBandRates: calc.ageBandRates,
     updatedAt: tzIso(Date.now()),
   });
 }
@@ -423,12 +426,14 @@ export const lifecycleHandlers = [
         premiumFamily: 0,
         total: 0,
         discountFromTariffPct: 0,
+        pricingBasis: input.pricingBasis,
+        ageBandRates: [],
         status: 'draft',
         approvals: [],
         createdById: user.id,
         createdByName: user.displayName,
       };
-      recalc(d, q, input.program, input.adjustments);
+      recalc(d, q, input.program, input.adjustments, input.pricingBasis);
       d.quotes.push(q);
       if (!deal.underwriterId) deal.underwriterId = user.id;
       moveDeal(d, deal.id, 'quote', user.displayName, `Котировка: программа ${PROGRAMS[q.program].name}, премия ${q.total}`);
@@ -454,7 +459,7 @@ export const lifecycleHandlers = [
       const q = quoteOf(d, ctx);
       if (q.status !== 'draft' && q.status !== 'rejected') throw conflict('srv.quote.locked');
       const input = await body(ctx.request, quotePatchSchema);
-      recalc(d, q, input.program, input.adjustments);
+      recalc(d, q, input.program, input.adjustments, input.pricingBasis ?? q.pricingBasis);
       q.status = 'draft';
       audit(user, 'quote_saved', { targetType: 'quote', targetId: q.id, targetLabel: dealOf(d, q.dealId).number });
       return quoteView(d, q, user);

@@ -40,6 +40,7 @@
 | `contract:5.1` | Размер страховой премии | `Премия за сотрудника {{premium.employee}}, за члена семьи {{premium.family}}, общая премия {{premium.total}}` |
 | `contract:5.2` | График платежей | `Порядок оплаты: {{contract.paymentFrequency}} (Приложение 3)` |
 | `contract:5.3` | Просрочка оплаты | — |
+| `contract:5.4` | Премия за застрахованных, включённых в течение срока | `{{premium.inclusionBasis}}` |
 | **6. Срок действия договора** | |  |
 | `contract:6.1` | Срок страхования | `С {{contract.startDate}} по {{contract.endDate}}` |
 | `contract:6.2` | Вступление договора в силу | `Порядок вступления в силу: {{contract.activationRule}}` |
@@ -75,6 +76,8 @@
 | `contract:П2.1` | Порядок ведения списка | — |
 | **Приложение 3. График платежей** | | таблица `schedule` |
 | `contract:П3.1` | Порядок оплаты взносов | — |
+| **Приложение 4. Ставки по возрастным группам** | | таблица `ageBands` |
+| `contract:П4.1` | Применение ставок | `Основа расчёта: {{premium.basis}}` |
 
 ### Поля
 
@@ -110,6 +113,8 @@
 | `{{premium.employee}}` | Премия за сотрудника в год | Contract.params.premiumEmployee |
 | `{{premium.family}}` | Премия за члена семьи в год | Contract.params.premiumFamily |
 | `{{premium.total}}` | Общая премия | Contract.params.total |
+| `{{premium.basis}}` | Основа расчёта премии включаемых в течение срока | Contract.params.pricingBasis: по типу или по возрастной группе |
+| `{{premium.inclusionBasis}}` | Правило расчёта премии за включаемых в течение срока | Contract.params.pricingBasis (+ Приложение 4 для расчёта по возрастным группам) |
 | `{{insured.employees}}` | Число сотрудников | Contract.params.employees |
 | `{{insured.family}}` | Число членов семей | Contract.params.familyMembers |
 | `{{insured.total}}` | Всего застрахованных | employees + familyMembers |
@@ -121,6 +126,7 @@
 | `program` — Лимиты программы | Категория, Лимит на застрахованного | PROGRAMS[Contract.params.program].limits |
 | `insured` — Список застрахованных | №, ФИО, Должность, Кем приходится | Список приложения 2: строка на каждого застрахованного с отношением к сотруднику, без ПИНФЛ и телефонов |
 | `schedule` — График платежей | №, Срок оплаты, Сумма | Contract.params.paymentSchedule |
+| `ageBands` — Ставки по возрастным группам | Возрастная группа, Годовая премия на человека | Contract.params.ageBandRates (из утверждённой котировки); применяется при pricingBasis = age_banded |
 
 ## Дополнительное соглашение (`endorsement`)
 

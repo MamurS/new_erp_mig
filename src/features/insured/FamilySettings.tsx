@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { CreditCard, Eye } from 'lucide-react';
 import { useI18n } from '@/i18n';
-import type { MeProfile } from '@/shared/types';
+import type { MeProfile } from '@/shared/types/dto';
 import { errorMessage } from '@/shared/api/client';
 import { useFamilyConsent, useSetPayoutCard } from '@/shared/api/queries/me';
 import { payoutCardSchema } from '@/shared/schemas/forms';

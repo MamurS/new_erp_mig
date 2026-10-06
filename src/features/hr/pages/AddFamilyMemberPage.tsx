@@ -1,7 +1,7 @@
 /*
  * «Добавить члена семьи» (FAMILY_SPEC): like adding an employee — Latin full name, date of birth, PINFL,
  * relation and the employee. The result is a change request for MIG (an endorsement with the premium for the
- * rest of the term by the person's age group), listed among the requests and on «Семья».
+ * rest of the term under the contract terms), listed among the requests and on «Семья».
  */
 import { useId, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { msg } from '@/i18n';
 import { LEGAL_FORMS } from '@/shared/config/legalForms';
 import { digitsOnly } from '@/shared/lib/masks';
+import { bandTableProblem, parseAgeBands, PRICING_BASES } from '@/shared/domain/pricing';
 import { isoDateInput, phoneInput, pinflInput } from './forms';
 
 /** Latin letters (with the Uzbek ʻ ʼ and their ASCII stand-ins), digits and common punctuation. */
@@ -132,10 +133,20 @@ export const migrationContractRowSchema = z
     paymentFrequency: code(MIGRATION_FREQUENCIES, msg('migration.v.frequency'), 'single'),
     /** Name of the assistance company; empty — MIG serves the client itself. */
     assistance: optional(120),
+    /** Premium of a person included during the term: by type (default) or by the age band table. */
+    pricing_basis: code(PRICING_BASES, msg('migration.v.pricingBasis'), 'flat_by_type'),
+    /** Age-band rate table of the contract, «0-17:900000; 18-29:1200000; …; 60+:2900000»; required for age_banded. */
+    age_bands: optional(400),
   })
   .superRefine((v, ctx) => {
     if (v.endDate <= v.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: msg('v.endAfterStart') });
-  });
+    if (v.age_bands !== undefined && !parseAgeBands(v.age_bands)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['age_bands'], message: msg('migration.v.ageBandsFormat') });
+    else if (v.pricing_basis === 'age_banded') {
+      const problem = bandTableProblem(v.age_bands === undefined ? undefined : parseAgeBands(v.age_bands)!);
+      if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['age_bands'], message: problem });
+    }
+  })
+  .transform(({ age_bands, ...v }) => ({ ...v, ...(age_bands !== undefined ? { age_bands: parseAgeBands(age_bands)! } : {}) }));
 
 export const MIGRATION_RELATIONS = ['employee', 'spouse', 'child', 'parent', 'other'] as const;
 

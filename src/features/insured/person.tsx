@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { EyeOff } from 'lucide-react';
 import { useI18n } from '@/i18n';
-import type { FamilyProfile } from '@/shared/types';
+import type { FamilyProfile } from '@/shared/types/dto';
 import { useMyFamily } from '@/shared/api/queries/me';
 import { RELATION_LABEL } from '@/shared/domain/family';
 import { cn } from '@/shared/lib/cn';

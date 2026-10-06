@@ -56,6 +56,7 @@ export const CONTRACT_TEMPLATE: DocTemplate = {
         clause('5.1', 'Размер страховой премии', 'Премия за сотрудника {{premium.employee}}, за члена семьи {{premium.family}}, общая премия {{premium.total}}'),
         clause('5.2', 'График платежей', 'Порядок оплаты: {{contract.paymentFrequency}} (Приложение 3)'),
         clause('5.3', 'Просрочка оплаты'),
+        clause('5.4', 'Премия за застрахованных, включённых в течение срока', '{{premium.inclusionBasis}}'),
       ],
     },
     {
@@ -110,6 +111,7 @@ export const CONTRACT_TEMPLATE: DocTemplate = {
     { id: 'A1', title: 'Приложение 1. Программа страхования «{{program.name}}»', clauses: [clause('П1.1', 'Состав программы')], table: 'program' },
     { id: 'A2', title: 'Приложение 2. Список застрахованных', clauses: [clause('П2.1', 'Порядок ведения списка')], table: 'insured' },
     { id: 'A3', title: 'Приложение 3. График платежей', clauses: [clause('П3.1', 'Порядок оплаты взносов')], table: 'schedule' },
+    { id: 'A4', title: 'Приложение 4. Ставки по возрастным группам', clauses: [clause('П4.1', 'Применение ставок', 'Основа расчёта: {{premium.basis}}')], table: 'ageBands' },
   ],
   fields: [
     { key: 'contract.number', description: 'Номер договора', source: 'Contract.number' },
@@ -142,6 +144,8 @@ export const CONTRACT_TEMPLATE: DocTemplate = {
     { key: 'premium.employee', description: 'Премия за сотрудника в год', source: 'Contract.params.premiumEmployee' },
     { key: 'premium.family', description: 'Премия за члена семьи в год', source: 'Contract.params.premiumFamily' },
     { key: 'premium.total', description: 'Общая премия', source: 'Contract.params.total' },
+    { key: 'premium.basis', description: 'Основа расчёта премии включаемых в течение срока', source: 'Contract.params.pricingBasis: по типу или по возрастной группе' },
+    { key: 'premium.inclusionBasis', description: 'Правило расчёта премии за включаемых в течение срока', source: 'Contract.params.pricingBasis (+ Приложение 4 для расчёта по возрастным группам)' },
     { key: 'insured.employees', description: 'Число сотрудников', source: 'Contract.params.employees' },
     { key: 'insured.family', description: 'Число членов семей', source: 'Contract.params.familyMembers' },
     { key: 'insured.total', description: 'Всего застрахованных', source: 'employees + familyMembers' },
@@ -150,5 +154,6 @@ export const CONTRACT_TEMPLATE: DocTemplate = {
     { id: 'program', title: 'Лимиты программы', columns: ['Категория', 'Лимит на застрахованного'], source: 'PROGRAMS[Contract.params.program].limits' },
     { id: 'insured', title: 'Список застрахованных', columns: ['№', 'ФИО', 'Должность', 'Кем приходится'], source: 'Список приложения 2: строка на каждого застрахованного с отношением к сотруднику, без ПИНФЛ и телефонов' },
     { id: 'schedule', title: 'График платежей', columns: ['№', 'Срок оплаты', 'Сумма'], source: 'Contract.params.paymentSchedule' },
+    { id: 'ageBands', title: 'Ставки по возрастным группам', columns: ['Возрастная группа', 'Годовая премия на человека'], source: 'Contract.params.ageBandRates (из утверждённой котировки); применяется при pricingBasis = age_banded' },
   ],
 };

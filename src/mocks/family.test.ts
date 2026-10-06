@@ -2,7 +2,7 @@
 /*
  * Family members as full insured persons on the mock server (FAMILY_SPEC): the app's profiles and per-person
  * data, the consent of an adult member, IDOR, the payout card, adding a member by HR and from the app with the
- * change request and the premium by age group, shared family limits and the age-limit task.
+ * change request and the premium by the contract terms, shared family limits and the age-limit task.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { SessionResponse } from '@/shared/types/dto';
@@ -194,16 +194,17 @@ describe('limit mode', () => {
 });
 
 describe('HR adds family members', () => {
-  it('HR adds a child: a change request with the premium by age; after MIG approves, the child is in the parent\'s app', async () => {
+  it('HR adds a child: a change request with the premium by the contract terms; after MIG approves, the child is in the parent\'s app', async () => {
     const hr = await loginStaff('hr@demo-client.uz');
     const tomorrow = isoDay(Date.now() + 86_400_000);
     const r = await call<PolicyChange>('/hr/family', { method: 'POST', sid: hr, json: { employeeId: demo().id, fullName: 'Karimova Zarina Azizovna', birthDate: '2024-01-15', pinfl: '41501240000777', relation: 'child', startDate: tomorrow } });
     expect(r.status).toBe(200);
     expect(r.data).toMatchObject({ kind: 'add', relation: 'child', principalId: demo().id, principalName: demo().fullName, status: 'pending' });
-    // Premium for the rest of the term by the age group: less than an employee's.
-    const employeeChange = db().policyChanges.find((c) => c.relation === 'employee' && c.kind === 'add' && c.status === 'pending')!;
+    // Premium for the rest of the term by the contract terms: the demo contract prices by type (premium_family).
+    const contract = db().contracts.find((c) => c.clientId === demo().clientId && c.status === 'active')!;
+    expect(contract.params.pricingBasis).toBe('flat_by_type');
     expect(r.data.premiumDelta).toBeGreaterThan(0);
-    expect(r.data.premiumDelta).toBeLessThan(employeeChange.premiumDelta * 2);
+    expect(r.data.premiumDelta).toBeLessThan(contract.params.premiumFamily);
     const list = await call<HrFamilyMember[]>(`/hr/family?employeeId=${demo().id}`, { sid: hr });
     expect(list.data.find((m) => m.fullName === 'Karimova Zarina Azizovna')).toMatchObject({ status: 'pending', relation: 'child' });
     // No medical data or personal identifiers in HR's list.
@@ -219,10 +220,9 @@ describe('HR adds family members', () => {
     const child = db().insured.find((i) => i.fullName === 'Karimova Zarina Azizovna')!;
     expect(child).toMatchObject({ relation: 'child', principalId: demo().id, phone: '', payoutCard: '', appStatus: 'not_invited' });
     expect(child.certificateNumber).toMatch(/^SERT-/);
-    // The change request of the endorsement carries the person's premium by the age group.
+    // The change request of the endorsement carries the person's premium by the contract terms and the rule.
     const cr = db().changeRequests.find((x) => x.insuredId === child.id)!;
-    expect(cr.payload).toMatchObject({ relation: 'child' });
-    expect(typeof cr.payload.annual).toBe('number');
+    expect(cr.payload).toMatchObject({ relation: 'child', annual: contract.params.premiumFamily, rule: { basis: 'flat_by_type', key: 'premium_family' } });
     const app = await loginPhone(DEMO_INSURED_PHONE);
     const profiles = await call<FamilyProfile[]>('/me/family', { sid: app });
     expect(profiles.data.find((p) => p.id === child.id)).toMatchObject({ access: 'full', dependentChild: true });

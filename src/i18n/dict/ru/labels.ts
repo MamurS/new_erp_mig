@@ -399,4 +399,6 @@ export const labels = {
   'labels.queueTab.age_limit': 'Возраст детей',
   'labels.censusRelation.parent': 'Родитель',
   'labels.censusRelation.other': 'Другой член семьи',
+  'labels.pricingBasis.flat_by_type': 'По типу (сотрудник / член семьи)',
+  'labels.pricingBasis.age_banded': 'По возрастной группе',
 } satisfies Record<string, string>;

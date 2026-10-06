@@ -235,6 +235,9 @@ export function migrationDemoFiles(): Record<MigrationStep, string> {
     premium_family: c.byType ? String(c.byType.family) : '',
     paymentFrequency: c.paymentFrequency,
     assistance: c.assistance,
+    // Inclusions during the term by type (the default); an age-banded contract also needs age_bands.
+    pricing_basis: 'flat_by_type',
+    age_bands: '',
   }));
 
   // A row per person; the error rows (employees without family) go before the employee they copy.

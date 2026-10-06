@@ -1,11 +1,10 @@
 /*
  * Family members as full insured persons (FAMILY_SPEC): relations, the child age limit, who in the family
- * may see what, shared family limits and the premium of a family member by age group. Pure functions:
+ * may see what and shared family limits (the premium of a person by the contract terms: pricing.ts). Pure functions:
  * the mock server passes the parameters and the records; the screens use the same labels.
  */
 import { defineLabels } from '@/i18n';
-import type { DmsParamValues, FamilyRelation, ISODate, InsuredRelation, Money, PolicyTariff, UUID } from '@/shared/types';
-import { BAND_COEF_KEY, bandOf } from './tariff';
+import type { DmsParamValues, FamilyRelation, ISODate, InsuredRelation, UUID } from '@/shared/types';
 
 export const RELATIONS = ['employee', 'spouse', 'child', 'parent', 'other'] as const satisfies readonly InsuredRelation[];
 export const FAMILY_RELATIONS = ['spouse', 'child', 'parent', 'other'] as const satisfies readonly FamilyRelation[];
@@ -107,21 +106,6 @@ export type FamilyDataKind = keyof typeof FAMILY_DATA_ACCESS;
 
 export function allows(level: FamilyAccessLevel, kind: FamilyDataKind): boolean {
   return (FAMILY_DATA_ACCESS[kind] as readonly FamilyAccessLevel[]).includes(level);
-}
-
-/**
- * Annual premium of a person by type: the employee's tariff; a family member's — the family tariff of
- * the policy times the age coefficient of «Параметры ДМС» for the age on `on`.
- */
-export function personAnnualPremium(
-  tariff: PolicyTariff,
-  person: Pick<FamilyPerson, 'relation' | 'birthDate'>,
-  on: ISODate,
-  params: Readonly<DmsParamValues>,
-): Money {
-  if (person.relation === 'employee') return tariff.employee;
-  const coef = params[BAND_COEF_KEY[bandOf(ageOn(person.birthDate, on))]];
-  return Math.round((tariff.family * coef) / 1000) * 1000;
 }
 
 /** Ids of the people whose consumption counts against a person's limits under the limit mode. */

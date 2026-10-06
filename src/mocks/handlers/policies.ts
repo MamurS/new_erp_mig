@@ -9,7 +9,8 @@ import { db, type ChangeRequestRow, type Db, type HrUserRow, type PolicyChangeRo
 import { certificateNumber } from '@/shared/domain/contracts';
 import { COVERAGE_START_RULES, PERIODICITIES } from '@/shared/domain/endorsements';
 import { dmsParam, numbering } from '../params';
-import { annualOf, createEndorsement } from '../lifecycle-core';
+import { createEndorsement, premiumOf } from '../lifecycle-core';
+import { contractPricing, pricingProblem } from '@/shared/domain/pricing';
 import { API, audit, body, conflict, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { DEMO_PASSWORD } from '../credentials';
 import { activePolicyOf, createInsured, createListedInsured, endorsementDoc, nextPolicyNumber, parsePolicyList, refreshPolicyTotals, toListRow, toPolicyChange } from '../policy-core';
@@ -17,10 +18,13 @@ import { currentAssistance, notifyAssistance } from '../assistance-core';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
 
-/** Annual premium of the person of a change under the contract: a transferred person's own, else by type and age group. */
-function annualOfChange(d: Db, contract: Contract, r: PolicyChangeRow): number {
+/**
+ * Annual premium of the person of a change under the contract and its rule: a transferred person's own, else by
+ * the contract's pricing basis (by type, or by the age band on the effective date).
+ */
+function premiumOfChange(d: Db, contract: Contract, r: PolicyChangeRow): ReturnType<typeof premiumOf> {
   const person = r.insuredId ? d.insured.find((i) => i.id === r.insuredId) : undefined;
-  return annualOf(contract, person ?? { relation: r.relation, birthDate: r.newPerson?.birthDate ?? '' }, r.effectiveDate);
+  return premiumOf(contract, person ?? { relation: r.relation, birthDate: r.newPerson?.birthDate ?? '' }, r.effectiveDate);
 }
 
 function clientOf(id: string) {
@@ -125,6 +129,10 @@ export const policyHandlers = [
           const person = d.insured.find((i) => i.id === r!.insuredId);
           if (!person || person.status !== 'active') throw conflict('srv.policyChanges.personExcluded', { name: r!.fullName });
         }
+        // An age-banded contract without a usable band table cannot price a change.
+        const contract = input.decision === 'approve' && policy.contractId ? d.contracts.find((c) => c.id === policy.contractId && c.status === 'active') : undefined;
+        const pricing = contract ? pricingProblem(contractPricing(contract.params)) : null;
+        if (pricing) throw httpErrorOf(422, 'validation', pricing);
       }
       const at = tzIso(Date.now());
       const out: PolicyChangeDecisionResult = { approved: 0, rejected: 0, endorsements: 0 };
@@ -170,8 +178,8 @@ export const policyHandlers = [
                 type: r!.kind === 'add' ? 'add_insured' : 'exclude_insured',
                 effectiveDate: r!.effectiveDate,
                 insuredId: r!.insuredId,
-                // The annual premium of the person (a family member's by the age group): the endorsement line uses it.
-                payload: { relation: r!.relation, annual: annualOfChange(d, contract, r!) },
+                // The annual premium of the person by the contract terms and the rule used: the endorsement line shows both.
+                payload: { relation: r!.relation, ...premiumOfChange(d, contract, r!) },
                 requestedBy: { id: r!.requestedById, role: 'hr', name: r!.requestedByName },
                 status: 'pending',
                 createdAt: at,

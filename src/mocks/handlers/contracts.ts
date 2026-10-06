@@ -14,6 +14,7 @@ import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
 import { addDays, addPendingScan, addSignature, buildPaymentSchedule, contractNumber, originalReminderDue, verifyScan, type Side } from '@/shared/domain/contracts';
 import { PERIODICITIES } from '@/shared/domain/endorsements';
+import { contractPricing, pricingProblem } from '@/shared/domain/pricing';
 import { clausesOf, DOC_TEMPLATES } from '@/features/documents/templates';
 import {
   changeRequestCreateSchema,
@@ -206,6 +207,12 @@ export async function readScan(request: Request): Promise<{ side: Side; bytes: U
   return { side, bytes, mime };
 }
 
+/** An `age_banded` contract without a usable band table cannot go further (legal review, signing). */
+function pricingGuard(c: Contract): void {
+  const problem = pricingProblem(contractPricing(c.params));
+  if (problem) throw httpErrorOf(422, 'validation', problem, { 'params.pricingBasis': problem });
+}
+
 /** Signing routes shared by contracts and endorsements (LIFECYCLE_SPEC §8: the same rules and methods). */
 function signingRoutes(kind: Kind) {
   const base = `${API}/${kind === 'contract' ? 'contracts' : 'endorsements'}/:id`;
@@ -217,6 +224,7 @@ function signingRoutes(kind: Kind) {
     return { user, d, ref };
   };
   const signable = (ref: DocRef, side: Side) => {
+    if (kind === 'contract') pricingGuard(ref.contract);
     const ok = side === 'mig' ? ['approved', 'sent', 'signing'] : ['sent', 'signing'];
     if (!ok.includes(ref.status)) throw conflict(side === 'client' ? 'srv.doc.notSentToClient' : 'srv.doc.notApproved');
     if (ref.signing[side]) throw conflict(side === 'mig' ? 'srv.doc.migSigned' : 'srv.doc.clientSigned');
@@ -340,6 +348,7 @@ function signingRoutes(kind: Kind) {
         if (!can(user, kind === 'contract' ? 'contracts.draft' : 'endorsements.manage')) throw forbidden();
         if (ref.status !== 'draft') throw conflict('srv.doc.reviewDraftOnly');
         if (kind === 'contract' && ref.contract.financeDiffers && !ref.contract.financeApprovedByName) throw conflict('srv.contract.financeNeedsApproval');
+        if (kind === 'contract') pricingGuard(ref.contract);
         if (kind === 'endorsement') {
           const e = d.endorsements.find((x) => x.id === ref.id)!;
           if (endorsementView(d, e).needsAmountApproval) throw conflict('srv.endorsement.amountNeedsApproval');
@@ -594,6 +603,10 @@ export const contractHandlers = [
           employees: kp.params.employees,
           familyMembers: kp.params.familyMembers,
           total,
+          // Inclusions during the term are priced as the underwriter chose in the quote; the band table of the
+          // quote is the contract's appendix (also when priced by type, so the basis can be switched in the draft).
+          pricingBasis: q?.pricingBasis ?? 'flat_by_type',
+          ...(q?.ageBandRates.length ? { ageBandRates: q.ageBandRates.map((r) => ({ ...r })) } : {}),
           paymentFrequency: 'single',
           paymentSchedule: buildPaymentSchedule(total, kp.params.coverageStart, 'single'),
           // By default the contract comes into force not earlier than the first installment is paid.
@@ -630,6 +643,8 @@ export const contractHandlers = [
         if (p.endDate <= p.startDate) throw new HttpError(422, 'validation', 'srv.contract.endAfterStart', { fields: { 'params.endDate': msg('srv.contract.afterStart') } });
         const signatory = d.staff.find((s) => s.id === p.migSignatoryId);
         if (!signatory?.signatory?.canSign) throw new HttpError(422, 'validation', 'srv.contract.chooseSignatory', { fields: { 'params.migSignatoryId': msg('srv.contract.notSignatory') } });
+        const pricing = pricingProblem(contractPricing(p));
+        if (pricing) throw httpErrorOf(422, 'validation', pricing, { 'params.pricingBasis': pricing });
         p.total = p.premiumEmployee * p.employees + p.premiumFamily * p.familyMembers;
         if (input.params.paymentSchedule) {
           const sum = input.params.paymentSchedule.reduce((s, x) => s + x.amount, 0);

@@ -3,6 +3,7 @@ import { Building2, House, Receipt, User, type LucideIcon } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { cn } from '@/shared/lib/cn';
+import { useSession } from '@/shared/auth/session';
 import { PersonProvider } from './person';
 
 const TABS: { to: string; label: I18nKey; icon: LucideIcon; end?: boolean }[] = [
@@ -15,8 +16,10 @@ const TABS: { to: string; label: I18nKey; icon: LucideIcon; end?: boolean }[] = 
 /** Authenticated layout: content + bottom tab bar fixed to the mobile column; the picked person of the family lives here. */
 export default function AppLayout() {
   const { t } = useI18n();
+  // Another person signed in (the demo switcher keeps the layout mounted): start over with a fresh choice.
+  const userId = useSession()?.user.id;
   return (
-    <PersonProvider>
+    <PersonProvider key={userId}>
       <main className="flex-1 px-4 pb-28 pt-5">
         <Outlet />
       </main>

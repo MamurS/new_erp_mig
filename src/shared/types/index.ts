@@ -1013,6 +1013,20 @@ export type AgeBand = '0-17' | '18-29' | '30-39' | '40-49' | '50-59' | '60+';
 
 export type QuoteStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected';
 
+/**
+ * How the premium of a person included during the term is set by the contract:
+ * `flat_by_type` — premium_employee / premium_family of the contract; `age_banded` — the annual rate of the
+ * person's age band from the contract's band table (an appendix taken from the approved quote).
+ */
+export type PricingBasis = 'flat_by_type' | 'age_banded';
+
+/** A row of the age-band rate table: ages from `minAge` to `maxAge` inclusive (`null` = and older), annual premium per person. */
+export interface AgeBandRate {
+  minAge: number;
+  maxAge: number | null;
+  annual: Money;
+}
+
 export interface Quote {
   id: UUID;
   dealId: UUID;
@@ -1024,6 +1038,10 @@ export interface Quote {
   premiumFamily: Money;
   total: Money;
   discountFromTariffPct: number;           // доля 0..1
+  /** Basis the underwriter chose for inclusions during the term; goes into the contract. */
+  pricingBasis: PricingBasis;
+  /** Annual rate per person of each age band (tariff × coefficient × discounts): the contract's band table. */
+  ageBandRates: AgeBandRate[];
   status: QuoteStatus;
   approvals: { byId: UUID; byName: string; at: ISODateTime; comment?: string }[];
   createdById: UUID;
@@ -1097,6 +1115,10 @@ export interface Contract {
     employees: number;
     familyMembers: number;
     total: Money;
+    /** Premium of a person included during the term: by type (default) or by the age band table. */
+    pricingBasis: PricingBasis;
+    /** Age-band rate table (appendix from the approved quote); required for `age_banded`. */
+    ageBandRates?: AgeBandRate[];
     paymentFrequency: PaymentFrequency;
     paymentSchedule: { dueDate: ISODate; amount: Money }[];
     activationRule: ActivationRule;

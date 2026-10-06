@@ -60,4 +60,6 @@ export const demo = {
   'demo.migration.title': 'Демо: файлы переноса',
   'demo.migration.hint': 'Готовые файлы старой системы: 5 клиентов, 5 договоров, 200 застрахованных, лимиты, 10 открытых убытков и счета, с несколькими строками с ошибками для отчёта проверки. Дата переноса — {date}.',
   'demo.migration.download': 'Демо-файл: {step}',
+  'demo.acc.spouse': 'Член семьи — супруга',
+  'demo.hints.phoneSpouse': 'член семьи (супруга): {phone}',
 } satisfies Record<string, string>;

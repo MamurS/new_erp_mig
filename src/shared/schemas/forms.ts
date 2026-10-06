@@ -529,8 +529,15 @@ export const quoteAdjustmentSchema = z.object({
   pct: z.number({ invalid_type_error: msg('v.pctRequired') }).min(-0.9, msg('v.pctMin')).max(2, msg('v.pctMax')),
   comment: text(5, 300, msg('v.commentRequiredMin5')),
 });
-export const quoteCreateSchema = z.object({ dealId: uuid, program: programInput, adjustments: z.array(quoteAdjustmentSchema).max(10, msg('v.maxLines', { max: 10 })).default([]) });
-export const quotePatchSchema = z.object({ program: programInput, adjustments: z.array(quoteAdjustmentSchema).max(10, msg('v.maxLines', { max: 10 })) });
+/** How a person included during the term is priced (contract terms); `flat_by_type` unless the underwriter chooses otherwise. */
+export const pricingBasisInput = z.enum(['flat_by_type', 'age_banded']);
+export const quoteCreateSchema = z.object({
+  dealId: uuid,
+  program: programInput,
+  adjustments: z.array(quoteAdjustmentSchema).max(10, msg('v.maxLines', { max: 10 })).default([]),
+  pricingBasis: pricingBasisInput.default('flat_by_type'),
+});
+export const quotePatchSchema = z.object({ program: programInput, adjustments: z.array(quoteAdjustmentSchema).max(10, msg('v.maxLines', { max: 10 })), pricingBasis: pricingBasisInput.optional() });
 export const quoteApproveSchema = z.object({ comment: z.string().trim().max(500).optional() });
 export const quoteRejectSchema = z.object({ reason: text(5, 500, msg('v.reasonMin5')) });
 export const kpDeclineSchema = z.object({ reason: text(3, 500, msg('v.reasonRequired')) });
@@ -542,6 +549,7 @@ export const contractParamsSchema = z.object({
   program: programInput,
   premiumEmployee: moneyInput,
   premiumFamily: moneyInput,
+  pricingBasis: pricingBasisInput,
   paymentFrequency: z.enum(['single', 'quarterly', 'monthly']),
   paymentSchedule: scheduleInput.optional(),
   activationRule: z.enum(['on_start_date', 'after_first_payment']),

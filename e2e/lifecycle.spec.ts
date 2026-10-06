@@ -324,7 +324,9 @@ test('4. HR adds and excludes employees → monthly endorsement with the formula
   expect(added.days).toBe(Math.round((Date.parse(contract.params.endDate) - Date.parse(startDate)) / 86_400_000) + 1);
   expect(e.lines.some((l) => l.description.startsWith('Исключение') && l.amount <= 0)).toBe(true);
   expect(e.total).toBe(e.lines.reduce((s, l) => s + l.amount, 0));
-  await expect(page.getByTestId('endorsement-lines')).toContainText(added.formula);
+  // The line names the contract's pricing rule (the demo contract prices inclusions by type).
+  const g = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  await expect(page.getByTestId('endorsement-lines')).toContainText(`по типу: premium_employee ${g(contract.params.premiumEmployee)} × ${added.days} / ${term} = ${g(added.amount)}`);
 
   await page.getByRole('button', { name: 'Отправить на согласование' }).click();
   await expect(page.getByText('Согласовано').first()).toBeVisible();

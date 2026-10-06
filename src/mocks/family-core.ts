@@ -4,11 +4,12 @@
  * family member. Rules themselves live in src/shared/domain/family.ts.
  */
 import type { FamilyMemberBrief, Policy, UUID } from '@/shared/types';
-import { allows, familyAccess, isDependentChild, isFamilyRelation, personAnnualPremium, type AgeLimits, type FamilyAccessLevel, type FamilyDataKind } from '@/shared/domain/family';
+import { allows, familyAccess, isDependentChild, isFamilyRelation, type AgeLimits, type FamilyAccessLevel, type FamilyDataKind } from '@/shared/domain/family';
 import { tariffOf } from '@/shared/domain/policies';
 import type { ClaimRow, Db, InsuredRow } from './db';
-import { notFound } from './http';
-import { dmsParam, paramValues } from './params';
+import { httpErrorOf, notFound } from './http';
+import { contractPricing, personPremium, PricingError } from '@/shared/domain/pricing';
+import { dmsParam } from './params';
 import { isoDay } from './time';
 
 export const ageLimits = (): AgeLimits => ({ maxChildAge: dmsParam('maxChildAge'), studentMaxAge: dmsParam('studentMaxAge') });
@@ -64,9 +65,20 @@ export function isDependent(i: InsuredRow): boolean {
   return isDependentChild(i, todayIso(), ageLimits());
 }
 
-/** Annual premium of a person on the policy by type (a family member by the age group on `on`). */
-export function annualPremiumOf(policy: Pick<Policy, 'tariff' | 'premium' | 'insuredCount' | 'program'>, person: Pick<InsuredRow, 'relation' | 'birthDate'>, on: string): number {
-  return personAnnualPremium(tariffOf(policy), person, on, paramValues());
+/**
+ * Annual premium of a person on the policy: by the terms of the policy's contract (by type or by the age band
+ * on `on`); a policy without a contract — by type from the policy tariff.
+ */
+export function annualPremiumOf(d: Db, policy: Pick<Policy, 'tariff' | 'premium' | 'insuredCount' | 'program' | 'contractId'>, person: Pick<InsuredRow, 'relation' | 'birthDate'>, on: string): number {
+  const c = policy.contractId ? d.contracts.find((x) => x.id === policy.contractId) : undefined;
+  const t = tariffOf(policy);
+  const pricing = c ? contractPricing(c.params) : contractPricing({ premiumEmployee: t.employee, premiumFamily: t.family });
+  try {
+    return personPremium(pricing, person, on).annual;
+  } catch (e) {
+    if (e instanceof PricingError) throw httpErrorOf(422, 'validation', e.problem);
+    throw e;
+  }
 }
 
 /** An appointment of a person whose medical data the signed-in person may see; anything else is 404. */

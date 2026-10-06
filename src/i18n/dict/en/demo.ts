@@ -62,4 +62,6 @@ export const demo: Translation<typeof Ru> = {
   'demo.migration.title': 'Demo: transfer files',
   'demo.migration.hint': 'Ready files of the previous system: 5 clients, 5 contracts, 200 insured persons, limits, 10 open claims and invoices, with a few rows with errors for the check report. Transfer date — {date}.',
   'demo.migration.download': 'Demo file: {step}',
+  'demo.acc.spouse': 'Family member — spouse',
+  'demo.hints.phoneSpouse': 'family member (spouse): {phone}',
 };

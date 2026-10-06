@@ -401,4 +401,6 @@ export const labels: Translation<typeof Ru> = {
   'labels.queueTab.age_limit': 'Children\'s age',
   'labels.censusRelation.parent': 'Parent',
   'labels.censusRelation.other': 'Other family member',
+  'labels.pricingBasis.flat_by_type': 'By type (employee / family member)',
+  'labels.pricingBasis.age_banded': 'By age band',
 };

@@ -34,9 +34,9 @@ import { ROLE_LABEL } from '@/shared/domain/labels';
 import type { ChangeRequestRow, ClientRow, Db, InsuredRow } from './db';
 import { createInsured, createListedInsured, nextPolicyNumber, refreshPolicyTotals } from './policy-core';
 import { notifyAssistance, syncAssistance } from './assistance-core';
-import { dmsParam, nextDocNumber, numbering, paramValues } from './params';
-import { personAnnualPremium } from '@/shared/domain/family';
-import { conflict, notFound } from './http';
+import { dmsParam, nextDocNumber, numbering } from './params';
+import { asPricingRule, contractPricing, personPremium, PricingError, type PricingRule } from '@/shared/domain/pricing';
+import { conflict, httpErrorOf, notFound } from './http';
 import { randomId } from './rng';
 import { isoDay, parseIso, tzIso } from './time';
 
@@ -284,12 +284,29 @@ export async function activateContract(d: Db, c: Contract, on: string): Promise<
 // ---------------------------------------------------------------- endorsements
 
 /**
- * Annual premium of an insured person under the contract: a transferred person's own premium (from the
- * files of the previous system), else by type — the employee's, or a family member's by the age group.
+ * Annual premium of an insured person under the contract and the rule that gave it: a transferred person's
+ * own premium (from the files of the previous system, no rule), else by the contract's `pricingBasis` — by type
+ * (premium_employee / premium_family) or by the age band on `on`. An `age_banded` contract without a usable
+ * band table is a 422.
  */
+export function premiumOf(c: Contract, i: Pick<InsuredRow, 'relation' | 'birthDate' | 'migratedPremium'>, on: string = c.params.startDate): { annual: number; rule?: PricingRule } {
+  if (i.migratedPremium) return { annual: i.migratedPremium.amount };
+  try {
+    return personPremium(contractPricing(c.params), i, on);
+  } catch (e) {
+    if (e instanceof PricingError) throw httpErrorOf(422, 'validation', e.problem);
+    throw e;
+  }
+}
+
 export function annualOf(c: Contract, i: Pick<InsuredRow, 'relation' | 'birthDate' | 'migratedPremium'>, on: string = c.params.startDate): number {
-  if (i.migratedPremium) return i.migratedPremium.amount;
-  return personAnnualPremium({ employee: c.params.premiumEmployee, family: c.params.premiumFamily }, i, on, paramValues());
+  return premiumOf(c, i, on).annual;
+}
+
+/** The date a person's premium was set on: the inclusion during the term, else the start of the contract. */
+function pricedOn(c: Contract, i: Pick<InsuredRow, 'addedAt'>): string {
+  const added = i.addedAt.slice(0, 10);
+  return added > c.params.startDate ? added : c.params.startDate;
 }
 
 export function claimsPaidFor(d: Db, insuredIds: readonly UUID[], from: string): number {
@@ -304,16 +321,17 @@ export function endorsementLines(d: Db, c: Contract, requests: readonly ChangeRe
   return requests.map((r) => {
     const label = r.description ?? CHANGE_TYPE_LABEL[r.type];
     if (r.type === 'add_insured') {
-      // The person's annual premium fixed with the request (a family member's by the age group), else by type now.
+      // The person's annual premium and its rule fixed with the request (by the contract terms), else computed now.
       const person = r.insuredId ? d.insured.find((i) => i.id === r.insuredId) : undefined;
       const fallback = person ?? (r.newPerson ? { relation: r.newPerson.relation, birthDate: r.newPerson.birthDate } : { relation: 'employee' as const, birthDate: '' });
-      const annual = typeof r.payload.annual === 'number' ? r.payload.annual : annualOf(c, fallback, r.effectiveDate);
-      const calc = addLine(annual, r.effectiveDate, c.params.startDate, c.params.endDate);
+      const fixed = typeof r.payload.annual === 'number' ? { annual: r.payload.annual, rule: asPricingRule(r.payload.rule) } : premiumOf(c, fallback, r.effectiveDate);
+      const calc = addLine(fixed.annual, r.effectiveDate, c.params.startDate, c.params.endDate, fixed.rule);
       return { changeRequestId: r.id, description: label, ...calc };
     }
     if (r.type === 'exclude_insured') {
       const person = d.insured.find((i) => i.id === r.insuredId);
-      const annual = person ? annualOf(c, person, r.effectiveDate) : c.params.premiumEmployee;
+      // The premium the person was priced at: the band of the inclusion date (or the contract start), not of the exclusion.
+      const annual = person ? annualOf(c, person, pricedOn(c, person)) : c.params.premiumEmployee;
       const calc = excludeLine(annual, r.effectiveDate, c.params.startDate, c.params.endDate, refundRule(), claimsPaidFor(d, r.insuredId ? [r.insuredId] : [], c.params.startDate));
       return { changeRequestId: r.id, description: label, ...calc };
     }

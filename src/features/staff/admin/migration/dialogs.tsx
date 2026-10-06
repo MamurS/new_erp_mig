@@ -8,6 +8,7 @@ import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { MIGRATION_COLUMNS } from '@/shared/domain/migration';
 import { MIGRATION_FREQUENCIES, MIGRATION_PROGRAMS, migrationBatchCreateSchema, migrationContractRowSchema, migrationReasonSchema } from '@/shared/schemas/migration';
 import { todayISO } from '@/shared/lib/format';
+import { PRICING_BASES, PRICING_BASIS_LABEL } from '@/shared/domain/pricing';
 import { Button } from '@/shared/ui/button';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
@@ -72,7 +73,7 @@ export function ManualContractDialog({ assistances, onClose }: { assistances: st
   const navigate = useNavigate();
   const manual = useManualMigration();
   const [date, setDate] = useState(todayISO());
-  const [row, setRow] = useState<Record<string, string>>({ ...EMPTY_ROW, program: 'standard', paymentFrequency: 'single' });
+  const [row, setRow] = useState<Record<string, string>>({ ...EMPTY_ROW, program: 'standard', paymentFrequency: 'single', pricing_basis: 'flat_by_type' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (k: string) => (v: string) => setRow((r) => ({ ...r, [k]: v }));
   const submit = async () => {
@@ -135,6 +136,22 @@ export function ManualContractDialog({ assistances, onClose }: { assistances: st
         {text('premium', t('migration.field.premium'), { inputMode: 'numeric', maxLength: 16 })}
         {text('premium_employee', t('migration.field.premiumEmployee'), { inputMode: 'numeric', maxLength: 16 })}
         {text('premium_family', t('migration.field.premiumFamily'), { inputMode: 'numeric', maxLength: 16 })}
+        <Field label={t('migration.field.pricingBasis')} error={errors.pricing_basis}>
+          {(a) => (
+            <Select {...a} value={row.pricing_basis} onChange={(e) => set('pricing_basis')(e.target.value)}>
+              {PRICING_BASES.map((b) => (
+                <option key={b} value={b}>
+                  {PRICING_BASIS_LABEL[b]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {row.pricing_basis === 'age_banded' && (
+          <Field label={t('migration.field.ageBands')} error={errors.age_bands} hint={t('migration.field.ageBandsHint')} className="sm:col-span-2">
+            {(a) => <Input {...a} maxLength={400} value={row.age_bands ?? ''} onChange={(e) => set('age_bands')(e.target.value)} />}
+          </Field>
+        )}
         <Field label={t('migration.field.paymentFrequency')} error={errors.paymentFrequency}>
           {(a) => (
             <Select {...a} value={row.paymentFrequency} onChange={(e) => set('paymentFrequency')(e.target.value)}>

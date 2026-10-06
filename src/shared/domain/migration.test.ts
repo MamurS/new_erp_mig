@@ -108,13 +108,13 @@ describe('reference order', () => {
 
   it('insured persons refer to transferred contracts already in force', () => {
     const refs = emptyDbRefs();
-    refs.contracts.set('MIG-2026/0458', { id: 'db-contract', program: 'standard', startDate: '2026-03-01', endDate: '2027-02-28', active: true, premiumEmployee: 4_000_000, premiumFamily: 3_000_000 });
+    refs.contracts.set('MIG-2026/0458', { id: 'db-contract', program: 'standard', startDate: '2026-03-01', endDate: '2027-02-28', active: true, premiumEmployee: 4_000_000, premiumFamily: 3_000_000, pricingBasis: 'flat_by_type' });
     const viaDb = validateBatch({ migrationDate: DATE, files: { insured: templates.insured } }, refs).insured!.valid[0]!.ref;
     // The premium by type comes from the contract in the system; no per-contract check for contracts outside the batch.
     expect(viaDb).toEqual({ contract: { db: 'db-contract' }, premium: 4_000_000, premiumSource: 'type' });
     const spouse = validateBatch({ migrationDate: DATE, files: { insured: templates.insured } }, refs).insured!.valid[1]!.ref;
     expect(spouse).toEqual({ contract: { db: 'db-contract' }, premium: 3_000_000, premiumSource: 'type', principal: { batch: 2 } });
-    refs.contracts.set('MIG-2026/0458', { id: 'db-contract', program: 'standard', startDate: '2026-03-01', endDate: '2027-02-28', active: false, premiumEmployee: 4_000_000, premiumFamily: 3_000_000 });
+    refs.contracts.set('MIG-2026/0458', { id: 'db-contract', program: 'standard', startDate: '2026-03-01', endDate: '2027-02-28', active: false, premiumEmployee: 4_000_000, premiumFamily: 3_000_000, pricingBasis: 'flat_by_type' });
     expect(validateBatch({ migrationDate: DATE, files: { insured: templates.insured } }, refs).insured!.errorRows).toBe(2);
   });
 

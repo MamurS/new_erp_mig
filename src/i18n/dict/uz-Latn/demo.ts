@@ -62,4 +62,6 @@ export const demo: Translation<typeof Ru> = {
   'demo.migration.title': 'Demo: koʻchirish fayllari',
   'demo.migration.hint': 'Eski tizimning tayyor fayllari: 5 mijoz, 5 shartnoma, 200 sugʻurtalangan, limitlar, 10 ochiq zarar va hisoblar, tekshiruv hisoboti uchun bir nechta xatoli qatorlar bilan. Koʻchirish sanasi — {date}.',
   'demo.migration.download': 'Demo fayl: {step}',
+  'demo.acc.spouse': 'Oila aʼzosi — turmush oʻrtogʻi',
+  'demo.hints.phoneSpouse': 'oila aʼzosi (turmush oʻrtogʻi): {phone}',
 };
