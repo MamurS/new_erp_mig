@@ -106,6 +106,9 @@ const staffRoutes: RouteObject[] = [
 const hrRoutes: RouteObject[] = [
   { index: true, lazy: lazy(() => import('@/features/hr/pages/EmployeesPage')) },
   { path: 'employees/new', lazy: lazy(() => import('@/features/hr/pages/AddEmployeePage')) },
+  { path: 'family', lazy: lazy(() => import('@/features/hr/pages/FamilyPage')) },
+  { path: 'family/new', lazy: lazy(() => import('@/features/hr/pages/AddFamilyMemberPage')) },
+  { path: 'family/requests', lazy: lazy(() => import('@/features/hr/pages/FamilyRequestsPage')) },
   { path: 'import', lazy: lazy(() => import('@/features/hr/pages/ImportPage')) },
   { path: 'documents', lazy: lazy(() => import('@/features/hr/pages/DocumentsPage')) },
   { path: 'kp/:kpId', lazy: lazy(() => import('@/features/kp/KpViewPage')) },
@@ -181,6 +184,7 @@ const appRoutes: RouteObject[] = [
   { path: 'chat', lazy: lazy(() => import('@/features/insured/pages/ChatPage')) },
   { path: 'profile', lazy: lazy(() => import('@/features/insured/pages/ProfilePage')) },
   { path: 'certificate', lazy: lazy(() => import('@/features/insured/pages/CertificatePage')) },
+  { path: 'family', lazy: lazy(() => import('@/features/insured/pages/FamilyPage')) },
   { path: 'coverage', lazy: lazy(() => import('@/features/insured/pages/CoveragePage')) },
 ];
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tm } from '@/i18n';
-import { changeDateProblem, daysInclusive, defaultEndDate, defaultTariff, policyPeriodProblem, policyPremium, proRataDelta, tariffOf } from './policies';
+import { changeDateProblem, daysInclusive, defaultEndDate, defaultTariff, policyPeriodProblem, policyPremium, proRataAmount, proRataDelta, tariffOf } from './policies';
 
 const year = { startDate: '2026-01-01', endDate: '2026-12-31' };
 const leap = { startDate: '2028-01-01', endDate: '2028-12-31' };
@@ -27,7 +27,7 @@ describe('policy premium and pro-rata (POLICY_SPEC §3)', () => {
     expect(proRataDelta(year, t, 'add', '2026-01-01')).toBe(3_650_000);
     expect(proRataDelta(year, t, 'add', '2026-12-31')).toBe(10_000);
     expect(proRataDelta(year, t, 'exclude', '2026-07-02')).toBe(-1_830_000); // 183 of 365 days
-    expect(proRataDelta(year, t, 'add', '2026-07-02', 1)).toBe(3_294_000); // + one family member
+    expect(proRataAmount(year, t.employee + t.family, 'add', '2026-07-02')).toBe(3_294_000); // with one family member
     expect(proRataDelta(leap, { employee: 3_660_000, family: 0 }, 'add', '2028-12-31')).toBe(10_000);
   });
 

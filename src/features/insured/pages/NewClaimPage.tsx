@@ -20,6 +20,7 @@ import { MaskedInput } from '@/shared/ui/masked-input';
 import { toast } from '@/shared/ui/toast';
 import { BIG, ChoiceChip, ScreenHeader, WizardSteps } from '../components';
 import { aiLang } from '../lib';
+import { NoMedical, PersonNote, usePerson } from '../person';
 
 interface Photo {
   id: number;
@@ -46,12 +47,18 @@ const FIELD_ERR: Record<FieldKey, I18nKey> = {
 let photoSeq = 0;
 
 export default function NewClaimPage() {
+  const { medical } = usePerson();
+  return medical ? <NewClaim /> : <NoMedical />;
+}
+
+function NewClaim() {
   const { t, lang } = useI18n();
   useDocumentTitle(t('app.refund.title'));
   const navigate = useNavigate();
   const me = useMe();
   const recognize = useRecognize();
   const submitClaim = useSubmitClaim();
+  const { personId, person, isSelf } = usePerson();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -86,7 +93,7 @@ export default function NewClaimPage() {
       // The server answers `available: false` when the scenario is off or the kill switch is on.
       if (r.items?.length) {
         try {
-          const res = await aiCheck.mutateAsync({ scenario: 'insured', items: r.items.map((x) => ({ text: x.name, amount: x.amount })), lang: aiLang(lang) });
+          const res = await aiCheck.mutateAsync({ scenario: 'insured', items: r.items.map((x) => ({ text: x.name, amount: x.amount })), lang: aiLang(lang), personId });
           setLabelled(res.available ? res : null);
         } catch {
           setLabelled(null);
@@ -177,6 +184,7 @@ export default function NewClaimPage() {
         amount: data.amount,
         serviceDate: data.serviceDate,
         providerName: data.providerName,
+        personId,
       });
       toast.success(t('app.refund.sent'));
       navigate(`/app/claims/${res.id}`, { replace: true });
@@ -186,11 +194,21 @@ export default function NewClaimPage() {
   };
 
   const err = (k: FieldKey) => (errors[k] ? t(errors[k]) : undefined);
+  // Where the money goes (FAMILY_SPEC): the employee's card by default, an adult family member may set an own one.
   const card = me.data?.payoutCardMasked ?? '•••• ••••';
+  const payout =
+    !isSelf && person
+      ? person.payoutCardOwn
+        ? t('app.refund.payoutOwnCard', { name: person.firstName })
+        : t('app.refund.payoutFamily', { name: person.firstName, card })
+      : me.data && me.data.relation !== 'employee' && !me.data.payoutCardOwn
+        ? t('app.refund.payoutPrincipal', { name: me.data.principalFirstName ?? '', card })
+        : t('app.refund.payout', { card });
 
   return (
     <div>
       <ScreenHeader title={t('app.refund.title')} back={step === 1 ? () => setStep(0) : '/app/claims'} />
+      <PersonNote />
       <WizardSteps labels={[t('app.refund.step1'), t('app.refund.step2')]} current={step} />
 
       <div key={step} className="animate-step">
@@ -379,9 +397,9 @@ export default function NewClaimPage() {
               )}
             </fieldset>
 
-            <p className="flex items-center gap-2 rounded-card bg-sky px-4 py-3 font-semibold text-sky-text">
+            <p className="flex items-center gap-2 rounded-card bg-sky px-4 py-3 font-semibold text-sky-text" data-testid="refund-payout">
               <CreditCard className="h-5 w-5 shrink-0" aria-hidden />
-              {t('app.refund.payout', { card })}
+              {payout}
             </p>
 
             <Button type="submit" disabled={processing} className={BIG}>
@@ -418,9 +436,9 @@ export default function NewClaimPage() {
                 </div>
               </dl>
             )}
-            <p className="flex items-center gap-2 rounded-card bg-sky px-4 py-3 font-semibold text-sky-text">
+            <p className="flex items-center gap-2 rounded-card bg-sky px-4 py-3 font-semibold text-sky-text" data-testid="refund-payout">
               <CreditCard className="h-5 w-5 shrink-0" aria-hidden />
-              {t('app.refund.payout', { card })}
+              {payout}
             </p>
             {submitError && (
               <p role="alert" className="rounded-btn bg-danger-soft px-4 py-3 font-semibold text-danger-text">

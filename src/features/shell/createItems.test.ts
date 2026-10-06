@@ -20,7 +20,7 @@ const EXPECTED: Record<Role, { items: CreateItemId[]; auto: AutoItemId[] }> = {
   sales_manager: { items: ['client', 'deal', 'membership'], auto: ['policy', 'endorsement', 'kp_contract'] },
   legal: { items: [], auto: [] },
   claims_officer: { items: ['claim'], auto: [] },
-  hr: { items: ['membership'], auto: ['policy', 'endorsement'] },
+  hr: { items: ['membership', 'family'], auto: ['policy', 'endorsement'] },
   insured: { items: [], auto: [] },
   clinic_registrar: { items: ['guarantee'], auto: [] },
   clinic_admin: { items: ['guarantee', 'user'], auto: [] },
@@ -69,6 +69,7 @@ describe('createMenuFor', () => {
     expect(to('underwriter', 'client')?.to).toBe('/staff/clients?create=client');
     expect(to('sales_manager', 'membership')?.to).toBe('/staff/endorsements?create=request');
     expect(to('hr', 'membership')?.to).toBe('/hr/employees/new');
+    expect(to('hr', 'family')?.to).toBe('/hr/family/new');
     expect(to('operator', 'claim')?.command).toBe('pick-insured-for-claim');
     expect(to('claims_officer', 'claim')?.to).toBe('/staff/claims?create=claim');
     expect(to('asst_operator', 'case')?.to).toBe('/assist/insured');

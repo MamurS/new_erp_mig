@@ -2,11 +2,12 @@
  * «Данные для оценки» (LIFECYCLE_SPEC §4): an anonymous census — gender, birth year, relation.
  * Names, PINFL and phones are never accepted at this stage: such columns are dropped with a warning.
  */
-import { defineLabels, msg } from '@/i18n';
+import { msg } from '@/i18n';
 import Papa from 'papaparse';
 import type { AgeBand, CensusRelation, ISODate } from '@/shared/types';
 import { toCsv } from '@/shared/lib/csv';
 import { AGE_BANDS, ageOn, bandOf, type CensusRow } from './tariff';
+import { RELATION_LABEL } from './family';
 
 export const CENSUS_COLUMNS = ['gender', 'birthYear', 'relation'] as const;
 export const CENSUS_MAX_ROWS = 5000;
@@ -15,7 +16,7 @@ export const CENSUS_MAX_BYTES = 1024 * 1024;
 /** Column names that look like personal data: dropped, never stored. */
 const PII_COLUMN = /(name|fio|фио|имя|фамил|отчеств|pinfl|пинфл|jshshir|phone|tel|телеф|email|почт|passport|паспорт|birthdate|дата.?рожд|address|адрес)/i;
 
-export const RELATION_LABEL = defineLabels<CensusRelation>('labels.censusRelation', ['employee', 'spouse', 'child']);
+export { RELATION_LABEL };
 
 export function censusTemplateCsv(): string {
   return toCsv(CENSUS_COLUMNS, [
@@ -49,6 +50,10 @@ function relation(v: string): CensusRelation | null {
   if (['spouse', 'супруг', 'супруга', 'супруг(а)', 'жена', 'муж', "turmush o'rtog'i"].includes(s)) return 'spouse';
   // eslint-disable-next-line mig/no-cyrillic-ui -- accepted spellings of input values, not interface strings
   if (['child', 'ребёнок', 'ребенок', 'дети', 'farzand', 'bola'].includes(s)) return 'child';
+  // eslint-disable-next-line mig/no-cyrillic-ui -- accepted spellings of input values, not interface strings
+  if (['parent', 'родитель', 'мать', 'отец', 'ota-ona', 'ota', 'ona'].includes(s)) return 'parent';
+  // eslint-disable-next-line mig/no-cyrillic-ui -- accepted spellings of input values, not interface strings
+  if (['other', 'другой', 'boshqa'].includes(s)) return 'other';
   return null;
 }
 

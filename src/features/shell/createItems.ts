@@ -17,7 +17,7 @@ import { portalOf, type Portal } from '@/shared/auth/home';
 /** Something the layout does itself instead of navigating (e.g. open the staff search to pick an insured person). */
 export type CreateCommand = 'pick-insured-for-claim';
 
-export type CreateItemId = 'client' | 'deal' | 'membership' | 'claim' | 'case' | 'guarantee' | 'user' | 'clinic' | 'assistance';
+export type CreateItemId = 'client' | 'deal' | 'membership' | 'family' | 'claim' | 'case' | 'guarantee' | 'user' | 'clinic' | 'assistance';
 export type AutoItemId = 'policy' | 'endorsement' | 'kp_contract';
 
 interface Variant {
@@ -61,6 +61,8 @@ export const CREATE_ITEMS: readonly CreateDef[] = [
       { portal: 'hr', perm: 'hr.employees.manage', label: 'create.item.membership', to: '/hr/employees/new', hint: 'create.hint.membershipHr' },
     ],
   },
+  // A family member of an employee (FAMILY_SPEC): the same change request as an employee, with the relation.
+  { id: 'family', variants: [{ portal: 'hr', perm: 'hr.employees.manage', label: 'create.item.family', to: '/hr/family/new', hint: 'create.hint.familyHr' }] },
   {
     id: 'claim',
     variants: [

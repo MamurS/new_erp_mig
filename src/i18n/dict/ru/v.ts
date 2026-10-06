@@ -139,4 +139,10 @@ export const v = {
   'v.file.types': 'Можно загрузить только PDF, JPEG или PNG',
   'v.file.tooLarge': 'Файл больше {mb} МБ',
   'v.file.mismatch': 'Содержимое файла не совпадает с его типом',
+  'v.relation': 'Укажите, кем приходится: employee, spouse, child, parent или other',
+  'v.principalRequired': 'Укажите ПИНФЛ сотрудника (principal_pinfl)',
+  'v.principalForEmployee': 'У сотрудника principal_pinfl не заполняется',
+  'v.fullNameLatin': 'ФИО латиницей, как в ID-карте: Фамилия Имя Отчество',
+  'v.familyConsentRequired': 'Подтвердите согласие члена семьи на обработку персональных данных',
+  'v.cardFormat': 'Номер карты: 16 цифр',
 } satisfies Record<string, string>;

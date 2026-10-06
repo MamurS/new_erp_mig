@@ -209,7 +209,7 @@ export const clientHandlers = [
       const term = q(ctx.url);
       let list = db().insured.filter((i) => i.clientId === c.id);
       if (term) list = list.filter((i) => matchesSearch(term, i.fullName));
-      return paginate(sortBy(list, ctx.url, { fullName: (i) => i.fullName, position: (i) => i.position }, 'fullName:asc').map((i) => toInsuredListItem(i, user)), ctx.url);
+      return paginate(sortBy(list, ctx.url, { fullName: (i) => i.fullName, position: (i) => i.position }, 'fullName:asc').map((i) => toInsuredListItem(db(), i, user)), ctx.url);
     }),
   ),
   http.get(

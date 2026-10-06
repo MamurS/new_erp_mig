@@ -13,7 +13,12 @@ import { can } from '@/shared/auth/permissions';
 import { canApproveDecision } from '@/shared/domain/settlement';
 import { clauseLabel } from '@/features/documents/templates';
 import { currentReserve, reserveTimeline } from './settlement-core';
+import { ageLimits, familyBrief, payoutCardOf, principalOf, todayIso } from './family-core';
+import { ageLimitDate, childAgeLimit, limitPoolOf, reachedAgeLimit } from '@/shared/domain/family';
+import { limitModeOf } from '@/shared/config/dmsParameters';
+import { paramValues } from './params';
 
+/** Insured people of a client (employees and family members, each person counts). */
 export function insuredCountFor(d: Db, clientId: string): number {
   return d.insured.filter((i) => i.clientId === clientId && i.status === 'active').length;
 }
@@ -41,7 +46,15 @@ export function toClient(d: Db, c: ClientRow): Client {
   };
 }
 
-export function toInsured(i: InsuredRow): Insured {
+/** A child over the age limit: the staff card explains the `age_limit` task of the manager queue. */
+function ageLimitOf(i: InsuredRow): Pick<Insured, 'ageLimit'> {
+  const limits = ageLimits();
+  if (!reachedAgeLimit(i, todayIso(), limits)) return {};
+  return { ageLimit: { age: childAgeLimit(i, limits), reachedOn: ageLimitDate(i, limits) } };
+}
+
+export function toInsured(d: Db, i: InsuredRow): Insured {
+  const principal = principalOf(d, i);
   return {
     id: i.id,
     clientId: i.clientId,
@@ -52,7 +65,11 @@ export function toInsured(i: InsuredRow): Insured {
     birthDateMasked: maskBirthDate(i.birthDate),
     pinflMasked: maskPinfl(i.pinfl),
     phoneMasked: maskPhone(i.phone),
-    familyMembersCount: i.familyMembersCount,
+    relation: i.relation,
+    ...(principal ? { principalId: principal.id, principalName: principal.fullName } : {}),
+    ...(i.isStudent ? { isStudent: true } : {}),
+    ...ageLimitOf(i),
+    family: familyBrief(d, i),
     appStatus: i.appStatus,
     myIdVerified: i.myIdVerified,
     attachedClinicId: i.attachedClinicId,
@@ -63,7 +80,8 @@ export function toInsured(i: InsuredRow): Insured {
   };
 }
 
-export function toInsuredListItem(i: InsuredRow, user: SessionUser): InsuredListItem {
+export function toInsuredListItem(d: Db, i: InsuredRow, user: SessionUser): InsuredListItem {
+  const principal = principalOf(d, i);
   const base: InsuredListItem = {
     id: i.id,
     fullName: i.fullName,
@@ -73,6 +91,8 @@ export function toInsuredListItem(i: InsuredRow, user: SessionUser): InsuredList
     position: i.position,
     status: i.status,
     appStatus: i.appStatus,
+    relation: i.relation,
+    ...(principal ? { principalId: principal.id, principalName: principal.fullName } : {}),
   };
   if (insuredVisibility(user.role) === 'masked') {
     base.pinflMasked = maskPinfl(i.pinfl);
@@ -85,7 +105,7 @@ export function toInsuredListItem(i: InsuredRow, user: SessionUser): InsuredList
 export function toInsuredDetail(d: Db, i: InsuredRow): InsuredDetail {
   const policy = d.policies.find((p) => p.id === i.policyId)!;
   return {
-    ...toInsured(i),
+    ...toInsured(d, i),
     policyNumber: policy.number,
     program: policy.program,
     policyStart: policy.startDate,
@@ -102,7 +122,7 @@ export function toHrEmployee(d: Db, i: InsuredRow): HrEmployee {
     position: i.position,
     program: policy?.program ?? 'standard',
     insuredFrom: i.insuredFrom,
-    familyMembersCount: i.familyMembersCount,
+    family: familyBrief(d, i),
     appStatus: i.appStatus,
     status: i.status,
     excludedFrom: i.excludedFrom,
@@ -112,27 +132,41 @@ export function toHrEmployee(d: Db, i: InsuredRow): HrEmployee {
 
 const PAID_LIKE = new Set(['approved', 'to_pay', 'paid']);
 
+/**
+ * Limits of a person. Parameter `limitMode`: `individual` — the person's own consumption; `family_shared` — one
+ * pool per family and category: the consumption of every person of the family on the policy counts.
+ */
 export function limitsFor(d: Db, i: InsuredRow): LimitUsage[] {
   const policy = d.policies.find((p) => p.id === i.policyId);
   const program = PROGRAMS[policy?.program ?? 'standard'];
   const from = policy ? parseIso(policy.startDate) : 0;
   const used: Record<LimitCategory, number> = { outpatient: 0, dental: 0, medicines: 0, inpatient: 0 };
+  const reserved: Record<LimitCategory, number> = { outpatient: 0, dental: 0, medicines: 0, inpatient: 0 };
+  const pool = new Set(limitPoolOf(i, d.insured, limitModeOf(paramValues())));
   for (const c of d.claims) {
-    if (c.insuredId !== i.id || !PAID_LIKE.has(c.status)) continue;
+    if (!pool.has(c.insuredId) || !PAID_LIKE.has(c.status)) continue;
     if (parseIso(c.serviceDate) < from - 7 * DAY) continue;
     used[CLAIM_TO_LIMIT[c.category]] += c.amountApproved ?? c.amountClaimed;
   }
-  // Used before the transfer from the previous system (as of the migration date) counts too.
-  for (const [cat, amount] of Object.entries(i.migratedUsed ?? {}) as [LimitCategory, number][]) used[cat] += amount;
-  // Lines accepted by an assistance count as used; approved guarantee letters reserve the limit.
-  const extra = limitExtras(d, i, from);
-  return (['outpatient', 'dental', 'medicines', 'inpatient'] as const).map((category) => ({
+  for (const person of d.insured.filter((x) => pool.has(x.id))) {
+    // Used before the transfer from the previous system (as of the migration date) counts too.
+    for (const [cat, amount] of Object.entries(person.migratedUsed ?? {}) as [LimitCategory, number][]) used[cat] += amount;
+    // Lines accepted by an assistance count as used; approved guarantee letters reserve the limit.
+    const extra = limitExtras(d, person, from);
+    for (const cat of LIMIT_CATEGORIES) {
+      used[cat] += extra.used[cat];
+      reserved[cat] += extra.reserved[cat];
+    }
+  }
+  return LIMIT_CATEGORIES.map((category) => ({
     category,
     limit: program.limits[category],
-    used: used[category] + extra.used[category],
-    reserved: extra.reserved[category],
+    used: used[category],
+    reserved: reserved[category],
   }));
 }
+
+const LIMIT_CATEGORIES = ['outpatient', 'dental', 'medicines', 'inpatient'] as const;
 
 export function toClaimDetail(d: Db, c: ClaimRow, user: SessionUser): ClaimDetail {
   const i = d.insured.find((x) => x.id === c.insuredId)!;
@@ -171,7 +205,7 @@ export function toClaimListItem(c: ClaimRow) {
   return { ...claim, reserve: currentReserve(c) };
 }
 
-export function toMyClaim(c: ClaimRow, i: InsuredRow): MyClaim {
+export function toMyClaim(d: Db, c: ClaimRow, i: InsuredRow): MyClaim {
   const status = toMyClaimStatus(c.status);
   const whenReached = (targets: string[]) => c.history.find((h) => targets.includes(h.to))?.at;
   const receivedAt = c.createdAt;
@@ -194,7 +228,7 @@ export function toMyClaim(c: ClaimRow, i: InsuredRow): MyClaim {
     serviceDate: c.serviceDate,
     status,
     steps,
-    payoutCardMasked: maskCard(i.payoutCard),
+    payoutCardMasked: maskCard(payoutCardOf(d, i).card),
   };
   if (status === 'approved') out.expectedPayoutBy = isoDay(Date.now() + 2 * DAY);
   if (status === 'received' || status === 'checking') out.expectedPayoutBy = isoDay(parseIso(c.slaDueAt) + 2 * DAY);

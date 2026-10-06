@@ -45,7 +45,7 @@ describe('KP screen', () => {
     const user = userEvent.setup();
     renderNew();
     const employees = await screen.findByLabelText('Сотрудников');
-    const active = db().insured.filter((i) => i.clientId === demoClientId() && i.status === 'active');
+    const active = db().insured.filter((i) => i.clientId === demoClientId() && i.status === 'active' && i.relation === 'employee');
     expect(employees).toHaveValue(String(active.length));
     expect(screen.getByLabelText('Язык')).toHaveValue('ru');
     expect(screen.getByLabelText('Обложка')).toHaveValue('grey');

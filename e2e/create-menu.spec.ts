@@ -24,7 +24,7 @@ const EXPECTED: Record<PortalRole, { items: string[]; auto: Auto[] }> = {
   sales_manager: { items: ['Клиент (лид)', 'Сделка', 'Изменение состава'], auto: ['policy', 'endorsement', 'kp_contract'] },
   legal: { items: [], auto: [] },
   claims_officer: { items: ['Убыток'], auto: [] },
-  hr: { items: ['Изменение состава'], auto: ['policy', 'endorsement'] },
+  hr: { items: ['Изменение состава', 'Член семьи'], auto: ['policy', 'endorsement'] },
   clinic_registrar: { items: ['Гарантийное письмо'], auto: [] },
   clinic_admin: { items: ['Гарантийное письмо', 'Пользователь'], auto: [] },
   asst_operator: { items: ['Обращение'], auto: [] },

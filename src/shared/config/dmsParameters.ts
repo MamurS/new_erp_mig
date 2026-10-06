@@ -10,9 +10,9 @@ import { DEFAULT_NUMBERING, DOC_NUMBER_KINDS, docNumber, numberingTemplateProble
 import { formatMoney, formatNumber } from '@/shared/lib/format';
 import { defineLabels, msg, t, tKey } from '@/i18n';
 
-export type DmsParamUnit = 'uzs' | 'percent' | 'days' | 'workdays' | 'minutes' | 'count' | 'ratio' | 'option';
+export type DmsParamUnit = 'uzs' | 'percent' | 'days' | 'workdays' | 'minutes' | 'count' | 'ratio' | 'option' | 'years';
 
-export const DMS_PARAM_GROUPS = ['guarantee', 'assistance', 'clinics', 'limits', 'kp', 'tariff', 'contracts', 'claims', 'security'] as const;
+export const DMS_PARAM_GROUPS = ['guarantee', 'assistance', 'clinics', 'limits', 'family', 'kp', 'tariff', 'contracts', 'claims', 'security'] as const;
 export type DmsParamGroup = (typeof DMS_PARAM_GROUPS)[number];
 /** Section titles of the parameters page, in the current language. */
 export const DMS_PARAM_GROUP_LABEL = defineLabels<DmsParamGroup>('params.group', DMS_PARAM_GROUPS);
@@ -392,6 +392,35 @@ const SPECS: Record<DmsParamKey, DmsParamSpec> = {
     integer: true,
     audience: 'staff',
   },
+  // Family members (FAMILY_SPEC): one setting for all programs (programs carry only their limits).
+  limitMode: {
+    group: 'family',
+    unit: 'option',
+    defaultValue: 0,
+    min: 0,
+    max: 1,
+    integer: true,
+    audience: 'all',
+    options: 2,
+  },
+  maxChildAge: {
+    group: 'family',
+    unit: 'years',
+    defaultValue: 18,
+    min: 1,
+    max: 30,
+    integer: true,
+    audience: 'all',
+  },
+  studentMaxAge: {
+    group: 'family',
+    unit: 'years',
+    defaultValue: 23,
+    min: 1,
+    max: 30,
+    integer: true,
+    audience: 'all',
+  },
 };
 
 export const DMS_PARAM_KEYS = Object.keys(SPECS) as DmsParamKey[];
@@ -439,6 +468,7 @@ const UNIT_SUFFIX: Record<DmsParamUnit, () => string> = {
   count: () => '',
   ratio: () => '',
   option: () => '',
+  years: () => t('params.unit.years'),
 };
 
 export function dmsUnitLabel(unit: DmsParamUnit): string {
@@ -468,6 +498,13 @@ export function fromDisplayValue(key: DmsParamKey, value: number): number {
 /** Share of the limit used from which it counts as running low: 1 − `limitLowShare`. */
 export function limitWarnRatio(values: Pick<DmsParamValues, 'limitLowShare'>): number {
   return 1 - values.limitLowShare;
+}
+
+/** How the limits of a family are counted (parameter `limitMode`): per person or one pool per family and category. */
+export const LIMIT_MODES = ['individual', 'family_shared'] as const;
+export type LimitMode = (typeof LIMIT_MODES)[number];
+export function limitModeOf(values: Pick<DmsParamValues, 'limitMode'>): LimitMode {
+  return LIMIT_MODES[values.limitMode] ?? 'individual';
 }
 
 /** Parameter with the base annual rate of each program (quotes, LIFECYCLE_SPEC §5). */

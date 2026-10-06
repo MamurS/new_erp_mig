@@ -77,7 +77,7 @@ export const insuredHandlers = [
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((i) => i.clientId === clientId);
       const p = paginate(sortBy(list, url, { fullName: (i) => i.fullName, clientName: (i) => i.clientName }, 'fullName:asc'), url);
-      return { ...p, items: p.items.map((i) => toInsuredListItem(i, user)) };
+      return { ...p, items: p.items.map((i) => toInsuredListItem(db(), i, user)) };
     }),
   ),
   http.get(

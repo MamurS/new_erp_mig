@@ -141,4 +141,10 @@ export const v: Translation<typeof Ru> = {
   'v.file.types': 'Only PDF, JPEG or PNG files can be uploaded',
   'v.file.tooLarge': 'The file is larger than {mb} MB',
   'v.file.mismatch': 'The file content does not match its type',
+  'v.relation': 'Specify the relation: employee, spouse, child, parent or other',
+  'v.principalRequired': 'Specify the employee\'s PINFL (principal_pinfl)',
+  'v.principalForEmployee': 'Leave principal_pinfl empty for an employee',
+  'v.fullNameLatin': 'Full name in Latin script as in the ID card: Surname Given Patronymic',
+  'v.familyConsentRequired': 'Confirm the family member\'s consent to the processing of personal data',
+  'v.cardFormat': 'Card number: 16 digits',
 };

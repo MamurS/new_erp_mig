@@ -1,9 +1,10 @@
 /* Server-side rules of policy issuance and insured-list changes (POLICY_SPEC). */
 import { msg } from '@/i18n/core';
 import Papa from 'papaparse';
-import type { ClientDocument, Policy, PolicyChange, PolicyChangeKind, UUID } from '@/shared/types';
+import type { ClientDocument, InsuredRelation, Policy, PolicyChange, PolicyChangeKind, UUID } from '@/shared/types';
 import type { HrImportError } from '@/shared/types/dto';
-import { changeDateProblem, POLICY_CSV_MAX_BYTES, POLICY_CSV_MAX_ROWS, proRataDelta, tariffOf } from '@/shared/domain/policies';
+import { changeDateProblem, POLICY_CSV_MAX_BYTES, POLICY_CSV_MAX_ROWS, proRataAmount } from '@/shared/domain/policies';
+import { annualPremiumOf } from './family-core';
 import { policyListRowSchema } from '@/shared/schemas/forms';
 import { formatMoney } from '@/shared/lib/format';
 import type { ClientRow, Db, InsuredRow, PolicyChangeRow } from './db';
@@ -22,7 +23,7 @@ export function parsePolicyList(text: string): { total: number; rows: PolicyList
   const header = parsed.meta.fields ?? [];
   const missing = ['fullName', 'birthDate', 'pinfl', 'phone', 'position'].filter((h) => !header.includes(h));
   if (missing.length) throw new HttpError(422, 'validation', 'srv.hr.missingColumns', { params: { columns: missing.join(', ') } });
-  const rows: PolicyListRow[] = [];
+  const rows: { row: number; data: PolicyListRow }[] = [];
   const errors: HrImportError[] = [];
   const seen = new Set<string>();
   parsed.data.forEach((raw, idx) => {
@@ -36,19 +37,74 @@ export function parsePolicyList(text: string): { total: number; rows: PolicyList
       return;
     }
     seen.add(r.data.pinfl);
-    rows.push(r.data);
+    rows.push({ row: idx + 2, data: r.data });
   });
-  return { total: parsed.data.length, rows, errors };
+  // A family member refers to an employee of the same list (a row per person, FAMILY_SPEC).
+  const employees = new Set(rows.filter((x) => x.data.relation === 'employee').map((x) => x.data.pinfl));
+  const ok = rows.filter((x) => {
+    if (x.data.relation === 'employee' || employees.has(x.data.principal_pinfl ?? '')) return true;
+    errors.push({ row: x.row, field: 'principal_pinfl', message: msg('srv.policy.principalNotInList') });
+    return false;
+  });
+  errors.sort((a, b) => a.row - b.row);
+  return { total: parsed.data.length, rows: ok.map((x) => x.data), errors };
 }
 
-export function createInsured(
-  d: Db,
-  client: ClientRow,
-  policy: Policy,
-  person: { fullName: string; position: string; birthDate: string; pinfl: string; phone: string; familyMembers: number },
-  insuredFrom: string,
-  appStatus: InsuredRow['appStatus'],
-): InsuredRow {
+/** Creates the persons of a list: employees first, then their family members under them. */
+export function createListedInsured(d: Db, client: ClientRow, policy: Policy, rows: readonly ContractListRow[], insuredFrom: string, appStatus: InsuredRow['appStatus']): InsuredRow[] {
+  const out: InsuredRow[] = [];
+  const byPinfl = new Map<string, InsuredRow>();
+  for (const r of [...rows].sort((a, b) => (a.relation === 'employee' ? 0 : 1) - (b.relation === 'employee' ? 0 : 1))) {
+    const principal = r.relation === 'employee' ? undefined : byPinfl.get(r.principalPinfl ?? '');
+    if (r.relation !== 'employee' && !principal) continue;
+    const person = createInsured(d, client, policy, { ...r, ...(principal ? { principalId: principal.id } : {}) }, insuredFrom, appStatus);
+    byPinfl.set(person.pinfl, person);
+    out.push(person);
+  }
+  return out;
+}
+
+/** A person of an initial list or appendix 2 (a row per person). */
+export interface ContractListRow {
+  fullName: string;
+  position: string;
+  birthDate: string;
+  pinfl: string;
+  phone: string;
+  relation: InsuredRelation;
+  principalPinfl?: string;
+  isStudent?: boolean;
+}
+
+/** Parsed CSV row → a person of the list. */
+export function toListRow(r: PolicyListRow): ContractListRow {
+  return {
+    fullName: r.fullName,
+    position: r.position,
+    birthDate: r.birthDate,
+    pinfl: r.pinfl,
+    phone: r.phone,
+    relation: r.relation,
+    ...(r.principal_pinfl ? { principalPinfl: r.principal_pinfl } : {}),
+    ...(r.student ? { isStudent: true } : {}),
+  };
+}
+
+/** A new insured person: an employee or a family member under `principalId` (FAMILY_SPEC). */
+export interface NewPerson {
+  fullName: string;
+  position: string;
+  birthDate: string;
+  pinfl: string;
+  /** Empty for a child without an own phone. */
+  phone: string;
+  relation?: InsuredRelation;
+  principalId?: UUID;
+  isStudent?: boolean;
+}
+
+export function createInsured(d: Db, client: ClientRow, policy: Policy, person: NewPerson, insuredFrom: string, appStatus: InsuredRow['appStatus']): InsuredRow {
+  const relation = person.relation ?? 'employee';
   const row: InsuredRow = {
     id: randomId(),
     userId: randomId(),
@@ -61,9 +117,13 @@ export function createInsured(
     pinfl: person.pinfl,
     phone: person.phone,
     email: `new${Date.now() % 100000}@client.example.uz`,
-    payoutCard: '8600000000000000',
-    familyMembersCount: person.familyMembers,
-    appStatus,
+    // A family member is paid to the employee's card until they set an own one.
+    payoutCard: relation === 'employee' ? '8600000000000000' : '',
+    relation,
+    ...(relation !== 'employee' && person.principalId ? { principalId: person.principalId } : {}),
+    ...(person.isStudent ? { isStudent: true } : {}),
+    // Nobody to invite without a phone (a child lives in the parent's app).
+    appStatus: person.phone ? appStatus : 'not_invited',
     myIdVerified: false,
     attachedClinicId: d.clinics[0]!.id,
     insuredFrom,
@@ -85,15 +145,15 @@ export function nextPolicyNumber(d: Db, year: number): string {
 }
 
 export function toPolicyChange(row: PolicyChangeRow): PolicyChange {
-  const { requestedById: _r, newPerson: _n, ...view } = row;
+  const { requestedById: _r, newPerson: _n, familyRequestId: _f, ...view } = row;
   return view;
 }
 
-/** Recomputes the insured and family counters of a policy and the client's figures. */
+/** Recomputes the insured (every person) and family-member counters of a policy and the client's figures. */
 export function refreshPolicyTotals(d: Db, policy: Policy): void {
   const members = d.insured.filter((i) => i.policyId === policy.id && i.status === 'active');
   policy.insuredCount = members.length;
-  policy.familyCount = members.reduce((s, i) => s + i.familyMembersCount, 0);
+  policy.familyCount = members.filter((i) => i.relation !== 'employee').length;
   const client = d.clients.find((c) => c.id === policy.clientId);
   if (client && client.activePolicyId === policy.id) client.premium = policy.premium;
 }
@@ -103,7 +163,17 @@ export function requestChange(
   actor: { id: UUID; displayName: string },
   client: ClientRow,
   kind: PolicyChangeKind,
-  input: { effectiveDate: string; fullName: string; position: string; familyMembers: number; insured?: InsuredRow; newPerson?: PolicyChangeRow['newPerson'] },
+  input: {
+    effectiveDate: string;
+    fullName: string;
+    position: string;
+    /** Who the person is; a family member goes under `principal` (an active employee of the client). */
+    relation?: InsuredRelation;
+    principal?: InsuredRow;
+    insured?: InsuredRow;
+    newPerson?: PolicyChangeRow['newPerson'];
+    familyRequestId?: UUID;
+  },
 ): PolicyChangeRow {
   const policy = activePolicyOf(d, client);
   if (!policy) throw new HttpError(409, 'conflict', 'srv.policyChanges.noPolicy');
@@ -114,6 +184,13 @@ export function requestChange(
   if (kind === 'add' && pending.some((c) => c.newPerson?.pinfl === input.newPerson?.pinfl)) {
     throw new HttpError(409, 'conflict', 'srv.policyChanges.alreadySent', { fields: { pinfl: msg('srv.policyChanges.sentShort') } });
   }
+  const relation = input.insured?.relation ?? input.relation ?? 'employee';
+  const principal = input.insured ? d.insured.find((i) => i.id === input.insured!.principalId) : input.principal;
+  if (relation !== 'employee' && (!principal || principal.clientId !== client.id || principal.relation !== 'employee')) throw new HttpError(422, 'validation', 'srv.family.noEmployee', { fields: { employeeId: msg('srv.family.noEmployee') } });
+  const birthDate = input.insured?.birthDate ?? input.newPerson?.birthDate ?? '';
+  // Each person has an own premium by the contract terms (by type or by the age band); a transferred
+  // person carries the annual premium of the previous system (refunded on exclusion).
+  const annual = input.insured?.migratedPremium ? input.insured.migratedPremium.amount : annualPremiumOf(d, policy, { relation, birthDate }, input.effectiveDate);
   const row: PolicyChangeRow = {
     id: randomId(),
     clientId: client.id,
@@ -124,17 +201,16 @@ export function requestChange(
     insuredId: input.insured?.id,
     fullName: input.fullName.replace(/\s+/g, ' '),
     position: input.position,
-    familyMembers: input.familyMembers,
+    relation,
+    ...(relation !== 'employee' && principal ? { principalId: principal.id, principalName: principal.fullName } : {}),
     effectiveDate: input.effectiveDate,
-    // A transferred person carries an own annual premium (with the family): it is the one refunded on exclusion.
-    premiumDelta: input.insured?.migratedPremium
-      ? proRataDelta(policy, { employee: input.insured.migratedPremium.amount, family: 0 }, kind, input.effectiveDate, 0)
-      : proRataDelta(policy, tariffOf(policy), kind, input.effectiveDate, input.familyMembers),
+    premiumDelta: proRataAmount(policy, annual, kind, input.effectiveDate),
     status: 'pending',
     requestedAt: tzIso(Date.now()),
     requestedByName: actor.displayName,
     requestedById: actor.id,
     newPerson: input.newPerson,
+    ...(input.familyRequestId ? { familyRequestId: input.familyRequestId } : {}),
   };
   d.policyChanges.unshift(row);
   return row;

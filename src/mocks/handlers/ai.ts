@@ -18,6 +18,7 @@ import { PROMPT_VERSION } from '@/features/ai/prompts';
 import { runGolden } from '@/features/ai/eval/run';
 import { AI_PROVIDERS_AVAILABLE, AI_SCENARIOS, aiEnabled } from '@/features/ai/settings';
 import { aiCheckRequestSchema, aiFeedbackSchema, aiRejectSchema, aiSettingsChangeSchema } from '@/shared/schemas/forms';
+import { personFor, personIdParam } from '../family-core';
 import { db, type Db, type InsuredRow } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route } from '../http';
 import { createMockProvider } from '../ai-provider';
@@ -150,7 +151,7 @@ export const aiHandlers = [
   ),
   http.post(
     `${API}/ai/coverage-check`,
-    route(async ({ request }) => {
+    route(async ({ request, url }) => {
       const { user } = requireSession(request);
       const input = await body(request, aiCheckRequestSchema);
       const d = db();
@@ -160,8 +161,10 @@ export const aiHandlers = [
       // ---- the insured person: only their own policy, never by id ----
       if (scenario === 'insured') {
         if (user.role !== 'insured' || !user.insuredId || !can(user, 'ai.coverage.self', { insuredId: user.insuredId })) throw forbidden();
-        const me = d.insured.find((i) => i.id === user.insuredId);
-        if (!me) throw notFound();
+        const viewer = d.insured.find((i) => i.id === user.insuredId);
+        if (!viewer) throw notFound();
+        // `?personId=`: a person of the family whose medical data the signed-in person may see (FAMILY_SPEC).
+        const me = personFor(d, viewer, personIdParam(url), 'medical').person;
         if (!aiEnabled(d.ai.settings, 'insured')) return OFF;
         const lang = input.lang ?? 'ru';
         if (input.items?.length) {

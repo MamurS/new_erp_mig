@@ -1,7 +1,7 @@
 /* «+ Создать» in the top bar: what the current role may start, plus documents the system creates itself. */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, ClipboardPlus, FilePlus2, FileSignature, FileText, Handshake, Headset, Hospital, Plus, Receipt, ShieldCheck, UserPlus, Users, type LucideIcon } from 'lucide-react';
+import { Building2, ClipboardPlus, FilePlus2, FileSignature, FileText, Handshake, Headset, Hospital, Plus, Receipt, ShieldCheck, UserPlus, Users, UsersRound, type LucideIcon } from 'lucide-react';
 import { t } from '@/i18n';
 import { useUser } from '@/shared/auth/session';
 import { cn } from '@/shared/lib/cn';
@@ -13,6 +13,7 @@ const ICON: Record<CreateItemId | AutoItemId, LucideIcon> = {
   client: Building2,
   deal: Handshake,
   membership: Users,
+  family: UsersRound,
   claim: Receipt,
   case: Headset,
   guarantee: ShieldCheck,

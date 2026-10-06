@@ -1,11 +1,11 @@
 import { t } from '@/i18n';
 import { forwardRef, type InputHTMLAttributes } from 'react';
-import { maskDate, maskMoney, maskPhone, maskPinfl } from '@/shared/lib/masks';
+import { maskCardNumber, maskDate, maskMoney, maskPhone, maskPinfl } from '@/shared/lib/masks';
 import { Input } from './input';
 
-export type MaskKind = 'phone' | 'pinfl' | 'date' | 'money';
+export type MaskKind = 'phone' | 'pinfl' | 'date' | 'money' | 'card';
 
-const MASKS: Record<MaskKind, (v: string) => string> = { phone: maskPhone, pinfl: maskPinfl, date: maskDate, money: maskMoney };
+const MASKS: Record<MaskKind, (v: string) => string> = { phone: maskPhone, pinfl: maskPinfl, date: maskDate, money: maskMoney, card: maskCardNumber };
 const META: Record<MaskKind, { inputMode: 'tel' | 'numeric'; readonly placeholder: string; autoComplete?: string }> = {
   phone: { inputMode: 'tel', placeholder: '+998 __ ___ __ __', autoComplete: 'tel' },
   pinfl: {
@@ -21,6 +21,7 @@ const META: Record<MaskKind, { inputMode: 'tel' | 'numeric'; readonly placeholde
     },
   },
   money: { inputMode: 'numeric', placeholder: '0' },
+  card: { inputMode: 'numeric', placeholder: '8600 ____ ____ ____', autoComplete: 'off' },
 };
 
 export interface MaskedInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {

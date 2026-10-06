@@ -72,6 +72,7 @@ import {
 import { clinicOf, clinicResponseMinutes, createAppointment, emitWebhook, isOverdueRequest, priceListOf, pushEvent, recomputeRegistry, refreshGuarantee, respondToAppointment, toGuaranteeView } from '../clinic-core';
 import { maskBirthDate, maskPhone, maskPinfl, formatPhoneFull } from '../mask';
 import { PROGRAMS } from '../programs';
+import { principalOf } from '../family-core';
 import { randomId, randomToken } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
 import { limitsFor } from '../views';
@@ -114,6 +115,8 @@ function toItem(d: Db, i: InsuredRow, access: 'full' | 'read'): AssistInsuredIte
     phoneMasked: maskPhone(i.phone),
     pinflMasked: maskPinfl(i.pinfl),
     birthDateMasked: maskBirthDate(i.birthDate),
+    relation: i.relation,
+    ...(i.principalId ? { principalName: principalOf(d, i)?.fullName } : {}),
     access,
   };
 }

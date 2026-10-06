@@ -32,10 +32,11 @@ import { addLine, CHANGE_TYPE_LABEL, excludeLine, programChangeLine, REFUND_RULE
 import { TARIFF_BASE_KEY } from '@/shared/config/dmsParameters';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import type { ChangeRequestRow, ClientRow, Db, InsuredRow } from './db';
-import { createInsured, nextPolicyNumber, refreshPolicyTotals } from './policy-core';
+import { createInsured, createListedInsured, nextPolicyNumber, refreshPolicyTotals } from './policy-core';
 import { notifyAssistance, syncAssistance } from './assistance-core';
 import { dmsParam, nextDocNumber, numbering } from './params';
-import { conflict, notFound } from './http';
+import { asPricingRule, contractPricing, personPremium, PricingError, type PricingRule } from '@/shared/domain/pricing';
+import { conflict, httpErrorOf, notFound } from './http';
 import { randomId } from './rng';
 import { isoDay, parseIso, tzIso } from './time';
 
@@ -252,11 +253,11 @@ export async function activateContract(d: Db, c: Contract, on: string): Promise<
   d.assignments.push({ policyId: policy.id, assistanceId: c.params.assistanceId ?? null, from: c.params.startDate, setById: c.params.migSignatoryId, setAt: tzIso(Date.now()) });
   syncAssistance(d);
   const list = d.contractInsured.find((x) => x.contractId === c.id)?.rows ?? [];
-  list.forEach((r, k) => {
-    const person = createInsured(d, client, policy, r, c.params.startDate, 'invited');
+  // A certificate for every person of appendix 2, family members included (FAMILY_SPEC).
+  createListedInsured(d, client, policy, list, c.params.startDate, 'invited').forEach((person, k) => {
     person.certificateNumber = certificateNumber(c.number, k + 1, numbering());
     person.contractId = c.id;
-    d.smsOutbox.unshift({ at: tzIso(Date.now()), insuredId: person.id, text: `Вы застрахованы по ДМС. Сертификат ${person.certificateNumber}. Скачайте приложение MIG ДМС.` });
+    if (person.phone) d.smsOutbox.unshift({ at: tzIso(Date.now()), insuredId: person.id, text: `Вы застрахованы по ДМС. Сертификат ${person.certificateNumber}. Скачайте приложение MIG ДМС.` });
   });
   for (const person of d.insured.filter((i) => i.policyId === policy.id)) await notifyAssistance(d, c.params.assistanceId, 'insured.added', person.id);
   await notifyAssistance(d, c.params.assistanceId, 'policy.assigned', policy.id);
@@ -283,12 +284,29 @@ export async function activateContract(d: Db, c: Contract, on: string): Promise<
 // ---------------------------------------------------------------- endorsements
 
 /**
- * Annual premium of an insured person under the contract: a transferred person's own premium (from the
- * files of the previous system), else employee plus family members by the contract's tariff.
+ * Annual premium of an insured person under the contract and the rule that gave it: a transferred person's
+ * own premium (from the files of the previous system, no rule), else by the contract's `pricingBasis` — by type
+ * (premium_employee / premium_family) or by the age band on `on`. An `age_banded` contract without a usable
+ * band table is a 422.
  */
-export function annualOf(c: Contract, i: Pick<InsuredRow, 'familyMembersCount' | 'migratedPremium'>): number {
-  if (i.migratedPremium) return i.migratedPremium.amount;
-  return c.params.premiumEmployee + c.params.premiumFamily * i.familyMembersCount;
+export function premiumOf(c: Contract, i: Pick<InsuredRow, 'relation' | 'birthDate' | 'migratedPremium'>, on: string = c.params.startDate): { annual: number; rule?: PricingRule } {
+  if (i.migratedPremium) return { annual: i.migratedPremium.amount };
+  try {
+    return personPremium(contractPricing(c.params), i, on);
+  } catch (e) {
+    if (e instanceof PricingError) throw httpErrorOf(422, 'validation', e.problem);
+    throw e;
+  }
+}
+
+export function annualOf(c: Contract, i: Pick<InsuredRow, 'relation' | 'birthDate' | 'migratedPremium'>, on: string = c.params.startDate): number {
+  return premiumOf(c, i, on).annual;
+}
+
+/** The date a person's premium was set on: the inclusion during the term, else the start of the contract. */
+function pricedOn(c: Contract, i: Pick<InsuredRow, 'addedAt'>): string {
+  const added = i.addedAt.slice(0, 10);
+  return added > c.params.startDate ? added : c.params.startDate;
 }
 
 export function claimsPaidFor(d: Db, insuredIds: readonly UUID[], from: string): number {
@@ -303,13 +321,17 @@ export function endorsementLines(d: Db, c: Contract, requests: readonly ChangeRe
   return requests.map((r) => {
     const label = r.description ?? CHANGE_TYPE_LABEL[r.type];
     if (r.type === 'add_insured') {
-      const family = Number(r.payload.familyMembers ?? r.newPerson?.familyMembers ?? 0);
-      const calc = addLine(c.params.premiumEmployee + c.params.premiumFamily * family, r.effectiveDate, c.params.startDate, c.params.endDate);
+      // The person's annual premium and its rule fixed with the request (by the contract terms), else computed now.
+      const person = r.insuredId ? d.insured.find((i) => i.id === r.insuredId) : undefined;
+      const fallback = person ?? (r.newPerson ? { relation: r.newPerson.relation, birthDate: r.newPerson.birthDate } : { relation: 'employee' as const, birthDate: '' });
+      const fixed = typeof r.payload.annual === 'number' ? { annual: r.payload.annual, rule: asPricingRule(r.payload.rule) } : premiumOf(c, fallback, r.effectiveDate);
+      const calc = addLine(fixed.annual, r.effectiveDate, c.params.startDate, c.params.endDate, fixed.rule);
       return { changeRequestId: r.id, description: label, ...calc };
     }
     if (r.type === 'exclude_insured') {
       const person = d.insured.find((i) => i.id === r.insuredId);
-      const annual = person ? annualOf(c, person) : c.params.premiumEmployee;
+      // The premium the person was priced at: the band of the inclusion date (or the contract start), not of the exclusion.
+      const annual = person ? annualOf(c, person, pricedOn(c, person)) : c.params.premiumEmployee;
       const calc = excludeLine(annual, r.effectiveDate, c.params.startDate, c.params.endDate, refundRule(), claimsPaidFor(d, r.insuredId ? [r.insuredId] : [], c.params.startDate));
       return { changeRequestId: r.id, description: label, ...calc };
     }

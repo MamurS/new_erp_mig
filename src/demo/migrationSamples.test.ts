@@ -10,6 +10,8 @@ import { MIGRATION_STEPS, emptyDbRefs, migrationFileName, parseMigrationCsv, val
 import { MIGRATION_DEMO_DATE, migrationDemoFiles } from './migrationSamples';
 
 const DIR = join(process.cwd(), 'e2e/fixtures/migration');
+/** Family members of the 200 employees (spouses and children), a row each. */
+const FAMILY_ROWS = 204;
 
 describe('demo files of the portfolio transfer', () => {
   const files = migrationDemoFiles();
@@ -33,12 +35,17 @@ describe('demo files of the portfolio transfer', () => {
     // Valid rows plus the rows with errors shown by the validation report.
     expect(rows.clients).toHaveLength(5 + 1);
     expect(rows.contracts).toHaveLength(5);
-    expect(rows.insured).toHaveLength(200 + 4);
+    // A row per person: 200 employees (+4 error rows) and their family members with the employee's PINFL.
+    const family = rows.insured!.filter((r) => r.relation !== 'employee');
+    expect(rows.insured!.filter((r) => r.relation === 'employee')).toHaveLength(200 + 4);
+    expect(family).toHaveLength(FAMILY_ROWS);
+    expect(family.every((r) => rows.insured!.some((e) => e.relation === 'employee' && e.pinfl === r.principal_pinfl))).toBe(true);
+    expect(family.filter((r) => r.relation === 'child').every((r) => !r.phone)).toBe(true);
     expect(rows.claims).toHaveLength(10 + 1);
     expect(rows.invoices!.length).toBeGreaterThanOrEqual(3);
     expect(rows.limits!.length).toBeGreaterThan(10);
     for (const s of MIGRATION_STEPS) expect(/[А-Яа-яЁё]/.test(files[s]), s).toBe(false);
-    expect(rows.insured!.filter((r) => /^\d{14}$/.test(r.pinfl ?? ''))).toHaveLength(203);
+    expect(rows.insured!.filter((r) => /^\d{14}$/.test(r.pinfl ?? ''))).toHaveLength(203 + FAMILY_ROWS);
   });
 
   it('premiums: by type for most contracts, individual for all of MIG-2026/0503, one deliberate mismatch', () => {
@@ -58,7 +65,8 @@ describe('demo files of the portfolio transfer', () => {
     const res = validateBatch({ migrationDate: MIGRATION_DEMO_DATE, files: Object.fromEntries(MIGRATION_STEPS.slice(0, 3).map((s) => [s, (parseMigrationCsv(s, files[s]) as { rows: RawRow[] }).rows])) }, refs);
     expect(res.insured!.issues.filter((i) => i.message === 'migration.v.noPremium')).toHaveLength(1);
     expect(res.contractPremiums!.filter((c) => !c.match).map((c) => [c.oldNumber, c.diff])).toEqual([['MIG-2026/0504', -2_500_000]]);
-    expect(res.contractPremiums!.find((c) => c.oldNumber === 'MIG-2026/0503')).toMatchObject({ insured: 40, individual: 40, diff: 0 });
+    // People are counted: 40 employees of MIG-2026/0503 and their family members, all with individual premiums.
+    expect(res.contractPremiums!.find((c) => c.oldNumber === 'MIG-2026/0503')).toMatchObject({ insured: 91, individual: 91, diff: 0 });
     expect(res.contractPremiums!.find((c) => c.oldNumber === 'MIG-2026/0505')).toMatchObject({ individual: 2, diff: 1, match: true });
   });
 });

@@ -34,6 +34,9 @@ export const specialty = z.enum([
   'ophthalmologist',
 ]);
 const appStatus = z.enum(['active', 'invited', 'not_invited']);
+export const insuredRelation = z.enum(['employee', 'spouse', 'child', 'parent', 'other']);
+export const familyRelation = z.enum(['spouse', 'child', 'parent', 'other']);
+const familyMemberBrief: z.ZodType<T.FamilyMemberBrief> = z.object({ id: uuid, fullName: z.string(), relation: familyRelation, status: z.enum(['active', 'excluded']) });
 const limitsRecord = z.object({ outpatient: money, dental: money, medicines: money, inpatient: money });
 /** «Перенесено из старой системы»: batch, date and author of the transfer. */
 export const migrationMark: z.ZodType<T.MigrationMark> = z.object({ batchId: uuid, at: isoDateTime, byName: z.string() });
@@ -158,7 +161,12 @@ const insuredBase = z.object({
   birthDateMasked: z.string(),
   pinflMasked: z.string(),
   phoneMasked: z.string(),
-  familyMembersCount: z.number(),
+  relation: insuredRelation,
+  principalId: uuid.optional(),
+  principalName: z.string().optional(),
+  isStudent: z.boolean().optional(),
+  ageLimit: z.object({ age: z.number(), reachedOn: isoDate }).optional(),
+  family: z.array(familyMemberBrief),
   appStatus,
   myIdVerified: z.boolean(),
   attachedClinicId: uuid,
@@ -179,6 +187,9 @@ export const insuredListItem: z.ZodType<D.InsuredListItem> = z.object({
   position: z.string(),
   status: z.enum(['active', 'excluded']),
   appStatus,
+  relation: insuredRelation,
+  principalId: uuid.optional(),
+  principalName: z.string().optional(),
   pinflMasked: z.string().optional(),
   phoneMasked: z.string().optional(),
   birthDateMasked: z.string().optional(),
@@ -600,7 +611,7 @@ export const queueItems = z.array(
     statusTone: z.enum(['default', 'success', 'warning', 'danger', 'info']),
     dueAt: isoDateTime,
     action: z.enum(['confirm', 'open', 'prepare_offer']),
-    subject: z.enum(['claim', 'registry', 'contract', 'endorsement']).optional(),
+    subject: z.enum(['claim', 'registry', 'contract', 'endorsement', 'insured']).optional(),
     legalForm: z.enum(LEGAL_FORMS).optional(),
     policyId: uuid.optional(),
   }) satisfies z.ZodType<D.QueueItem>,
@@ -641,7 +652,7 @@ export const hrEmployee: z.ZodType<D.HrEmployee> = z.object({
   position: z.string(),
   program: programCode,
   insuredFrom: isoDate,
-  familyMembersCount: z.number(),
+  family: z.array(familyMemberBrief),
   appStatus,
   status: z.enum(['active', 'excluded', 'pending', 'rejected']),
   excludedFrom: isoDate.optional(),
@@ -675,6 +686,11 @@ export const meProfile: z.ZodType<D.MeProfile> = z.object({
   pinflMasked: z.string(),
   payoutCardMasked: z.string(),
   consentGivenAt: isoDateTime.optional(),
+  relation: insuredRelation,
+  payoutCardOwn: z.boolean(),
+  familyConsentGranted: z.boolean().optional(),
+  principalName: z.string().optional(),
+  principalFirstName: z.string().optional(),
 });
 export const mePolicy: z.ZodType<D.MePolicy> = z.object({
   number: z.string(),
@@ -769,7 +785,9 @@ export const policyChange: z.ZodType<T.PolicyChange> = z.object({
   insuredId: uuid.optional(),
   fullName: z.string(),
   position: z.string(),
-  familyMembers: z.number(),
+  relation: insuredRelation,
+  principalId: uuid.optional(),
+  principalName: z.string().optional(),
   effectiveDate: isoDate,
   premiumDelta: money,
   status: z.enum(['pending', 'approved', 'rejected']),
@@ -824,6 +842,9 @@ const dmsParamKey = z.enum([
   'fraudMaxClaimsPerMonth',
   'fraudPriceExcessShare',
   'fraudDaysBeforeExclusion',
+  'limitMode',
+  'maxChildAge',
+  'studentMaxAge',
 ]);
 /** Portals other than the MIG one receive only part of the values. */
 export const dmsParamValues: z.ZodType<Partial<T.DmsParamValues>> = z.record(dmsParamKey, z.number());
@@ -849,3 +870,55 @@ export const dmsParamsView: z.ZodType<D.DmsParamsView> = z.object({
   numbering: z.array(z.object({ kind: docNumberKind, value: z.string(), isDemo: z.boolean(), changedAt: isoDateTime.optional(), changedByName: z.string().optional() })),
   changes: z.array(dmsParamChange),
 });
+
+// ---- family members (FAMILY_SPEC) ----
+export const familyProfile: z.ZodType<D.FamilyProfile> = z.object({
+  id: uuid,
+  fullName: z.string(),
+  firstName: z.string(),
+  relation: insuredRelation,
+  access: z.enum(['self', 'full', 'basic']),
+  status: z.enum(['active', 'excluded']),
+  certificateNumber: z.string().optional(),
+  dependentChild: z.boolean(),
+  ownLogin: z.boolean(),
+  payoutCardOwn: z.boolean().optional(),
+});
+export const familyProfiles = z.array(familyProfile);
+export const familyRequest: z.ZodType<D.FamilyRequest> = z.object({
+  id: uuid,
+  employeeId: uuid,
+  employeeName: z.string(),
+  fullName: z.string(),
+  relation: familyRelation,
+  birthDateMasked: z.string(),
+  pinflMasked: z.string(),
+  isStudent: z.boolean().optional(),
+  age: z.number(),
+  status: z.enum(['pending', 'approved', 'rejected']),
+  createdAt: isoDateTime,
+  consentAt: isoDateTime,
+  decidedAt: isoDateTime.optional(),
+  decidedByName: z.string().optional(),
+  rejectionReason: z.string().optional(),
+  policyChangeId: uuid.optional(),
+});
+export const familyRequests = z.array(familyRequest);
+export const hrFamilyMember: z.ZodType<D.HrFamilyMember> = z.object({
+  id: uuid,
+  fullName: z.string(),
+  relation: familyRelation,
+  employeeId: uuid,
+  employeeName: z.string(),
+  birthDateMasked: z.string(),
+  status: z.enum(['active', 'excluded', 'pending', 'rejected']),
+  insuredFrom: isoDate,
+  certificateNumber: z.string().optional(),
+  isStudent: z.boolean().optional(),
+  overAgeLimit: z.boolean().optional(),
+  appStatus,
+  rejectionReason: z.string().optional(),
+});
+export const hrFamilyMembers = z.array(hrFamilyMember);
+export const familyConsentResult = z.object({ granted: z.boolean() });
+export const payoutCardResult = z.object({ payoutCardMasked: z.string(), payoutCardOwn: z.boolean() });

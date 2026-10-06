@@ -11,17 +11,24 @@ import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Field, Input } from '@/shared/ui/input';
 import { BIG, LoadError, ScreenHeader } from '../components';
+import { NoMedical, PersonNote, usePerson } from '../person';
 import { aiLang } from '../lib';
 
 const EXAMPLES = ['mri', 'nurofen', 'vitaminD', 'teethCleaning'] as const;
 const TONE = { covered: 'bg-accent-soft text-accent-text', needs_guarantee: 'bg-sun text-sun-text', excluded: 'bg-danger-soft text-danger-text', limit_exhausted: 'bg-danger-soft text-danger-text', policy_inactive: 'bg-danger-soft text-danger-text', unknown: 'bg-sky text-sky-text' } as const;
 
 export default function CoveragePage() {
+  const { medical } = usePerson();
+  return medical ? <Coverage /> : <NoMedical />;
+}
+
+function Coverage() {
   const { t, lang } = useI18n();
   useDocumentTitle(t('app.coverage.title'));
   const navigate = useNavigate();
   const status = useAiStatus();
   const check = useAiCheck();
+  const { personId } = usePerson();
   const [query, setQuery] = useState('');
   const [asked, setAsked] = useState('');
   const [error, setError] = useState<string>();
@@ -34,7 +41,7 @@ export default function CoveragePage() {
     setError(undefined);
     setAsked(text);
     try {
-      const r = await check.mutateAsync({ scenario: 'insured', query: text, lang: aiLang(lang) });
+      const r = await check.mutateAsync({ scenario: 'insured', query: text, lang: aiLang(lang), personId });
       setResult({ item: r.items[0], off: !r.available });
     } catch {
       setResult(null);
@@ -46,6 +53,7 @@ export default function CoveragePage() {
   return (
     <div>
       <ScreenHeader title={t('app.coverage.title')} back="/app" />
+      <PersonNote />
       {off || result?.off ? (
         <section className="flex flex-col items-center gap-3 rounded-card bg-sky p-5 text-center text-sky-text" data-testid="coverage-off" role="status">
           <ShieldQuestion className="h-8 w-8" aria-hidden />

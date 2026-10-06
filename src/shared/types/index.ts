@@ -122,7 +122,10 @@ export interface PolicyChange {
   insuredId?: UUID;
   fullName: string;
   position: string;
-  familyMembers: number;
+  /** Who the person is to the policy; a family member is added under an employee (`principalId`). */
+  relation: InsuredRelation;
+  principalId?: UUID;
+  principalName?: string;
   effectiveDate: ISODate;
   premiumDelta: Money;                     // + доплата, − возврат
   status: PolicyChangeStatus;
@@ -136,6 +139,18 @@ export interface PolicyChange {
 
 export type AppStatus = 'active' | 'invited' | 'not_invited';
 
+/** Who the insured person is to the policy: the employee or a member of the employee's family. */
+export type InsuredRelation = 'employee' | 'spouse' | 'child' | 'parent' | 'other';
+export type FamilyRelation = Exclude<InsuredRelation, 'employee'>;
+
+/** A person of the employee's family as other screens list them (no personal data). */
+export interface FamilyMemberBrief {
+  id: UUID;
+  fullName: string;
+  relation: FamilyRelation;
+  status: 'active' | 'excluded';
+}
+
 export interface Insured {
   id: UUID;
   clientId: UUID;
@@ -146,7 +161,16 @@ export interface Insured {
   birthDateMasked: string;                 // '••.••.1987'
   pinflMasked: string;                     // '••••••••••1234'
   phoneMasked: string;                     // '+998 •• ••• •• 67'
-  familyMembersCount: number;
+  relation: InsuredRelation;
+  /** The employee whose family the person belongs to; absent for an employee. */
+  principalId?: UUID;
+  principalName?: string;
+  /** A child studying full time: covered up to `studentMaxAge` instead of `maxChildAge`. */
+  isStudent?: boolean;
+  /** A child that reached the age limit (`maxChildAge` / `studentMaxAge`): MIG decides on the exclusion. */
+  ageLimit?: { age: number; reachedOn: ISODate };
+  /** People of the employee's family (an employee only; empty otherwise). */
+  family: FamilyMemberBrief[];
   appStatus: AppStatus;
   myIdVerified: boolean;
   attachedClinicId: UUID;
@@ -434,7 +458,12 @@ export type AuditAction =
   | 'migration_applied'
   | 'migration_rejected'
   | 'migration_rolled_back'
-  | 'migration_scan_attached';
+  | 'migration_scan_attached'
+  | 'family_consent_granted'
+  | 'family_consent_revoked'
+  | 'family_request_created'
+  | 'family_request_decided'
+  | 'payout_card_changed';
 
 export interface AuditEntry {
   id: UUID;
@@ -874,7 +903,10 @@ export type DmsParamKey =
   | 'kpNoAnswerDays'
   | 'fraudMaxClaimsPerMonth'
   | 'fraudPriceExcessShare'
-  | 'fraudDaysBeforeExclusion';
+  | 'fraudDaysBeforeExclusion'
+  | 'limitMode'
+  | 'maxChildAge'
+  | 'studentMaxAge';
 
 export type DmsParamValues = Record<DmsParamKey, number>;
 
@@ -967,7 +999,8 @@ export interface DealEvent {
   text: string;
 }
 
-export type CensusRelation = 'employee' | 'spouse' | 'child';
+/** Relation of a census row: the same as an insured person's (a row per person). */
+export type CensusRelation = InsuredRelation;
 
 export interface Census {
   id: UUID;
@@ -980,6 +1013,20 @@ export type AgeBand = '0-17' | '18-29' | '30-39' | '40-49' | '50-59' | '60+';
 
 export type QuoteStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected';
 
+/**
+ * How the premium of a person included during the term is set by the contract:
+ * `flat_by_type` — premium_employee / premium_family of the contract; `age_banded` — the annual rate of the
+ * person's age band from the contract's band table (an appendix taken from the approved quote).
+ */
+export type PricingBasis = 'flat_by_type' | 'age_banded';
+
+/** A row of the age-band rate table: ages from `minAge` to `maxAge` inclusive (`null` = and older), annual premium per person. */
+export interface AgeBandRate {
+  minAge: number;
+  maxAge: number | null;
+  annual: Money;
+}
+
 export interface Quote {
   id: UUID;
   dealId: UUID;
@@ -991,6 +1038,10 @@ export interface Quote {
   premiumFamily: Money;
   total: Money;
   discountFromTariffPct: number;           // доля 0..1
+  /** Basis the underwriter chose for inclusions during the term; goes into the contract. */
+  pricingBasis: PricingBasis;
+  /** Annual rate per person of each age band (tariff × coefficient × discounts): the contract's band table. */
+  ageBandRates: AgeBandRate[];
   status: QuoteStatus;
   approvals: { byId: UUID; byName: string; at: ISODateTime; comment?: string }[];
   createdById: UUID;
@@ -1064,6 +1115,10 @@ export interface Contract {
     employees: number;
     familyMembers: number;
     total: Money;
+    /** Premium of a person included during the term: by type (default) or by the age band table. */
+    pricingBasis: PricingBasis;
+    /** Age-band rate table (appendix from the approved quote); required for `age_banded`. */
+    ageBandRates?: AgeBandRate[];
     paymentFrequency: PaymentFrequency;
     paymentSchedule: { dueDate: ISODate; amount: Money }[];
     activationRule: ActivationRule;

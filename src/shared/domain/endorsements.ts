@@ -5,6 +5,7 @@
 import { defineLabels, msg } from '@/i18n';
 import type { ChangeRequestType, ISODate, Money } from '@/shared/types';
 import { daysInclusive } from './policies';
+import { bandLabel, type PricingRule } from './pricing';
 
 export type RefundRule = 'pro_rata' | 'pro_rata_minus_claims' | 'none';
 export const REFUND_RULES: readonly RefundRule[] = ['pro_rata', 'pro_rata_minus_claims', 'none'];
@@ -29,12 +30,21 @@ export function remainingDays(effective: ISODate, start: ISODate, end: ISODate):
   return daysInclusive(effective < start ? start : effective, end);
 }
 
-/** Inclusion: annual premium × remaining days / days of the term. */
-export function addLine(annual: Money, effective: ISODate, start: ISODate, end: ISODate): LineCalc {
+/**
+ * Inclusion: annual premium × remaining days / days of the term. With the contract's pricing rule the
+ * formula says which one gave the annual premium: «по типу: premium_family …» or «по возрастной группе 0–17: …».
+ */
+export function addLine(annual: Money, effective: ISODate, start: ISODate, end: ISODate, rule?: PricingRule): LineCalc {
   const days = remainingDays(effective, start, end);
   const term = daysInclusive(start, end);
   const amount = Math.round((annual * days) / term);
-  return { days, amount, formula: `${g(annual)} × ${days} / ${term} = ${g(amount)}` };
+  const p = { annual: g(annual), days, term, amount: g(amount) };
+  const formula = !rule
+    ? `${p.annual} × ${days} / ${term} = ${p.amount}`
+    : rule.basis === 'flat_by_type'
+      ? msg('dom.endorsement.addByType', { key: rule.key, ...p })
+      : msg('dom.endorsement.addByBand', { band: bandLabel(rule), ...p });
+  return { days, amount, formula };
 }
 
 /** Exclusion under the refund rule; with claims deducted the refund is never below zero. */

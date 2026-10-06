@@ -15,6 +15,7 @@ import { Button } from '@/shared/ui/button';
 import { Skeleton } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { BIG, CardSkeletons, ChoiceChip, Empty, LoadError, ScreenHeader, SPECIALTY_ICON, WizardSteps } from '../components';
+import { NoMedical, PersonNote, usePerson } from '../person';
 import { dayLabel, isSpecialty, isUuid, limitForSpecialty, nextDays, SPECIALTIES } from '../lib';
 import { limitLeft } from '@/shared/domain/assistance';
 import { useDmsParam } from '@/shared/api/queries/params';
@@ -91,6 +92,11 @@ function ClinicSlots({ clinic, day, picked, onPick }: { clinic: Clinic; day: str
 }
 
 export default function BookingPage() {
+  const { medical } = usePerson();
+  return medical ? <Booking /> : <NoMedical />;
+}
+
+function Booking() {
   const { t } = useI18n();
   useDocumentTitle(t('app.booking.title'));
   const navigate = useNavigate();
@@ -103,6 +109,7 @@ export default function BookingPage() {
   const [picked, setPicked] = useState<SlotPick | null>(null);
   const [error, setError] = useState<string | null>(null);
   const book = useBookAppointment();
+  const { personId } = usePerson();
 
   const labels = [t('app.booking.step1'), t('app.booking.step2'), t('app.booking.step3')];
 
@@ -116,7 +123,7 @@ export default function BookingPage() {
     if (!specialty || !picked) return;
     setError(null);
     try {
-      await book.mutateAsync({ clinicId: picked.clinicId, specialty, startsAt: picked.startsAt });
+      await book.mutateAsync({ clinicId: picked.clinicId, specialty, startsAt: picked.startsAt, personId });
       toast.success(t('app.booking.booked'));
       setStep(3);
     } catch (e) {
@@ -149,6 +156,7 @@ export default function BookingPage() {
   return (
     <div>
       <ScreenHeader title={t('app.booking.title')} back={goBack} />
+      <PersonNote />
       <WizardSteps labels={labels} current={step} />
       <div key={step} className="animate-step">
         {step === 0 && (
@@ -255,7 +263,7 @@ function StepWhere(p: {
 }) {
   const { t } = useI18n();
   const clinics = useNearbyClinics(p.specialty);
-  const limits = useMeLimits();
+  const limits = useMeLimits(usePerson().personId);
   const cat = limitForSpecialty(p.specialty);
   const usage = limits.data?.find((l) => l.category === cat);
   const lowShare = useDmsParam('limitLowShare');

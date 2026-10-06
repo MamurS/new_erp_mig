@@ -6,15 +6,28 @@ import { formatDate, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { BIG, CardSkeletons, ClaimStepBar, Empty, LoadError, ScreenHeader, StatusPill } from '../components';
+import { MedicalGate, PersonNote, usePerson } from '../person';
 
 export default function ClaimsPage() {
   const { t } = useI18n();
   useDocumentTitle(t('app.claims.title'));
-  const q = useMyClaims();
-
   return (
     <div>
       <ScreenHeader title={t('app.claims.title')} />
+      <PersonNote />
+      <MedicalGate>
+        <Claims />
+      </MedicalGate>
+    </div>
+  );
+}
+
+function Claims() {
+  const { t } = useI18n();
+  const { personId } = usePerson();
+  const q = useMyClaims(personId);
+  return (
+    <>
       <Button asChild className={BIG}>
         <Link to="/app/claims/new">
           <Plus className="h-5 w-5" aria-hidden />
@@ -57,6 +70,6 @@ export default function ClaimsPage() {
           </ul>
         )}
       </div>
-    </div>
+    </>
   );
 }

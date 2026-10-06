@@ -100,7 +100,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     event(deal.id, daysAgo, sales.fullName, `Загружены данные для оценки: ${c.rows.length} человек`);
     return c;
   };
-  const withQuote = (deal: Deal, c: Census, program: Quote['program'], adjustments: Quote['adjustments'], status: Quote['status'], daysAgo: number): Quote => {
+  const withQuote = (deal: Deal, c: Census, program: Quote['program'], adjustments: Quote['adjustments'], status: Quote['status'], daysAgo: number, pricingBasis: Quote['pricingBasis'] = 'flat_by_type'): Quote => {
     const calc = calculateQuote({ program, rows: c.rows, startDate: deal.expectedStart!, adjustments }, DMS_DEFAULTS);
     const q: Quote = {
       id: id(),
@@ -113,6 +113,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       premiumFamily: calc.premiumFamily,
       total: calc.total,
       discountFromTariffPct: calc.discountFromTariffPct,
+      pricingBasis,
+      ageBandRates: calc.ageBandRates,
       status,
       approvals: status === 'approved' ? [{ byId: underwriter.id, byName: underwriter.fullName, at: at(daysAgo), comment: 'В пределах полномочий' }] : [],
       createdById: underwriter.id,
@@ -188,6 +190,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
         employees: kp.params.employees,
         familyMembers: kp.params.familyMembers,
         total,
+        pricingBasis: q?.pricingBasis ?? 'flat_by_type',
+        ...(q?.ageBandRates.length ? { ageBandRates: q.ageBandRates.map((r) => ({ ...r })) } : {}),
         paymentFrequency: 'quarterly',
         paymentSchedule: buildPaymentSchedule(total, kp.params.coverageStart, 'quarterly'),
         activationRule: 'after_first_payment',
@@ -232,12 +236,12 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     const q = withQuote(deal, c, 'standard_plus', [], 'approved', 15);
     withKp(deal, client, q, c, 'sent', 10);
   }
-  // ---- deal 3: the contract is at the lawyer with a changed clause ----
+  // ---- deal 3: the contract is at the lawyer with a changed clause; inclusions are priced by age band ----
   {
     const client = newClient(PROSPECTS[2]!, 'negotiation', 80, 40);
     const deal = newDeal(client, 'contract_review', 40);
     const c = withCensus(deal, 76, 36);
-    const q = withQuote(deal, c, 'standard', [{ label: 'Надбавка за отрасль', pct: 0.06, comment: 'Тяжёлые условия труда на складах' }], 'approved', 30);
+    const q = withQuote(deal, c, 'standard', [{ label: 'Надбавка за отрасль', pct: 0.06, comment: 'Тяжёлые условия труда на складах' }], 'approved', 30, 'age_banded');
     const kp = withKp(deal, client, q, c, 'accepted', 25);
     const contract = newContract(deal, client, kp, q, 15);
     contract.clauseOverrides = [
@@ -281,8 +285,9 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   const demoPolicy = d.policies.find((p) => p.id === demoClient.activePolicyId)!;
   const members = d.insured.filter((i) => i.policyId === demoPolicy.id);
   const tariff = tariffOf(demoPolicy);
-  const employees = members.length;
-  const family = members.reduce((s, i) => s + i.familyMembersCount, 0);
+  // A row per person (FAMILY_SPEC): employees and family members by type.
+  const family = members.filter((i) => i.relation !== 'employee').length;
+  const employees = members.length - family;
   demoClient.requisites = { bank: 'Demo Bank ATB', account: '20208000900123456789', mfo: '00000', director: 'Tursunov Baxtiyor Alisherovich', directorBasis: 'Устав', address: 'г. Ташкент, Юнусабадский р-н' };
   const demoDeal: Deal = {
     id: id(),
@@ -319,6 +324,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       employees,
       familyMembers: family,
       total,
+      // The demo HR company's contract prices inclusions by type (premium_employee / premium_family).
+      pricingBasis: 'flat_by_type',
       paymentFrequency: 'quarterly',
       paymentSchedule: buildPaymentSchedule(total, demoPolicy.startDate, 'quarterly'),
       activationRule: 'on_start_date',
@@ -344,7 +351,11 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     m.contractId = demoContract.id;
     m.certificateNumber = docNumber('certificate', { year: demoContractYear, n: demoContractSeq, m: k + 1 });
   });
-  d.contractInsured.push({ contractId: demoContract.id, rows: members.map((m) => ({ fullName: m.fullName, birthDate: m.birthDate, pinfl: m.pinfl, phone: m.phone, position: m.position, familyMembers: m.familyMembersCount })) });
+  const pinflOf = (id: string | undefined) => members.find((m) => m.id === id)?.pinfl;
+  d.contractInsured.push({
+    contractId: demoContract.id,
+    rows: members.map((m) => ({ fullName: m.fullName, birthDate: m.birthDate, pinfl: m.pinfl, phone: m.phone, position: m.position, relation: m.relation, ...(m.principalId ? { principalPinfl: pinflOf(m.principalId) } : {}) })),
+  });
   for (const inv of d.invoices.filter((i) => i.clientId === demoClient.id)) {
     inv.contractId = demoContract.id;
     inv.paid = inv.status === 'paid' ? inv.amount : 0;
@@ -390,6 +401,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   for (const b of d.bankPayments) d.statementKeys.push(statementLineKey({ docNumber: b.docNumber ?? '', date: b.date, amount: b.amount, payerInn: b.payerInn }));
   event(demoDeal.id, 1, 'Система', `Договор ${demoContract.number} действует: полис ${demoPolicy.number}`);
 
+  // The demo contract prices by type; the seed's requests are about employees.
+  const EMPLOYEE_RULE = { basis: 'flat_by_type', key: 'premium_employee' } as const;
   const request = (type: ChangeRequest['type'], insuredId: string, effective: string, status: ChangeRequest['status'], description: string): ChangeRequestRow => {
     const r: ChangeRequestRow = {
       id: id(),
@@ -397,7 +410,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       type,
       effectiveDate: effective,
       insuredId,
-      payload: { familyMembers: members.find((m) => m.id === insuredId)?.familyMembersCount ?? 0 },
+      payload: { relation: members.find((m) => m.id === insuredId)?.relation ?? 'employee', annual: tariff.employee, rule: EMPLOYEE_RULE },
       requestedBy: { id: hr.id, role: 'hr', name: hr.fullName },
       status,
       createdAt: tzIso(parseIso(effective) - DAY),
@@ -407,15 +420,16 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     return r;
   };
   const short = (name: string) => name.split(' ').map((w, k) => (k === 0 ? w : `${w[0]}.`)).join(' ');
-  const recent = members.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.insuredFrom > demoPolicy.startDate).sort((a, b) => (a.insuredFrom < b.insuredFrom ? -1 : 1));
-  const leavers = members.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.appStatus === 'active' && m.insuredFrom === demoPolicy.startDate);
+  const staffOnly = members.filter((m) => m.relation === 'employee');
+  const recent = staffOnly.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.insuredFrom > demoPolicy.startDate).sort((a, b) => (a.insuredFrom < b.insuredFrom ? -1 : 1));
+  const leavers = staffOnly.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.appStatus === 'active' && m.insuredFrom === demoPolicy.startDate);
   const refund = REFUND_RULES[DMS_DEFAULTS.refundRule]!;
   const line = (r: ChangeRequestRow) => {
-    const person = members.find((m) => m.id === r.insuredId)!;
-    const annual = tariff.employee + tariff.family * person.familyMembersCount;
+    // The requests of the seed are about employees: the employee's tariff.
+    const annual = tariff.employee;
     const calc =
       r.type === 'add_insured'
-        ? addLine(annual, r.effectiveDate, demoContract.params.startDate, demoContract.params.endDate)
+        ? addLine(annual, r.effectiveDate, demoContract.params.startDate, demoContract.params.endDate, EMPLOYEE_RULE)
         : excludeLine(annual, r.effectiveDate, demoContract.params.startDate, demoContract.params.endDate, refund, 0);
     return { changeRequestId: r.id, description: r.description!, ...calc };
   };

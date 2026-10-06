@@ -51,8 +51,9 @@ describe('KP API', () => {
     const d = db();
     const active = d.insured.filter((i) => i.clientId === clientId && i.status === 'active');
     const policy = d.policies.find((p) => p.clientId === clientId && p.status === 'active')!;
-    expect(data.params.employees).toBe(active.length);
-    expect(data.params.familyMembers).toBe(active.reduce((s, i) => s + i.familyMembersCount, 0));
+    // A row per person: employees and family members separately.
+    expect(data.params.employees).toBe(active.filter((i) => i.relation === 'employee').length);
+    expect(data.params.familyMembers).toBe(active.filter((i) => i.relation !== 'employee').length);
     expect(data.params).toMatchObject({ templateId: 'gold', lang: 'ru', variant: 'grey' });
     expect(data.params.coverageStart > policy.endDate).toBe(true);
     expect(data.letter).toMatchObject({ clientName: 'Toshkent Agrologistika', createdByEmail: 'underwriter@demo.mig.uz', policyId: policy.id });

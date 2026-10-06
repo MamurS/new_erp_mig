@@ -7,13 +7,16 @@ import { logger } from '@/shared/lib/logger';
 import { Skeleton } from '@/shared/ui/states';
 import { LoadError, ScreenHeader } from '../components';
 import { qrPayload } from '../lib';
+import { PersonNote, usePerson } from '../person';
 
 export default function CardPage() {
   const { t } = useI18n();
   useDocumentTitle(t('app.card.title'));
-  const token = useCardToken();
+  const { personId, person, isSelf } = usePerson();
+  const token = useCardToken(personId);
   const me = useMe();
-  const policy = useMePolicy();
+  const policy = useMePolicy(personId);
+  const fullName = isSelf ? me.data?.fullName : person?.fullName;
   const [qr, setQr] = useState<string | null>(null);
   const expiresAt = token.data ? Date.parse(token.data.expiresAt) : null;
   const left = useCountdown(expiresAt);
@@ -41,6 +44,7 @@ export default function CardPage() {
   return (
     <div>
       <ScreenHeader title={t('app.card.title')} back="/app" />
+      <PersonNote />
       <section className="flex flex-col items-center rounded-hero border border-border bg-surface p-5 text-center">
         {token.isError ? (
           <LoadError error={token.error} onRetry={() => void token.refetch()} />
@@ -61,10 +65,12 @@ export default function CardPage() {
           {t('app.card.refresh', { sec: left })}
         </p>
         <div className="mt-4 w-full border-t border-border-soft pt-4">
-          {me.isLoading ? (
+          {isSelf && me.isLoading ? (
             <Skeleton className="mx-auto h-7 w-3/4" />
           ) : (
-            <p className="font-heading text-[20px] font-semibold">{me.data?.fullName}</p>
+            <p className="font-heading text-[20px] font-semibold" data-testid="card-person">
+              {fullName}
+            </p>
           )}
           {policy.data && (
             <dl className="mt-3 grid grid-cols-2 gap-3 text-left">

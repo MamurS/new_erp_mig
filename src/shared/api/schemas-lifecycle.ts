@@ -73,10 +73,13 @@ export const dealViews = z.array(dealViewBase);
 export const census: z.ZodType<T.Census> = z.object({
   id: uuid,
   dealId: uuid,
-  rows: z.array(z.object({ gender: z.enum(['m', 'f']), birthYear: z.number(), relation: z.enum(['employee', 'spouse', 'child']) })),
+  rows: z.array(z.object({ gender: z.enum(['m', 'f']), birthYear: z.number(), relation: z.enum(['employee', 'spouse', 'child', 'parent', 'other']) })),
   uploadedAt: isoDateTime,
 });
 export const censusUpload = z.object({ census, errors: z.array(z.object({ row: z.number(), message: z.string() })), dropped: z.array(z.string()) });
+
+const pricingBasis = z.enum(['flat_by_type', 'age_banded']);
+const ageBandRates = z.array(z.object({ minAge: z.number(), maxAge: z.number().nullable(), annual: money }));
 
 const quoteBase = z.object({
   id: uuid,
@@ -89,6 +92,8 @@ const quoteBase = z.object({
   premiumFamily: money,
   total: money,
   discountFromTariffPct: z.number(),
+  pricingBasis,
+  ageBandRates,
   status: quoteStatus,
   approvals: z.array(z.object({ byId: uuid, byName: z.string(), at: isoDateTime, comment: z.string().optional() })),
   createdById: uuid,
@@ -169,6 +174,8 @@ export const contractView: z.ZodType<D.ContractView> = z.object({
     employees: z.number(),
     familyMembers: z.number(),
     total: money,
+    pricingBasis,
+    ageBandRates: ageBandRates.optional(),
     paymentFrequency: z.enum(['single', 'quarterly', 'monthly']),
     paymentSchedule: z.array(z.object({ dueDate: isoDate, amount: money })),
     activationRule: z.enum(['on_start_date', 'after_first_payment']),
@@ -198,7 +205,7 @@ export const contractView: z.ZodType<D.ContractView> = z.object({
   dealNumber: z.string(),
   migSignatory: signatoryOption.nullable(),
   signatories: z.array(signatoryOption),
-  insuredRows: z.array(z.object({ fullName: z.string(), position: z.string(), familyMembers: z.number() })),
+  insuredRows: z.array(z.object({ fullName: z.string(), position: z.string(), relation: z.enum(['employee', 'spouse', 'child', 'parent', 'other']) })),
   invoices: z.array(S.invoice),
   payments: z.array(payment),
   endorsements: z.array(endorsementSummary),

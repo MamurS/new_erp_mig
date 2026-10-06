@@ -42,7 +42,7 @@ const ACCOUNTS: Record<StaffRole, string> = {
 /** What the role's queue is about (the task's list per role). */
 const EXPECTED: Record<StaffRole, QueueType[]> = {
   operator: ['assistance_sla', 'complaint', 'appointment', 'clinic_no_response'],
-  underwriter: ['quote', 'renewal', 'endorsement', 'limit_request', 'loss_ratio'],
+  underwriter: ['quote', 'renewal', 'endorsement', 'limit_request', 'loss_ratio', 'age_limit'],
   sales_manager: ['lead', 'kp', 'contract'],
   claims_officer: ['claim', 'appeal', 'fraud_flag'],
   doctor_expert: ['escalation', 'opinion', 'qa_sample'],

@@ -141,4 +141,10 @@ export const v: Translation<typeof Ru> = {
   'v.file.types': 'Faqat PDF, JPEG yoki PNG yuklash mumkin',
   'v.file.tooLarge': 'Fayl {mb} MB dan katta',
   'v.file.mismatch': 'Fayl mazmuni uning turiga mos kelmaydi',
+  'v.relation': 'Kim boʻlishini koʻrsating: employee, spouse, child, parent yoki other',
+  'v.principalRequired': 'Xodimning JShShIRini koʻrsating (principal_pinfl)',
+  'v.principalForEmployee': 'Xodim uchun principal_pinfl toʻldirilmaydi',
+  'v.fullNameLatin': 'F.I.Sh. lotin harflarida, ID-kartadagidek: Familiya Ism Otasining ismi',
+  'v.familyConsentRequired': 'Oila aʼzosining shaxsiy maʼlumotlarni qayta ishlashga roziligini tasdiqlang',
+  'v.cardFormat': 'Karta raqami: 16 ta raqam',
 };

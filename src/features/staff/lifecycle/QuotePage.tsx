@@ -3,13 +3,14 @@ import { defineLabels, t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
-import type { ProgramCode } from '@/shared/types';
+import type { PricingBasis, ProgramCode } from '@/shared/types';
 import type { QuoteView } from '@/shared/types/dto';
 import { useQuote, useQuoteAction, useSaveQuote } from '@/shared/api/queries/lifecycle';
 import { useDmsParamValues } from '@/shared/api/queries/params';
 import { errorMessage } from '@/shared/api/client';
 import { AGE_BAND_LABEL, calculateQuote, quoteAuthorityProblem } from '@/shared/domain/tariff';
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
+import { PRICING_BASES, PRICING_BASIS_LABEL } from '@/shared/domain/pricing';
 import { useSession } from '@/shared/auth/session';
 import { quoteApproveSchema, quotePatchSchema, quoteRejectSchema } from '@/shared/schemas/forms';
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from '@/shared/lib/format';
@@ -23,6 +24,7 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { ReasonDialog } from './common';
 import { TableScroll } from '@/shared/ui/table-scroll';
+import { AgeBandTable } from './AgeBandTable';
 
 const PROGRAMS: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
 const STATUS_LABEL = defineLabels('staffLc.quoteStatus', ['draft', 'pending_approval', 'approved', 'rejected'] as const);
@@ -44,11 +46,13 @@ function Calculator({ quote }: { quote: QuoteView }) {
   const save = useSaveQuote();
   const action = useQuoteAction();
   const [program, setProgram] = useState<ProgramCode>(quote.program);
+  const [pricingBasis, setPricingBasis] = useState<PricingBasis>(quote.pricingBasis);
   const [rows, setRows] = useState<AdjRow[]>(() => toRows(quote));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [dialog, setDialog] = useState<'approve' | 'reject' | null>(null);
   useEffect(() => {
     setProgram(quote.program);
+    setPricingBasis(quote.pricingBasis);
     setRows(toRows(quote));
   }, [quote]);
 
@@ -65,7 +69,7 @@ function Calculator({ quote }: { quote: QuoteView }) {
   const problem = editable && calc ? quoteAuthorityProblem(calc, authority) : quote.authorityProblem;
 
   const parse = () => {
-    const parsed = quotePatchSchema.safeParse({ program, adjustments });
+    const parsed = quotePatchSchema.safeParse({ program, adjustments, pricingBasis });
     if (!parsed.success) {
       setErrors(Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.'), i.message])));
       return null;
@@ -232,6 +236,25 @@ function Calculator({ quote }: { quote: QuoteView }) {
                   ? t('staffLc.quote.authorityBoth', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0), premium: formatMoney(authority.quotePremiumMax) })
                   : t('staffLc.quote.authorityDiscount', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0) })}
               </p>
+            )}
+          </Card>
+          <Card title={t('staffLc.pricing.basis')}>
+            <Field label={t('staffLc.pricing.basis')} hint={t('staffLc.pricing.quoteHint')}>
+              {(a) => (
+                <Select {...a} disabled={!editable} value={pricingBasis} onChange={(e) => setPricingBasis(e.target.value as PricingBasis)} data-testid="quote-pricing-basis">
+                  {PRICING_BASES.map((b) => (
+                    <option key={b} value={b}>
+                      {PRICING_BASIS_LABEL[b]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            {pricingBasis === 'age_banded' && shown.ageBandRates.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-1 text-[12px] text-muted">{t('staffLc.pricing.tableTitle')}</p>
+                <AgeBandTable rates={shown.ageBandRates} />
+              </div>
             )}
           </Card>
           {quote.approvals.length > 0 && (

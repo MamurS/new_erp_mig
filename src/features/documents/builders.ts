@@ -7,6 +7,8 @@ import type { LimitCategory } from '@/shared/types';
 import { ACTIVATION_RULE_LABEL, PAYMENT_FREQUENCY_LABEL } from '@/shared/domain/contracts';
 import { DECISION_KIND_LABEL } from '@/shared/domain/settlement';
 import { translate, type I18nKey } from '@/i18n';
+import { hasKey, unpack } from '@/i18n/core';
+import { bandLabel } from '@/shared/domain/pricing';
 import { formatDateDoc as formatDate, formatMoneyDoc as formatMoney } from '@/shared/lib/format';
 import { PROGRAMS } from '@/shared/domain/programs';
 import { formatLegalName, type DocLang, type LegalFormCode } from '@/shared/config/legalForms';
@@ -17,8 +19,14 @@ import type { StubRenderInput } from './render';
  * Documents keep their own language (Russian) whatever the interface language is: labels are read
  * from the Russian dictionary, dates and money use the fixed document formats.
  */
-const docLabel = (prefix: 'labels.limitCategory' | 'labels.program' | 'labels.role', id: string): string =>
+const docLabel = (prefix: 'labels.limitCategory' | 'labels.program' | 'labels.role' | 'labels.censusRelation', id: string): string =>
   translate('ru', `${prefix}.${id}` as I18nKey);
+
+/** A packed message of the server (an endorsement formula) in the document's language. */
+const docMsg = (packed: string): string => {
+  const { key, params } = unpack(packed);
+  return hasKey(key) ? translate('ru', key as I18nKey, params) : packed;
+};
 
 /**
  * Full legal name of a party in the document's language (`ООО «Name»`, `«Name» MChJ`, `Name LLC`).
@@ -67,6 +75,11 @@ export function contractDocument(c: ContractView, opts: DocBuildOptions = {}): S
     'premium.employee': formatMoney(c.params.premiumEmployee),
     'premium.family': formatMoney(c.params.premiumFamily),
     'premium.total': formatMoney(c.params.total),
+    'premium.basis': translate('ru', `labels.pricingBasis.${c.params.pricingBasis}`),
+    'premium.inclusionBasis':
+      c.params.pricingBasis === 'age_banded'
+        ? 'По ставке возрастной группы застрахованного на дату включения (Приложение 4) × оставшиеся дни срока / дни срока'
+        : 'По типу: премия за сотрудника или за члена семьи × оставшиеся дни срока / дни срока',
     'insured.employees': String(c.params.employees),
     'insured.family': String(c.params.familyMembers),
     'insured.total': String(c.params.employees + c.params.familyMembers),
@@ -91,8 +104,14 @@ export function contractDocument(c: ContractView, opts: DocBuildOptions = {}): S
     signatures: { mig: sideLine(c.signing.mig), client: sideLine(c.signing.client) },
     tables: {
       program: (Object.keys(limits) as LimitCategory[]).map((k) => [docLabel('labels.limitCategory', k), formatMoney(limits[k])]),
-      insured: c.insuredRows.map((x, i) => [String(i + 1), x.fullName, x.position, String(x.familyMembers)]),
+      // A row per person with the relation (FAMILY_SPEC «Котировка и договор»).
+      insured: c.insuredRows.map((x, i) => [String(i + 1), x.fullName, x.position, docLabel('labels.censusRelation', x.relation)]),
       schedule: c.params.paymentSchedule.map((p, i) => [String(i + 1), formatDate(p.dueDate), formatMoney(p.amount)]),
+      // The band table applies only to an age-banded contract; priced by type it is not part of the terms.
+      ageBands:
+        c.params.pricingBasis === 'age_banded'
+          ? (c.params.ageBandRates ?? []).map((b) => [bandLabel(b), formatMoney(b.annual)])
+          : [['—', 'Не применяется: премия по типу (п. 5.4)']],
     },
   };
 }
@@ -119,7 +138,7 @@ export function endorsementDocument(e: EndorsementView, opts: DocBuildOptions = 
     overrides: Object.fromEntries(e.clauseOverrides.map((o) => [o.clauseId, o.text])),
     showChanges: opts.showChanges,
     signatures: { mig: sideLine(e.signing.mig), client: sideLine(e.signing.client) },
-    tables: { lines: e.lines.map((l, i) => [String(i + 1), l.description, String(l.days), l.formula, formatMoney(l.amount)]) },
+    tables: { lines: e.lines.map((l, i) => [String(i + 1), l.description, String(l.days), docMsg(l.formula), formatMoney(l.amount)]) },
   };
 }
 

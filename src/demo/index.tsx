@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { flushSync } from 'react-dom';
 import { matchesSearch } from '@/shared/lib/searchNormalize';
+import { formatPhone, normalizePhone } from '@/shared/lib/masks';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, FlaskConical, RotateCcw, Search } from 'lucide-react';
@@ -23,7 +24,7 @@ import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
 import { MisSimulator } from './MisSimulator';
 import { AssistSimulator } from './AssistSimulator';
 import { MigrationSamples } from './MigrationSamples';
-import { DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from '@/mocks/credentials';
+import { DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_SPOUSE_PHONE, DEMO_STAFF } from '@/mocks/credentials';
 
 type Account = { role: Role; login: string; label?: string };
 
@@ -33,7 +34,20 @@ const GROUPS: { id: 'mig' | 'assist' | 'clinic' | 'hr' | 'insured'; accounts: Ac
   { id: 'assist', accounts: DEMO_ASSIST_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
   { id: 'clinic', accounts: DEMO_CLINIC_USERS.map((c) => ({ role: c.role as Role, login: c.email })) },
   { id: 'hr', accounts: [{ role: 'hr', login: DEMO_HR.email }] },
-  { id: 'insured', accounts: [{ role: 'insured', login: '+998 90 000 00 01' }] },
+  {
+    id: 'insured',
+    accounts: [
+      { role: 'insured', login: formatPhone(DEMO_INSURED_PHONE) },
+      // The employee's spouse: an adult family member with an own login (FAMILY_SPEC).
+      {
+        role: 'insured',
+        login: formatPhone(DEMO_SPOUSE_PHONE),
+        get label() {
+          return t('demo.acc.spouse');
+        },
+      },
+    ],
+  },
 ];
 const GROUP_TITLE = defineLabels('demo.group', ['mig', 'assist', 'clinic', 'hr', 'insured'] as const);
 
@@ -44,7 +58,7 @@ async function loginAs(acc: Account): Promise<Role> {
   if (current) await request('/auth/logout', { method: 'POST' }).catch(() => undefined);
   let challengeId: string;
   if (acc.role === 'insured') {
-    challengeId = (await request('/auth/phone', { method: 'POST', body: { phone: DEMO_INSURED_PHONE }, schema: S.challenge })).challengeId;
+    challengeId = (await request('/auth/phone', { method: 'POST', body: { phone: normalizePhone(acc.login) }, schema: S.challenge })).challengeId;
     const res = await request('/auth/phone/verify', { method: 'POST', body: { challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
     // Commit the new session (and any guard redirect it causes) before the caller navigates home.
     flushSync(() => setSession(res));
@@ -92,7 +106,10 @@ function DemoBanner() {
             try {
               qc.clear();
               const role = await loginAs(a);
-              navigate(homeFor(role));
+              // An insured person without the consent goes straight to the consent screen: the guard sends there
+              // anyway, and a second navigation to the app home would race it (an app → app switch keeps the layout).
+              const consentMissing = role === 'insured' && !getSession()?.user.consentGivenAt;
+              navigate(consentMissing ? '/app/consent' : homeFor(role));
               toast.success(t('demo.loginAs.done', { label: a.label ?? ROLE_LABEL[role] }));
             } catch (e) {
               toast.error(errorMessage(e));
@@ -276,13 +293,23 @@ function StaffLoginHints({ onPick }: { onPick: (email: string, password: string)
 }
 
 function PhoneLoginHint({ onPick }: { onPick: (phone: string) => void }) {
+  const employee = formatPhone(DEMO_INSURED_PHONE);
+  const spouse = formatPhone(DEMO_SPOUSE_PHONE);
   return (
-    <p className="mt-4 text-center text-[13px] text-muted">
-      {t('demo.hints.phone', { phone: '+998 90 000 00 01', code: DEMO_CODE })} ·{' '}
-      <button type="button" className="font-semibold text-accent underline" onClick={() => onPick('+998 90 000 00 01')}>
-        {t('demo.hints.fill')}
-      </button>
-    </p>
+    <div className="mt-4 flex flex-col gap-1 text-center text-[13px] text-muted">
+      <p>
+        {t('demo.hints.phone', { phone: employee, code: DEMO_CODE })} ·{' '}
+        <button type="button" className="font-semibold text-accent underline" onClick={() => onPick(employee)}>
+          {t('demo.hints.fill')}
+        </button>
+      </p>
+      <p>
+        {t('demo.hints.phoneSpouse', { phone: spouse })} ·{' '}
+        <button type="button" className="font-semibold text-accent underline" aria-label={`${t('demo.hints.fill')}: ${t('demo.acc.spouse')}`} onClick={() => onPick(spouse)}>
+          {t('demo.hints.fill')}
+        </button>
+      </p>
+    </div>
   );
 }
 

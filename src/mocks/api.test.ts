@@ -211,12 +211,16 @@ describe('seed', () => {
     expect(db().clients.map((c) => c.id)).toEqual(a);
   });
 
-  it('demo HR company has ~45 employees and 8 not in the app', () => {
+  it('demo HR company has ~45 employees and 8 not in the app; family members are insured persons of their own', () => {
     const d = db();
     const hr = d.hrUsers[0]!;
-    const emp = d.insured.filter((i) => i.clientId === hr.companyId);
+    const emp = d.insured.filter((i) => i.clientId === hr.companyId && i.relation === 'employee');
     expect(emp).toHaveLength(45);
     expect(emp.filter((i) => i.appStatus !== 'active')).toHaveLength(8);
+    // The demo person's spouse and two children, and a child of another employee who reached the age limit.
+    const family = d.insured.filter((i) => i.clientId === hr.companyId && i.relation !== 'employee');
+    expect(family.map((i) => i.relation).sort()).toEqual(['child', 'child', 'child', 'spouse']);
+    expect(family.every((i) => emp.some((e) => e.id === i.principalId) && !!i.certificateNumber)).toBe(true);
   });
 });
 

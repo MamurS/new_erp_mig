@@ -16,7 +16,7 @@ import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
 import { toClient, toHrEmployee } from '../views';
 import { DEMO_PASSWORD } from '../credentials';
-import { msg } from '@/i18n/core';
+import { msg, translate } from '@/i18n/core';
 
 const SPECIALTIES = new Set<Specialty>(['therapist', 'pediatrician', 'dentist', 'cardiologist', 'gynecologist', 'ent', 'neurologist', 'ophthalmologist']);
 
@@ -250,10 +250,15 @@ export const staffMiscHandlers = [
       if (user.role === 'hr') {
         if (type !== 'hr_employees') throw forbidden();
         // No PINFL, birth dates, phones or medical data in exports.
-        const rows = d.insured.filter((i) => i.clientId === user.companyId).map((i) => toHrEmployee(d, i));
+        // A row per person: family members with the relation and the employee (FAMILY_SPEC).
+        const people = d.insured.filter((i) => i.clientId === user.companyId);
+        const nameOf = (id: string | undefined) => (id ? (d.insured.find((x) => x.id === id)?.fullName ?? '') : '');
         csv = toCsv(
-          ['ФИО', 'Должность', 'Программа', 'Застрахован с', 'Членов семьи', 'Приложение', 'Статус'],
-          rows.map((r) => [r.fullName, r.position, PROGRAM_LABEL[r.program], r.insuredFrom, r.familyMembersCount, r.appStatus, r.status]),
+          ['ФИО', 'Кем приходится', 'Сотрудник', 'Должность', 'Программа', 'Застрахован с', 'Приложение', 'Статус'],
+          people.map((i) => {
+            const r = toHrEmployee(d, i);
+            return [r.fullName, translate('ru', `labels.censusRelation.${i.relation}`), nameOf(i.principalId), r.position, PROGRAM_LABEL[r.program], r.insuredFrom, r.appStatus, r.status];
+          }),
         );
       } else if (type === 'clients') {
         requirePermission(user, 'clients.read');

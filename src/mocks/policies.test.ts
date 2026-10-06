@@ -29,12 +29,15 @@ async function login(email: string): Promise<string> {
   return b.data.sessionId;
 }
 
+/** A row per person: two employees, the first one's spouse and child (FAMILY_SPEC), two rows with errors. */
 const CSV = [
-  'fullName,birthDate,pinfl,phone,position,familyMembers',
-  'Алиев Тимур Рашидович,15.03.1990,31503900000011,+998901112233,Инженер,2',
-  'Каримова Нигора Алишеровна,1988-07-01,30107880000022,901112244,Бухгалтер,',
-  'Ошибкин Ош,01.01.1990,123,901112255,Водитель,0',
-  'Дублев Дубль Дублевич,01.01.1991,31503900000011,901112266,Водитель,0',
+  'fullName,birthDate,pinfl,phone,position,relation,principal_pinfl',
+  'Алиев Тимур Рашидович,15.03.1990,31503900000011,+998901112233,Инженер,,',
+  'Алиева Лола Тимуровна,02.04.1992,40204920000033,+998901112277,,spouse,31503900000011',
+  'Алиев Сардор Тимурович,10.10.2015,31010150000044,,,child,31503900000011',
+  'Каримова Нигора Алишеровна,1988-07-01,30107880000022,901112244,Бухгалтер,employee,',
+  'Ошибкин Ош,01.01.1990,123,901112255,Водитель,,',
+  'Дублев Дубль Дублевич,01.01.1991,31503900000011,901112266,Водитель,,',
 ].join('\n');
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -48,10 +51,10 @@ describe('policy issuance', () => {
     const uw = await login('underwriter@demo.mig.uz');
     const r = await call<{ total: number; valid: number; familyMembers: number; errors: { row: number; field: string }[] }>(`/clients/${issuable().id}/policies/check`, { method: 'POST', sid: uw, text: CSV });
     expect(r.status).toBe(200);
-    expect(r.data).toMatchObject({ total: 4, valid: 2, familyMembers: 2 });
+    expect(r.data).toMatchObject({ total: 6, valid: 4, employees: 2, familyMembers: 2 });
     expect(r.data.errors.map((e) => [e.row, e.field])).toEqual([
-      [4, 'pinfl'],
-      [5, 'pinfl'],
+      [6, 'pinfl'],
+      [7, 'pinfl'],
     ]);
   });
 
@@ -60,10 +63,17 @@ describe('policy issuance', () => {
     const client = issuable();
     const r = await call<Policy>(`/clients/${client.id}/policies`, { method: 'POST', sid: uw, json: { ...terms, csv: CSV, hr: { fullName: 'Новая Эйчар Тестовна', email: 'hr@new-client.uz' } } });
     expect(r.status).toBe(200);
-    expect(r.data).toMatchObject({ status: 'active', insuredCount: 2, familyCount: 2, premium: 2 * 3_800_000 + 2 * 3_040_000 });
+    expect(r.data).toMatchObject({ status: 'active', insuredCount: 4, familyCount: 2, premium: 2 * 3_800_000 + 2 * 3_040_000 });
     expect(r.data.number).toMatch(/^DMS-\d{4}-\d{6}$/);
     const d = db();
-    expect(d.insured.filter((i) => i.policyId === r.data.id)).toHaveLength(2);
+    const people = d.insured.filter((i) => i.policyId === r.data.id);
+    expect(people).toHaveLength(4);
+    // Family members are insured persons under the employee; a child has no phone and is not invited.
+    const timur = people.find((i) => i.pinfl === '31503900000011')!;
+    expect(people.filter((i) => i.principalId === timur.id).map((i) => [i.relation, i.appStatus])).toEqual([
+      ['spouse', 'not_invited'],
+      ['child', 'not_invited'],
+    ]);
     expect(d.clients.find((c) => c.id === client.id)).toMatchObject({ status: 'active', activePolicyId: r.data.id, premium: r.data.premium });
     expect(d.documents.filter((x) => x.clientId === client.id && x.title.includes(r.data.number)).map((x) => x.kind).sort()).toEqual(['insured_list', 'policy']);
     expect(d.audit.some((a) => a.action === 'policy_issued' && a.targetId === r.data.id)).toBe(true);

@@ -44,7 +44,9 @@ import type {
   Visit,
   WebhookDelivery,
   WebhookEndpoint,
+  FamilyRelation,
   Insured,
+  InsuredRelation,
   Invoice,
   LimitCategory,
   KpDocument,
@@ -149,11 +151,13 @@ export interface ClinicEventRow {
 export interface ClientRow extends Omit<Client, 'hrContact' | 'insuredCount'> {
   hrContact: { name: string; phone: string; email: string };
 }
-export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMasked' | 'phoneMasked'> {
+export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMasked' | 'phoneMasked' | 'family' | 'principalName'> {
+  /** Date of birth (ISO); the API sends it masked (`birthDateMasked`). */
   birthDate: string;
   pinfl: string;
   phone: string;
   email: string;
+  /** Card for reimbursements; empty for a family member who did not set an own one: the employee's card is used. */
   payoutCard: string;
   consentGivenAt?: string;
   addedAt: string;
@@ -163,13 +167,45 @@ export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMask
   userId: UUID;
   /** Used limits by category as of the migration date (transferred from the previous system). */
   migratedUsed?: Partial<Record<LimitCategory, number>>;
-  /** Annual premium of a transferred person (employee with the family members) and where it came from. */
+  /** Annual premium of a transferred person (each person has an own one) and where it came from. */
   migratedPremium?: { amount: number; source: MigrationPremiumSource };
 }
 /** Change request of the insured list; personal data of a new person stays on the server only. */
 export interface PolicyChangeRow extends PolicyChange {
   requestedById: UUID;
-  newPerson?: { birthDate: string; pinfl: string; phone: string };
+  /** Phone is empty for a child without an own login. */
+  newPerson?: { birthDate: string; pinfl: string; phone: string; isStudent?: boolean };
+  /** The app request of the employee the change came from. */
+  familyRequestId?: UUID;
+}
+/** «Разрешить {сотруднику} видеть мои обращения»: an adult family member's consent; revoked ones stay as history. */
+export interface FamilyConsentRow {
+  id: UUID;
+  /** The adult family member who gives the consent. */
+  ownerId: UUID;
+  /** The employee who may see the owner's claims and appointments. */
+  viewerId: UUID;
+  grantedAt: string;
+  revokedAt?: string;
+}
+/** A family member the employee asked to add from the app; personal data stays on the server. */
+export interface FamilyRequestRow {
+  id: UUID;
+  employeeId: UUID;
+  clientId: UUID;
+  fullName: string;
+  birthDate: string;
+  pinfl: string;
+  relation: FamilyRelation;
+  isStudent?: boolean;
+  consentAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  decidedAt?: string;
+  decidedById?: UUID;
+  decidedByName?: string;
+  rejectionReason?: string;
+  policyChangeId?: UUID;
 }
 export interface ClaimRow extends Claim {
   /** Plain-language reason for the insured person (no internal comments). */
@@ -231,17 +267,20 @@ export interface InsuredDocRow {
   createdAt: string;
 }
 
+/** A row of appendix 2: one person, with the relation and, for a family member, the employee's PINFL. */
 export interface ContractInsuredRow {
   fullName: string;
   birthDate: string;
   pinfl: string;
   phone: string;
   position: string;
-  familyMembers: number;
+  relation: InsuredRelation;
+  principalPinfl?: string;
+  isStudent?: boolean;
 }
 /** A lifecycle change request; a new person's data stays on the server. */
 export interface ChangeRequestRow extends ChangeRequest {
-  newPerson?: { fullName: string; birthDate: string; pinfl: string; phone: string; position: string; familyMembers: number };
+  newPerson?: { fullName: string; birthDate: string; pinfl: string; phone: string; position: string; relation: InsuredRelation; principalId?: UUID; isStudent?: boolean };
   /** Policy change of POLICY_SPEC the request came from. */
   policyChangeId?: UUID;
 }
@@ -329,6 +368,9 @@ export interface Db {
   ai: { settings: AiSettings; changes: AiSettingsChange[]; logs: AiCallLog[]; rebillFlags: Record<UUID, string> };
   // ---- transfer of the existing portfolio (/staff/admin/migration) ----
   migrationBatches: MigrationBatchRow[];
+  // ---- family members (FAMILY_SPEC) ----
+  familyConsents: FamilyConsentRow[];
+  familyRequests: FamilyRequestRow[];
 }
 
 /**

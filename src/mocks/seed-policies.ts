@@ -57,7 +57,7 @@ export function seedPolicyChanges(
       ...baseRow('add', eff, opts.now - int(rng, 2, 40) * 3600_000),
       fullName,
       position,
-      familyMembers: 0,
+      relation: 'employee' as const,
       status: k < 3 ? 'pending' : 'rejected',
       newPerson: newPerson(),
       ...(k === 3
@@ -65,22 +65,22 @@ export function seedPolicyChanges(
         : {}),
     });
   }
-  const active = base.insured.filter((i) => i.clientId === client.id && i.status === 'active' && i.pinfl !== '31205870123456');
+  const active = base.insured.filter((i) => i.clientId === client.id && i.status === 'active' && i.relation === 'employee' && i.pinfl !== '31205870123456');
   const leaving = pick(rng, active);
   out.push({
     ...baseRow('exclude', clamp(isoDay(opts.now + 14 * DAY)), opts.now - 5 * 3600_000),
     insuredId: leaving.id,
     fullName: leaving.fullName,
     position: leaving.position,
-    familyMembers: leaving.familyMembersCount,
-    premiumDelta: proRataDelta(policy, tariff, 'exclude', clamp(isoDay(opts.now + 14 * DAY)), leaving.familyMembersCount),
+    relation: 'employee',
+    premiumDelta: proRataDelta(policy, tariff, 'exclude', clamp(isoDay(opts.now + 14 * DAY))),
     status: 'pending',
   });
 
   // 2 approved additions with an endorsement; the people are already in the insured list.
   const endorsementId = id();
   const approvedAt = opts.now - 20 * DAY;
-  const recent = base.insured.filter((i) => i.clientId === client.id && i.status === 'active' && i.pinfl !== '31205870123456').slice(-2);
+  const recent = base.insured.filter((i) => i.clientId === client.id && i.status === 'active' && i.relation === 'employee' && i.pinfl !== '31205870123456').slice(-2);
   for (const person of recent) {
     const eff = clamp(isoDay(approvedAt));
     out.push({
@@ -88,8 +88,8 @@ export function seedPolicyChanges(
       insuredId: person.id,
       fullName: person.fullName,
       position: person.position,
-      familyMembers: person.familyMembersCount,
-      premiumDelta: proRataDelta(policy, tariff, 'add', eff, person.familyMembersCount),
+      relation: 'employee',
+      premiumDelta: proRataDelta(policy, tariff, 'add', eff),
       status: 'approved',
       decidedAt: tzIso(approvedAt),
       decidedByName: underwriter.fullName,

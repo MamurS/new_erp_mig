@@ -77,6 +77,8 @@ function queueRowPath(row: QueueItem, confirmed: boolean): string {
       return '/staff/admin/ai';
     case 'integration_error':
       return `/staff/clinics/${id}`;
+    case 'age_limit':
+      return `/staff/insured/${id}`;
     case 'appointment':
     case 'clinic_no_response':
       return `/staff/appointments?status=${confirmed ? 'confirmed' : 'requested'}`;

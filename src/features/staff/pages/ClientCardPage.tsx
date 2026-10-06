@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
 import { Mail, FilePlus2 } from 'lucide-react';
 import type { InsuredListItem } from '@/shared/types/dto';
+import { RELATION_LABEL } from '@/shared/domain/family';
 import type { Policy } from '@/shared/types';
 import { useClient, useClientHistory, useClientInsured, usePolicies } from '@/shared/api/queries/staff';
 import { useCan } from '@/shared/auth/guards';
@@ -188,7 +189,8 @@ function InsuredTab({ clientId }: { clientId: string }) {
   const canOpen = !!user && (INSURED_CARD_ROLES as string[]).includes(user.role);
   const cols: Column<InsuredListItem>[] = [
     { key: 'name', header: t('common.fullName'), cell: (i) => <span className="font-medium">{i.fullName}</span> },
-    { key: 'position', header: t('common.position'), cell: (i) => <span className="text-muted">{i.position}</span> },
+    // A family member is listed as a person of their own: the relation and the employee instead of a position.
+    { key: 'position', header: t('common.position'), cell: (i) => <span className="text-muted">{i.relation === 'employee' ? i.position : `${RELATION_LABEL[i.relation]}${i.principalName ? ` · ${i.principalName}` : ''}`}</span> },
     { key: 'pinfl', header: t('staff.clientCard.colPinfl'), cell: (i) => <span className="num text-muted">{i.pinflMasked ?? '—'}</span> },
     { key: 'app', header: t('staff.clientCard.colApp'), cell: (i) => <Chip kind={i.appStatus === 'active' ? 'success' : 'neutral'}>{i.appStatus === 'active' ? t('staff.clientCard.app.active') : i.appStatus === 'invited' ? t('staff.clientCard.app.invited') : t('staff.clientCard.app.none')}</Chip> },
     { key: 'status', header: t('common.status'), cell: (i) => <StatusDot tone={i.status === 'active' ? 'success' : 'muted'}>{i.status === 'active' ? t('staff.clientCard.insuredActive') : t('staff.clientCard.insuredExcluded')}</StatusDot> },

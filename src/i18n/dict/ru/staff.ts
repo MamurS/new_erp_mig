@@ -536,4 +536,9 @@ export const staff = {
   'staff.params.history': 'История изменений',
   'staff.params.decidedApplied': ' · подтвердил {name}',
   'staff.params.decidedRejected': ' · отклонил {name}',
+  'staff.insuredCard.family': 'Семья',
+  'staff.insuredCard.relation': 'Кем приходится',
+  'staff.insuredCard.student': 'студент',
+  'staff.insuredCard.ageLimitTitle': 'Ребёнок достиг предельного возраста',
+  'staff.insuredCard.ageLimitText': '{date} исполнилось {age} — предельный возраст ребёнка по программе. Из полиса он не исключается автоматически: согласуйте с HR клиента исключение (заявка на исключение закроет задачу) или оставьте его, если он учится очно и не достиг предельного возраста для студентов.',
 } satisfies Record<string, string>;

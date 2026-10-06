@@ -58,9 +58,14 @@ export async function loginStaff(page: Page, role: Exclude<Role, 'insured'>): Pr
   await expect(page).toHaveURL(new RegExp(`${HOME[role]}$`));
 }
 
-export async function loginInsured(page: Page): Promise<void> {
+/** Demo phones of the app: the employee (default) and the employee's spouse with an own login (FAMILY_SPEC). */
+export const INSURED_PHONE = '+998 90 000 00 01';
+export const SPOUSE_PHONE = '+998 90 000 00 02';
+
+/** Signs in to the app by phone (the demo employee by default) and accepts the first-login consent. */
+export async function loginInsured(page: Page, phone: string = INSURED_PHONE): Promise<void> {
   await page.goto('/app/login');
-  await page.getByLabel(/Номер телефона/).fill('900000001');
+  await page.getByLabel(/Номер телефона/).fill(phone.replace(/\D/g, '').replace(/^998/, ''));
   await page.getByRole('button', { name: 'Получить код' }).click();
   await expect(page).toHaveURL(/\/app\/login\/code/);
   await page.getByLabel('Цифра 1').fill(CODE);

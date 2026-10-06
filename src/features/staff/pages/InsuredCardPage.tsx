@@ -1,7 +1,7 @@
 import { t } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CalendarPlus, FilePlus2, FileText, SlidersHorizontal, Plus } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, FilePlus2, FileText, SlidersHorizontal, Plus } from 'lucide-react';
 import type { Specialty } from '@/shared/types';
 import {
   useAppointments,
@@ -40,6 +40,8 @@ import { useTopbar } from '../topbar';
 import { MigratedBadge } from '../components/MigratedBadge';
 import { NewClaimDialog } from '../components/NewClaimDialog';
 import { TableScroll } from '@/shared/ui/table-scroll';
+import { FamilyNames } from '@/shared/ui/family-names';
+import { RELATION_LABEL } from '@/shared/domain/family';
 
 export default function InsuredCardPage() {
   const { insuredId = '' } = useParams();
@@ -104,6 +106,17 @@ export default function InsuredCardPage() {
         </div>
       </div>
 
+      {p.ageLimit && (
+        // The manager queue's `age_limit` task leads here: what happened and what to do (no automatic exclusion).
+        <div role="note" data-testid="age-limit-note" className="flex items-start gap-2 rounded-btn bg-warning-soft px-3 py-2 text-warning-text">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div>
+            <p className="font-semibold">{t('staff.insuredCard.ageLimitTitle')}</p>
+            <p>{t('staff.insuredCard.ageLimitText', { age: p.ageLimit.age, date: formatDate(p.ageLimit.reachedOn) })}</p>
+          </div>
+        </div>
+      )}
+
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">{t('staff.clientCard.tab.overview')}</TabsTrigger>
@@ -158,10 +171,30 @@ export default function InsuredCardPage() {
                   <dt className="text-muted">{t('staff.insuredCard.insuredFrom')}</dt>
                   <dd>{formatDate(p.insuredFrom)}</dd>
                 </div>
-                <div className="flex justify-between gap-2 py-1.5">
-                  <dt className="text-muted">{t('staff.insuredCard.familyCount')}</dt>
-                  <dd>{p.familyMembersCount}</dd>
-                </div>
+                {p.relation === 'employee' ? (
+                  <div className="flex justify-between gap-2 py-1.5">
+                    <dt className="text-muted">{t('staff.insuredCard.family')}</dt>
+                    <dd className="text-right">
+                      <FamilyNames family={p.family} to={(id) => `/staff/insured/${id}`} />
+                    </dd>
+                  </div>
+                ) : (
+                  <div className="flex justify-between gap-2 py-1.5">
+                    <dt className="text-muted">{t('staff.insuredCard.relation')}</dt>
+                    <dd className="text-right" data-testid="insured-relation">
+                      {RELATION_LABEL[p.relation]}
+                      {p.isStudent ? ` · ${t('staff.insuredCard.student')}` : ''}
+                      {p.principalId && p.principalName ? (
+                        <>
+                          {' · '}
+                          <Link to={`/staff/insured/${p.principalId}`} className="text-accent-text hover:underline">
+                            {p.principalName}
+                          </Link>
+                        </>
+                      ) : null}
+                    </dd>
+                  </div>
+                )}
               </dl>
               <p className="mt-3 text-[12px] text-muted">{t('staff.insuredCard.viewsAudited')}</p>
             </Card>

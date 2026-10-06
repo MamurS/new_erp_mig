@@ -26,19 +26,24 @@ test('1. Underwriter issues a policy from a CSV of 3 employees and invites HR, w
   await page.getByRole('radio', { name: /^Стандарт\+/ }).click();
   await page.getByRole('button', { name: 'Далее' }).click();
 
+  // A row per person: family members with the relation and the employee's PINFL (FAMILY_SPEC).
   const csv = [
-    'fullName,birthDate,pinfl,phone,position,familyMembers',
-    'Алиев Тимур Рашидович,15.03.1990,31503900000011,+998901112233,Инженер,2',
-    'Каримова Нигора Алишеровна,01.07.1988,30107880000022,901112244,Бухгалтер,0',
-    'Сидоров Пётр Ильич,20.11.1979,32011790000033,901112255,Директор,1',
-    'Ошибкин Ош,01.01.1990,123,901112266,Водитель,0',
+    'fullName,birthDate,pinfl,phone,position,relation,principal_pinfl',
+    'Алиев Тимур Рашидович,15.03.1990,31503900000011,+998901112233,Инженер,,',
+    'Алиева Лола Тимуровна,02.04.1992,40204920000044,+998901112277,,spouse,31503900000011',
+    'Алиев Сардор Тимурович,10.10.2015,31010150000055,,,child,31503900000011',
+    'Каримова Нигора Алишеровна,01.07.1988,30107880000022,901112244,Бухгалтер,employee,',
+    'Сидоров Пётр Ильич,20.11.1979,32011790000033,901112255,Директор,,',
+    'Сидорова Анна Петровна,05.05.2012,40505120000066,,,child,32011790000033',
+    'Ошибкин Ош,01.01.1990,123,901112266,Водитель,,',
   ].join('\n');
   await page.getByLabel('Файл со списком застрахованных').setInputFiles({ name: 'staff.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') });
-  await expect(page.getByTestId('policy-list-preview')).toContainText('корректных: 3');
-  await expect(page.getByTestId('policy-list-preview')).toContainText('членов семьи: 3');
+  await expect(page.getByTestId('policy-list-preview')).toContainText('корректных: 6');
+  await expect(page.getByTestId('policy-list-preview')).toContainText('Сотрудников: 3, членов семьи: 3');
   // Row preview: valid rows green, the broken one red with the reason; no PINFL on screen.
   const preview = page.getByTestId('policy-list-preview');
-  await expect(preview.locator('tr[data-status="valid"]')).toHaveCount(3);
+  await expect(preview.locator('tr[data-status="valid"]')).toHaveCount(6);
+  await expect(preview.locator('tr[data-status="valid"]').nth(2)).toContainText('Ребёнок');
   await expect(preview.locator('tr[data-status="invalid"]')).toContainText('pinfl');
   await expect(preview).not.toContainText('31503900000011');
   await page.getByRole('button', { name: 'Далее' }).click();
@@ -51,8 +56,8 @@ test('1. Underwriter issues a policy from a CSV of 3 employees and invites HR, w
   await expect(page.getByText(/Полис DMS-\d{4}-\d{6} оформлен/)).toBeVisible();
   const policyId = page.url().split('/').pop()!;
   const policy = (await api(page, 'GET', `/policies/${policyId}`)).data as { insuredCount: number; familyCount: number; premium: number };
-  expect(policy).toMatchObject({ insuredCount: 3, familyCount: 3, premium: 3 * 5_200_000 + 3 * 4_160_000 });
-  await expect(page.getByRole('table', { name: 'Застрахованные по полису' }).getByRole('row')).toHaveCount(4);
+  expect(policy).toMatchObject({ insuredCount: 6, familyCount: 3, premium: 3 * 5_200_000 + 3 * 4_160_000 });
+  await expect(page.getByRole('table', { name: 'Застрахованные по полису' }).getByRole('row')).toHaveCount(7);
 
   // The invited HR logs in and sees the three employees.
   await logoutFromSidebar(page);

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, FileBadge, LogOut, MonitorSmartphone } from 'lucide-react';
+import { ChevronRight, FileBadge, LogOut, MonitorSmartphone, Users } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { useMe } from '@/shared/api/queries/me';
+import { FamilyConsentSwitch, PayoutCardActions } from '../FamilySettings';
 import { logout } from '@/shared/auth/logout';
 import { formatDate } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
@@ -29,7 +30,7 @@ export default function ProfilePage() {
         [t('app.profile.company'), me.data.companyName],
         [t('app.profile.phone'), me.data.phoneMasked, true],
         [t('app.profile.pinfl'), me.data.pinflMasked, true],
-        [t('app.profile.card'), me.data.payoutCardMasked, true],
+        [me.data.relation !== 'employee' && !me.data.payoutCardOwn ? t('app.profile.cardPrincipal', { name: me.data.principalFirstName ?? '' }) : t('app.profile.card'), me.data.payoutCardMasked, true],
       ]
     : [];
 
@@ -57,7 +58,18 @@ export default function ProfilePage() {
         </dl>
       )}
 
-      <Link to="/app/certificate" className="mt-4 flex min-h-[54px] items-center gap-3 rounded-card border border-border bg-surface px-4 font-bold hover:bg-rail">
+      {me.data && me.data.relation !== 'employee' && me.data.familyConsentGranted !== undefined && (
+        <FamilyConsentSwitch granted={me.data.familyConsentGranted} principalName={me.data.principalFirstName ?? ''} />
+      )}
+      {me.data && <PayoutCardActions profile={me.data} />}
+
+      <Link to="/app/family" className="mt-4 flex min-h-[54px] items-center gap-3 rounded-card border border-border bg-surface px-4 font-bold hover:bg-rail">
+        <Users className="h-5 w-5 text-accent" aria-hidden />
+        <span className="flex-1">{t('app.family.title')}</span>
+        <ChevronRight className="h-5 w-5 text-muted" aria-hidden />
+      </Link>
+
+      <Link to="/app/certificate" state={{ self: true }} className="mt-3 flex min-h-[54px] items-center gap-3 rounded-card border border-border bg-surface px-4 font-bold hover:bg-rail">
         <FileBadge className="h-5 w-5 text-accent" aria-hidden />
         <span className="flex-1">{t('app.profile.certificate')}</span>
         <ChevronRight className="h-5 w-5 text-muted" aria-hidden />

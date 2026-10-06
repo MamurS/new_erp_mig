@@ -3,7 +3,7 @@
  * discount are DMS parameters; the functions take their current values and are pure.
  */
 import { msg } from '@/i18n';
-import type { AgeBand, CensusRelation, DmsParamKey, DmsParamValues, ISODate, Money, ProgramCode, Quote, StaffAuthority } from '@/shared/types';
+import type { AgeBand, AgeBandRate, CensusRelation, DmsParamKey, DmsParamValues, ISODate, Money, ProgramCode, Quote, StaffAuthority } from '@/shared/types';
 import { TARIFF_BASE_KEY } from '@/shared/config/dmsParameters';
 
 export const AGE_BANDS: readonly AgeBand[] = ['0-17', '18-29', '30-39', '40-49', '50-59', '60+'];
@@ -25,6 +25,13 @@ export const BAND_COEF_KEY: Record<AgeBand, DmsParamKey> = {
   '50-59': 'tariffCoef50to59',
   '60+': 'tariffCoef60plus',
 };
+
+/** A quote age band as a row of the contract's band table: '0-17' → 0..17, '60+' → 60 and older. */
+export function bandBounds(band: AgeBand): { minAge: number; maxAge: number | null } {
+  if (band.endsWith('+')) return { minAge: Number(band.slice(0, -1)), maxAge: null };
+  const [min, max] = band.split('-').map(Number) as [number, number];
+  return { minAge: min, maxAge: max };
+}
 
 export interface CensusRow {
   gender: 'm' | 'f';
@@ -56,7 +63,7 @@ export interface QuoteInput {
   adjustments: readonly { label: string; pct: number; comment: string }[];
 }
 
-export type QuoteCalc = Pick<Quote, 'rates' | 'groupDiscountPct' | 'premiumEmployee' | 'premiumFamily' | 'total' | 'discountFromTariffPct'> & {
+export type QuoteCalc = Pick<Quote, 'rates' | 'groupDiscountPct' | 'premiumEmployee' | 'premiumFamily' | 'total' | 'discountFromTariffPct' | 'ageBandRates'> & {
   employees: number;
   familyMembers: number;
   /** Total by the tariff with the group discount, before manual adjustments. */
@@ -95,7 +102,17 @@ export function calculateQuote(input: QuoteInput, params: Readonly<DmsParamValue
     employees,
     familyMembers,
     tariffTotal: round1000(rates.reduce((s, r) => s + r.premium, 0) * (1 - groupDiscountPct)),
+    ageBandRates: ageBandRatesOf(base, params, factor),
   };
+}
+
+/**
+ * The contract's age-band rate table derived from the quote (the appendix for `age_banded` contracts):
+ * per person of a band, base rate × band coefficient × (1 − group discount) × (1 + adjustments), rounded to 1000.
+ * The same factors as the quote's premiums, so the underwriter does not fill the table by hand.
+ */
+export function ageBandRatesOf(base: Money, params: Readonly<DmsParamValues>, factor: number): AgeBandRate[] {
+  return AGE_BANDS.map((band) => ({ ...bandBounds(band), annual: round1000(base * params[BAND_COEF_KEY[band]] * factor) }));
 }
 
 /** Why a quote needs approval by someone with more authority; null when the author may approve it alone. */
