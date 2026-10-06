@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, FileText, MoreHorizontal, Plus, Send, ShieldCheck, Upload, UserMinus, BellRing } from 'lucide-react';
+import { Download, FileText, MoreHorizontal, Plus, Send, ShieldCheck, Upload, UserMinus, BellRing, UsersRound } from 'lucide-react';
 import type { HrEmployee, HrOverview } from '@/shared/types/dto';
 import { useExcludeEmployee, useHrEmployees, useHrOverview, useInvite } from '@/shared/api/queries/hr';
 import { useExport } from '@/shared/api/queries/staff';
@@ -24,6 +24,7 @@ import { cn } from '@/shared/lib/cn';
 import { FamilyNames } from '@/shared/ui/family-names';
 import { invoicePdf, downloadPdf, pdfFileName } from '../pdf';
 import { AppStatusChip, HR_BTN, HrCard, HrHeader } from '../ui';
+import { EmployeeFamilyDialog } from '../family/EmployeeFamilyDialog';
 import { t, tp, tm } from '@/i18n';
 
 const PAGE_SIZE = 25;
@@ -49,6 +50,7 @@ export default function EmployeesPage() {
   const invite = useInvite();
   const exporter = useExport();
   const [excluding, setExcluding] = useState<HrEmployee | null>(null);
+  const [familyOf, setFamilyOf] = useState<HrEmployee | null>(null);
 
   const onInvite = (e: HrEmployee) =>
     invite.mutate([e.id], {
@@ -131,6 +133,10 @@ export default function EmployeesPage() {
               </Button>
             </MenuTrigger>
             <MenuContent>
+              <MenuItem className="min-h-11" onSelect={() => setFamilyOf(e)}>
+                <UsersRound className="h-4 w-4" aria-hidden />
+                {t('hr.employees.familyMenu')}
+              </MenuItem>
               <MenuItem className="min-h-11" disabled={e.appStatus === 'active'} onSelect={() => onInvite(e)}>
                 <Send className="h-4 w-4" aria-hidden />
                 {t('hr.employees.invite')}
@@ -260,6 +266,7 @@ export default function EmployeesPage() {
       </section>
 
       {excluding && <ExcludeDialog employee={excluding} onClose={() => setExcluding(null)} />}
+      {familyOf && <EmployeeFamilyDialog employee={familyOf} onClose={() => setFamilyOf(null)} />}
     </>
   );
 }

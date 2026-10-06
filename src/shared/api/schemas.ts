@@ -165,6 +165,7 @@ const insuredBase = z.object({
   principalId: uuid.optional(),
   principalName: z.string().optional(),
   isStudent: z.boolean().optional(),
+  ageLimit: z.object({ age: z.number(), reachedOn: isoDate }).optional(),
   family: z.array(familyMemberBrief),
   appStatus,
   myIdVerified: z.boolean(),
@@ -688,6 +689,8 @@ export const meProfile: z.ZodType<D.MeProfile> = z.object({
   relation: insuredRelation,
   payoutCardOwn: z.boolean(),
   familyConsentGranted: z.boolean().optional(),
+  principalName: z.string().optional(),
+  principalFirstName: z.string().optional(),
 });
 export const mePolicy: z.ZodType<D.MePolicy> = z.object({
   number: z.string(),
@@ -879,6 +882,7 @@ export const familyProfile: z.ZodType<D.FamilyProfile> = z.object({
   certificateNumber: z.string().optional(),
   dependentChild: z.boolean(),
   ownLogin: z.boolean(),
+  payoutCardOwn: z.boolean().optional(),
 });
 export const familyProfiles = z.array(familyProfile);
 export const familyRequest: z.ZodType<D.FamilyRequest> = z.object({
@@ -906,6 +910,7 @@ export const hrFamilyMember: z.ZodType<D.HrFamilyMember> = z.object({
   relation: familyRelation,
   employeeId: uuid,
   employeeName: z.string(),
+  birthDateMasked: z.string(),
   status: z.enum(['active', 'excluded', 'pending', 'rejected']),
   insuredFrom: isoDate,
   certificateNumber: z.string().optional(),

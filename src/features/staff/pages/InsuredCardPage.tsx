@@ -1,7 +1,7 @@
 import { t } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CalendarPlus, FilePlus2, FileText, SlidersHorizontal, Plus } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, FilePlus2, FileText, SlidersHorizontal, Plus } from 'lucide-react';
 import type { Specialty } from '@/shared/types';
 import {
   useAppointments,
@@ -105,6 +105,17 @@ export default function InsuredCardPage() {
           )}
         </div>
       </div>
+
+      {p.ageLimit && (
+        // The manager queue's `age_limit` task leads here: what happened and what to do (no automatic exclusion).
+        <div role="note" data-testid="age-limit-note" className="flex items-start gap-2 rounded-btn bg-warning-soft px-3 py-2 text-warning-text">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div>
+            <p className="font-semibold">{t('staff.insuredCard.ageLimitTitle')}</p>
+            <p>{t('staff.insuredCard.ageLimitText', { age: p.ageLimit.age, date: formatDate(p.ageLimit.reachedOn) })}</p>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="overview">
         <TabsList>

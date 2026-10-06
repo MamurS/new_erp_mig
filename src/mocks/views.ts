@@ -13,8 +13,8 @@ import { can } from '@/shared/auth/permissions';
 import { canApproveDecision } from '@/shared/domain/settlement';
 import { clauseLabel } from '@/features/documents/templates';
 import { currentReserve, reserveTimeline } from './settlement-core';
-import { familyBrief, payoutCardOf, principalOf } from './family-core';
-import { limitPoolOf } from '@/shared/domain/family';
+import { ageLimits, familyBrief, payoutCardOf, principalOf, todayIso } from './family-core';
+import { ageLimitDate, childAgeLimit, limitPoolOf, reachedAgeLimit } from '@/shared/domain/family';
 import { limitModeOf } from '@/shared/config/dmsParameters';
 import { paramValues } from './params';
 
@@ -46,6 +46,13 @@ export function toClient(d: Db, c: ClientRow): Client {
   };
 }
 
+/** A child over the age limit: the staff card explains the `age_limit` task of the manager queue. */
+function ageLimitOf(i: InsuredRow): Pick<Insured, 'ageLimit'> {
+  const limits = ageLimits();
+  if (!reachedAgeLimit(i, todayIso(), limits)) return {};
+  return { ageLimit: { age: childAgeLimit(i, limits), reachedOn: ageLimitDate(i, limits) } };
+}
+
 export function toInsured(d: Db, i: InsuredRow): Insured {
   const principal = principalOf(d, i);
   return {
@@ -61,6 +68,7 @@ export function toInsured(d: Db, i: InsuredRow): Insured {
     relation: i.relation,
     ...(principal ? { principalId: principal.id, principalName: principal.fullName } : {}),
     ...(i.isStudent ? { isStudent: true } : {}),
+    ...ageLimitOf(i),
     family: familyBrief(d, i),
     appStatus: i.appStatus,
     myIdVerified: i.myIdVerified,

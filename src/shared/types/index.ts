@@ -167,6 +167,8 @@ export interface Insured {
   principalName?: string;
   /** A child studying full time: covered up to `studentMaxAge` instead of `maxChildAge`. */
   isStudent?: boolean;
+  /** A child that reached the age limit (`maxChildAge` / `studentMaxAge`): MIG decides on the exclusion. */
+  ageLimit?: { age: number; reachedOn: ISODate };
   /** People of the employee's family (an employee only; empty otherwise). */
   family: FamilyMemberBrief[];
   appStatus: AppStatus;

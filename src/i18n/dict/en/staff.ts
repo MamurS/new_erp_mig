@@ -542,4 +542,6 @@ export const staff: Translation<typeof Ru> = {
   'staff.insuredCard.family': 'Family',
   'staff.insuredCard.relation': 'Relation',
   'staff.insuredCard.student': 'student',
+  'staff.insuredCard.ageLimitTitle': 'The child has reached the age limit',
+  'staff.insuredCard.ageLimitText': 'Turned {age} on {date}, the age limit for children under the programme. The child is not excluded automatically: agree the exclusion with the client's HR (an exclusion request closes the task), or keep the child if they study full time and are under the age limit for students.',
 };

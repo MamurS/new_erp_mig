@@ -549,4 +549,6 @@ export const staff: Translation<typeof Ru> = {
   'staff.insuredCard.family': 'Oila',
   'staff.insuredCard.relation': 'Kim boʻladi',
   'staff.insuredCard.student': 'talaba',
+  'staff.insuredCard.ageLimitTitle': 'Farzand yosh chegarasiga yetdi',
+  'staff.insuredCard.ageLimitText': '{date} kuni {age} yoshga toʻldi — dastur boʻyicha bolalar uchun yosh chegarasi. U polisdan avtomatik chiqarilmaydi: chiqarishni mijozning HR xodimi bilan kelishing (chiqarish arizasi vazifani yopadi) yoki u kunduzgi taʼlimda oʻqisa va talabalar uchun yosh chegarasiga yetmagan boʻlsa, qoldiring.',
 };

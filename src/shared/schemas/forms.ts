@@ -203,6 +203,7 @@ export const hrFamilyMemberSchema = z.object({
   startDate: isoDateInput,
 });
 export type HrFamilyMemberInput = z.input<typeof hrFamilyMemberSchema>;
+export type HrFamilyMemberPayload = z.output<typeof hrFamilyMemberSchema>;
 /** The employee asks to add a family member from the app; HR approves. */
 export const familyRequestSchema = z.object({
   ...familyMemberFields,

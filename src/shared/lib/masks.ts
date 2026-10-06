@@ -27,6 +27,12 @@ export function maskPinfl(input: string): string {
   return digitsOnly(input).slice(0, 14);
 }
 
+/** `8600 1234 5678 9012`: a bank card number while typing (16 digits in groups of four). */
+export function maskCardNumber(input: string): string {
+  const d = digitsOnly(input).slice(0, 16);
+  return (d.match(/.{1,4}/g) ?? []).join(' ');
+}
+
 /** `dd.mm.yyyy` */
 export function maskDate(input: string): string {
   const d = digitsOnly(input).slice(0, 8);

@@ -1,6 +1,6 @@
 /* Pure helpers for the insured app (no React). */
 import type { I18nKey, Lang } from '@/i18n';
-import type { LimitCategory, MyClaim, Specialty } from '@/shared/types';
+import type { Appointment, AppointmentStatus, LimitCategory, MyClaim, Specialty } from '@/shared/types';
 import { addDaysISO, todayISO } from '@/shared/lib/format';
 import { isSafeHttpUrl, safeUrl } from '@/shared/lib/safeUrl';
 
@@ -94,4 +94,14 @@ export const CHAT_MAX = 1000;
 /** QR payload: only the one-time token, never PINFL or other personal data (SPEC §8.4, §9.4). */
 export function qrPayload(token: string): string {
   return `MIG-DMS:${token}`;
+}
+
+const ACTIVE_APPOINTMENT: readonly AppointmentStatus[] = ['requested', 'confirmed'];
+/** An appointment still ahead: requested or confirmed and not yet started. */
+export function isUpcomingAppointment(a: Pick<Appointment, 'status' | 'startsAt'>, now: number): boolean {
+  return ACTIVE_APPOINTMENT.includes(a.status) && Date.parse(a.startsAt) >= now;
+}
+/** Upcoming appointments, nearest first. */
+export function upcomingAppointments<T extends Pick<Appointment, 'status' | 'startsAt'>>(list: readonly T[], now: number): T[] {
+  return list.filter((a) => isUpcomingAppointment(a, now)).sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1));
 }

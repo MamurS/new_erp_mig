@@ -3,6 +3,7 @@ import { Building2, House, Receipt, User, type LucideIcon } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { cn } from '@/shared/lib/cn';
+import { PersonProvider } from './person';
 
 const TABS: { to: string; label: I18nKey; icon: LucideIcon; end?: boolean }[] = [
   { to: '/app', label: 'app.nav.home', icon: House, end: true },
@@ -11,11 +12,11 @@ const TABS: { to: string; label: I18nKey; icon: LucideIcon; end?: boolean }[] = 
   { to: '/app/profile', label: 'app.nav.profile', icon: User },
 ];
 
-/** Authenticated layout: content + bottom tab bar fixed to the mobile column. */
+/** Authenticated layout: content + bottom tab bar fixed to the mobile column; the picked person of the family lives here. */
 export default function AppLayout() {
   const { t } = useI18n();
   return (
-    <>
+    <PersonProvider>
       <main className="flex-1 px-4 pb-28 pt-5">
         <Outlet />
       </main>
@@ -50,6 +51,6 @@ export default function AppLayout() {
         </ul>
       </nav>
       <IdleWatcher />
-    </>
+    </PersonProvider>
   );
 }

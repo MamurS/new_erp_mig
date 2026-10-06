@@ -11,7 +11,7 @@ import { createAppointment, emitWebhook, pushEvent } from '../clinic-core';
 import { currentAssistance } from '../assistance-core';
 import { db, type ClaimRow, type Db, type FamilyRequestRow, type InsuredRow } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, insuredLabel, notFound, param, requireSession, route, validate } from '../http';
-import { accessOf, ageLimits, familyOf, hasConsent, isDependent, myAppointment, myClaimOf, payoutCardOf, personFor, personIdParam, todayIso } from '../family-core';
+import { accessOf, ageLimits, familyOf, hasConsent, isDependent, myAppointment, myClaimOf, payoutCardOf, personFor, personIdParam, principalOf, todayIso } from '../family-core';
 import { toFamilyRequest } from '../family-requests';
 import { maskCard, maskPhone, maskPinfl } from '../mask';
 import { scheduleSaveDb } from '../persist';
@@ -49,7 +49,13 @@ function profileOf(d: Db, me: InsuredRow, p: InsuredRow): FamilyProfile | null {
     ...(p.certificateNumber ? { certificateNumber: p.certificateNumber } : {}),
     dependentChild: isDependent(p),
     ownLogin: !!p.phone && isAdultMember(p, todayIso(), ageLimits()),
+    ...(p.id !== me.id ? { payoutCardOwn: payoutCardOf(d, p).own } : {}),
   };
+}
+
+/** The employee (policyholder) of a family member's own app: names only. */
+function principalNames(p: InsuredRow | undefined): Pick<MeProfile, 'principalName' | 'principalFirstName'> {
+  return p ? { principalName: p.fullName, principalFirstName: firstName(p.fullName) } : {};
 }
 
 const REPLIES = [
@@ -92,6 +98,7 @@ export const meHandlers = [
         relation: me.relation,
         payoutCardOwn: payoutCardOf(db(), me).own,
         ...(me.principalId ? { familyConsentGranted: hasConsent(db(), me.id, me.principalId) } : {}),
+        ...principalNames(principalOf(db(), me)),
       };
       return out;
     }),

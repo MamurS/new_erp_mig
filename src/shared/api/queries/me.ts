@@ -34,7 +34,10 @@ export function useFamilyConsent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (granted: boolean) => request('/me/family/consent', { method: 'POST', body: { granted }, schema: S.familyConsentResult }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.meProfile }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.meProfile });
+      void qc.invalidateQueries({ queryKey: qk.meFamily });
+    },
   });
 }
 /** Own card for reimbursements; null — back to the employee's card (a family member only). */
@@ -42,6 +45,8 @@ export function useSetPayoutCard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (card: string | null) => request('/me/payout-card', { method: 'POST', body: { card }, schema: S.payoutCardResult }),
+    // The full card number is the mutation's variable: drop it from the mutation cache at once.
+    gcTime: 0,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.meProfile });
       void qc.invalidateQueries({ queryKey: qk.meClaims });
@@ -54,6 +59,8 @@ export function useRequestFamilyMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: FamilyRequestInput) => request('/me/family/requests', { method: 'POST', body, schema: S.familyRequest }),
+    // The variables carry the PINFL and the date of birth: do not keep them in the mutation cache.
+    gcTime: 0,
     onSuccess: () => void qc.invalidateQueries({ queryKey: qk.meFamilyRequests }),
   });
 }

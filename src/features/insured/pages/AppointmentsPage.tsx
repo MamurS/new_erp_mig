@@ -12,8 +12,9 @@ import { Button } from '@/shared/ui/button';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
 import { toast } from '@/shared/ui/toast';
 import { BIG, CardSkeletons, Empty, LoadError, ScreenHeader, Section } from '../components';
+import { isUpcomingAppointment, upcomingAppointments } from '../lib';
+import { MedicalGate, PersonNote, usePerson } from '../person';
 
-const ACTIVE: AppointmentStatus[] = ['requested', 'confirmed'];
 const TONE: Record<AppointmentStatus, string> = {
   requested: 'bg-sun text-sun-text',
   confirmed: 'bg-accent-soft text-accent-text',
@@ -22,21 +23,31 @@ const TONE: Record<AppointmentStatus, string> = {
   cancelled: 'bg-rail text-muted',
 };
 
-function isUpcoming(a: Appointment, now: number): boolean {
-  return ACTIVE.includes(a.status) && Date.parse(a.startsAt) >= now;
-}
-
 export default function AppointmentsPage() {
   const { t } = useI18n();
   useDocumentTitle(t('app.appointments.title'));
-  const q = useMyAppointments();
+  return (
+    <div>
+      <ScreenHeader title={t('app.appointments.title')} back="/app" />
+      <PersonNote />
+      <MedicalGate>
+        <Appointments />
+      </MedicalGate>
+    </div>
+  );
+}
+
+function Appointments() {
+  const { t } = useI18n();
+  const { personId } = usePerson();
+  const q = useMyAppointments(personId);
   const cancel = useCancelMyAppointment();
   const accept = useAcceptProposal();
   const [target, setTarget] = useState<Appointment | null>(null);
   const [now] = useState(() => Date.now());
 
-  const upcoming = (q.data ?? []).filter((a) => isUpcoming(a, now)).sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1));
-  const past = (q.data ?? []).filter((a) => !isUpcoming(a, now));
+  const upcoming = upcomingAppointments(q.data ?? [], now);
+  const past = (q.data ?? []).filter((a) => !isUpcomingAppointment(a, now));
 
   const confirmCancel = async () => {
     if (!target) return;
@@ -97,8 +108,7 @@ export default function AppointmentsPage() {
   );
 
   return (
-    <div>
-      <ScreenHeader title={t('app.appointments.title')} back="/app" />
+    <>
       {q.isLoading ? (
         <CardSkeletons />
       ) : q.isError ? (
@@ -148,6 +158,6 @@ export default function AppointmentsPage() {
         loading={cancel.isPending}
         onConfirm={() => void confirmCancel()}
       />
-    </div>
+    </>
   );
 }

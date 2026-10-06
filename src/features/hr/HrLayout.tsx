@@ -1,12 +1,12 @@
 import { ContentScroll } from '@/shared/ui/content-scroll';
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
-import { BarChart3, CircleHelp, FileSignature, ReceiptText, Users } from 'lucide-react';
+import { BarChart3, CircleHelp, FileSignature, Inbox, ReceiptText, Users, UsersRound } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
-import { useHrOverview } from '@/shared/api/queries/hr';
+import { useHrFamilyRequests, useHrOverview } from '@/shared/api/queries/hr';
 import { CreateMenu } from '@/features/shell/CreateMenu';
 import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
@@ -15,6 +15,8 @@ import { t } from '@/i18n';
 
 const NAV = [
   { path: '/hr', get label() { return t('hr.nav.employees'); }, icon: Users },
+  { path: '/hr/family', get label() { return t('hr.nav.family'); }, icon: UsersRound },
+  { path: '/hr/family/requests', get label() { return t('hr.nav.familyRequests'); }, icon: Inbox },
   { path: '/hr/documents', get label() { return t('hr.nav.documents'); }, icon: ReceiptText },
   { path: '/hr/contracts', get label() { return t('hr.nav.contracts'); }, icon: FileSignature },
   { path: '/hr/stats', get label() { return t('hr.nav.stats'); }, icon: BarChart3 },
@@ -26,13 +28,17 @@ export default function HrLayout() {
   const user = useUser();
   const loc = useLocation();
   const overview = useHrOverview();
+  // Requests of employees from the app waiting for HR: the counter of «Заявки из приложения».
+  const familyRequests = useHrFamilyRequests('pending');
+  const pendingRequests = familyRequests.data?.length ?? 0;
   const company = overview.data?.companyName;
   const all = [...NAV, ...HELP];
   // «Сотрудники» covers the employee pages under /hr/employees too.
   const current =
     all.filter((n) => n.path !== '/hr' && (loc.pathname === n.path || loc.pathname.startsWith(`${n.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]?.path ??
     (loc.pathname === '/hr' || loc.pathname.startsWith('/hr/employees') ? '/hr' : undefined);
-  const groups: SidebarGroup[] = [{ items: NAV }, { label: t('hr.nav.support'), items: HELP }];
+  const nav = NAV.map((n) => (n.path === '/hr/family/requests' ? { path: n.path, label: n.label, icon: n.icon, count: pendingRequests } : n));
+  const groups: SidebarGroup[] = [{ items: nav }, { label: t('hr.nav.support'), items: HELP }];
 
   return (
     <SidebarProvider portal="hr">

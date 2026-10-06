@@ -351,6 +351,9 @@ export interface MeProfile {
   payoutCardOwn: boolean;
   /** An adult family member: the employee may see this person's claims and appointments. */
   familyConsentGranted?: boolean;
+  /** A family member's own app: the employee (policyholder) — names only. */
+  principalName?: string;
+  principalFirstName?: string;
 }
 export interface MePolicy {
   number: string;
@@ -917,6 +920,8 @@ export interface FamilyProfile {
   dependentChild: boolean;
   /** The person signs in with an own phone (an adult family member). */
   ownLogin: boolean;
+  /** Another person of the family: reimbursements go to the person's own card (else to the employee's). */
+  payoutCardOwn?: boolean;
 }
 export type FamilyRequestStatus = 'pending' | 'approved' | 'rejected';
 /** A family member the employee asked to add from the app; HR approves it into a change request. */
@@ -947,6 +952,8 @@ export interface HrFamilyMember {
   relation: FamilyRelation;
   employeeId: UUID;
   employeeName: string;
+  /** '••.••.2016': the year only, like every birth date in lists. */
+  birthDateMasked: string;
   /** pending / rejected: an HR request MIG has not approved yet. */
   status: 'active' | 'excluded' | 'pending' | 'rejected';
   insuredFrom: ISODate;

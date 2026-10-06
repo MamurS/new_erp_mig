@@ -22,7 +22,12 @@ export function useAiStatus() {
   return useQuery({ queryKey: ak.status, queryFn: () => request('/ai/status', { schema: A.aiStatus }), enabled: !!session, staleTime: 15_000 });
 }
 
-export const useAiCheck = () => useMutation({ mutationFn: (v: AiCheckRequest) => request('/ai/coverage-check', { method: 'POST', body: v, schema: A.aiCheckResult }) });
+/** `personId`: the insured scenario for a person of the family (FAMILY_SPEC; the server answers 404 for anyone else). */
+export const useAiCheck = () =>
+  useMutation({
+    mutationFn: ({ personId, ...v }: AiCheckRequest & { personId?: string }) =>
+      request('/ai/coverage-check', { method: 'POST', body: v, query: personId ? { personId } : undefined, schema: A.aiCheckResult }),
+  });
 
 /** A decision hint for one record: asked once per screen visit (every answer is logged). */
 export const useAiHint = (subject: { type: 'claim' | 'guarantee' | 'registry_line'; id: string }, enabled: boolean) =>
