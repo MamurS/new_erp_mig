@@ -130,7 +130,9 @@ export const useAllocatePayment = () =>
 export const useImport1c = () => useLifecycleMutation((csv: string) => request('/payments/import-1c', { method: 'POST', body: csv, headers: { 'Content-Type': 'text/csv' }, schema: L.importResult }));
 export const useCertificates = (policyId: string | undefined) =>
   useQuery({ queryKey: lk.certificates(policyId ?? ''), queryFn: () => request(`/policies/${policyId}/certificates`, { schema: L.certificates }), enabled: !!policyId });
-export const useMyCertificate = () => useQuery({ queryKey: lk.myCertificate, queryFn: () => request('/me/certificate', { schema: L.certificateView.nullable() }), retry: false });
+/** Certificate of the signed-in person or of a family member (`personId`, FAMILY_SPEC). */
+export const useMyCertificate = (personId?: string) =>
+  useQuery({ queryKey: [...lk.myCertificate, personId ?? 'self'], queryFn: () => request('/me/certificate', { query: personId ? { personId } : undefined, schema: L.certificateView.nullable() }), retry: false });
 
 // ---------------- claims settlement ----------------
 export function useSettlement() {

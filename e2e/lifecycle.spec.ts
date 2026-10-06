@@ -172,7 +172,13 @@ test('1. New client end to end: lead → census → quote above authority → KP
   await clause.getByLabel('Формулировка').fill('Период ожидания для плановой стоматологии — 30 дней с даты включения.');
   await clause.getByRole('button', { name: 'Сохранить формулировку' }).click();
   await expect(page.getByTestId('clause-4.4')).toContainText('Исходный текст');
-  const list = ['fullName,birthDate,pinfl,phone,position,familyMembers', 'Путев Первый Петрович,15.03.1990,31503901234567,+998907770011,Инженер,1', 'Путева Вторая Ивановна,01.07.1988,30107881234568,+998907770012,Бухгалтер,0'].join('\n');
+  // Appendix 2: a row per person, the family member with the relation and the employee's PINFL.
+  const list = [
+    'fullName,birthDate,pinfl,phone,position,relation,principal_pinfl',
+    'Путев Первый Петрович,15.03.1990,31503901234567,+998907770011,Инженер,,',
+    'Путева Вторая Ивановна,01.07.1988,30107881234568,+998907770012,Бухгалтер,,',
+    'Путев Младший Первович,12.12.2015,31212151234569,,,child,31503901234567',
+  ].join('\n');
   await page.getByLabel('Файл приложения 2').setInputFiles(csvFile('list.csv', list));
   await expect(page.getByText('Приложение 2 загружено')).toBeVisible();
   await page.getByRole('button', { name: 'Отправить на согласование' }).click();
@@ -216,7 +222,8 @@ test('1. New client end to end: lead → census → quote above authority → KP
   const contract = (await api(page, 'GET', `/contracts/${contractId}`)).data as { status: string; policyId?: string };
   expect(contract.status).toBe('active');
   const certs = (await api(page, 'GET', `/policies/${contract.policyId}/certificates`)).data as { certificateNumber: string; fullName: string }[];
-  expect(certs).toHaveLength(2);
+  // A certificate for every person of Appendix 2, the child included.
+  expect(certs).toHaveLength(3);
   expect(certs[0]!.certificateNumber).toMatch(/^SERT-\d{4}-\d{6}-0001$/);
 
   // The insured person logs in with the phone from Appendix 2 and sees the certificate

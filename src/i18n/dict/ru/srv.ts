@@ -369,4 +369,6 @@ export const srv = {
   'srv.family.phoneTaken': 'Этот телефон уже используется для входа другого застрахованного',
   'srv.family.requestDecided': 'По заявке уже принято решение',
   'srv.policy.principalNotInList': 'Сотрудник с этим ПИНФЛ не найден в списке',
+  'srv.dash.q.ageLimit': 'Исполнилось {age} лет {date} · сотрудник {employee} · {client}',
+  'srv.dash.st.ageLimitReached': 'Решить об исключении',
 } satisfies Record<string, string>;

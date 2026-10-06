@@ -22,6 +22,7 @@ import {
   reserveSchema,
 } from '@/shared/schemas/forms';
 import { toCsv } from '@/shared/lib/csv';
+import { myClaimOf } from '../family-core';
 import { db, type ClaimRow, type Db } from '../db';
 import { API, audit, body, conflict, type Ctx, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { toClaimDetail } from '../views';
@@ -225,8 +226,10 @@ export const settlementHandlers = [
       const { user } = requireSession(ctx.request);
       if (user.role !== 'insured') throw forbidden();
       const d = db();
-      const c = d.claims.find((x) => x.id === param(ctx, 'id') && x.insuredId === user.insuredId);
-      if (!c) throw notFound();
+      const me = d.insured.find((i) => i.id === user.insuredId);
+      if (!me) throw notFound();
+      // Own claims and the claims of the family the signed-in person may see (a child, an adult who allowed it).
+      const { c } = myClaimOf(d, me, param(ctx, 'id'));
       if (c.appeal) throw conflict('srv.claim.alreadyAppealed');
       if (c.status !== 'rejected' && c.decision?.kind !== 'partial') throw conflict('srv.claim.appealOnlyRejected');
       const { text } = await body(ctx.request, appealSchema);
@@ -241,8 +244,10 @@ export const settlementHandlers = [
     route((ctx) => {
       const { user } = requireSession(ctx.request);
       if (user.role !== 'insured') throw forbidden();
-      const c = db().claims.find((x) => x.id === param(ctx, 'id') && x.insuredId === user.insuredId);
-      const letter = c ? letterOf(c) : null;
+      const d = db();
+      const me = d.insured.find((i) => i.id === user.insuredId);
+      if (!me) throw notFound();
+      const letter = letterOf(myClaimOf(d, me, param(ctx, 'id')).c);
       if (!letter) throw notFound();
       return letter;
     }),

@@ -105,7 +105,8 @@ describe('portfolio migration', () => {
     const v = await uploadAll(sid, id);
     expect(step(v, 'contracts')).toMatchObject({ total: 5, valid: 5, errorRows: 0 });
     const insured = step(v, 'insured');
-    expect(insured).toMatchObject({ total: 204, valid: 200, errorRows: 4 });
+    // A row per person: 204 employees (4 with errors) and 204 family members.
+    expect(insured).toMatchObject({ total: 408, valid: 404, errorRows: 4 });
     expect(insured.issues.filter((i) => i.level === 'error').map((i) => [i.field, i.message.split('|')[0]])).toEqual([
       ['pinfl', 'v.pinflFormat'],
       ['contractOldNumber', 'migration.v.contractNotFound'],
@@ -175,11 +176,11 @@ describe('portfolio migration', () => {
     expect(recon.clients).toMatchObject({ file: 6, excluded: 1, loaded: 5, match: false });
     expect(recon.contracts).toMatchObject({ file: 5, loaded: 5, match: true });
     expect(recon.premium).toMatchObject({ file: 1_444_559_999, loaded: 1_444_559_999, match: true });
-    expect(recon.insured).toMatchObject({ file: 204, excluded: 4, loaded: 200, match: false });
+    expect(recon.insured).toMatchObject({ file: 408, excluded: 4, loaded: 404, match: false });
     // Per contract, from the premiums stored on the transferred persons: only MIG-2026/0504 does not add up.
     const premiums = Object.fromEntries(ok.data.contractPremiums.map((c) => [c.oldNumber, c]));
-    expect(premiums['MIG-2026/0504']).toMatchObject({ insured: 30, total: 223_900_000, insuredSum: 221_400_000, diff: -2_500_000, match: false });
-    expect(premiums['MIG-2026/0503']).toMatchObject({ insured: 40, individual: 40, diff: 0, match: true });
+    expect(premiums['MIG-2026/0504']).toMatchObject({ insured: 54, total: 223_900_000, insuredSum: 221_400_000, diff: -2_500_000, match: false });
+    expect(premiums['MIG-2026/0503']).toMatchObject({ insured: 91, individual: 91, diff: 0, match: true });
     expect(premiums['MIG-2026/0505']).toMatchObject({ individual: 2, diff: 1, match: true });
     expect(Object.values(premiums).every((c) => /^DMS-D-/.test(c.number ?? ''))).toBe(true);
     expect(recon.limitsUsed!.match).toBe(true);
@@ -193,7 +194,7 @@ describe('portfolio migration', () => {
     const d = db();
     expect(d.clients.filter((c) => c.migration?.batchId === id)).toHaveLength(5);
     expect(d.clients.some((c) => c.name === 'Andijon Mebel Savdo')).toBe(false);
-    expect(d.insured.filter((i) => i.migration?.batchId === id && i.status === 'active')).toHaveLength(200);
+    expect(d.insured.filter((i) => i.migration?.batchId === id && i.status === 'active')).toHaveLength(404);
     expect(d.insured.some((i) => i.externalCertificateNumber === 'C-0999-0001')).toBe(false);
     expect(d.claims.some((c) => c.externalNumber === 'CL-2026-7799')).toBe(false);
     const migrated = d.contracts.filter((c) => c.migration?.batchId === id);

@@ -86,6 +86,8 @@ const insuredItem = z.object({
   phoneMasked: z.string(),
   pinflMasked: z.string(),
   birthDateMasked: z.string(),
+  relation: z.enum(['employee', 'spouse', 'child', 'parent', 'other']),
+  principalName: z.string().optional(),
   access,
 });
 export const insuredItems: z.ZodType<D.AssistInsuredItem[]> = z.array(insuredItem);

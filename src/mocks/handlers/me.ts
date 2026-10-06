@@ -11,7 +11,7 @@ import { createAppointment, emitWebhook, pushEvent } from '../clinic-core';
 import { currentAssistance } from '../assistance-core';
 import { db, type ClaimRow, type Db, type FamilyRequestRow, type InsuredRow } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, insuredLabel, notFound, param, requireSession, route, validate } from '../http';
-import { accessOf, ageLimits, familyOf, hasConsent, isDependent, payoutCardOf, personFor, personIdParam, todayIso } from '../family-core';
+import { accessOf, ageLimits, familyOf, hasConsent, isDependent, myAppointment, myClaimOf, payoutCardOf, personFor, personIdParam, todayIso } from '../family-core';
 import { toFamilyRequest } from '../family-requests';
 import { maskCard, maskPhone, maskPinfl } from '../mask';
 import { scheduleSaveDb } from '../persist';
@@ -30,22 +30,6 @@ function requireInsured(request: Request): { user: SessionUser; me: InsuredRow }
   const me = db().insured.find((i) => i.id === user.insuredId);
   if (!me) throw notFound();
   return { user, me };
-}
-
-/** An appointment of a person whose medical data the signed-in person may see; anything else is 404. */
-function myAppointment(d: Db, me: InsuredRow, id: string) {
-  const a = d.appointments.find((x) => x.id === id);
-  const who = a ? d.insured.find((x) => x.id === a.insuredId) : undefined;
-  if (!a || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
-  return a;
-}
-
-/** A claim of a person whose medical data the signed-in person may see; anything else is 404. */
-export function myClaimOf(d: Db, me: InsuredRow, id: string): { c: ClaimRow; who: InsuredRow } {
-  const c = d.claims.find((x) => x.id === id);
-  const who = c ? d.insured.find((x) => x.id === c.insuredId) : undefined;
-  if (!c || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
-  return { c, who };
 }
 
 function firstName(fullName: string): string {

@@ -371,4 +371,6 @@ export const srv: Translation<typeof Ru> = {
   'srv.family.phoneTaken': 'Bu telefon boshqa sugʻurtalangan shaxsning kirishi uchun ishlatilmoqda',
   'srv.family.requestDecided': 'Ariza boʻyicha qaror allaqachon qabul qilingan',
   'srv.policy.principalNotInList': 'Bu JShShIR bilan xodim roʻyxatda topilmadi',
+  'srv.dash.q.ageLimit': '{date} kuni {age} yoshga toʻldi · xodim {employee} · {client}',
+  'srv.dash.st.ageLimitReached': 'Chiqarish haqida qaror qiling',
 };

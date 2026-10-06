@@ -13,6 +13,7 @@ import { useCan } from '@/shared/auth/guards';
 import { CASE_TYPE_LABEL } from '@/shared/domain/assistance';
 import { GUARANTEE_STATUS_LABEL } from '@/shared/domain/clinics';
 import { SPECIALTY_LABEL } from '@/shared/domain/labels';
+import { RELATION_LABEL } from '@/shared/domain/family';
 import { assistAppointmentSchema, assistGuaranteeRequestSchema, caseCreateSchema } from '@/shared/schemas/forms';
 import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
@@ -324,6 +325,14 @@ export default function InsuredCardPage() {
                     </span>
                   </Kv>
                   <Kv label={t('common.status')}>{p.status === 'active' ? t('assist.insured.active') : t('assist.insured.excluded')}</Kv>
+                  {p.relation !== 'employee' && (
+                    <Kv label={t('staff.insuredCard.relation')}>
+                      <span data-testid="insured-relation">
+                        {RELATION_LABEL[p.relation]}
+                        {p.principalName ? ` · ${p.principalName}` : ''}
+                      </span>
+                    </Kv>
+                  )}
                   <RevealField insuredId={p.id} field="pinfl" masked={p.pinflMasked} canReveal={canReveal && full} apiBase="/assist/insured" />
                   <RevealField insuredId={p.id} field="phone" masked={p.phoneMasked} canReveal={canReveal && full} apiBase="/assist/insured" />
                   <RevealField insuredId={p.id} field="birthDate" masked={p.birthDateMasked} canReveal={canReveal && full} apiBase="/assist/insured" />

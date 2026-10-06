@@ -115,7 +115,8 @@ export const hrHandlers = [
         companyName: client.name,
         companyLegalForm: client.legalForm,
         insuredCount: employees.length,
-        notInApp: employees.filter((i) => i.appStatus !== 'active').length,
+        // Only people with an own phone can use the app (a child lives in the parent's app).
+        notInApp: employees.filter((i) => i.appStatus !== 'active' && !!i.phone).length,
         nextInvoice,
         policy: policy
           ? { number: policy.number, program: policy.program, programName: PROGRAM_LABEL[policy.program], startDate: policy.startDate, endDate: policy.endDate }
@@ -264,9 +265,10 @@ export const hrHandlers = [
       const { ids } = await body(request, hrInviteSchema);
       const d = db();
       const own = d.insured.filter((i) => i.clientId === user.companyId && i.status === 'active');
-      const targets = ids === 'all_not_in_app' ? own.filter((i) => i.appStatus !== 'active') : own.filter((i) => ids.includes(i.id));
+      // Nobody to invite without a phone (a child lives in the parent's app).
+      const targets = ids === 'all_not_in_app' ? own.filter((i) => i.appStatus !== 'active' && !!i.phone) : own.filter((i) => ids.includes(i.id));
       if (ids !== 'all_not_in_app' && targets.length !== ids.length) throw notFound();
-      for (const t of targets) if (t.appStatus === 'not_invited') t.appStatus = 'invited';
+      for (const t of targets) if (t.appStatus === 'not_invited' && t.phone) t.appStatus = 'invited';
       return { invited: targets.filter((t) => t.appStatus !== 'active').length };
     }),
   ),

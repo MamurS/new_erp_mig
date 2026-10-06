@@ -371,4 +371,6 @@ export const srv: Translation<typeof Ru> = {
   'srv.family.phoneTaken': 'This phone is already used to sign in by another insured person',
   'srv.family.requestDecided': 'The request has already been decided',
   'srv.policy.principalNotInList': 'No employee with this PINFL in the list',
+  'srv.dash.q.ageLimit': 'Turned {age} on {date} · employee {employee} · {client}',
+  'srv.dash.st.ageLimitReached': 'Decide on exclusion',
 };

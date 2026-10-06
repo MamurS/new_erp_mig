@@ -1,5 +1,5 @@
 /* Policy issuance and the queue of insured-list changes (POLICY_SPEC §4, §5.2, §7). */
-import { msg } from '@/i18n/core';
+import { msg, translate } from '@/i18n/core';
 import { http } from 'msw';
 import type { Contract, Policy } from '@/shared/types';
 import type { PolicyChangeDecisionResult, PolicyListCheck } from '@/shared/types/dto';
@@ -175,7 +175,8 @@ export const policyHandlers = [
                 requestedBy: { id: r!.requestedById, role: 'hr', name: r!.requestedByName },
                 status: 'pending',
                 createdAt: at,
-                description: `${r!.kind === 'add' ? 'Включение' : 'Исключение'}: ${short} (${r!.position})`,
+                // A family member: the relation and the employee instead of the position (documents are in Russian).
+                description: `${r!.kind === 'add' ? 'Включение' : 'Исключение'}: ${short} (${r!.relation === 'employee' ? r!.position : `${translate('ru', `labels.censusRelation.${r!.relation}`).toLowerCase()} сотрудника ${r!.principalName ?? ''}`.trim()})`,
                 policyChangeId: r!.id,
                 ...(r!.kind === 'add' && deferred ? { newPerson: { fullName: r!.fullName, position: r!.position, relation: r!.relation, ...(r!.principalId ? { principalId: r!.principalId } : {}), ...r!.newPerson! } } : {}),
               };

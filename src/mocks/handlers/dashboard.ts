@@ -22,6 +22,8 @@ import { canApproveDecision } from '@/shared/domain/settlement';
 import { canApproveQuote } from '@/shared/domain/tariff';
 import { originalReminderDue } from '@/shared/domain/contracts';
 import { dealContract, latestQuote, toDealView } from '../lifecycle-core';
+import { ageLimitDate, childAgeLimit, reachedAgeLimit } from '@/shared/domain/family';
+import { ageLimits } from '../family-core';
 
 export function requireStaff(user: SessionUser): void {
   if (!isStaffRole(user.role)) throw forbidden();
@@ -284,6 +286,33 @@ const lossRatioItems: Builder = (d, _user, now) =>
       action: 'open' as const,
     }));
 
+/**
+ * A child of an employee reached the age limit (`maxChildAge`, `studentMaxAge` for a student): the underwriter
+ * decides on the exclusion with the client. No automatic exclusion; a pending exclusion request closes the task.
+ */
+const ageLimitItems: Builder = (d, _user, now) => {
+  const today = isoDay(now);
+  const limits = ageLimits();
+  return d.insured
+    .filter((i) => reachedAgeLimit(i, today, limits) && !d.policyChanges.some((c) => c.kind === 'exclude' && c.status === 'pending' && c.insuredId === i.id))
+    .map((i) => {
+      const reached = ageLimitDate(i, limits);
+      const employee = d.insured.find((x) => x.id === i.principalId);
+      return {
+        id: `${i.id}:age`,
+        type: 'age_limit' as const,
+        entityId: i.id,
+        subject: 'insured' as const,
+        who: i.fullName,
+        details: msg('srv.dash.q.ageLimit', { age: childAgeLimit(i, limits), date: ru(reached), employee: employee?.fullName ?? '—', client: i.clientName }),
+        status: msg('srv.dash.st.ageLimitReached'),
+        statusTone: 'warning' as const,
+        dueAt: tzIso(parseIso(reached)),
+        action: 'open' as const,
+      };
+    });
+};
+
 const policyChangeItems: Builder = (d) => {
   const byClient = new Map<string, { name: string; count: number; oldest: string; delta: number; firstId: string }>();
   for (const c of d.policyChanges.filter((x) => x.status === 'pending')) {
@@ -477,7 +506,7 @@ const adminItems: Builder = (d, user) => {
 /** What each role works on (one place to read the whole map of the dashboard). */
 const ROLE_QUEUE: Partial<Record<SessionUser['role'], Builder[]>> = {
   operator: [appointmentItems, assistanceServiceItems],
-  underwriter: [quoteItems, renewalItems, financeItems, limitItems, lossRatioItems, policyChangeItems],
+  underwriter: [quoteItems, renewalItems, financeItems, limitItems, lossRatioItems, policyChangeItems, ageLimitItems],
   sales_manager: [salesItems],
   claims_officer: [claimsOfficerItems],
   doctor_expert: [doctorItems],

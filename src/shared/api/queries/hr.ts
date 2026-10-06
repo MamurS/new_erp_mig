@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { HrEmployeePayload } from '@/shared/schemas/forms';
+import type { HrEmployeePayload, HrFamilyMemberInput } from '@/shared/schemas/forms';
 import { request } from '../client';
 import * as S from '../schemas';
 import { qk, type Params } from './keys';
@@ -58,6 +58,31 @@ export function useInvite() {
   return useMutation({
     mutationFn: (ids: string[] | 'all_not_in_app') =>
       request('/hr/employees/invite', { method: 'POST', body: { ids }, schema: S.inviteResult }),
+    onSuccess: inv,
+  });
+}
+
+// ---- family members (FAMILY_SPEC) ----
+/** Family members of the company's employees (one employee with `employeeId`), with HR's requests not yet approved. */
+export const useHrFamily = (employeeId?: string) =>
+  useQuery({ queryKey: qk.hrFamily(employeeId), queryFn: () => request('/hr/family', { query: { employeeId }, schema: S.hrFamilyMembers }) });
+/** HR adds a family member of an employee: a change request for MIG (endorsement, premium by the age group). */
+export function useAddFamilyMember() {
+  const inv = useHrInvalidate();
+  return useMutation({
+    mutationFn: (body: HrFamilyMemberInput) => request('/hr/family', { method: 'POST', body, schema: S.policyChange }),
+    onSuccess: inv,
+  });
+}
+/** Requests of employees from the app (`status`: 'pending', 'approved', 'rejected', comma-separated). */
+export const useHrFamilyRequests = (status?: string) =>
+  useQuery({ queryKey: qk.hrFamilyRequests(status), queryFn: () => request('/hr/family-requests', { query: { status }, schema: S.familyRequests }) });
+/** Approve (→ change request from `startDate`, the next day by default) or reject (`reason`) an app request. */
+export function useDecideFamilyRequest() {
+  const inv = useHrInvalidate();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: 'approve' | 'reject'; startDate?: string; reason?: string }) =>
+      request(`/hr/family-requests/${v.id}/decision`, { method: 'POST', body: { decision: v.decision, startDate: v.startDate, reason: v.reason }, schema: S.familyRequest }),
     onSuccess: inv,
   });
 }

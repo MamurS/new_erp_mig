@@ -152,8 +152,9 @@ export default function PolicyIssuePage() {
   };
 
   const template = () => {
-    // eslint-disable-next-line mig/no-cyrillic-ui -- sample row of the CSV template (data, not UI)
+    // A row per person: the employee, then the family members with the employee's PINFL.
     const rows = [
+      // eslint-disable-next-line mig/no-cyrillic-ui -- sample row of the CSV template (data, not UI)
       ['Ivanov Ivan Ivanovich', '15.03.1990', '31503900000001', '+998901234567', 'Инженер', 'employee', '', ''],
       ['Ivanova Anna Petrovna', '02.04.1992', '40204920000002', '', '', 'spouse', '31503900000001', ''],
       ['Ivanov Pavel Ivanovich', '10.10.2015', '31010150000003', '', '', 'child', '31503900000001', ''],

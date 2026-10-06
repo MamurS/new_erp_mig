@@ -6,7 +6,7 @@
 import type { FamilyMemberBrief, Policy, UUID } from '@/shared/types';
 import { allows, familyAccess, isDependentChild, isFamilyRelation, personAnnualPremium, type AgeLimits, type FamilyAccessLevel, type FamilyDataKind } from '@/shared/domain/family';
 import { tariffOf } from '@/shared/domain/policies';
-import type { Db, InsuredRow } from './db';
+import type { ClaimRow, Db, InsuredRow } from './db';
 import { notFound } from './http';
 import { dmsParam, paramValues } from './params';
 import { isoDay } from './time';
@@ -72,4 +72,20 @@ export function isDependent(i: InsuredRow): boolean {
 /** Annual premium of a person on the policy by type (a family member by the age group on `on`). */
 export function annualPremiumOf(policy: Pick<Policy, 'tariff' | 'premium' | 'insuredCount' | 'program'>, person: Pick<InsuredRow, 'relation' | 'birthDate'>, on: string): number {
   return personAnnualPremium(tariffOf(policy), person, on, paramValues());
+}
+
+/** An appointment of a person whose medical data the signed-in person may see; anything else is 404. */
+export function myAppointment(d: Db, me: InsuredRow, id: string) {
+  const a = d.appointments.find((x) => x.id === id);
+  const who = a ? d.insured.find((x) => x.id === a.insuredId) : undefined;
+  if (!a || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
+  return a;
+}
+
+/** A claim of a person whose medical data the signed-in person may see; anything else is 404. */
+export function myClaimOf(d: Db, me: InsuredRow, id: string): { c: ClaimRow; who: InsuredRow } {
+  const c = d.claims.find((x) => x.id === id);
+  const who = c ? d.insured.find((x) => x.id === c.insuredId) : undefined;
+  if (!c || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
+  return { c, who };
 }

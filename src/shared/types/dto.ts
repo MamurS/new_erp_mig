@@ -518,6 +518,9 @@ export interface AssistInsuredItem {
   phoneMasked: string;
   pinflMasked: string;
   birthDateMasked: string;
+  /** A family member is a full insured person; the employee's name is shown next to the relation. */
+  relation: InsuredRelation;
+  principalName?: string;
   access: 'full' | 'read';
 }
 export interface AssistInsuredDetail extends AssistInsuredItem {

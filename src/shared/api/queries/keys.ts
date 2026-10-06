@@ -46,4 +46,8 @@ export const qk = {
   slots: (clinicId: string, date: string) => ['clinics', clinicId, 'slots', date] as const,
   chat: ['me', 'chat'] as const,
   cardToken: ['me', 'card-token'] as const,
+  meFamily: ['me', 'family'] as const,
+  meFamilyRequests: ['me', 'family-requests'] as const,
+  hrFamily: (employeeId?: string) => ['hr', 'family', employeeId ?? 'all'] as const,
+  hrFamilyRequests: (status?: string) => ['hr', 'family-requests', status ?? 'all'] as const,
 };

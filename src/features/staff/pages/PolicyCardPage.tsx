@@ -2,6 +2,7 @@ import { t } from '@/i18n';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { InsuredListItem } from '@/shared/types/dto';
+import { RELATION_LABEL } from '@/shared/domain/family';
 import type { LimitCategory, PolicyChange } from '@/shared/types';
 import { usePolicyChanges } from '@/shared/api/queries/policies';
 import { POLICY_CHANGE_KIND_LABEL, POLICY_CHANGE_STATUS_LABEL } from '@/shared/domain/policies';
@@ -141,7 +142,8 @@ function PolicyInsured({ clientId }: { clientId: string }) {
   const canOpen = !!user && (INSURED_CARD_ROLES as string[]).includes(user.role);
   const cols: Column<InsuredListItem>[] = [
     { key: 'name', header: t('common.fullName'), cell: (i) => <span className="font-medium">{i.fullName}</span> },
-    { key: 'position', header: t('common.position'), cell: (i) => <span className="text-muted">{i.position}</span> },
+    // A family member is listed as a person of their own: the relation and the employee instead of a position.
+    { key: 'position', header: t('common.position'), cell: (i) => <span className="text-muted">{i.relation === 'employee' ? i.position : `${RELATION_LABEL[i.relation]}${i.principalName ? ` · ${i.principalName}` : ''}`}</span> },
     { key: 'status', header: t('common.status'), cell: (i) => <StatusDot tone={i.status === 'active' ? 'success' : 'muted'}>{i.status === 'active' ? t('staff.clientCard.insuredActive') : t('staff.clientCard.insuredExcluded')}</StatusDot> },
   ];
   return (

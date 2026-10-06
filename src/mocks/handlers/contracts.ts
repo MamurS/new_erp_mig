@@ -38,6 +38,7 @@ import { randomId } from '../rng';
 import { tzIso } from '../time';
 import { toClient } from '../views';
 import { parsePolicyList, toListRow } from '../policy-core';
+import { personFor, personIdParam } from '../family-core';
 import { dmsParam, numbering } from '../params';
 import { assistanceName } from '../assistance-core';
 import {
@@ -904,12 +905,15 @@ export const contractHandlers = [
   ),
   http.get(
     `${API}/me/certificate`,
-    route(({ request }) => {
+    route(({ request, url }) => {
       const { user } = requireSession(request);
       if (user.role !== 'insured' || !user.insuredId) throw forbidden();
       const d = db();
-      const me = d.insured.find((i) => i.id === user.insuredId);
-      if (!me?.certificateNumber) throw notFound();
+      const viewer = d.insured.find((i) => i.id === user.insuredId);
+      if (!viewer) throw notFound();
+      // `?personId=`: a person of the family whose certificate the signed-in person may see (FAMILY_SPEC).
+      const me = personFor(d, viewer, personIdParam(url), 'card').person;
+      if (!me.certificateNumber) throw notFound();
       return certificates(d, me.policyId).find((c) => c.insuredId === me.id) ?? null;
     }),
   ),
