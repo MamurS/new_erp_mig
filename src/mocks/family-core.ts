@@ -29,11 +29,6 @@ export function familyBrief(d: Db, i: InsuredRow): FamilyMemberBrief[] {
   return familyOf(d, i.id).flatMap((m) => (isFamilyRelation(m.relation) ? [{ id: m.id, fullName: m.fullName, relation: m.relation, status: m.status }] : []));
 }
 
-/** Active family members of the active persons of a policy. */
-export function familyCountOf(people: readonly Pick<InsuredRow, 'relation'>[]): number {
-  return people.filter((p) => p.relation !== 'employee').length;
-}
-
 /** The card reimbursements are paid to: the person's own, else the employee's (a family member by default). */
 export function payoutCardOf(d: Db, i: InsuredRow): { card: string; own: boolean } {
   if (i.payoutCard) return { card: i.payoutCard, own: true };
