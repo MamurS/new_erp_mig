@@ -17,6 +17,7 @@ import { toast } from '@/shared/ui/toast';
 import { SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { formatDate, daysUntil } from '@/shared/lib/format';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { Button } from '@/shared/ui/button';
 import { Chip, StatusDot } from '@/shared/ui/chips';
 import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
@@ -131,6 +132,7 @@ export default function ClinicsPage() {
   const navigate = useNavigate();
   const canCreate = useCan('clinics.manage');
   const [creating, setCreating] = useState(false);
+  useCreateIntent('clinic', canCreate, setCreating, true);
   const cols: Column<Clinic>[] = [
     {
       key: 'name',

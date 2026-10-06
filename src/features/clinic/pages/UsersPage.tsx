@@ -11,6 +11,7 @@ import { useUser } from '@/shared/auth/session';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { formatDateTime } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
@@ -79,6 +80,7 @@ export default function UsersPage() {
   const q = useClinicUsers();
   const patch = usePatchClinicUser();
   const [inviting, setInviting] = useState(false);
+  useCreateIntent('user', true, setInviting, true);
   const [deactivate, setDeactivate] = useState<ClinicUserView | null>(null);
 
   const change = async (u: ClinicUserView, body: { role?: ClinicUserView['role']; active?: boolean }) => {

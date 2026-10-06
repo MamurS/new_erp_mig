@@ -27,6 +27,7 @@ import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims
 import { addDaysISO, formatDate, formatDateTime, formatMoney, formatTime, todayISO } from '@/shared/lib/format';
 import { maskMoney, parseMoney } from '@/shared/lib/masks';
 import { useDocumentTitle } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Chip, StatusDot } from '@/shared/ui/chips';
@@ -57,6 +58,7 @@ export default function InsuredCardPage() {
   const canLimit = useCan('limits.request_change');
   const canClaims = useCan('claims.read');
   const [dialog, setDialog] = useState<null | 'book' | 'letter' | 'claim' | 'limit'>(null);
+  useCreateIntent('claim', canCreateClaim, setDialog, 'claim');
   const claims = useInsuredClaims(insuredId);
   const openClaim = claims.data?.find((c) => ['new', 'review', 'medical_review'].includes(c.status));
 

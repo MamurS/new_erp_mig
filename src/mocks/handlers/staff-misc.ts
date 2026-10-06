@@ -1,6 +1,6 @@
 import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { http, HttpResponse } from 'msw';
-import { adminUserPatchSchema, exportSchema, limitRequestSchema, rejectLimitSchema } from '@/shared/schemas/forms';
+import { adminUserPatchSchema, exportSchema, staffUserInviteSchema, limitRequestSchema, rejectLimitSchema } from '@/shared/schemas/forms';
 import type { AuditEntry, Clinic, LimitChangeRequest, Slot, Specialty } from '@/shared/types';
 import type { ClaimsByCategoryRow, LossRatioRow, PremiumByMonthRow } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
@@ -9,12 +9,14 @@ import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims
 import { FOUR_EYES_LIMIT_HINT } from '@/shared/domain/limits';
 import { exportFileName, toCsv } from '@/shared/lib/csv';
 import { db } from '../db';
-import { API, audit, body, byLegalForm, byLegalName, conflict, filterLegalForm, forbidden, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
+import { API, audit, body, byLegalForm, byLegalName, conflict, filterLegalForm, forbidden, HttpError, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { legalFormShort } from '@/shared/config/legalForms';
 import { hashString, mulberry32, randomId } from '../rng';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { PROGRAMS } from '../programs';
 import { toClient, toHrEmployee } from '../views';
+import { DEMO_PASSWORD } from '../credentials';
+import { msg } from '@/i18n/core';
 
 const SPECIALTIES = new Set<Specialty>(['therapist', 'pediatrician', 'dentist', 'cardiologist', 'gynecologist', 'ent', 'neurologist', 'ophthalmologist']);
 
@@ -318,6 +320,23 @@ export const staffMiscHandlers = [
       const { user } = requireSession(request);
       requirePermission(user, 'users.manage');
       return db().staff.map(({ password: _p, ...s }) => s);
+    }),
+  ),
+  http.post(
+    `${API}/admin/users`,
+    route(async ({ request }) => {
+      const { user } = requireSession(request);
+      requirePermission(user, 'users.manage');
+      const input = await body(request, staffUserInviteSchema);
+      const d = db();
+      if (d.staff.some((s) => s.email === input.email) || d.clinicUsers.some((u) => u.email === input.email) || d.hrUsers.some((h) => h.email === input.email)) {
+        throw new HttpError(409, 'conflict', 'srv.users.emailTaken', { fields: { email: msg('srv.users.emailInUse') } });
+      }
+      const row = { id: randomId(), ...input, active: true, authority: {}, password: DEMO_PASSWORD };
+      d.staff.push(row);
+      audit(user, 'role_change', { targetType: 'user', targetId: row.id, targetLabel: `${row.fullName}: ${row.role}` });
+      const { password: _p, ...out } = row;
+      return HttpResponse.json(out, { status: 201 });
     }),
   ),
   http.patch(

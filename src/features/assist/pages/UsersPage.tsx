@@ -12,6 +12,7 @@ import { useUser } from '@/shared/auth/session';
 import { ASSISTANCE_ROLES, ROLE_LABEL } from '@/shared/domain/labels';
 import { formatDateTime } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
@@ -84,6 +85,7 @@ export default function UsersPage() {
   const q = useAssistUsers();
   const patch = usePatchAssistUser();
   const [inviting, setInviting] = useState(false);
+  useCreateIntent('user', true, setInviting, true);
   const change = async (u: AssistUserView, body: { role?: AssistanceRole; active?: boolean }) => {
     try {
       await patch.mutateAsync({ id: u.id, ...body });

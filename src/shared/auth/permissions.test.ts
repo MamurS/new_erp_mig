@@ -164,6 +164,8 @@ const AI_TABLE: Record<string, string> = {
   'ai.admin': '`admin` (с подтверждением второго)',
 };
 const AI_ACTIONS = Object.keys(AI_TABLE) as Action[];
+/** Transfer of the existing portfolio (DECISIONS: «Перенос портфеля»): admin only, the second admin applies. */
+const MIGRATION_ACTIONS: Action[] = ['migration.manage', 'migration.approve'];
 const lifecycleRows = [...multi(LIFECYCLE_TABLE), ...multi(LIFECYCLE_READ_TABLE)];
 const rows = parse(TABLE);
 const paramRows = parse(PARAMS_TABLE);
@@ -183,7 +185,7 @@ describe('permissions matrix (SPEC §4)', () => {
     const earlier = [...rows, ...clinicRows, ...policyRows, ...assistRows, ...paramRows].map((r) => r.action);
     // LIFECYCLE §14 also restates `kp.send` and `rebills.review` of the earlier tables.
     const added = lifecycleRows.map((r) => r.action).filter((a) => !earlier.includes(a));
-    expect([...earlier, ...added, ...AI_ACTIONS].sort()).toEqual([...ACTIONS].sort());
+    expect([...earlier, ...added, ...AI_ACTIONS, ...MIGRATION_ACTIONS].sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -472,5 +474,21 @@ describe('AI permissions (AI_COVERAGE_SPEC §5)', () => {
     const admin = userFor('admin');
     expect(can(admin, 'ai.admin', { createdById: admin.id })).toBe(false);
     for (const a of AI_ACTIONS) expect(can(userFor('hr'), a, { companyId: COMPANY })).toBe(false);
+  });
+});
+
+describe('portfolio migration permissions', () => {
+  const ALL: Role[] = [...ROLES, ...ASSIST_ROLES, 'sales_manager', 'legal', 'claims_officer'];
+  const OTHER = '99999999-9999-4999-8999-999999999999';
+  it('only an admin prepares and applies a batch', () => {
+    const allowed = (action: Action) => ALL.filter((r) => can({ ...userFor(r), canSign: true }, action, { createdById: OTHER, companyId: COMPANY, insuredId: INSURED, clinicId: CLINIC, assistanceId: ASSIST }));
+    expect(allowed('migration.manage')).toEqual(['admin']);
+    expect(allowed('migration.approve')).toEqual(['admin']);
+  });
+  it('four-eyes: the author never applies own batch', () => {
+    const admin = userFor('admin');
+    expect(can(admin, 'migration.approve', { createdById: OTHER })).toBe(true);
+    expect(can(admin, 'migration.approve', { createdById: admin.id })).toBe(false);
+    expect(can(admin, 'migration.manage', { createdById: admin.id })).toBe(true);
   });
 });

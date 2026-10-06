@@ -198,6 +198,8 @@ export const chatSchema = z.object({ text: text(1, 1000, msg('v.messageRequired'
 const emailInput = z.string().trim().toLowerCase().min(1, msg('v.emailRequired')).max(254).email(msg('v.emailInvalid'));
 const clinicRole = z.enum(['clinic_registrar', 'clinic_admin']);
 
+/** «+ Создать → Пользователь» (admin): a new MIG employee is invited by work email. */
+export const staffUserInviteSchema = z.object({ email: emailInput, fullName: text(3, 120), role: staffRole });
 export const clinicUserInviteSchema = z.object({ email: emailInput, fullName: text(3, 120), role: clinicRole });
 export const clinicUserPatchSchema = z
   .object({ role: clinicRole.optional(), active: z.boolean().optional() })

@@ -34,6 +34,8 @@ export const specialty = z.enum([
 ]);
 const appStatus = z.enum(['active', 'invited', 'not_invited']);
 const limitsRecord = z.object({ outpatient: money, dental: money, medicines: money, inpatient: money });
+/** «Перенесено из старой системы»: batch, date and author of the transfer. */
+export const migrationMark: z.ZodType<T.MigrationMark> = z.object({ batchId: uuid, at: isoDateTime, byName: z.string() });
 
 export const sessionUser: z.ZodType<T.SessionUser> = z.object({
   id: uuid,
@@ -78,6 +80,7 @@ export const client: z.ZodType<T.Client> = z.object({
     .optional(),
   estimatedHeadcount: z.number().optional(),
   currentInsurer: z.string().optional(),
+  migration: migrationMark.optional(),
 });
 
 export function page<S extends z.ZodTypeAny>(item: S) {
@@ -162,6 +165,8 @@ const insuredBase = z.object({
   status: z.enum(['active', 'excluded']),
   certificateNumber: z.string().optional(),
   contractId: uuid.optional(),
+  externalCertificateNumber: z.string().optional(),
+  migration: migrationMark.optional(),
 });
 export const insured: z.ZodType<T.Insured> = insuredBase;
 export const insuredListItem: z.ZodType<D.InsuredListItem> = z.object({
@@ -297,6 +302,8 @@ const claimBase = z.object({
     .optional(),
   handledBy: z.enum(['mig', 'assistance']).optional(),
   receiptFiscal: receiptFiscal.optional(),
+  externalNumber: z.string().optional(),
+  migration: migrationMark.optional(),
 });
 export const claim: z.ZodType<T.Claim> = claimBase;
 export const claimPage = page(claim);
@@ -485,8 +492,14 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'ai_settings_rejected',
     'ai_kill_switch',
     'ai_feedback',
+    'migration_validated',
+    'migration_submitted',
+    'migration_applied',
+    'migration_rejected',
+    'migration_rolled_back',
+    'migration_scan_attached',
   ]),
-  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill', 'parameter', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'ai']),
+  targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill', 'parameter', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'ai', 'migration']),
   targetId: uuid.optional(),
   targetLabel: z.string().optional(),
   reason: z.string().optional(),
@@ -524,6 +537,8 @@ export const invoice: z.ZodType<T.Invoice> = z.object({
   contractId: uuid.optional(),
   endorsementId: uuid.optional(),
   paid: money.optional(),
+  externalNumber: z.string().optional(),
+  migration: migrationMark.optional(),
 });
 export const invoices = z.array(invoice);
 

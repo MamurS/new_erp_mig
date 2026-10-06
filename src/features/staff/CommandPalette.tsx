@@ -14,15 +14,19 @@ import { INSURED_CARD_ROLES, STAFF_SECTIONS } from './nav';
 const itemCls =
   'flex cursor-pointer items-center gap-2 rounded-btn px-2 py-1.5 aria-selected:bg-accent-soft aria-selected:text-accent-text';
 
-export function CommandPalette({ open, onOpenChange, user }: { open: boolean; onOpenChange: (v: boolean) => void; user: SessionUser }) {
+/** `claim`: «+ Создать → Убыток» — only insured persons; choosing one opens their card with the claim form. */
+export type PaletteMode = 'search' | 'claim';
+
+export function CommandPalette({ open, onOpenChange, user, mode = 'search' }: { open: boolean; onOpenChange: (v: boolean) => void; user: SessionUser; mode?: PaletteMode }) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const term = useDebounced(q.trim(), 250);
   const enabled = open && term.length >= 2;
-  const canClients = can(user, 'clients.read');
-  const canPolicies = can(user, 'policies.read');
+  const claimMode = mode === 'claim';
+  const canClients = !claimMode && can(user, 'clients.read');
+  const canPolicies = !claimMode && can(user, 'policies.read');
   const canInsured = can(user, 'insured.read') && (INSURED_CARD_ROLES as string[]).includes(user.role);
-  const canClaims = can(user, 'claims.read');
+  const canClaims = !claimMode && can(user, 'claims.read');
   const clients = useClients({ q: term, pageSize: 5 }, enabled && canClients);
   const policies = usePolicies({ q: term, pageSize: 5 }, enabled && canPolicies);
   const insured = useInsuredList({ q: term, pageSize: 5 }, enabled && canInsured);
@@ -46,14 +50,14 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
           data-theme="staff"
           className="animate-modal fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-24px)] max-w-xl -translate-x-1/2 overflow-hidden rounded-card border border-border bg-surface shadow-2xl"
         >
-          <D.Title className="sr-only">{t('staff.palette.title')}</D.Title>
+          <D.Title className="sr-only">{claimMode ? t('create.claimPick.title') : t('staff.palette.title')}</D.Title>
           <D.Description className="sr-only">{t('staff.palette.description')}</D.Description>
-          <Command shouldFilter={false} label={t('staff.palette.title')} loop>
+          <Command shouldFilter={false} label={claimMode ? t('create.claimPick.title') : t('staff.palette.title')} loop>
             <Command.Input
               value={q}
               onValueChange={setQ}
               maxLength={100}
-              placeholder={t('staff.palette.placeholder')}
+              placeholder={claimMode ? t('create.claimPick.placeholder') : t('staff.palette.placeholder')}
               className="h-12 w-full border-b border-border bg-transparent px-4 outline-hidden"
             />
             <Command.List className="max-h-[60vh] overflow-y-auto p-2">
@@ -83,7 +87,7 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
               {canInsured && (insured.data?.items.length ?? 0) > 0 && (
                 <Command.Group heading={t('staff.palette.insured')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
                   {insured.data!.items.map((i) => (
-                    <Command.Item key={i.id} value={`i-${i.id}`} onSelect={() => go(`/staff/insured/${i.id}`)} className={itemCls}>
+                    <Command.Item key={i.id} value={`i-${i.id}`} onSelect={() => go(claimMode ? `/staff/insured/${i.id}?create=claim` : `/staff/insured/${i.id}`)} className={itemCls}>
                       <User className="h-4 w-4 text-muted" aria-hidden /> {i.fullName}
                       <span className="ml-auto truncate text-[12px] text-muted">{i.clientName}</span>
                     </Command.Item>
@@ -100,16 +104,18 @@ export function CommandPalette({ open, onOpenChange, user }: { open: boolean; on
                   ))}
                 </Command.Group>
               )}
-              <Command.Group heading={t('staff.palette.sections')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
-                {sections
-                  .filter((s) => matchesSearch(term, s.label))
-                  .map((s) => (
-                    <Command.Item key={s.path} value={`s-${s.path}`} onSelect={() => go(s.path)} className={itemCls}>
-                      <s.icon className="h-4 w-4 text-muted" aria-hidden /> {s.label}
-                      <CornerDownLeft className="ml-auto h-3 w-3 text-muted" aria-hidden />
-                    </Command.Item>
-                  ))}
-              </Command.Group>
+              {!claimMode && (
+                <Command.Group heading={t('staff.palette.sections')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                  {sections
+                    .filter((s) => matchesSearch(term, s.label))
+                    .map((s) => (
+                      <Command.Item key={s.path} value={`s-${s.path}`} onSelect={() => go(s.path)} className={itemCls}>
+                        <s.icon className="h-4 w-4 text-muted" aria-hidden /> {s.label}
+                        <CornerDownLeft className="ml-auto h-3 w-3 text-muted" aria-hidden />
+                      </Command.Item>
+                    ))}
+                </Command.Group>
+              )}
             </Command.List>
           </Command>
         </D.Content>

@@ -16,6 +16,7 @@ import { INTEGRATION_MODE_LABEL } from '@/shared/domain/clinics';
 import { t, tm } from '@/i18n';
 import { formatNumber, formatPercent } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
 import { LegalFormOptions, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
@@ -151,6 +152,7 @@ export default function AssistancesPage() {
   });
   const canManage = useCan('assistance.manage');
   const [creating, setCreating] = useState(false);
+  useCreateIntent('assistance', canManage, setCreating, true);
   const columns: Column<AssistanceListItem>[] = [
     { key: 'name', header: t('staffOps.rebills.col.assistance'), sortKey: 'name', cell: (a) => <span className="font-medium">{a.name}</span> },
     legalFormColumn<AssistanceListItem>((a) => a.legalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),

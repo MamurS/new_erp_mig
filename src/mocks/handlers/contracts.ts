@@ -187,7 +187,7 @@ function overridesFrom(kind: Kind, input: { clauseId: string; text: string }[], 
   });
 }
 
-async function readScan(request: Request): Promise<{ side: Side; bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'application/pdf' }> {
+export async function readScan(request: Request): Promise<{ side: Side; bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'application/pdf' }> {
   let form: FormData;
   try {
     form = await request.formData();

@@ -15,6 +15,7 @@ import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { changeRequestCreateSchema } from '@/shared/schemas/forms';
 import { formatDate, formatMoney } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
@@ -141,6 +142,7 @@ export default function EndorsementsPage() {
   const canManage = useCan('endorsements.manage');
   const periodicity = PERIODICITIES[useDmsParam('endorsementPeriodicity')] ?? 'monthly';
   const [newReq, setNewReq] = useState(false);
+  useCreateIntent('request', canManage, setNewReq, true);
 
   const pendingByContract = new Map<string, ChangeRequestView[]>();
   for (const r of requests.data ?? []) if (r.status === 'pending') pendingByContract.set(r.contractId, [...(pendingByContract.get(r.contractId) ?? []), r]);

@@ -11,6 +11,7 @@ import { DEAL_STAGE_LABEL, DEAL_STAGES } from '@/shared/domain/contracts';
 import { leadCreateSchema } from '@/shared/schemas/forms';
 import { formatDate, formatMoney, formatMoneyShort } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
@@ -165,6 +166,7 @@ export default function DealsPage() {
   const directory = useStaffDirectory();
   const managers = (directory.data ?? []).filter((s) => s.role === 'sales_manager');
   const [lead, setLead] = useState(false);
+  useCreateIntent('lead', canCreate, setLead, true);
 
   const columns: Column<DealView>[] = [
     { key: 'num', header: t('staffLc.deal.fallback'), cell: (d) => <span className="num font-medium">{d.number}</span> },

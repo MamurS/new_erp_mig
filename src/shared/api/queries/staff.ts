@@ -3,6 +3,8 @@ import type { ClaimStatus, LimitCategory, PiiField, Specialty, StaffRole } from 
 import { request } from '../client';
 import * as S from '../schemas';
 import { qk, type Params } from './keys';
+import type { z } from 'zod';
+import type { staffUserInviteSchema } from '@/shared/schemas/forms';
 
 const list = { placeholderData: keepPreviousData };
 
@@ -252,6 +254,13 @@ export const useAudit = (p: Params) =>
   useQuery({ queryKey: qk.audit(p), queryFn: () => request('/audit', { query: p, schema: S.auditPage }), ...list });
 export const useAdminUsers = (enabled = true) =>
   useQuery({ queryKey: qk.adminUsers, queryFn: () => request('/admin/users', { schema: S.staffUsers }), enabled });
+export function useInviteStaffUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: z.input<typeof staffUserInviteSchema>) => request('/admin/users', { method: 'POST', body: v, schema: S.staffUser }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.adminUsers }),
+  });
+}
 export function usePatchUser() {
   const qc = useQueryClient();
   return useMutation({
