@@ -22,8 +22,8 @@ test('flat_by_type: a child included mid-term costs premium_family × remaining 
   test.setTimeout(120_000);
   await loginStaff(page, 'hr');
   // HR adds a child of the demo employee through the API of the HR cabinet.
-  const employees = (await api(page, 'GET', '/hr/employees')).data as { id: string; fullName: string }[];
-  const employee = employees.find((e) => e.fullName.startsWith('Karimov Aziz'))!;
+  const employees = (await api(page, 'GET', `/hr/employees?q=${encodeURIComponent('Karimov Aziz')}`)).data as { items: { id: string; fullName: string }[] };
+  const employee = employees.items.find((e) => e.fullName.startsWith('Karimov Aziz Bahromovich'))!;
   expect(employee).toBeTruthy();
   const startDate = new Date(Date.now() + 2 * DAY).toISOString().slice(0, 10);
   const added = await api(page, 'POST', '/hr/family', { employeeId: employee.id, fullName: 'Karimova Shahlo Azizovna', birthDate: '2019-04-20', pinfl: '62004190000123', relation: 'child', startDate });
