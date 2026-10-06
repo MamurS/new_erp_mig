@@ -1,7 +1,7 @@
 /* Claim business rules shared by UI and mock server (SPEC §4). */
 import { defineLabels, msg } from '@/i18n';
 import { roleTransitionsFrom } from '@/shared/auth/permissions';
-import type { Claim, ClaimCategory, ClaimStatus, LimitCategory, MyClaim, SessionUser } from '@/shared/types';
+import type { Claim, ClaimCategory, ClaimIntakeChannel, ClaimStatus, LimitCategory, MyClaim, SessionUser } from '@/shared/types';
 
 export const MEDICAL_REVIEW_AMOUNT = 5_000_000;
 
@@ -69,3 +69,7 @@ export const TRANSITION_LABEL = defineLabels<ClaimStatus>('labels.claimTransitio
 export const TRANSITION_TOAST = defineLabels<ClaimStatus>('labels.claimTransitionToast', ['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid']);
 
 export const CLAIM_CATEGORY_LABEL = defineLabels<ClaimCategory>('labels.claimCategory', ['medicines', 'doctor_visit', 'diagnostics', 'dental', 'inpatient']);
+
+/** How a claim registered by MIG staff reached MIG (the order of the form's select). */
+export const CLAIM_INTAKE_CHANNELS: readonly ClaimIntakeChannel[] = ['hr_letter', 'phone', 'email', 'other'];
+export const CLAIM_INTAKE_LABEL = defineLabels<ClaimIntakeChannel>('labels.claimIntake', ['hr_letter', 'phone', 'email', 'other']);

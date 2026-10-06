@@ -54,7 +54,7 @@ import type {
   StaffUser,
   UUID,
 } from '@/shared/types';
-import type { MigrationBatchStatus, MigrationIssue, MigrationStep, MigrationStepStatus, MigrationTotals } from '@/shared/types/migration';
+import type { MigrationBatchStatus, MigrationContractPremium, MigrationIssue, MigrationPremiumSource, MigrationStep, MigrationStepStatus, MigrationTotals } from '@/shared/types/migration';
 
 export interface StaffRow extends StaffUser {
   password: string;
@@ -163,6 +163,8 @@ export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMask
   userId: UUID;
   /** Used limits by category as of the migration date (transferred from the previous system). */
   migratedUsed?: Partial<Record<LimitCategory, number>>;
+  /** Annual premium of a transferred person (employee with the family members) and where it came from. */
+  migratedPremium?: { amount: number; source: MigrationPremiumSource };
 }
 /** Change request of the insured list; personal data of a new person stays on the server only. */
 export interface PolicyChangeRow extends PolicyChange {
@@ -347,6 +349,8 @@ export interface MigrationBatchRow {
   steps: Partial<Record<MigrationStep, { status: MigrationStepStatus; excludeErrors: boolean; validRows?: number[] }>>;
   /** Report of the dry run kept after applying (the files themselves are dropped then). */
   totals?: Partial<Record<MigrationStep, { fileTotals: MigrationTotals; validTotals: MigrationTotals; errorRows: number; warningRows: number; issues: MigrationIssue[] }>>;
+  /** Per-contract premium check as it was when the batch was applied. */
+  contractPremiums?: MigrationContractPremium[];
   submittedAt?: string;
   decidedAt?: string;
   decidedById?: UUID;

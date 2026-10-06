@@ -140,11 +140,23 @@ export function useTransition() {
 export function useCreateClaim() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { insuredId: string; category: string; amount: number; serviceDate: string; providerName: string }) =>
-      request('/claims', { method: 'POST', body, schema: S.idResult }),
+    mutationFn: (v: { insuredId: string; intakeChannel: string; category: string; amount: number; serviceDate: string; providerName: string; files: Blob[] }) => {
+      // Multipart: the fields and the attachments (already checked and re-encoded by prepareAttachment).
+      const fd = new FormData();
+      fd.append('insuredId', v.insuredId);
+      fd.append('intakeChannel', v.intakeChannel);
+      fd.append('category', v.category);
+      fd.append('amount', String(v.amount));
+      fd.append('serviceDate', v.serviceDate);
+      fd.append('providerName', v.providerName);
+      v.files.forEach((f, i) => fd.append('files', f, f instanceof File ? f.name : `document-${i + 1}`));
+      return request('/claims', { method: 'POST', body: fd, schema: S.idResult });
+    },
     onSuccess: (_d, v) => {
       void qc.invalidateQueries({ queryKey: ['claims'] });
       void qc.invalidateQueries({ queryKey: qk.insuredClaims(v.insuredId) });
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
+      void qc.invalidateQueries({ queryKey: ['queue'] });
     },
   });
 }

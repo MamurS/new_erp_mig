@@ -23,6 +23,8 @@ export type AutoItemId = 'policy' | 'endorsement' | 'kp_contract';
 interface Variant {
   portal: Portal;
   perm: Action;
+  /** A second right the variant needs (e.g. the claims officer registers a claim together with its reserve). */
+  alsoPerm?: Action;
   label: I18nKey;
   /** Start of the process; `?create=…` opens the dialog of a list page. */
   to?: string;
@@ -59,7 +61,14 @@ export const CREATE_ITEMS: readonly CreateDef[] = [
       { portal: 'hr', perm: 'hr.employees.manage', label: 'create.item.membership', to: '/hr/employees/new', hint: 'create.hint.membershipHr' },
     ],
   },
-  { id: 'claim', variants: [{ portal: 'staff', perm: 'claims.create', label: 'create.item.claim', command: 'pick-insured-for-claim', hint: 'create.hint.claim' }] },
+  {
+    id: 'claim',
+    variants: [
+      // Claims officer: the claim form on the claims page, with the insured person found in the form itself.
+      { portal: 'staff', perm: 'claims.create', alsoPerm: 'claims.reserves', label: 'create.item.claim', to: '/staff/claims?create=claim' },
+      { portal: 'staff', perm: 'claims.create', label: 'create.item.claim', command: 'pick-insured-for-claim', hint: 'create.hint.claim' },
+    ],
+  },
   { id: 'case', variants: [{ portal: 'assist', perm: 'assist.cases.manage', label: 'create.item.case', to: '/assist/insured', hint: 'create.hint.case' }] },
   { id: 'guarantee', variants: [{ portal: 'clinic', perm: 'guarantees.request', label: 'create.item.guarantee', to: '/clinic/check', hint: 'create.hint.guarantee' }] },
   {
@@ -107,7 +116,7 @@ export function createMenuFor(user: MinimalUser | null | undefined): CreateMenu 
   const portal = portalOf(user.role);
   const items: CreateMenuItem[] = [];
   for (const def of CREATE_ITEMS) {
-    const v = def.variants.find((x) => x.portal === portal && can(user, x.perm));
+    const v = def.variants.find((x) => x.portal === portal && can(user, x.perm) && (!x.alsoPerm || can(user, x.alsoPerm)));
     if (!v) continue;
     items.push({ id: def.id, label: v.label, ...(v.to ? { to: v.to } : {}), ...(v.command ? { command: v.command } : {}), ...(v.hint ? { hint: v.hint } : {}) });
   }

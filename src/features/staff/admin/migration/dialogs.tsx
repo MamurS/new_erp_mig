@@ -133,6 +133,8 @@ export function ManualContractDialog({ assistances, onClose }: { assistances: st
           )}
         </Field>
         {text('premium', t('migration.field.premium'), { inputMode: 'numeric', maxLength: 16 })}
+        {text('premium_employee', t('migration.field.premiumEmployee'), { inputMode: 'numeric', maxLength: 16 })}
+        {text('premium_family', t('migration.field.premiumFamily'), { inputMode: 'numeric', maxLength: 16 })}
         <Field label={t('migration.field.paymentFrequency')} error={errors.paymentFrequency}>
           {(a) => (
             <Select {...a} value={row.paymentFrequency} onChange={(e) => set('paymentFrequency')(e.target.value)}>

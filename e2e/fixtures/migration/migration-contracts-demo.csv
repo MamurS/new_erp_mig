@@ -1,6 +1,6 @@
-oldNumber,clientStir,startDate,endDate,program,premium,paymentFrequency,assistance
-MIG-2026/0501,409100001,2026-07-01,2027-06-30,standard,228000000,quarterly,
-MIG-2026/0502,409100002,2026-04-01,2027-03-31,premium,360000000,single,
-MIG-2026/0503,409100003,2026-06-01,2027-05-31,basic,96000000,monthly,
-MIG-2026/0504,409100004,2026-09-01,2027-08-31,standard_plus,157500000,quarterly,
-MIG-2026/0505,409100005,2026-05-01,2027-04-30,standard,76000000,single,Shifo Assistans Group
+oldNumber,clientStir,startDate,endDate,program,premium,premium_employee,premium_family,paymentFrequency,assistance
+MIG-2026/0501,409100001,2026-07-01,2027-06-30,standard,406080000,3600000,2880000,quarterly,
+MIG-2026/0502,409100002,2026-04-01,2027-03-31,premium,520800000,6000000,4800000,single,
+MIG-2026/0503,409100003,2026-06-01,2027-05-31,basic,169050000,,,monthly,
+MIG-2026/0504,409100004,2026-09-01,2027-08-31,standard_plus,223900000,4500000,3600000,quarterly,
+MIG-2026/0505,409100005,2026-05-01,2027-04-30,standard,124729999,3800000,3040000,single,Shifo Assistans Group

@@ -19,7 +19,7 @@ const EXPECTED: Record<Role, { items: CreateItemId[]; auto: AutoItemId[] }> = {
   admin: { items: ['user', 'clinic', 'assistance'], auto: [] },
   sales_manager: { items: ['client', 'deal', 'membership'], auto: ['policy', 'endorsement', 'kp_contract'] },
   legal: { items: [], auto: [] },
-  claims_officer: { items: [], auto: [] },
+  claims_officer: { items: ['claim'], auto: [] },
   hr: { items: ['membership'], auto: ['policy', 'endorsement'] },
   insured: { items: [], auto: [] },
   clinic_registrar: { items: ['guarantee'], auto: [] },
@@ -46,7 +46,7 @@ describe('createMenuFor', () => {
   it.each(ALL_ROLES)('%s: every enabled item is allowed by the matrix', (role) => {
     for (const item of createMenuFor(userOf(role)).items) {
       const def = CREATE_ITEMS.find((d) => d.id === item.id)!;
-      expect(def.variants.some((v) => can(userOf(role), v.perm) && (v.to === item.to || v.command === item.command)), `${role} ${item.id}`).toBe(true);
+      expect(def.variants.some((v) => can(userOf(role), v.perm) && (!v.alsoPerm || can(userOf(role), v.alsoPerm)) && (v.to === item.to || v.command === item.command)), `${role} ${item.id}`).toBe(true);
     }
   });
 
@@ -70,6 +70,7 @@ describe('createMenuFor', () => {
     expect(to('sales_manager', 'membership')?.to).toBe('/staff/endorsements?create=request');
     expect(to('hr', 'membership')?.to).toBe('/hr/employees/new');
     expect(to('operator', 'claim')?.command).toBe('pick-insured-for-claim');
+    expect(to('claims_officer', 'claim')?.to).toBe('/staff/claims?create=claim');
     expect(to('asst_operator', 'case')?.to).toBe('/assist/insured');
     expect(to('clinic_registrar', 'guarantee')?.to).toBe('/clinic/check');
     expect(to('admin', 'user')?.to).toBe('/staff/admin/users?create=user');

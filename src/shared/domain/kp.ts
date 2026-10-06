@@ -12,6 +12,17 @@ export function kpTotalPremium(p: Pick<KpParams, 'employees' | 'premiumEmployee'
   return p.employees * p.premiumEmployee + p.familyMembers * p.premiumFamily;
 }
 
+/**
+ * Premium per person for a renewal offer: a person transferred from the previous system counts with
+ * the own premium stored at the transfer (`migratedPremium`), any other person with an even share of the
+ * policy premium; the offer takes their average. Without transferred persons it is the even share.
+ */
+export function renewalPremiumPerPerson(policyPremium: Money, insuredCount: number, persons: readonly { migratedPremium?: { amount: Money } }[]): Money {
+  const share = policyPremium / Math.max(1, insuredCount || persons.length);
+  if (!persons.some((p) => p.migratedPremium)) return share;
+  return persons.reduce((s, p) => s + (p.migratedPremium ? p.migratedPremium.amount : share), 0) / persons.length;
+}
+
 /** 'KP-2026-000123' with the default template. */
 export function kpNumber(year: number, seq: number, templates: Partial<NumberingTemplates> = DEFAULT_NUMBERING): string {
   return docNumber('kp', { year, n: seq }, templates);

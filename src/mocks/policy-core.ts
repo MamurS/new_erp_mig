@@ -126,7 +126,10 @@ export function requestChange(
     position: input.position,
     familyMembers: input.familyMembers,
     effectiveDate: input.effectiveDate,
-    premiumDelta: proRataDelta(policy, tariffOf(policy), kind, input.effectiveDate, input.familyMembers),
+    // A transferred person carries an own annual premium (with the family): it is the one refunded on exclusion.
+    premiumDelta: input.insured?.migratedPremium
+      ? proRataDelta(policy, { employee: input.insured.migratedPremium.amount, family: 0 }, kind, input.effectiveDate, 0)
+      : proRataDelta(policy, tariffOf(policy), kind, input.effectiveDate, input.familyMembers),
     status: 'pending',
     requestedAt: tzIso(Date.now()),
     requestedByName: actor.displayName,

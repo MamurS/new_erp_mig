@@ -9,7 +9,7 @@ import { useFileUrl } from '@/shared/api/files';
 import { errorMessage } from '@/shared/api/client';
 import { useUser } from '@/shared/auth/session';
 import { INSURED_CARD_ROLES } from '../nav';
-import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL, TRANSITION_LABEL, TRANSITION_TOAST } from '@/shared/domain/claims';
+import { CLAIM_CATEGORY_LABEL, CLAIM_INTAKE_LABEL, CLAIM_STATUS_LABEL, TRANSITION_LABEL, TRANSITION_TOAST } from '@/shared/domain/claims';
 import { LIMIT_CATEGORY_LABEL } from '@/shared/domain/labels';
 import { formatDate, formatDateTime, formatFileSize, formatMoney } from '@/shared/lib/format';
 import { maskMoney, parseMoney } from '@/shared/lib/masks';
@@ -91,6 +91,7 @@ export default function ClaimCardPage() {
               </Kv>
               <Kv label={t('common.client')}>{c.clientName}</Kv>
               <Kv label={t('common.source')}>{SOURCE_LABEL[c.source]}</Kv>
+              {c.intakeChannel && <Kv label={t('staff.claimCard.intakeChannel')}>{CLAIM_INTAKE_LABEL[c.intakeChannel]}</Kv>}
               <Kv label={t('staff.claimCard.where')}>{c.providerName}</Kv>
               <Kv label={t('staff.insuredCard.serviceDate')}>{formatDate(c.serviceDate)}</Kv>
               <Kv label={t('staff.claimCard.claimed')}>

@@ -9,7 +9,7 @@ import { currentAssistance } from '../assistance-core';
 import type { KpDocument, KpParams, SessionUser } from '@/shared/types';
 import type { KpDefaults } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
-import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '@/shared/domain/kp';
+import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium, renewalPremiumPerPerson } from '@/shared/domain/kp';
 import { db, type ClientRow } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, type Ctx } from '../http';
 import { randomId } from '../rng';
@@ -68,7 +68,7 @@ export const kpHandlers = [
       const client = findClient(param(ctx, 'id'));
       const policy = policyFor(client, ctx.url);
       const active = d.insured.filter((i) => i.clientId === client.id && i.status === 'active');
-      const perPerson = policy && policy.premium > 0 ? roundK(policy.premium / Math.max(1, policy.insuredCount || active.length)) : DEFAULT_PREMIUM;
+      const perPerson = policy && policy.premium > 0 ? roundK(renewalPremiumPerPerson(policy.premium, policy.insuredCount, active)) : DEFAULT_PREMIUM;
       const program = policy?.program ?? client.program;
       const sum = program ? Object.values(PROGRAMS[program].limits).reduce((s, v) => s + v, 0) : DEFAULT_SUM;
       const today = startOfDay(Date.now());

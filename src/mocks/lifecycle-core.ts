@@ -282,8 +282,12 @@ export async function activateContract(d: Db, c: Contract, on: string): Promise<
 
 // ---------------------------------------------------------------- endorsements
 
-/** Annual premium of an insured person under the contract: employee plus family members. */
-export function annualOf(c: Contract, i: Pick<InsuredRow, 'familyMembersCount'>): number {
+/**
+ * Annual premium of an insured person under the contract: a transferred person's own premium (from the
+ * files of the previous system), else employee plus family members by the contract's tariff.
+ */
+export function annualOf(c: Contract, i: Pick<InsuredRow, 'familyMembersCount' | 'migratedPremium'>): number {
+  if (i.migratedPremium) return i.migratedPremium.amount;
   return c.params.premiumEmployee + c.params.premiumFamily * i.familyMembersCount;
 }
 

@@ -1,16 +1,12 @@
-import { t, tm } from '@/i18n';
+import { t } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Controller, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { CalendarPlus, FilePlus2, FileText, SlidersHorizontal, Plus } from 'lucide-react';
-import type { ClaimCategory, Specialty } from '@/shared/types';
+import type { Specialty } from '@/shared/types';
 import {
   useAppointments,
   useClinics,
   useCreateAppointment,
-  useCreateClaim,
   useGuaranteeLetter,
   useInsured,
   useInsuredAccessLog,
@@ -21,11 +17,9 @@ import {
 } from '@/shared/api/queries/staff';
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
-import { myClaimSchema } from '@/shared/schemas/forms';
 import { APPOINTMENT_STATUS_LABEL, AUDIT_ACTION_LABEL, PROGRAM_LABEL, ROLE_LABEL, SPECIALTY_LABEL } from '@/shared/domain/labels';
 import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims';
 import { addDaysISO, formatDate, formatDateTime, formatMoney, formatTime, todayISO } from '@/shared/lib/format';
-import { maskMoney, parseMoney } from '@/shared/lib/masks';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { useCreateIntent } from '@/shared/lib/createIntent';
 import { cn } from '@/shared/lib/cn';
@@ -33,7 +27,6 @@ import { Button } from '@/shared/ui/button';
 import { Chip, StatusDot } from '@/shared/ui/chips';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
-import { MaskedInput } from '@/shared/ui/masked-input';
 import { Card } from '@/shared/ui/page';
 import { EmptyState, ErrorState, QueryState, SkeletonRows } from '@/shared/ui/states';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
@@ -45,6 +38,7 @@ import { LimitRequestDialog } from '../components/LimitRequestDialog';
 import { APPT_TONE, CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
 import { MigratedBadge } from '../components/MigratedBadge';
+import { NewClaimDialog } from '../components/NewClaimDialog';
 import { TableScroll } from '@/shared/ui/table-scroll';
 
 export default function InsuredCardPage() {
@@ -186,7 +180,7 @@ export default function InsuredCardPage() {
 
       <BookDialog open={dialog === 'book'} onOpenChange={(o) => setDialog(o ? 'book' : null)} insuredId={p.id} />
       <GuaranteeDialog open={dialog === 'letter'} onOpenChange={(o) => setDialog(o ? 'letter' : null)} insuredId={p.id} />
-      <NewClaimDialog open={dialog === 'claim'} onOpenChange={(o) => setDialog(o ? 'claim' : null)} insuredId={p.id} />
+      <NewClaimDialog open={dialog === 'claim'} onOpenChange={(o) => setDialog(o ? 'claim' : null)} insured={{ id: p.id, fullName: p.fullName }} />
       <LimitRequestDialog open={dialog === 'limit'} onOpenChange={(o) => setDialog(o ? 'limit' : null)} policyId={p.policyId} insuredId={p.id} />
     </div>
   );
@@ -479,85 +473,6 @@ function GuaranteeDialog({ open, onOpenChange, insuredId }: { open: boolean; onO
           {(a) => <Input {...a} value={service} maxLength={200} onChange={(e) => setService(e.target.value)} />}
         </Field>
       </div>
-    </Modal>
-  );
-}
-
-const operatorClaimSchema = myClaimSchema;
-type ClaimValues = z.input<typeof operatorClaimSchema>;
-const CATS: ClaimCategory[] = ['medicines', 'doctor_visit', 'diagnostics', 'dental', 'inpatient'];
-
-function NewClaimDialog({ open, onOpenChange, insuredId }: { open: boolean; onOpenChange: (v: boolean) => void; insuredId: string }) {
-  const create = useCreateClaim();
-  const navigate = useNavigate();
-  const form = useForm<ClaimValues>({
-    resolver: zodResolver(operatorClaimSchema),
-    defaultValues: { category: 'doctor_visit', amount: 0, serviceDate: '', providerName: '' },
-    mode: 'onTouched',
-  });
-  const onSubmit = form.handleSubmit(async (v) => {
-    try {
-      const res = await create.mutateAsync({ insuredId, ...v, amount: v.amount });
-      toast.success(t('staff.insuredCard.claimCreated'));
-      onOpenChange(false);
-      form.reset();
-      navigate(`/staff/claims/${res.id}`);
-    } catch (e) {
-      toast.error(errorMessage(e));
-    }
-  });
-  return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title={t('staff.insuredCard.newClaim')}
-      footer={
-        <>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button loading={create.isPending} onClick={() => void onSubmit()}>
-            {t('staff.insuredCard.createClaim')}
-          </Button>
-        </>
-      }
-    >
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
-        <Field label={t('common.category')}>
-          {(a) => (
-            <Select {...a} {...form.register('category')}>
-              {CATS.map((c) => (
-                <option key={c} value={c}>
-                  {CLAIM_CATEGORY_LABEL[c]}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        <Field label={t('staff.insuredCard.amountUzs')} error={tm(form.formState.errors.amount?.message)}>
-          {(a) => (
-            <Controller
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <MaskedInput {...a} mask="money" value={field.value ? maskMoney(String(field.value)) : ''} onChange={(v) => field.onChange(parseMoney(v))} onBlur={field.onBlur} />
-              )}
-            />
-          )}
-        </Field>
-        <Field label={t('staff.insuredCard.serviceDate')} error={tm(form.formState.errors.serviceDate?.message)}>
-          {(a) => (
-            <Controller
-              control={form.control}
-              name="serviceDate"
-              render={({ field }) => <MaskedInput {...a} mask="date" value={field.value} onChange={field.onChange} onBlur={field.onBlur} />}
-            />
-          )}
-        </Field>
-        <Field label={t('staff.insuredCard.provider')} error={tm(form.formState.errors.providerName?.message)}>
-          {(a) => <Input {...a} maxLength={120} {...form.register('providerName')} />}
-        </Field>
-      </form>
     </Modal>
   );
 }
