@@ -24,7 +24,9 @@ export function FamilyConsentSwitch({ granted, principalName }: { granted: boole
   const apply = async () => {
     try {
       await consent.mutateAsync(!granted);
-      toast.success(t(granted ? 'app.family.consentRevoked' : 'app.family.consentGranted', { name: principalName }));
+      toast.success(
+        t(granted ? 'app.family.consentRevoked' : 'app.family.consentGranted', { name: principalName }),
+      );
       setAsking(false);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -43,12 +45,23 @@ export function FamilyConsentSwitch({ granted, principalName }: { granted: boole
           aria-checked={granted}
           aria-labelledby="family-consent-label"
           onClick={() => setAsking(true)}
-          className={cn('relative h-8 w-14 shrink-0 rounded-full transition-colors', granted ? 'bg-accent' : 'bg-rail')}
+          className={cn(
+            'relative h-8 w-14 shrink-0 rounded-full transition-colors',
+            granted ? 'bg-accent' : 'bg-rail',
+          )}
         >
-          <span aria-hidden className={cn('absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all', granted ? 'left-7' : 'left-1')} />
+          <span
+            aria-hidden
+            className={cn(
+              'absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all',
+              granted ? 'left-7' : 'left-1',
+            )}
+          />
         </button>
       </div>
-      <p className="mt-2 text-[13px] text-muted">{t(granted ? 'app.family.consentOnHint' : 'app.family.consentOffHint', { name: principalName })}</p>
+      <p className="mt-2 text-[13px] text-muted">
+        {t(granted ? 'app.family.consentOnHint' : 'app.family.consentOffHint', { name: principalName })}
+      </p>
       <ConfirmDialog
         open={asking}
         onOpenChange={setAsking}
@@ -105,15 +118,26 @@ export function PayoutCardActions({ profile }: { profile: MeProfile }) {
         {t('app.payout.title')}
       </p>
       <p className="mt-1 text-[14px] text-muted">
-        {member && !profile.payoutCardOwn ? t('app.payout.principal', { name: principal }) : t('app.payout.own')}{' '}
+        {member && !profile.payoutCardOwn
+          ? t('app.payout.principal', { name: principal })
+          : t('app.payout.own')}{' '}
         <span className="num font-semibold text-text">{profile.payoutCardMasked}</span>
       </p>
       <div className="mt-3 flex flex-col gap-2">
-        <Button variant="secondary" onClick={() => setOpen(true)} className="h-11 w-full rounded-btn text-[15px]">
+        <Button
+          variant="secondary"
+          onClick={() => setOpen(true)}
+          className="h-11 w-full rounded-btn text-[15px]"
+        >
           {t(member && !profile.payoutCardOwn ? 'app.payout.setOwn' : 'app.payout.change')}
         </Button>
         {member && profile.payoutCardOwn && (
-          <Button variant="ghost" loading={setCard.isPending} onClick={() => void save(null)} className="h-11 w-full rounded-btn text-[15px]">
+          <Button
+            variant="ghost"
+            loading={setCard.isPending}
+            onClick={() => void save(null)}
+            className="h-11 w-full rounded-btn text-[15px]"
+          >
             {t('app.payout.backToPrincipal', { name: principal })}
           </Button>
         )}
@@ -128,7 +152,15 @@ export function PayoutCardActions({ profile }: { profile: MeProfile }) {
           className="flex flex-col gap-4"
         >
           <Field label={t('app.payout.number')} error={error}>
-            {(a) => <MaskedInput {...a} mask="card" value={value} onChange={setValue} className="h-12 text-[15px]" />}
+            {(a) => (
+              <MaskedInput
+                {...a}
+                mask="card"
+                value={value}
+                onChange={setValue}
+                className="h-12 text-[15px]"
+              />
+            )}
           </Field>
           <p className="text-[13px] text-muted">{t('app.payout.hint')}</p>
           <Button type="submit" loading={setCard.isPending} className={BIG}>

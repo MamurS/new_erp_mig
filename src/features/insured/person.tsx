@@ -3,7 +3,16 @@
  * in the switcher «Я / {name}» on the home screen. Kept in memory for the session of the app layout only — never
  * in the URL or in storage; the server decides what may be seen (404 for anyone else).
  */
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { EyeOff } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import type { FamilyProfile } from '@/shared/types/dto';
@@ -24,7 +33,14 @@ export interface SelectedPerson {
   select: (id: string) => void;
 }
 
-const SELF: SelectedPerson = { personId: undefined, person: undefined, family: [], isSelf: true, medical: true, select: () => undefined };
+const SELF: SelectedPerson = {
+  personId: undefined,
+  person: undefined,
+  family: [],
+  isSelf: true,
+  medical: true,
+  select: () => undefined,
+};
 const Ctx = createContext<SelectedPerson>(SELF);
 
 export function PersonProvider({ children }: { children: ReactNode }) {
@@ -37,7 +53,14 @@ export function PersonProvider({ children }: { children: ReactNode }) {
     // A person that left the list (excluded, consent revoked to nothing) falls back to the signed-in one.
     const person = list.find((p) => p.id === picked) ?? self;
     const isSelf = !person || person.access === 'self';
-    return { personId: isSelf ? undefined : person.id, person, family: list, isSelf, medical: !person || person.access !== 'basic', select };
+    return {
+      personId: isSelf ? undefined : person.id,
+      person,
+      family: list,
+      isSelf,
+      medical: !person || person.access !== 'basic',
+      select,
+    };
   }, [family.data, picked, select]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -62,7 +85,12 @@ export function ProfileSwitcher({ className }: { className?: string }) {
     family.findIndex((p) => p.id === person?.id),
   );
   const onKey = (e: KeyboardEvent, i: number) => {
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    const step =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown'
+        ? 1
+        : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+          ? -1
+          : 0;
     if (!step) return;
     e.preventDefault();
     const next = (i + step + family.length) % family.length;
@@ -72,7 +100,12 @@ export function ProfileSwitcher({ className }: { className?: string }) {
     refs.current[next]?.focus();
   };
   return (
-    <div role="radiogroup" aria-label={t('app.family.switcher')} data-testid="profile-switcher" className={cn('-mx-4 flex gap-2 overflow-x-auto px-4 pb-1', className)}>
+    <div
+      role="radiogroup"
+      aria-label={t('app.family.switcher')}
+      data-testid="profile-switcher"
+      className={cn('-mx-4 flex gap-2 overflow-x-auto px-4 pb-1', className)}
+    >
       {family.map((p, i) => {
         const on = i === current;
         return (
@@ -90,7 +123,9 @@ export function ProfileSwitcher({ className }: { className?: string }) {
             onKeyDown={(e) => onKey(e, i)}
             className={cn(
               'min-h-[44px] shrink-0 rounded-full border px-4 text-[15px] font-semibold transition-colors',
-              on ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-text hover:border-accent',
+              on
+                ? 'border-accent bg-accent text-white'
+                : 'border-border bg-surface text-text hover:border-accent',
             )}
           >
             {label(p)}
@@ -107,7 +142,10 @@ export function PersonNote() {
   const { person, isSelf } = usePerson();
   if (isSelf || !person) return null;
   return (
-    <p className="mb-4 rounded-card bg-accent-soft px-4 py-2.5 text-[14px] font-semibold text-accent-text" data-testid="person-note">
+    <p
+      className="mb-4 rounded-card bg-accent-soft px-4 py-2.5 text-[14px] font-semibold text-accent-text"
+      data-testid="person-note"
+    >
       {t('app.family.for', { name: person.fullName, relation: RELATION_LABEL[person.relation] })}
     </p>
   );
@@ -118,7 +156,10 @@ export function MedicalHidden({ person }: { person: FamilyProfile | undefined })
   const { t } = useI18n();
   return (
     <div data-testid="medical-hidden">
-      <Empty icon={<EyeOff className="h-8 w-8" aria-hidden />} title={t('app.family.hidden', { name: person?.firstName ?? '' })} />
+      <Empty
+        icon={<EyeOff className="h-8 w-8" aria-hidden />}
+        title={t('app.family.hidden', { name: person?.firstName ?? '' })}
+      />
     </div>
   );
 }

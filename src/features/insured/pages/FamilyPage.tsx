@@ -36,7 +36,10 @@ const REQUEST_STATUS: Record<FamilyRequestStatus, I18nKey> = {
 function PersonCard({ p, testId }: { p: FamilyProfile; testId: string }) {
   const { t } = useI18n();
   return (
-    <li className="flex items-start gap-3 rounded-card border border-border bg-surface p-4" data-testid={testId}>
+    <li
+      className="flex items-start gap-3 rounded-card border border-border bg-surface p-4"
+      data-testid={testId}
+    >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-text">
         <UserRound className="h-5 w-5" aria-hidden />
       </span>
@@ -64,14 +67,23 @@ function RequestCard({ r }: { r: FamilyRequest }) {
             {RELATION_LABEL[r.relation]} · {t('app.family.sentOn', { date: formatDate(r.createdAt) })}
           </p>
         </div>
-        <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold', REQUEST_TONE[r.status])} data-testid="family-request-status">
+        <span
+          className={cn('shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold', REQUEST_TONE[r.status])}
+          data-testid="family-request-status"
+        >
           {t(REQUEST_STATUS[r.status])}
         </span>
       </div>
-      {r.status === 'pending' && <p className="mt-2 text-[13px] text-muted">{t('app.family.req.pendingHint')}</p>}
-      {r.status === 'approved' && <p className="mt-2 text-[13px] text-muted">{t('app.family.req.approvedHint')}</p>}
+      {r.status === 'pending' && (
+        <p className="mt-2 text-[13px] text-muted">{t('app.family.req.pendingHint')}</p>
+      )}
+      {r.status === 'approved' && (
+        <p className="mt-2 text-[13px] text-muted">{t('app.family.req.approvedHint')}</p>
+      )}
       {r.status === 'rejected' && r.rejectionReason && (
-        <p className="mt-2 text-[13px] font-semibold text-danger-text">{t('app.family.req.reason', { reason: r.rejectionReason })}</p>
+        <p className="mt-2 text-[13px] font-semibold text-danger-text">
+          {t('app.family.req.reason', { reason: r.rejectionReason })}
+        </p>
       )}
     </li>
   );
@@ -137,14 +149,33 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
     >
       <p className="rounded-card bg-sky px-4 py-3 text-[14px] text-sky-text">{t('app.family.addHint')}</p>
       <Field label={t('app.family.f.fullName')} error={errors.fullName} hint={t('app.family.f.fullNameHint')}>
-        {(a) => <Input {...a} value={fullName} maxLength={120} autoComplete="off" onChange={(e) => setFullName(e.target.value)} className="h-12 text-[15px]" />}
+        {(a) => (
+          <Input
+            {...a}
+            value={fullName}
+            maxLength={120}
+            autoComplete="off"
+            onChange={(e) => setFullName(e.target.value)}
+            className="h-12 text-[15px]"
+          />
+        )}
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label={t('app.family.f.birthDate')} error={errors.birthDate}>
-          {(a) => <MaskedInput {...a} mask="date" value={birthDate} onChange={setBirthDate} className="h-12 text-[15px]" />}
+          {(a) => (
+            <MaskedInput
+              {...a}
+              mask="date"
+              value={birthDate}
+              onChange={setBirthDate}
+              className="h-12 text-[15px]"
+            />
+          )}
         </Field>
         <Field label={t('app.family.f.pinfl')} error={errors.pinfl}>
-          {(a) => <MaskedInput {...a} mask="pinfl" value={pinfl} onChange={setPinfl} className="h-12 text-[15px]" />}
+          {(a) => (
+            <MaskedInput {...a} mask="pinfl" value={pinfl} onChange={setPinfl} className="h-12 text-[15px]" />
+          )}
         </Field>
       </div>
       <fieldset>
@@ -163,14 +194,30 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
         )}
       </fieldset>
       {relation === 'child' && (
-        <label htmlFor="family-student" className="flex min-h-[44px] cursor-pointer items-center gap-3 text-[15px]">
-          <Checkbox id="family-student" checked={isStudent} onCheckedChange={setIsStudent} className="h-6 w-6" />
+        <label
+          htmlFor="family-student"
+          className="flex min-h-[44px] cursor-pointer items-center gap-3 text-[15px]"
+        >
+          <Checkbox
+            id="family-student"
+            checked={isStudent}
+            onCheckedChange={setIsStudent}
+            className="h-6 w-6"
+          />
           {t('app.family.f.student')}
         </label>
       )}
       <div>
-        <label htmlFor="family-consent" className="flex min-h-[44px] cursor-pointer items-start gap-3 text-[15px] font-semibold">
-          <Checkbox id="family-consent" checked={consent} onCheckedChange={setConsent} className="mt-0.5 h-6 w-6" />
+        <label
+          htmlFor="family-consent"
+          className="flex min-h-[44px] cursor-pointer items-start gap-3 text-[15px] font-semibold"
+        >
+          <Checkbox
+            id="family-consent"
+            checked={consent}
+            onCheckedChange={setConsent}
+            className="mt-0.5 h-6 w-6"
+          />
           {t('app.family.f.consent')}
         </label>
         {errors.consent && (
@@ -249,7 +296,10 @@ function MemberFamily({ principalName }: { principalName: string }) {
   const self = family.data?.find((p) => p.access === 'self');
   return (
     <>
-      <section className="flex items-start gap-3 rounded-card bg-accent-soft p-4" data-testid="family-principal">
+      <section
+        className="flex items-start gap-3 rounded-card bg-accent-soft p-4"
+        data-testid="family-principal"
+      >
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent-text" aria-hidden />
         <div>
           <p className="text-[13px] text-muted">{t('app.family.policyholder')}</p>

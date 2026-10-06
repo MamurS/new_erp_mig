@@ -18,7 +18,16 @@ const server = createMockServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
 // The Radix checkbox measures itself with ResizeObserver, which jsdom does not have.
-beforeEach(() => vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }));
+beforeEach(() =>
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  ),
+);
 afterEach(() => vi.unstubAllGlobals());
 
 const routes = [
@@ -39,9 +48,20 @@ const routes = [
 
 async function loginSpouse(): Promise<void> {
   clearSession();
-  const c = await request('/auth/phone', { method: 'POST', body: { phone: DEMO_SPOUSE_PHONE }, schema: S.challenge });
-  const s = await request('/auth/phone/verify', { method: 'POST', body: { challengeId: c.challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
-  setSession({ ...s, user: { ...s.user, consentGivenAt: s.user.consentGivenAt ?? new Date().toISOString() } });
+  const c = await request('/auth/phone', {
+    method: 'POST',
+    body: { phone: DEMO_SPOUSE_PHONE },
+    schema: S.challenge,
+  });
+  const s = await request('/auth/phone/verify', {
+    method: 'POST',
+    body: { challengeId: c.challengeId, code: DEMO_CODE },
+    schema: S.sessionResponse,
+  });
+  setSession({
+    ...s,
+    user: { ...s.user, consentGivenAt: s.user.consentGivenAt ?? new Date().toISOString() },
+  });
 }
 
 describe('family in the insured app', () => {
@@ -75,7 +95,9 @@ describe('family in the insured app', () => {
     await loginAs('insured');
     renderRoutes(routes, '/app/family', { i18n: true });
     const members = await screen.findAllByTestId('family-member');
-    expect(members.map((m) => m.textContent).join(' ')).toMatch(/Karimova Dilnoza Rustamovna.*Karimov Temur Azizovich|Karimov Temur Azizovich.*Karimova Dilnoza Rustamovna/);
+    expect(members.map((m) => m.textContent).join(' ')).toMatch(
+      /Karimova Dilnoza Rustamovna.*Karimov Temur Azizovich|Karimov Temur Azizovich.*Karimova Dilnoza Rustamovna/,
+    );
 
     await user.click(screen.getByRole('button', { name: 'Добавить' }));
     const form = await screen.findByRole('form', { name: 'Добавить члена семьи' });
@@ -104,11 +126,17 @@ describe('family in the insured app', () => {
     await user.click(toggle);
     const dialog = await screen.findByRole('dialog', { name: 'Разрешить Aziz видеть обращения?' });
     await user.click(within(dialog).getByRole('button', { name: 'Разрешить' }));
-    expect(await screen.findByRole('switch', { name: 'Разрешить Aziz видеть мои обращения', checked: true })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('switch', { name: 'Разрешить Aziz видеть мои обращения', checked: true }),
+    ).toBeInTheDocument();
     // Back to «off» for the other tests sharing the mock DB.
     await user.click(screen.getByRole('switch', { name: 'Разрешить Aziz видеть мои обращения' }));
-    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Закрыть доступ' }));
-    expect(await screen.findByRole('switch', { name: 'Разрешить Aziz видеть мои обращения', checked: false })).toBeInTheDocument();
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Закрыть доступ' }),
+    );
+    expect(
+      await screen.findByRole('switch', { name: 'Разрешить Aziz видеть мои обращения', checked: false }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('payout-card')).toHaveTextContent(/Сейчас выплаты идут на карту Aziz/);
   });
 

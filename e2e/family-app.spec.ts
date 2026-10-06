@@ -43,10 +43,15 @@ async function family(page: Page): Promise<Profile[]> {
   return r.data as Profile[];
 }
 
-test('a. The employee switches to a child: certificate and QR, limits, the child\'s appointment and reimbursement', async ({ page }) => {
+test("a. The employee switches to a child: certificate and QR, limits, the child's appointment and reimbursement", async ({
+  page,
+}) => {
   failOnDialog(page);
   await loginInsured(page);
-  await expect(switcher(page).getByRole('radio', { name: 'Я', exact: true })).toHaveAttribute('aria-checked', 'true');
+  await expect(switcher(page).getByRole('radio', { name: 'Я', exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
   await expect(switcher(page).getByRole('radio')).toHaveCount(4);
 
   await pick(page, 'Temur');
@@ -90,7 +95,7 @@ test('a. The employee switches to a child: certificate and QR, limits, the child
   expect(await page.title()).not.toContain('Temur');
 });
 
-test('b. A clinic registrar checks the child\'s app code: coverage for that child', async ({ page }) => {
+test("b. A clinic registrar checks the child's app code: coverage for that child", async ({ page }) => {
   failOnDialog(page);
   await loginInsured(page);
   await pick(page, 'Temur');
@@ -113,7 +118,9 @@ test('b. A clinic registrar checks the child\'s app code: coverage for that chil
   await expect(result.getByTestId('coverage-table')).toBeVisible();
 });
 
-test('c. The spouse\'s claim is hidden until she allows it; revoking hides it again; both are audited', async ({ page }) => {
+test("c. The spouse's claim is hidden until she allows it; revoking hides it again; both are audited", async ({
+  page,
+}) => {
   failOnDialog(page);
   await loginInsured(page);
   const spouseId = (await family(page)).find((p) => p.relation === 'spouse')!.id;
@@ -132,7 +139,10 @@ test('c. The spouse\'s claim is hidden until she allows it; revoking hides it ag
   const toggle = page.getByRole('switch', { name: CONSENT_SWITCH });
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.click();
-  await page.getByRole('dialog', { name: 'Разрешить Aziz видеть обращения?' }).getByRole('button', { name: 'Разрешить' }).click();
+  await page
+    .getByRole('dialog', { name: 'Разрешить Aziz видеть обращения?' })
+    .getByRole('button', { name: 'Разрешить' })
+    .click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
 
   await asEmployee(page);
@@ -145,7 +155,10 @@ test('c. The spouse\'s claim is hidden until she allows it; revoking hides it ag
   await asSpouse(page);
   await page.getByRole('link', { name: 'Профиль', exact: true }).click();
   await page.getByRole('switch', { name: CONSENT_SWITCH }).click();
-  await page.getByRole('dialog', { name: 'Закрыть доступ для Aziz?' }).getByRole('button', { name: 'Закрыть доступ' }).click();
+  await page
+    .getByRole('dialog', { name: 'Закрыть доступ для Aziz?' })
+    .getByRole('button', { name: 'Закрыть доступ' })
+    .click();
   await expect(page.getByRole('switch', { name: CONSENT_SWITCH })).toHaveAttribute('aria-checked', 'false');
 
   await asEmployee(page);
@@ -154,14 +167,20 @@ test('c. The spouse\'s claim is hidden until she allows it; revoking hides it ag
   expect((await api(page, 'GET', `/me/claims?personId=${spouseId}`)).status).toBe(404);
 
   await switchTo(page, /^Администратор — admin@/, /\/staff$/);
-  const res = await api(page, 'GET', '/audit?action=family_consent_granted,family_consent_revoked&pageSize=50');
+  const res = await api(
+    page,
+    'GET',
+    '/audit?action=family_consent_granted,family_consent_revoked&pageSize=50',
+  );
   expect(res.status, JSON.stringify(res.data).slice(0, 300)).toBe(200);
   const audit = res.data as { items: { action: string }[] };
   expect(audit.items.filter((e) => e.action === 'family_consent_granted').length).toBeGreaterThanOrEqual(1);
   expect(audit.items.filter((e) => e.action === 'family_consent_revoked').length).toBeGreaterThanOrEqual(1);
 });
 
-test('d. The employee asks to add a family member from the app: pending, then approved by HR', async ({ page }) => {
+test('d. The employee asks to add a family member from the app: pending, then approved by HR', async ({
+  page,
+}) => {
   failOnDialog(page);
   await loginInsured(page);
   await page.getByRole('link', { name: 'Профиль', exact: true }).click();
@@ -184,38 +203,62 @@ test('d. The employee asks to add a family member from the app: pending, then ap
 
   // HR approves it (the HR screen itself is covered by e2e/hr-family.spec.ts).
   await switchTo(page, /^HR клиента/, /\/hr$/);
-  const pending = (await api(page, 'GET', '/hr/family-requests?status=pending')).data as { id: string; fullName: string }[];
+  const pending = (await api(page, 'GET', '/hr/family-requests?status=pending')).data as {
+    id: string;
+    fullName: string;
+  }[];
   const mine = pending.find((r) => r.fullName === 'Karimova Zarina Azizovna');
   expect(mine).toBeTruthy();
-  expect((await api(page, 'POST', `/hr/family-requests/${mine!.id}/decision`, { decision: 'approve' })).status).toBe(200);
+  expect(
+    (await api(page, 'POST', `/hr/family-requests/${mine!.id}/decision`, { decision: 'approve' })).status,
+  ).toBe(200);
 
   await asEmployee(page);
   await page.getByRole('link', { name: 'Профиль', exact: true }).click();
   await page.getByRole('link', { name: 'Моя семья' }).click();
-  await expect(page.getByTestId('family-request').filter({ hasText: 'Karimova Zarina Azizovna' }).getByTestId('family-request-status')).toHaveText('Одобрено');
+  await expect(
+    page
+      .getByTestId('family-request')
+      .filter({ hasText: 'Karimova Zarina Azizovna' })
+      .getByTestId('family-request-status'),
+  ).toHaveText('Одобрено');
 });
 
-test('e. IDOR: another family\'s person, appointment or claim through /api/me is 404', async ({ page }) => {
+test("e. IDOR: another family's person, appointment or claim through /api/me is 404", async ({ page }) => {
   // Ids of another family, as a curator sees them.
   await loginInsured(page);
   await switchTo(page, /^Куратор ДМС/, /\/staff$/);
   let other: { id: string } | undefined;
   for (let p = 1; p <= 30 && !other; p++) {
-    const list = (await api(page, 'GET', `/insured?page=${p}&pageSize=100`)).data as { items: { id: string; fullName: string; relation?: string }[] };
-    other = list.items.find((i) => i.relation && i.relation !== 'employee' && !FAMILY_NAMES.includes(i.fullName));
+    const list = (await api(page, 'GET', `/insured?page=${p}&pageSize=100`)).data as {
+      items: { id: string; fullName: string; relation?: string }[];
+    };
+    other = list.items.find(
+      (i) => i.relation && i.relation !== 'employee' && !FAMILY_NAMES.includes(i.fullName),
+    );
     if (list.items.length < 100) break;
   }
   expect(other, 'a family member of another employee').toBeTruthy();
-  const claims = (await api(page, 'GET', '/claims?pageSize=100')).data as { items: { id: string; insuredName: string }[] };
+  const claims = (await api(page, 'GET', '/claims?pageSize=100')).data as {
+    items: { id: string; insuredName: string }[];
+  };
   const otherClaim = claims.items.find((c) => !FAMILY_NAMES.includes(c.insuredName));
-  const appts = (await api(page, 'GET', '/appointments?pageSize=100')).data as { items?: { id: string; insuredName: string }[] } | { id: string; insuredName: string }[];
+  const appts = (await api(page, 'GET', '/appointments?pageSize=100')).data as
+    { items?: { id: string; insuredName: string }[] } | { id: string; insuredName: string }[];
   const apptList = Array.isArray(appts) ? appts : (appts.items ?? []);
   const otherAppt = apptList.find((a) => !FAMILY_NAMES.includes(a.insuredName));
   expect(otherClaim).toBeTruthy();
   expect(otherAppt).toBeTruthy();
 
   await asEmployee(page);
-  for (const path of ['/me/policy', '/me/limits', '/me/claims', '/me/appointments', '/me/certificate', '/me/card-token']) {
+  for (const path of [
+    '/me/policy',
+    '/me/limits',
+    '/me/claims',
+    '/me/appointments',
+    '/me/certificate',
+    '/me/card-token',
+  ]) {
     expect((await api(page, 'GET', `${path}?personId=${other!.id}`)).status, path).toBe(404);
   }
   expect((await api(page, 'GET', '/me/claims?personId=not-a-uuid')).status).toBe(404);
