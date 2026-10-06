@@ -176,6 +176,8 @@ export const migration: Translation<typeof Ru> = {
   'migration.frequency.monthly': 'Har oyda',
   'migration.manualSent': 'Shartnoma ikkinchi administratorga yuborildi',
 
+  'migration.contractsSearch': 'Shartnoma raqami, eski MIG raqami yoki mijoz',
+  'staff.palette.contracts': 'Shartnomalar',
   'migration.mark': 'Eski tizimdan koʻchirilgan',
   'migration.markDetail': 'Eski tizimdan {date} koʻchirilgan, {name}',
   'migration.oldNumberChip': 'Eski № {number}',

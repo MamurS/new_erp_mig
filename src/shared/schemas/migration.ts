@@ -45,7 +45,7 @@ export const oldNumber = required(1, 40).pipe(z.string().regex(OLD_NUMBER, msg('
 const money = (opts: { min?: number; required?: boolean } = {}) =>
   z
     .union([z.string(), z.undefined()])
-    .transform((v) => (v ?? '').replace(/[\s ]/g, ''))
+    .transform((v) => (v ?? '').replace(/[\s\u00a0]/g, ''))
     .superRefine((v, ctx) => {
       if (v === '' && opts.required === false) return;
       if (!/^\d{1,13}$/.test(v)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: v === '' ? msg('v.required') : msg('migration.v.money') });

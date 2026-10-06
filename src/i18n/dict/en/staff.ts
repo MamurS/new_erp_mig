@@ -40,7 +40,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.layout.mfaHint': 'Signed in with MFA via corporate VPN',
   'staff.palette.title': 'Command palette',
   'staff.palette.description': 'Search clients, policies, insured persons, claims and sections',
-  'staff.palette.placeholder': 'Client, TIN, policy or claim number, full name…',
+  'staff.palette.placeholder': 'Client, TIN, policy, contract or claim number, full name…',
   'staff.palette.minChars': 'Enter at least 2 characters',
   'staff.palette.clients': 'Clients',
   'staff.palette.policies': 'Policies',

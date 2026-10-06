@@ -45,9 +45,9 @@ const STEP_RU: Record<MigrationStep, string> = { clients: 'клиенты', cont
 
 /** Steps whose rows changed since they were confirmed go back to «validated»; the batch back to a draft. */
 function reopen(b: MigrationBatchRow, steps: MigrationStep[]): void {
-  for (const s of steps) {
-    const st = b.steps[s];
-    if (st) b.steps[s] = { status: 'validated', excludeErrors: false };
+  const from = Math.min(...steps.map((s) => MIGRATION_STEPS.indexOf(s)));
+  for (const s of MIGRATION_STEPS.slice(from)) {
+    if (b.steps[s]?.status === 'confirmed') b.steps[s] = { status: 'validated', excludeErrors: false };
   }
   b.status = 'draft';
   b.submittedAt = undefined;

@@ -32,6 +32,8 @@ import { QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { CsvFileButton, ReasonDialog } from './common';
+import { MigratedBadge } from '../components/MigratedBadge';
+import { MigratedScanCard } from '../admin/migration/MigratedScanCard';
 import { TableScroll } from '@/shared/ui/table-scroll';
 
 const PROGRAMS: ProgramCode[] = ['basic', 'standard', 'standard_plus', 'premium'];
@@ -460,6 +462,11 @@ function ContractEditor({ c }: { c: ContractView }) {
                 </Link>
               </>
             )}
+            {c.migration && (
+              <span className="mt-1 block">
+                <MigratedBadge mark={c.migration} oldNumber={c.externalNumber} />
+              </span>
+            )}
           </span>
         }
         actions={
@@ -529,10 +536,16 @@ function ContractEditor({ c }: { c: ContractView }) {
         </div>
         <div className="min-w-0">{doc && <DocPreview doc={doc} label={t('staffLc.contract.preview')} className="sticky top-16" />}</div>
       </div>
-      {signingStage && (
+      {c.migration ? (
         <div className="mt-4">
-          <SigningPanel kind="contracts" doc={c} mode="staff" printInput={() => contractDocument(c)} />
+          <MigratedScanCard c={c} />
         </div>
+      ) : (
+        signingStage && (
+          <div className="mt-4">
+            <SigningPanel kind="contracts" doc={c} mode="staff" printInput={() => contractDocument(c)} />
+          </div>
+        )
       )}
       <div className="mt-4">
         <Finance c={c} />

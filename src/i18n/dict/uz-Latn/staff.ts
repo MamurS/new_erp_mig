@@ -41,7 +41,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.palette.title': 'Buyruqlar palitrasi',
   'staff.palette.description':
     'Mijozlar, polislar, sugʻurtalanganlar, zararlar va boʻlimlar boʻyicha qidiruv',
-  'staff.palette.placeholder': 'Mijoz, STIR, polis yoki zarar raqami, F.I.Sh.…',
+  'staff.palette.placeholder': 'Mijoz, STIR, polis, shartnoma yoki zarar raqami, F.I.Sh.…',
   'staff.palette.minChars': 'Kamida 2 ta belgi kiriting',
   'staff.palette.clients': 'Mijozlar',
   'staff.palette.policies': 'Polislar',

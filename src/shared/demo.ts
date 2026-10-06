@@ -3,6 +3,7 @@
  * main.tsx loads it dynamically only when VITE_DEMO_MODE === 'true'.
  */
 import type { ComponentType } from 'react';
+import type { MigrationStep } from '@/shared/types/migration';
 
 export interface DemoModule {
   DemoBanner: ComponentType;
@@ -13,6 +14,8 @@ export interface DemoModule {
   MisSimulator: ComponentType;
   /** Assistance portal: buttons that make real integration API calls as the assistance's system would. */
   AssistSimulator: ComponentType;
+  /** Portfolio transfer: downloads of the demo files of the previous system. */
+  MigrationSamples: ComponentType<{ stepLabel: (step: MigrationStep) => string }>;
 }
 
 let current: DemoModule | null = null;

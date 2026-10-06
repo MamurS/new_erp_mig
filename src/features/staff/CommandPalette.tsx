@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Command } from 'cmdk';
 import { matchesSearch } from '@/shared/lib/searchNormalize';
 import * as D from '@radix-ui/react-dialog';
-import { Building2, FileText, Receipt, User, CornerDownLeft } from 'lucide-react';
+import { Building2, FileSignature, FileText, Receipt, User, CornerDownLeft } from 'lucide-react';
 import type { SessionUser } from '@/shared/types';
 import { can } from '@/shared/auth/permissions';
 import { useClaims, useClients, useInsuredList, usePolicies } from '@/shared/api/queries/staff';
+import { useContracts } from '@/shared/api/queries/lifecycle';
 import { useDebounced } from '@/shared/lib/hooks';
 import { t } from '@/i18n';
 import { INSURED_CARD_ROLES, STAFF_SECTIONS } from './nav';
@@ -31,6 +32,9 @@ export function CommandPalette({ open, onOpenChange, user, mode = 'search' }: { 
   const policies = usePolicies({ q: term, pageSize: 5 }, enabled && canPolicies);
   const insured = useInsuredList({ q: term, pageSize: 5 }, enabled && canInsured);
   const claims = useClaims({ q: term, pageSize: 5 }, enabled && canClaims);
+  // Contracts by the new number, the old number of a transferred one or the client.
+  const canContracts = !claimMode && can(user, 'contracts.read');
+  const contracts = useContracts({ q: term }, enabled && canContracts);
 
   useEffect(() => {
     if (!open) setQ('');
@@ -100,6 +104,17 @@ export function CommandPalette({ open, onOpenChange, user, mode = 'search' }: { 
                     <Command.Item key={c.id} value={`u-${c.id}`} onSelect={() => go(`/staff/claims/${c.id}`)} className={itemCls}>
                       <Receipt className="h-4 w-4 text-muted" aria-hidden /> <span className="num">{c.number}</span>
                       <span className="ml-auto truncate text-[12px] text-muted">{c.clientName}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
+              {canContracts && (contracts.data?.length ?? 0) > 0 && (
+                <Command.Group heading={t('staff.palette.contracts')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                  {contracts.data!.slice(0, 5).map((c) => (
+                    <Command.Item key={c.id} value={`d-${c.id}`} onSelect={() => go(`/staff/contracts/${c.id}`)} className={itemCls}>
+                      <FileSignature className="h-4 w-4 text-muted" aria-hidden /> <span className="num">{c.number}</span>
+                      {c.externalNumber && <span className="num text-[12px] text-muted">{c.externalNumber}</span>}
+                      <span className="ml-auto truncate text-[12px] text-muted">{c.client.name}</span>
                     </Command.Item>
                   ))}
                 </Command.Group>

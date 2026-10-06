@@ -173,6 +173,8 @@ export const migration = {
   'migration.frequency.monthly': 'Ежемесячно',
   'migration.manualSent': 'Договор отправлен второму администратору',
 
+  'migration.contractsSearch': 'Номер договора, старый номер МИГ или клиент',
+  'staff.palette.contracts': 'Договоры',
   'migration.mark': 'Перенесено из старой системы',
   'migration.markDetail': 'Перенесено из старой системы {date}, {name}',
   'migration.oldNumberChip': 'Старый № {number}',

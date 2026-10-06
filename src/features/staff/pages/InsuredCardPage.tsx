@@ -44,6 +44,7 @@ import { RevealField } from '../components/RevealField';
 import { LimitRequestDialog } from '../components/LimitRequestDialog';
 import { APPT_TONE, CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
+import { MigratedBadge } from '../components/MigratedBadge';
 import { TableScroll } from '@/shared/ui/table-scroll';
 
 export default function InsuredCardPage() {
@@ -82,6 +83,7 @@ export default function InsuredCardPage() {
             <Chip kind={p.status === 'active' ? 'success' : 'neutral'}>{p.status === 'active' ? t('staff.clientCard.insuredActive') : t('staff.clientCard.insuredExcluded')}</Chip>
             {p.myIdVerified && <Chip kind="accent">MyID ✓</Chip>}
             {p.appStatus === 'active' ? <Chip kind="sky">{t('staff.insuredCard.inApp')}</Chip> : <Chip>{t('staff.insuredCard.notInApp')}</Chip>}
+            <MigratedBadge mark={p.migration} oldCertificate={p.externalCertificateNumber} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

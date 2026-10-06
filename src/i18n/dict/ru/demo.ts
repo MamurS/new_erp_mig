@@ -57,4 +57,7 @@ export const demo = {
   'demo.assist.noUnpaid': 'Неоплаченных принятых строк нет',
   'demo.assist.payDone': 'Оплата клинике отмечена: {n} строк',
   'demo.assist.rebillDone': 'Счёт {number} выставлен МИГ: {n} строк',
+  'demo.migration.title': 'Демо: файлы переноса',
+  'demo.migration.hint': 'Готовые файлы старой системы: 5 клиентов, 5 договоров, 200 застрахованных, лимиты, 10 открытых убытков и счета, с несколькими строками с ошибками для отчёта проверки. Дата переноса — {date}.',
+  'demo.migration.download': 'Демо-файл: {step}',
 } satisfies Record<string, string>;

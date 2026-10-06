@@ -176,6 +176,8 @@ export const migration: Translation<typeof Ru> = {
   'migration.frequency.monthly': 'Monthly',
   'migration.manualSent': 'Contract sent to a second administrator',
 
+  'migration.contractsSearch': 'Contract number, old MIG number or client',
+  'staff.palette.contracts': 'Contracts',
   'migration.mark': 'Transferred from the previous system',
   'migration.markDetail': 'Transferred from the previous system {date}, {name}',
   'migration.oldNumberChip': 'Old No. {number}',

@@ -38,7 +38,7 @@ export const staff = {
   'staff.layout.mfaHint': 'Вход с MFA через корпоративный VPN',
   'staff.palette.title': 'Командная палитра',
   'staff.palette.description': 'Поиск по клиентам, полисам, застрахованным, убыткам и разделам',
-  'staff.palette.placeholder': 'Клиент, ИНН, номер полиса или убытка, ФИО…',
+  'staff.palette.placeholder': 'Клиент, ИНН, номер полиса, договора или убытка, ФИО…',
   'staff.palette.minChars': 'Введите минимум 2 символа',
   'staff.palette.clients': 'Клиенты',
   'staff.palette.policies': 'Полисы',

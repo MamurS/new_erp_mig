@@ -103,7 +103,7 @@ function unguard(v: string): string {
 }
 
 export function parseMigrationCsv(step: MigrationStep, text: string): { rows: RawRow[] } | { error: string } {
-  const parsed = Papa.parse<RawRow>(text.replace(/^﻿/, ''), { header: true, skipEmptyLines: 'greedy', transformHeader: (h) => h.trim(), transform: (v) => unguard(v) });
+  const parsed = Papa.parse<RawRow>(text.replace(/^\ufeff/, ''), { header: true, skipEmptyLines: 'greedy', transformHeader: (h) => h.trim(), transform: (v) => unguard(v) });
   const header = parsed.meta.fields ?? [];
   const missing = MIGRATION_REQUIRED_COLUMNS[step].filter((c) => !header.includes(c));
   if (missing.length) return { error: msg('migration.v.missingColumns', { columns: missing.join(', ') }) };
@@ -185,7 +185,7 @@ export interface BatchInput {
 /** Money figure of a raw row (lenient: an unreadable value counts as 0). */
 function rawAmount(step: MigrationStep, r: RawRow): number {
   const n = (v: string | undefined) => {
-    const s = (v ?? '').replace(/[\s ]/g, '');
+    const s = (v ?? '').replace(/[\s\u00a0]/g, '');
     return /^\d{1,13}$/.test(s) ? Number(s) : 0;
   };
   if (step === 'contracts') return n(r.premium);
