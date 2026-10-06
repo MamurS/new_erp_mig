@@ -1,14 +1,17 @@
 import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { http, HttpResponse } from 'msw';
 import { z } from 'zod';
-import { declineAppointmentSchema, myClaimSchema, transitionSchema } from '@/shared/schemas/forms';
+import { declineAppointmentSchema, staffClaimSchema, transitionSchema } from '@/shared/schemas/forms';
+import { msg } from '@/i18n/core';
+import { ATTACHMENT_MAX_FILES } from '@/shared/lib/attachments';
 import { claimTransitions } from '@/shared/domain/claims';
 import { can } from '@/shared/auth/permissions';
 import { isStaffRole } from '@/shared/domain/labels';
 import type { Appointment, SessionUser } from '@/shared/types';
 import { currentAssistance } from '../assistance-core';
 import { db, type ClaimRow } from '../db';
-import { API, audit, body, conflict, forbidden, HttpError, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
+import { API, audit, body, conflict, forbidden, HttpError, httpErrorOf, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy, validate } from '../http';
+import { readAttachment, readForm } from '../uploads';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../time';
 import { toClaimDetail, toClaimListItem } from '../views';
@@ -123,13 +126,36 @@ export const claimHandlers = [
     `${API}/claims`,
     route(async ({ request }) => {
       const { user } = requireSession(request);
+      // Staff registration only: the insured person files through /me/claims.
       requirePermission(user, 'claims.create');
-      if (user.role !== 'operator') throw forbidden();
-      const input = await body(request, myClaimSchema.extend({ insuredId: z.string().uuid() }));
+      if (!isStaffRole(user.role)) throw forbidden();
+      const form = await readForm(request);
+      const input = validate(staffClaimSchema, {
+        insuredId: form.get('insuredId'),
+        intakeChannel: form.get('intakeChannel'),
+        category: form.get('category'),
+        amount: Number(form.get('amount')),
+        serviceDate: form.get('serviceDate'),
+        providerName: form.get('providerName'),
+      });
+      const files = form.getAll('files').filter((f): f is File => f instanceof File);
+      if (files.length > ATTACHMENT_MAX_FILES) throw new HttpError(422, 'validation', 'srv.file.max10', { fields: { files: msg('srv.file.max10') } });
+      const d = db();
       const i = findInsured(input.insuredId);
+      const claimId = randomId();
+      const attachments: ClaimRow['attachments'] = [];
+      for (const [idx, f] of files.entries()) {
+        const { bytes, mime } = await readAttachment(f);
+        const fileId = randomId();
+        const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
+        // Neutral names without personal data; the insured person never gets these files (no insuredId).
+        const fileName = `document-${idx + 1}.${ext}`;
+        d.files.push({ id: fileId, mime, bytes, claimId, fileName });
+        attachments.push({ id: fileId, kind: 'other', fileName, mime, sizeBytes: bytes.length, url: `/api/files/${fileId}` });
+      }
       const now = Date.now();
       const claim: ClaimRow = {
-        id: randomId(),
+        id: claimId,
         number: nextClaimNumber(),
         insuredId: i.id,
         insuredName: i.fullName,
@@ -137,6 +163,7 @@ export const claimHandlers = [
         clientName: i.clientName,
         category: input.category,
         source: 'operator',
+        intakeChannel: input.intakeChannel,
         amountClaimed: input.amount,
         providerName: input.providerName,
         serviceDate: input.serviceDate,
@@ -144,12 +171,16 @@ export const claimHandlers = [
         slaDueAt: tzIso(now + 5 * DAY),
         createdAt: tzIso(now),
         updatedAt: tzIso(now),
-        attachments: [],
-        history: [{ at: tzIso(now), actorName: user.displayName, to: 'new', comment: 'Создан оператором' }],
+        attachments,
+        history: [{ at: tzIso(now), actorName: user.displayName, to: 'new', comment: 'Создан сотрудником МИГ' }],
+        // Registered by MIG itself: settled by the claims officer, never routed to an assistance.
         handledBy: 'mig',
       };
-      db().claims.unshift(claim);
-      refreshFlags(db(), claim);
+      d.claims.unshift(claim);
+      refreshFlags(d, claim);
+      // The reserve is set at once to the claimed amount: the registration step of the reserve history (settlement-core).
+      audit(user, 'claim_created', { targetType: 'claim', targetId: claim.id, targetLabel: claim.number });
+      audit(user, 'claim_reserve_changed', { targetType: 'claim', targetId: claim.id, targetLabel: `${claim.number}: 0 → ${currentReserve(claim)}`, reason: 'Регистрация: заявленная сумма' });
       return { id: claim.id };
     }),
   ),
@@ -182,7 +213,13 @@ export const claimHandlers = [
       }
       const bytes = f.bytes ?? (await renderReceiptPng(f.seedText ?? ['Файл недоступен после перезагрузки']));
       return new HttpResponse(bytes, {
-        headers: { 'Content-Type': f.bytes ? f.mime : 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+        headers: {
+          'Content-Type': f.bytes ? f.mime : 'image/png',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+          // PDFs are never rendered inline: download only, under a neutral name.
+          ...(f.bytes && f.mime === 'application/pdf' ? { 'Content-Disposition': `attachment; filename="${f.fileName ?? 'document.pdf'}"` } : {}),
+        },
       });
     }),
   ),

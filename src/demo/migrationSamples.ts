@@ -1,7 +1,11 @@
 /*
  * Demo files of the portfolio transfer: 5 clients, 5 contracts, 200 insured persons, used limits,
  * 10 open claims and a few unpaid invoices, plus rows with errors that show the validation report
- * (they are excluded explicitly, so the whole flow completes). Deterministic: the same files every time;
+ * (they are excluded explicitly, so the whole flow completes).
+ * Premiums: most contracts give premiums per employee and per family member; MIG-2026/0503 has none and
+ * every insured person carries an individual premium; MIG-2026/0505 mixes both (two individual premiums
+ * win over the type) and its total is 1 сум off (within the tolerance); MIG-2026/0504's total premium
+ * deliberately differs from the sum of its insured persons' premiums (a highlighted mismatch). Deterministic: the same files every time;
  * the e2e fixtures (e2e/fixtures/migration) are these files, checked by migrationSamples.test.ts.
  * Names are Latin, PINFLs have the 14-digit format with the birth date inside, numbers are ASCII.
  */
@@ -37,13 +41,45 @@ const CLIENTS = [
   { name: 'Toshkent Digital Systems', legalForm: 'llc', stir: '409100005', director: 'Nazarov Temur Shuhratovich', hr: 'Ismoilova Sevara Bahromovna' },
 ];
 
-const CONTRACTS = [
-  { oldNumber: 'MIG-2026/0501', client: 0, startDate: '2026-07-01', endDate: '2027-06-30', program: 'standard', premium: 228_000_000, paymentFrequency: 'quarterly', assistance: '', people: 60 },
-  { oldNumber: 'MIG-2026/0502', client: 1, startDate: '2026-04-01', endDate: '2027-03-31', program: 'premium', premium: 360_000_000, paymentFrequency: 'single', assistance: '', people: 50 },
-  { oldNumber: 'MIG-2026/0503', client: 2, startDate: '2026-06-01', endDate: '2027-05-31', program: 'basic', premium: 96_000_000, paymentFrequency: 'monthly', assistance: '', people: 40 },
-  { oldNumber: 'MIG-2026/0504', client: 3, startDate: '2026-09-01', endDate: '2027-08-31', program: 'standard_plus', premium: 157_500_000, paymentFrequency: 'quarterly', assistance: '', people: 30 },
-  { oldNumber: 'MIG-2026/0505', client: 4, startDate: '2026-05-01', endDate: '2027-04-30', program: 'standard', premium: 76_000_000, paymentFrequency: 'single', assistance: 'Shifo Assistans Group', people: 20 },
+interface DemoContract {
+  oldNumber: string;
+  client: number;
+  startDate: string;
+  endDate: string;
+  program: string;
+  byType: { employee: number; family: number } | null;
+  individual: number[];
+  offset: number;
+  paymentFrequency: string;
+  assistance: string;
+  people: number;
+}
+
+/**
+ * `byType`: premiums per employee and per family member (null — individual premiums only);
+ * `individual`: positions (1-based) of persons with an individual premium; `offset`: added to the total
+ * premium on purpose (a deliberate mismatch, or a difference within the ±1 сум tolerance).
+ */
+const CONTRACTS: DemoContract[] = [
+  { oldNumber: 'MIG-2026/0501', client: 0, startDate: '2026-07-01', endDate: '2027-06-30', program: 'standard', byType: { employee: 3_600_000, family: 2_880_000 }, individual: [], offset: 0, paymentFrequency: 'quarterly', assistance: '', people: 60 },
+  { oldNumber: 'MIG-2026/0502', client: 1, startDate: '2026-04-01', endDate: '2027-03-31', program: 'premium', byType: { employee: 6_000_000, family: 4_800_000 }, individual: [], offset: 0, paymentFrequency: 'single', assistance: '', people: 50 },
+  { oldNumber: 'MIG-2026/0503', client: 2, startDate: '2026-06-01', endDate: '2027-05-31', program: 'basic', byType: null, individual: [], offset: 0, paymentFrequency: 'monthly', assistance: '', people: 40 },
+  { oldNumber: 'MIG-2026/0504', client: 3, startDate: '2026-09-01', endDate: '2027-08-31', program: 'standard_plus', byType: { employee: 4_500_000, family: 3_600_000 }, individual: [], offset: 2_500_000, paymentFrequency: 'quarterly', assistance: '', people: 30 },
+  { oldNumber: 'MIG-2026/0505', client: 4, startDate: '2026-05-01', endDate: '2027-04-30', program: 'standard', byType: { employee: 3_800_000, family: 3_040_000 }, individual: [1, 2], offset: -1, paymentFrequency: 'single', assistance: 'Shifo Assistans Group', people: 20 },
 ];
+
+/** Individual premium of a person (deterministic): by age, plus the family members. */
+function individualPremium(birthDate: string, family: number): number {
+  const age = 2026 - Number(birthDate.slice(0, 4));
+  return 1_800_000 + Math.floor(age / 10) * 150_000 + family * 1_450_000;
+}
+
+/** Premium of a person by the rules of the files: individual, else by type. */
+function premiumOf(p: Person): number {
+  const c = CONTRACTS.find((x) => x.oldNumber === p.contractOldNumber)!;
+  if (p.premium) return Number(p.premium);
+  return c.byType!.employee + c.byType!.family * Number(p.familyMembers);
+}
 
 interface Person {
   fullName: string;
@@ -55,6 +91,7 @@ interface Person {
   contractOldNumber: string;
   position: string;
   familyMembers: string;
+  premium: string;
 }
 
 const pad = (n: number, w: number) => String(n).padStart(w, '0');
@@ -80,6 +117,8 @@ function people(): Person[] {
       const father = seq === 1 ? 'Karim' : pick(FATHER);
       const birthDate = seq === 1 ? '1988-05-14' : `${1965 + Math.floor(r() * 38)}-${pad(1 + Math.floor(r() * 12), 2)}-${pad(1 + Math.floor(r() * 28), 2)}`;
       const late = k > c.people - 3;
+      const familyMembers = String(Math.floor(r() * 3));
+      const individual = !c.byType || c.individual.includes(k);
       out.push({
         fullName: `${surname}${female ? 'a' : ''} ${first} ${father}${female ? 'ovna' : 'ovich'}`,
         birthDate,
@@ -90,7 +129,8 @@ function people(): Person[] {
         inclusionDate: late ? '2026-09-15' : c.startDate,
         contractOldNumber: c.oldNumber,
         position: pick(POSITION),
-        familyMembers: String(Math.floor(r() * 3)),
+        familyMembers,
+        premium: individual ? String(individualPremium(birthDate, Number(familyMembers))) : '',
       });
     }
   });
@@ -126,13 +166,16 @@ export function migrationDemoFiles(): Record<MigrationStep, string> {
   // An error row: the STIR has 8 digits.
   clients.splice(3, 0, { ...clients[0]!, name: 'Andijon Mebel Savdo', stir: '40910006', account: '20208000900100209999', hrEmail: 'hr@client6.example.uz', hrPhone: '+998712009999' });
 
+  // The total premium of a contract is the sum of its persons' premiums (plus the deliberate offset).
   const contracts = CONTRACTS.map((c) => ({
     oldNumber: c.oldNumber,
     clientStir: CLIENTS[c.client]!.stir,
     startDate: c.startDate,
     endDate: c.endDate,
     program: c.program,
-    premium: String(c.premium),
+    premium: String(persons.filter((p) => p.contractOldNumber === c.oldNumber).reduce((s, p) => s + premiumOf(p), 0) + c.offset),
+    premiumEmployee: c.byType ? String(c.byType.employee) : '',
+    premiumFamily: c.byType ? String(c.byType.family) : '',
     paymentFrequency: c.paymentFrequency,
     assistance: c.assistance,
   }));
@@ -142,6 +185,8 @@ export function migrationDemoFiles(): Record<MigrationStep, string> {
   insured.splice(10, 0, { ...persons[10]!, fullName: 'Ergashev Bobur Nodirovich', pinfl: '3120588100090', phone: '+998779000001', oldCertificate: 'C-0501-0901' });
   insured.splice(70, 0, { ...persons[70]!, fullName: 'Saidova Lola Farhodovna', pinfl: '41503901009002', phone: '+998779000002', oldCertificate: 'C-0999-0001', contractOldNumber: 'MIG-2026/0999' });
   insured.splice(150, 0, { ...persons[150]!, fullName: 'Umarov Aziz Akmalovich', pinfl: '30704851009003', phone: '+998779000003', oldCertificate: 'C-0503-0901', inclusionDate: '2026-01-10' });
+  // An error row: a person of the contract without premiums by type and without an individual premium.
+  insured.splice(140, 0, { ...persons[130]!, fullName: 'Xolmatova Zarina Akmalovna', birthDate: '1990-02-11', pinfl: '41102901009004', phone: '+998779000004', oldCertificate: 'C-0503-0902', premium: '' });
 
   // Used limits of every fifth person; the first person has 2 500 000 of outpatient care used.
   const cats = ['outpatient', 'dental', 'medicines'] as const;

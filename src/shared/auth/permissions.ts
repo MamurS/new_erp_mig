@@ -115,7 +115,7 @@ export const PERMISSIONS = {
       ],
     },
   },
-  'claims.create': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'claims.create': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
   'appointments.read': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
   'appointments.manage': { operator: yes, underwriter: no, doctor_expert: no, accountant: no, admin: no, hr: no, insured: 'own', clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
   'clinics.read': { operator: yes, underwriter: yes, doctor_expert: yes, accountant: no, admin: yes, hr: no, insured: yes, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },

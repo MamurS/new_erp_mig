@@ -61,6 +61,18 @@ export const migrationBatchView: z.ZodType<M.MigrationBatchView> = z.intersectio
         match: z.boolean(),
       }),
     ),
+    contractPremiums: z.array(
+      z.object({
+        oldNumber: z.string(),
+        number: z.string().optional(),
+        total: z.number(),
+        insured: z.number(),
+        individual: z.number(),
+        insuredSum: z.number(),
+        diff: z.number(),
+        match: z.boolean(),
+      }),
+    ),
     rollback: z
       .object({
         allowed: z.boolean(),

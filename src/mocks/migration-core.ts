@@ -5,9 +5,10 @@
  * rules: a batch is rolled back only while nobody has acted on its records.
  */
 import type { AuditAction, ClaimEvent, Contract, Deal, Invoice, LimitCategory, MigrationMark, Policy, SessionUser, UUID } from '@/shared/types';
-import type { MigrationBatchSummary, MigrationBatchView, MigrationRollbackBlocker, MigrationStep, MigrationStepView } from '@/shared/types/migration';
+import type { MigrationBatchSummary, MigrationBatchView, MigrationContractPremium, MigrationRollbackBlocker, MigrationStep, MigrationStepView } from '@/shared/types/migration';
 import { can } from '@/shared/auth/permissions';
-import { MIGRATION_STEPS, emptyDbRefs, loadedTotals, reconcile, validateBatch, type BatchResults, type MigrationDbRefs, type MigrationRef } from '@/shared/domain/migration';
+import { MIGRATION_STEPS, contractPremiumCheck, emptyDbRefs, loadedTotals, reconcile, validateBatch, type BatchResults, type MigrationDbRefs, type MigrationRef } from '@/shared/domain/migration';
+import { defaultTariff } from '@/shared/domain/policies';
 import { addDays, buildPaymentSchedule, certificateNumber, contractNumber, dealNumber } from '@/shared/domain/contracts';
 import { DOC_TEMPLATES } from '@/features/documents/templates';
 import type { ClaimRow, ClientRow, Db, InsuredRow, MigrationBatchRow } from './db';
@@ -38,7 +39,15 @@ export function dbRefs(d: Db): MigrationDbRefs {
   }
   for (const c of d.contracts) {
     if (!c.externalNumber) continue;
-    refs.contracts.set(c.externalNumber.toUpperCase(), { id: c.id, program: c.params.program, startDate: c.params.startDate, endDate: c.params.endDate, active: c.status === 'active' });
+    refs.contracts.set(c.externalNumber.toUpperCase(), {
+      id: c.id,
+      program: c.params.program,
+      startDate: c.params.startDate,
+      endDate: c.params.endDate,
+      active: c.status === 'active',
+      premiumEmployee: c.params.premiumEmployee,
+      premiumFamily: c.params.premiumFamily,
+    });
   }
   for (const i of d.insured) {
     if (i.status !== 'active') continue;
@@ -134,6 +143,21 @@ function loadedOf(d: Db, b: MigrationBatchRow) {
   });
 }
 
+/**
+ * Per-contract premium check: before the load from the dry run, after it from the premiums stored on the
+ * batch's insured persons (a rolled back batch keeps the figures it had when applied).
+ */
+function contractPremiumsOf(d: Db, b: MigrationBatchRow, res: BatchResults | null): MigrationContractPremium[] {
+  if (res) return res.contractPremiums ?? [];
+  if (b.status !== 'applied') return b.contractPremiums ?? [];
+  return (b.contractPremiums ?? []).map((x) => {
+    const c = d.contracts.find((y) => y.migration?.batchId === b.id && y.externalNumber === x.oldNumber);
+    if (!c) return x;
+    const persons = d.insured.filter((i) => i.contractId === c.id && i.migration?.batchId === b.id && i.migratedPremium).map((i) => ({ premium: i.migratedPremium!.amount, source: i.migratedPremium!.source }));
+    return contractPremiumCheck({ oldNumber: x.oldNumber, number: c.number, total: c.params.total }, persons);
+  });
+}
+
 export function batchView(d: Db, b: MigrationBatchRow, user: SessionUser): MigrationBatchView {
   const res = b.status === 'draft' || b.status === 'pending_approval' || b.status === 'rejected' ? validate(d, b) : null;
   const totals = b.totals;
@@ -169,6 +193,7 @@ export function batchView(d: Db, b: MigrationBatchRow, user: SessionUser): Migra
     canApprove: b.status === 'pending_approval' && can(user, 'migration.approve', { createdById: b.createdById }),
     isAuthor: b.createdById === user.id,
     reconciliation: reconcile(forRecon, applied ? loadedOf(d, b) : null),
+    contractPremiums: contractPremiumsOf(d, b, res && b.steps.insured?.status !== 'skipped' && b.files.insured ? res : null),
     contracts: d.contracts
       .filter((c) => c.migration?.batchId === b.id)
       .map((c) => ({ id: c.id, number: c.number, externalNumber: c.externalNumber ?? '', clientName: c.clientName })),
@@ -255,7 +280,10 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
     const deal: Deal = { id: randomId(), number: dealNumber(year, d.dealSeq, numbering()), clientId: client.id, type: 'new', stage: 'active', ownerId: manager.id, expectedStart: r.startDate, createdAt: at, updatedAt: at };
     d.deals.unshift(deal);
     applied.dealIds.push(deal.id);
-    const premiumEmployee = Math.round(r.premium / Math.max(1, employees));
+    // Tariff for later changes of the list: the premiums by type of the file, else the program's base tariff.
+    const base = defaultTariff(r.program);
+    const premiumEmployee = r.premiumEmployee ?? base.employee;
+    const premiumFamily = r.premiumFamily ?? base.family;
     const c: Contract = {
       id: randomId(),
       number: contractNumber(year, d.contractSeq, numbering()),
@@ -270,7 +298,7 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
         endDate: r.endDate,
         program: r.program,
         premiumEmployee,
-        premiumFamily: 0,
+        premiumFamily,
         employees,
         familyMembers: family,
         total: r.premium,
@@ -303,7 +331,7 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
       status: 'active',
       premium: r.premium,
       insuredCount: 0,
-      tariff: { employee: premiumEmployee, family: 0 },
+      tariff: { employee: premiumEmployee, family: premiumFamily },
       familyCount: 0,
       assistanceId: v.ref.assistanceId,
       contractId: c.id,
@@ -358,6 +386,7 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
     person.contractId = c.id;
     person.certificateNumber = certificateNumber(c.number, d.insured.filter((i) => i.contractId === c.id).length, numbering());
     person.externalCertificateNumber = r.oldCertificate;
+    person.migratedPremium = { amount: v.ref.premium, source: v.ref.premiumSource };
     person.migration = mark;
     person.updatedAt = at;
     if (r.phone) d.smsOutbox.unshift({ at, insuredId: person.id, text: `Ваш полис ДМС перенесён в новую систему МИГ. Сертификат ${person.certificateNumber}. Скачайте приложение MIG ДМС.` });
@@ -449,6 +478,10 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
   b.decidedAt = at;
   b.decidedById = approver.id;
   b.decidedByName = approver.displayName;
+  b.contractPremiums = (res.contractPremiums ?? []).map((x) => {
+    const c = d.contracts.find((y) => y.migration?.batchId === b.id && y.externalNumber === x.oldNumber);
+    return c ? { ...x, number: c.number } : x;
+  });
   b.totals = Object.fromEntries(
     MIGRATION_STEPS.flatMap((s) => {
       const r = res[s];

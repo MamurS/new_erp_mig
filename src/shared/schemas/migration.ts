@@ -53,6 +53,18 @@ const money = (opts: { min?: number; required?: boolean } = {}) =>
     })
     .transform((v) => (v === '' ? 0 : Number(v)));
 
+/** Like money(), but an empty cell is «not given» (undefined), not 0. */
+const optionalMoney = (opts: { min?: number } = {}) =>
+  z
+    .union([z.string(), z.undefined()])
+    .transform((v) => (v ?? '').replace(/[\s\u00a0]/g, ''))
+    .superRefine((v, ctx) => {
+      if (v === '') return;
+      if (!/^\d{1,13}$/.test(v)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg('migration.v.money') });
+      else if (Number(v) < (opts.min ?? 0)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg('v.min', { min: opts.min ?? 0 }) });
+    })
+    .transform((v) => (v === '' ? undefined : Number(v)));
+
 const count = (min: number, max: number) =>
   z
     .union([z.string(), z.undefined()])
@@ -119,7 +131,14 @@ export const migrationContractRowSchema = z
     startDate: date,
     endDate: date,
     program: code(MIGRATION_PROGRAMS, msg('migration.v.program')),
+    /** Total premium of the contract. */
     premium: money({ min: 1 }),
+    /**
+     * Premium per person by type: an employee, a family member. Optional: without them every insured
+     * person of the contract needs an individual premium (checked on the insured file, row by row).
+     */
+    premiumEmployee: optionalMoney({ min: 1 }),
+    premiumFamily: optionalMoney(),
     paymentFrequency: code(MIGRATION_FREQUENCIES, msg('migration.v.frequency'), 'single'),
     /** Name of the assistance company; empty — MIG serves the client itself. */
     assistance: optional(120),
@@ -141,7 +160,10 @@ export const migrationInsuredRowSchema = z.object({
   inclusionDate: date,
   contractOldNumber: oldNumber,
   position: optional(80),
+  /** Family members covered under this employee's certificate (they are not separate rows). */
   familyMembers: count(0, 10),
+  /** Individual annual premium of this row (the employee with the family members); empty — by the contract's premiums by type. */
+  premium: optionalMoney({ min: 1 }),
 });
 
 export const migrationLimitRowSchema = z

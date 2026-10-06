@@ -21,6 +21,8 @@ import { ExportButton } from '../components/ExportButton';
 import { CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
 import { SlaCell } from '../components/cells';
+import { NewClaimDialog } from '../components/NewClaimDialog';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 
 const SOURCE_LABEL = {
   get app() {
@@ -54,6 +56,9 @@ export default function ClaimsPage() {
   const settles = useCan('claims.decide');
   const reserves = useCan('claims.reserves') || settles;
   const [search, setSearch] = useState('');
+  // «+ Создать → Убыток» of the claims officer: the claim form with the insured person found in the form.
+  const [creating, setCreating] = useState(false);
+  useCreateIntent('claim', useCan('claims.create'), setCreating, true);
   const q = useDebounced(search.trim());
   const page = Number(f.page) || 1;
   const sort = parseSort(f.sort || 'createdAt:desc');
@@ -162,6 +167,7 @@ export default function ClaimsPage() {
           }
         />
       </div>
+      <NewClaimDialog open={creating} onOpenChange={setCreating} />
     </div>
   );
 }

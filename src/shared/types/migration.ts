@@ -65,6 +65,29 @@ export interface MigrationReconRow {
   match: boolean;
 }
 
+/** Premium of an insured person: the individual premium of the row, or by type from the contract. */
+export type MigrationPremiumSource = 'individual' | 'type';
+
+/**
+ * Per-contract premium check: the sum of the premiums of its insured persons against the contract's
+ * total premium. They must agree within MIGRATION_PREMIUM_TOLERANCE (1 сум).
+ */
+export interface MigrationContractPremium {
+  oldNumber: string;
+  /** New number, once the batch is applied. */
+  number?: string;
+  /** Total premium of the contract (contracts file). */
+  total: Money;
+  /** Insured persons of the contract that are (or will be) written. */
+  insured: number;
+  /** Of them, with an individual premium (the others by type). */
+  individual: number;
+  insuredSum: Money;
+  /** insuredSum − total. */
+  diff: Money;
+  match: boolean;
+}
+
 export interface MigrationRollbackBlocker {
   /** What happened to the transferred data. */
   kind: 'audit' | 'claim' | 'payment' | 'endorsement' | 'change_request' | 'policy_change' | 'appointment' | 'guarantee' | 'visit' | 'invoice' | 'contract' | 'insured' | 'consent' | 'chat' | 'file' | 'limit_request' | 'case' | 'kp' | 'deal';
@@ -105,6 +128,8 @@ export interface MigrationBatchView extends MigrationBatchSummary {
   isAuthor: boolean;
   /** Before the load: the files against the rows to be written; after it: against the system. */
   reconciliation: MigrationReconRow[];
+  /** Once the insured file is loaded: per contract, the sum of insured premiums against the total premium. */
+  contractPremiums: MigrationContractPremium[];
   /** Applied batches: can it be rolled back, and if not, why. */
   rollback?: { allowed: boolean; blockers: MigrationRollbackBlocker[] };
   /** Applied batches: transferred contracts (old and new numbers). */

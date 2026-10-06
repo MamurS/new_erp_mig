@@ -26,6 +26,7 @@ export const v: Translation<typeof Ru> = {
   'v.amountPositive': 'The amount must be greater than zero',
   'v.amountAboveZero': 'Amount above zero',
   'v.amountRequired': 'Enter the amount',
+  'v.insuredRequired': 'Choose the insured person',
   'v.amountTooLarge': 'The amount is too large',
   'v.rejectReasonRequired': 'Give a reason for the denial',
   'v.justificationMin10': 'Justification: at least 10 characters',

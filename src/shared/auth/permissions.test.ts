@@ -3,7 +3,7 @@
  * one test per cell. Both tables are verbatim copies.
  */
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, can, type Action } from './permissions';
+import { ACTIONS, can, ruleFor, type Action } from './permissions';
 import type { ClaimStatus, Role, SessionUser } from '@/shared/types';
 
 const TABLE = `
@@ -490,5 +490,20 @@ describe('portfolio migration permissions', () => {
     expect(can(admin, 'migration.approve', { createdById: OTHER })).toBe(true);
     expect(can(admin, 'migration.approve', { createdById: admin.id })).toBe(false);
     expect(can(admin, 'migration.manage', { createdById: admin.id })).toBe(true);
+  });
+});
+
+describe('claim registration (SPEC §4 `claims.create` + DECISIONS: «Регистрация убытка урегулировщиком»)', () => {
+  const ALL: Role[] = [...ROLES, ...ASSIST_ROLES, 'sales_manager', 'legal', 'claims_officer'];
+  it('MIG staff: the operator and the claims officer; the insured person only for themselves', () => {
+    const staff = ALL.filter((r) => r !== 'insured' && can(userFor(r), 'claims.create', { companyId: COMPANY, clinicId: CLINIC, assistanceId: ASSIST }));
+    expect(staff.sort()).toEqual(['claims_officer', 'operator']);
+    expect(ruleFor('claims_officer', 'claims.create')).toBe(true);
+    expect(can(userFor('insured'), 'claims.create', { insuredId: INSURED })).toBe(true);
+    expect(can(userFor('insured'), 'claims.create', { insuredId: OTHER_INSURED })).toBe(false);
+  });
+  it('the claims officer registers the claim together with its reserve; the operator has no reserve right', () => {
+    expect(can(userFor('claims_officer'), 'claims.reserves')).toBe(true);
+    expect(can(userFor('operator'), 'claims.reserves')).toBe(false);
   });
 });

@@ -5,7 +5,7 @@ import { LEGAL_FORMS } from '@/shared/config/legalForms';
  */
 import { z } from 'zod';
 import { msg } from '@/i18n';
-import { claimCategory, claimStatus, limitCategory, specialty, staffRole } from '@/shared/api/schemas';
+import { claimCategory, claimIntakeChannel, claimStatus, limitCategory, specialty, staffRole } from '@/shared/api/schemas';
 import { todayISO } from '@/shared/lib/format';
 import { digitsOnly, parseRuDate } from '@/shared/lib/masks';
 import { dmsParamError, isDmsParamKey, isNumberingParamKey, numberingKindOf, numberingTemplateError } from '@/shared/config/dmsParameters';
@@ -186,6 +186,14 @@ export const myClaimSchema = z.object({
   amount: z.number({ invalid_type_error: msg('v.amountRequired') }).int().positive(msg('v.amountRequired')).max(100_000_000, msg('v.amountTooLarge')),
   serviceDate: isoDateInput,
   providerName: text(2, 120, msg('v.providerRequired')),
+});
+/**
+ * A claim registered by MIG staff (operator, claims officer): the insured person, how the claim reached MIG and
+ * the same fields as a claim from the app. Attachments travel next to it in the multipart body.
+ */
+export const staffClaimSchema = myClaimSchema.extend({
+  insuredId: z.string({ required_error: msg('v.insuredRequired') }).trim().uuid(msg('v.insuredRequired')),
+  intakeChannel: z.enum(claimIntakeChannel.options, { errorMap: () => ({ message: msg('v.required') }) }),
 });
 export const myAppointmentSchema = z.object({
   clinicId: uuid,

@@ -22,6 +22,7 @@ export const programCode = z.enum(['basic', 'standard', 'standard_plus', 'premiu
 export const limitCategory = z.enum(['outpatient', 'dental', 'medicines', 'inpatient']);
 export const claimStatus = z.enum(['new', 'review', 'medical_review', 'approved', 'rejected', 'to_pay', 'paid']);
 export const claimCategory = z.enum(['medicines', 'doctor_visit', 'diagnostics', 'dental', 'inpatient']);
+export const claimIntakeChannel = z.enum(['hr_letter', 'phone', 'email', 'other']);
 export const specialty = z.enum([
   'therapist',
   'pediatrician',
@@ -264,6 +265,7 @@ const claimBase = z.object({
   clientName: z.string(),
   category: claimCategory,
   source: z.enum(['app', 'clinic_invoice', 'operator', 'assistance']),
+  intakeChannel: claimIntakeChannel.optional(),
   amountClaimed: money,
   amountApproved: money.optional(),
   providerName: z.string(),
@@ -484,6 +486,7 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'claim_decision_escalated',
     'claim_decision_rejected',
     'claim_reserve_changed',
+    'claim_created',
     'claim_flag_dismissed',
     'claim_appealed',
     'claim_appeal_resolved',

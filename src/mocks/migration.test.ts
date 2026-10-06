@@ -12,6 +12,8 @@ import { MIGRATION_STEPS } from '@/shared/domain/migration';
 import { MIGRATION_DEMO_DATE, MIGRATION_DEMO_PHONE, migrationDemoFiles } from '@/demo/migrationSamples';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
+import { annualOf } from './lifecycle-core';
+import { defaultTariff } from '@/shared/domain/policies';
 
 const BASE = 'http://localhost/api';
 const server = createMockServer();
@@ -103,11 +105,23 @@ describe('portfolio migration', () => {
     const v = await uploadAll(sid, id);
     expect(step(v, 'contracts')).toMatchObject({ total: 5, valid: 5, errorRows: 0 });
     const insured = step(v, 'insured');
-    expect(insured).toMatchObject({ total: 203, valid: 200, errorRows: 3 });
+    expect(insured).toMatchObject({ total: 204, valid: 200, errorRows: 4 });
     expect(insured.issues.filter((i) => i.level === 'error').map((i) => [i.field, i.message.split('|')[0]])).toEqual([
       ['pinfl', 'v.pinflFormat'],
       ['contractOldNumber', 'migration.v.contractNotFound'],
+      ['premium', 'migration.v.noPremium'],
       ['inclusionDate', 'migration.v.outsideTerm'],
+    ]);
+    // Before applying: the contract whose insured premiums do not add up is a warning and a highlighted row.
+    expect(insured.issues.filter((i) => i.message.startsWith('migration.v.premiumMismatch')).map((i) => i.message)).toEqual([
+      'migration.v.premiumMismatch|{"contract":"MIG-2026/0504","sum":"221 400 000","total":"223 900 000"}',
+    ]);
+    expect(v.contractPremiums.map((c) => [c.oldNumber, c.match])).toEqual([
+      ['MIG-2026/0501', true],
+      ['MIG-2026/0502', true],
+      ['MIG-2026/0503', true],
+      ['MIG-2026/0504', false],
+      ['MIG-2026/0505', true],
     ]);
     expect(insured.issues.filter((i) => i.message === 'migration.v.noPhone')).toHaveLength(5);
     expect(insured.issues.some((i) => i.message === 'migration.v.pinflBirthDate')).toBe(true);
@@ -160,8 +174,14 @@ describe('portfolio migration', () => {
     const recon = Object.fromEntries(ok.data.reconciliation.map((r) => [r.metric, r]));
     expect(recon.clients).toMatchObject({ file: 6, excluded: 1, loaded: 5, match: false });
     expect(recon.contracts).toMatchObject({ file: 5, loaded: 5, match: true });
-    expect(recon.premium).toMatchObject({ file: 917_500_000, loaded: 917_500_000, match: true });
-    expect(recon.insured).toMatchObject({ file: 203, excluded: 3, loaded: 200, match: false });
+    expect(recon.premium).toMatchObject({ file: 1_444_559_999, loaded: 1_444_559_999, match: true });
+    expect(recon.insured).toMatchObject({ file: 204, excluded: 4, loaded: 200, match: false });
+    // Per contract, from the premiums stored on the transferred persons: only MIG-2026/0504 does not add up.
+    const premiums = Object.fromEntries(ok.data.contractPremiums.map((c) => [c.oldNumber, c]));
+    expect(premiums['MIG-2026/0504']).toMatchObject({ insured: 30, total: 223_900_000, insuredSum: 221_400_000, diff: -2_500_000, match: false });
+    expect(premiums['MIG-2026/0503']).toMatchObject({ insured: 40, individual: 40, diff: 0, match: true });
+    expect(premiums['MIG-2026/0505']).toMatchObject({ individual: 2, diff: 1, match: true });
+    expect(Object.values(premiums).every((c) => /^DMS-D-/.test(c.number ?? ''))).toBe(true);
     expect(recon.limitsUsed!.match).toBe(true);
     expect(recon.claims).toMatchObject({ file: 11, loaded: 10, match: false });
     expect(recon.reserves!.match).toBe(false);
@@ -179,7 +199,19 @@ describe('portfolio migration', () => {
     const migrated = d.contracts.filter((c) => c.migration?.batchId === id);
     expect(migrated.every((c) => c.status === 'active' && !!c.policyId && /^DMS-D-\d{4}-\d{6}$/.test(c.number))).toBe(true);
     expect(migrated.map((c) => c.externalNumber).sort()).toEqual(['MIG-2026/0501', 'MIG-2026/0502', 'MIG-2026/0503', 'MIG-2026/0504', 'MIG-2026/0505']);
-    expect(d.insured.find((i) => i.phone === MIGRATION_DEMO_PHONE)?.certificateNumber).toMatch(/^SERT-/);
+    const demo = d.insured.find((i) => i.phone === MIGRATION_DEMO_PHONE)!;
+    expect(demo.certificateNumber).toMatch(/^SERT-/);
+    // Premiums: by type (3 600 000 + 2 880 000 per family member) or individual; never an even split.
+    expect(demo.migratedPremium).toEqual({ amount: 3_600_000 + 2_880_000 * demo.familyMembersCount, source: 'type' });
+    const c0501 = migrated.find((c) => c.externalNumber === 'MIG-2026/0501')!;
+    expect(c0501.params).toMatchObject({ premiumEmployee: 3_600_000, premiumFamily: 2_880_000, total: 406_080_000 });
+    expect(annualOf(c0501, demo)).toBe(demo.migratedPremium!.amount);
+    const c0503 = migrated.find((c) => c.externalNumber === 'MIG-2026/0503')!;
+    const p0503 = d.insured.filter((i) => i.contractId === c0503.id);
+    expect(p0503.every((i) => i.migratedPremium?.source === 'individual')).toBe(true);
+    expect(new Set(p0503.map((i) => i.migratedPremium!.amount)).size).toBeGreaterThan(1);
+    // Without premiums by type in the file, later changes of the list use the program's base tariff.
+    expect(c0503.params).toMatchObject({ premiumEmployee: defaultTariff('basic').employee, premiumFamily: defaultTariff('basic').family });
 
     // Contracts list search finds a transferred contract by its old number.
     const uw = await login('underwriter@demo.mig.uz');
@@ -210,6 +242,8 @@ describe('portfolio migration', () => {
     const d = db();
     expect({ clients: d.clients.length, contracts: d.contracts.length, policies: d.policies.length, insured: d.insured.length, claims: d.claims.length, invoices: d.invoices.length, deals: d.deals.length, documents: d.documents.length }).toEqual(base);
     expect(r.data.reconciliation.find((x) => x.metric === 'contracts')).toMatchObject({ loaded: 0, match: false });
+    // The per-contract premium check stays as it was when the batch was applied.
+    expect(r.data.contractPremiums).toEqual(view.contractPremiums);
     // A rolled back batch's insured person no longer signs in.
     const a = await call<{ challengeId: string }>('/auth/phone', { method: 'POST', json: { phone: MIGRATION_DEMO_PHONE } });
     expect((await call('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } })).status).toBe(401);

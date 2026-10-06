@@ -30,12 +30,11 @@ import {
   rescheduleRequest,
 } from '@/shared/integration/schemas';
 import {
-  GUARANTEE_FILE_MAX_BYTES,
   guaranteeNumber,
   REGISTRY_CSV_MAX_BYTES,
   REGISTRY_CSV_MAX_ROWS,
 } from '@/shared/domain/clinics';
-import { detectMime } from '@/shared/lib/image';
+import { readAttachment, readForm } from '../uploads';
 import { db, type ClinicUserRow, type Db, type GuaranteeRow, type IntegrationClientRow } from '../db';
 import { API, audit, body, conflict, forbidden, HttpError, notFound, param, requirePermission, requireSession, route, validate } from '../http';
 import { randomId } from '../rng';
@@ -79,25 +78,6 @@ function requireClinic(request: Request, action: Action): { user: SessionUser; a
 }
 
 const toUserView = (u: ClinicUserRow): ClinicUserView => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt });
-
-async function readForm(request: Request): Promise<FormData> {
-  try {
-    return await request.formData();
-  } catch {
-    throw new HttpError(400, 'validation', 'srv.form.invalid');
-  }
-}
-
-/** PDF, JPEG, PNG up to 10 MB, checked by magic bytes (images arrive already re-encoded by the browser). */
-async function readAttachment(file: File): Promise<{ bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'application/pdf' }> {
-  if (file.size === 0 || file.size > GUARANTEE_FILE_MAX_BYTES) throw new HttpError(422, 'validation', 'srv.file.tooLarge10mb', { fields: { files: msg('srv.file.tooLarge10mb') } });
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const mime = detectMime(bytes);
-  if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') {
-    throw new HttpError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { files: msg('srv.file.unsupported') } });
-  }
-  return { bytes, mime };
-}
 
 export async function attachGuaranteeFiles(d: Db, g: GuaranteeRow, form: FormData): Promise<void> {
   const files = form.getAll('files').filter((f): f is File => f instanceof File);

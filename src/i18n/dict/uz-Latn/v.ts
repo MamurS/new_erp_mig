@@ -26,6 +26,7 @@ export const v: Translation<typeof Ru> = {
   'v.amountPositive': 'Summa noldan katta boʻlishi kerak',
   'v.amountAboveZero': 'Summa noldan katta boʻlsin',
   'v.amountRequired': 'Summani kiriting',
+  'v.insuredRequired': 'Sugʻurtalangan shaxsni tanlang',
   'v.amountTooLarge': 'Summa juda katta',
   'v.rejectReasonRequired': 'Rad etish uchun sababni koʻrsating',
   'v.justificationMin10': 'Asoslash: kamida 10 ta belgi',

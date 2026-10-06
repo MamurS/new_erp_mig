@@ -10,7 +10,7 @@ import Papa from 'papaparse';
 import type { z } from 'zod';
 import { msg } from '@/i18n/core';
 import type { LimitCategory, Money, ProgramCode, UUID } from '@/shared/types';
-import type { MigrationIssue, MigrationMetric, MigrationReconRow, MigrationStep, MigrationTotals } from '@/shared/types/migration';
+import type { MigrationContractPremium, MigrationIssue, MigrationMetric, MigrationPremiumSource, MigrationReconRow, MigrationStep, MigrationTotals } from '@/shared/types/migration';
 import { PROGRAMS } from './programs';
 import { toCsv } from '@/shared/lib/csv';
 import {
@@ -34,8 +34,8 @@ export const MIGRATION_STEPS = ['clients', 'contracts', 'insured', 'limits', 'cl
 /** Columns of each file, in the order of the template. */
 export const MIGRATION_COLUMNS: Record<MigrationStep, readonly string[]> = {
   clients: ['name', 'legalForm', 'stir', 'bank', 'account', 'mfo', 'director', 'directorBasis', 'address', 'hrName', 'hrPhone', 'hrEmail'],
-  contracts: ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'paymentFrequency', 'assistance'],
-  insured: ['fullName', 'birthDate', 'pinfl', 'phone', 'oldCertificate', 'inclusionDate', 'contractOldNumber', 'position', 'familyMembers'],
+  contracts: ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'premiumEmployee', 'premiumFamily', 'paymentFrequency', 'assistance'],
+  insured: ['fullName', 'birthDate', 'pinfl', 'phone', 'oldCertificate', 'inclusionDate', 'contractOldNumber', 'position', 'familyMembers', 'premium'],
   limits: ['pinfl', 'oldCertificate', 'category', 'usedAmount'],
   claims: ['oldNumber', 'pinfl', 'oldCertificate', 'category', 'serviceDate', 'provider', 'amountClaimed', 'reserve', 'status'],
   invoices: ['oldNumber', 'contractOldNumber', 'amount', 'paid', 'issuedAt', 'dueDate'],
@@ -67,7 +67,18 @@ const EXAMPLE: Record<MigrationStep, Record<string, string>> = {
     hrPhone: '+998901234567',
     hrEmail: 'hr@example-trade.uz',
   },
-  contracts: { oldNumber: 'MIG-2026/0458', clientStir: '301234567', startDate: '2026-03-01', endDate: '2027-02-28', program: 'standard', premium: '125000000', paymentFrequency: 'quarterly', assistance: '' },
+  contracts: {
+    oldNumber: 'MIG-2026/0458',
+    clientStir: '301234567',
+    startDate: '2026-03-01',
+    endDate: '2027-02-28',
+    program: 'standard',
+    premium: '6300000',
+    premiumEmployee: '3500000',
+    premiumFamily: '2800000',
+    paymentFrequency: 'quarterly',
+    assistance: '',
+  },
   insured: {
     fullName: 'Rahimov Jasur Olimovich',
     birthDate: '1988-05-14',
@@ -78,6 +89,7 @@ const EXAMPLE: Record<MigrationStep, Record<string, string>> = {
     contractOldNumber: 'MIG-2026/0458',
     position: 'Accountant',
     familyMembers: '1',
+    premium: '',
   },
   limits: { pinfl: '31405880123456', oldCertificate: 'C-0458-0001', category: 'outpatient', usedAmount: '1250000' },
   claims: { oldNumber: 'CL-2026-7781', pinfl: '31405880123456', oldCertificate: 'C-0458-0001', category: 'diagnostics', serviceDate: '2026-09-12', provider: 'Shifo Med Center', amountClaimed: '850000', reserve: '850000', status: 'review' },
@@ -122,7 +134,7 @@ export interface MigrationDbRefs {
   /** Clients by STIR (ИНН). */
   clients: Map<string, { id: UUID; hasActivePolicy: boolean }>;
   /** Contracts transferred earlier, by their old number. */
-  contracts: Map<string, { id: UUID; program: ProgramCode; startDate: string; endDate: string; active: boolean }>;
+  contracts: Map<string, { id: UUID; program: ProgramCode; startDate: string; endDate: string; active: boolean; premiumEmployee: Money; premiumFamily: Money }>;
   /** Active insured persons: by PINFL and by old certificate number (transferred ones). */
   insuredByPinfl: Map<string, { id: UUID; program: ProgramCode; from: string }>;
   insuredByCertificate: Map<string, { id: UUID; program: ProgramCode; from: string }>;
@@ -167,13 +179,22 @@ export interface StepResult<T, R = undefined> {
   validTotals: MigrationTotals;
 }
 
+/** A valid insured row: its contract and its resolved annual premium. */
+export interface InsuredRef {
+  contract: MigrationRef;
+  premium: Money;
+  premiumSource: MigrationPremiumSource;
+}
+
 export interface BatchResults {
   clients?: StepResult<MigrationClientRow>;
   contracts?: StepResult<MigrationContractRow, { client: MigrationRef; assistanceId: UUID | null }>;
-  insured?: StepResult<MigrationInsuredRow, { contract: MigrationRef }>;
+  insured?: StepResult<MigrationInsuredRow, InsuredRef>;
   limits?: StepResult<MigrationLimitRow, { insured: MigrationRef }>;
   claims?: StepResult<MigrationClaimRow, { insured: MigrationRef }>;
   invoices?: StepResult<MigrationInvoiceRow, { contract: MigrationRef }>;
+  /** Per contract of the batch (valid rows), once the insured file is loaded. */
+  contractPremiums?: MigrationContractPremium[];
 }
 
 /** Input of a validation: the parsed rows of each file loaded so far (in order) and the migration date. */
@@ -272,6 +293,44 @@ interface ContractFacts {
   program: ProgramCode;
   startDate: string;
   endDate: string;
+  premiumEmployee?: Money;
+  premiumFamily?: Money;
+}
+
+/** «1 234 567»: sums inside a message (messages are formatted without the locale). */
+const groupDigits = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+/** Sums of premiums may differ by this much (rounding in the previous system). */
+export const MIGRATION_PREMIUM_TOLERANCE = 1;
+
+/**
+ * Annual premium of an insured row, in this order: the row's individual premium; else by type from the
+ * contract — an employee plus the family members covered under the certificate; else none (an error).
+ */
+export function insuredPremium(
+  row: Pick<MigrationInsuredRow, 'premium' | 'familyMembers'>,
+  contract: { premiumEmployee?: Money; premiumFamily?: Money },
+): { premium: Money; source: MigrationPremiumSource } | null {
+  if (row.premium !== undefined) return { premium: row.premium, source: 'individual' };
+  if (contract.premiumEmployee === undefined) return null;
+  if (row.familyMembers > 0 && contract.premiumFamily === undefined) return null;
+  return { premium: contract.premiumEmployee + (contract.premiumFamily ?? 0) * row.familyMembers, source: 'type' };
+}
+
+/** Per-contract premium check: the insured persons' premiums against the contract's total, within the tolerance. */
+export function contractPremiumCheck(c: { oldNumber: string; number?: string; total: Money }, persons: readonly { premium: Money; source: MigrationPremiumSource }[]): MigrationContractPremium {
+  const insuredSum = persons.reduce((s, p) => s + p.premium, 0);
+  const diff = insuredSum - c.total;
+  return {
+    oldNumber: c.oldNumber,
+    ...(c.number ? { number: c.number } : {}),
+    total: c.total,
+    insured: persons.length,
+    individual: persons.filter((p) => p.source === 'individual').length,
+    insuredSum,
+    diff,
+    match: Math.abs(diff) <= MIGRATION_PREMIUM_TOLERANCE,
+  };
 }
 
 /** Validates the files loaded so far, in the load order. Nothing is written. */
@@ -376,13 +435,27 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
       }
       if (p.inclusionDate < contract.facts.startDate || p.inclusionDate > contract.facts.endDate) c.error(row, 'inclusionDate', msg('migration.v.outsideTerm'));
       else if (p.inclusionDate > date) c.warn(row, 'inclusionDate', msg('migration.v.includedAfterMigration'));
-      return { data: p, ref: { contract: contract.ref } };
+      const premium = insuredPremium(p, contract.facts);
+      if (!premium) {
+        c.error(row, 'premium', msg('migration.v.noPremium'));
+        return null;
+      }
+      return { data: p, ref: { contract: contract.ref, premium: premium.premium, premiumSource: premium.source } };
     });
+    // Per contract of the batch: the premiums of the rows to be written against the contract's total.
+    const checks: MigrationContractPremium[] = [];
+    for (const v of out.contracts?.valid ?? []) {
+      const persons = res.flatMap((x, idx) => (x && !c.hasError(idx + 2) && 'batch' in x.ref.contract && x.ref.contract.batch === v.row ? [{ row: idx + 2, premium: x.ref.premium, source: x.ref.premiumSource }] : []));
+      const check = contractPremiumCheck({ oldNumber: v.data.oldNumber, total: v.data.premium }, persons);
+      checks.push(check);
+      if (!check.match && persons[0]) c.warn(persons[0].row, 'premium', msg('migration.v.premiumMismatch', { contract: v.data.oldNumber, sum: groupDigits(check.insuredSum), total: groupDigits(check.total) }));
+    }
+    out.contractPremiums = checks;
     out.insured = finish('insured', f.insured, res, c);
   }
 
   // ---- insured persons for limits and claims
-  const insuredFacts = (v: ValidRow<MigrationInsuredRow, { contract: MigrationRef }>): { program: ProgramCode; from: string } => {
+  const insuredFacts = (v: ValidRow<MigrationInsuredRow, InsuredRef>): { program: ProgramCode; from: string } => {
     const ref = v.ref.contract;
     if ('batch' in ref) {
       const b = [...batchContracts.values()].find((x) => x.row === ref.batch);

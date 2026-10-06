@@ -11,7 +11,7 @@ const FIXTURES = join(process.cwd(), 'e2e/fixtures/migration');
 const STEPS = [
   { step: 'clients', label: 'Клиенты', summary: 'Строк 6 · без ошибок 5 · с ошибками 1', errors: 1 },
   { step: 'contracts', label: 'Договоры', summary: 'Строк 5 · без ошибок 5 · с ошибками 0', errors: 0 },
-  { step: 'insured', label: 'Застрахованные', summary: 'Строк 203 · без ошибок 200 · с ошибками 3', errors: 3 },
+  { step: 'insured', label: 'Застрахованные', summary: 'Строк 204 · без ошибок 200 · с ошибками 4', errors: 4 },
   { step: 'limits', label: 'Использованные лимиты', summary: 'Строк 40 · без ошибок 40 · с ошибками 0', errors: 0 },
   { step: 'claims', label: 'Открытые убытки', summary: 'Строк 11 · без ошибок 10 · с ошибками 1', errors: 1 },
   { step: 'invoices', label: 'Неоплаченные счета', summary: 'Строк 3 · без ошибок 3 · с ошибками 0', errors: 0 },
@@ -83,6 +83,12 @@ test('migration: the demo batch is transferred, reconciled, found by the old num
   await expect(page.getByTestId('issues-insured')).toContainText('ПИНФЛ — 14 цифр');
   await expect(page.getByTestId('issues-insured')).toContainText('Договор с этим старым номером не найден');
   await expect(page.getByTestId('issues-claims')).toContainText('Переносятся только открытые убытки');
+  // Premiums: a person without an individual premium in a contract without premiums by type is an error;
+  // a contract whose insured premiums do not add up is a warning and a highlighted row before applying.
+  await expect(page.getByTestId('issues-insured')).toContainText('Нет премии: укажите premium в строке или premiumEmployee и premiumFamily в договоре');
+  await expect(page.getByTestId('issues-insured')).toContainText('Договор MIG-2026/0504: сумма премий застрахованных 221 400 000 не равна премии договора 223 900 000');
+  await expect(page.getByTestId('premium-MIG-2026/0504')).toHaveAttribute('data-match', 'false');
+  await expect(page.getByTestId('premium-MIG-2026/0503')).toHaveAttribute('data-match', 'true');
   // Nothing is written before the second administrator applies the batch.
   expect(((await api(page, 'GET', '/clients?q=409100001')).data as { total: number }).total).toBe(0);
 
@@ -96,6 +102,15 @@ test('migration: the demo batch is transferred, reconciled, found by the old num
   await expect(page.getByTestId('recon-clients')).toContainText('Расхождение');
   await expect(page.getByTestId('recon-insured')).toHaveAttribute('data-match', 'false');
   await expect(page.getByTestId('migrated-contracts')).toContainText('MIG-2026/0501');
+  // Per contract: the sum of the transferred persons' premiums against the contract premium (±1 сум).
+  await expect(page.getByTestId('premium-MIG-2026/0504')).toHaveAttribute('data-match', 'false');
+  await expect(page.getByTestId('premium-MIG-2026/0504')).toContainText('Расхождение');
+  await expect(page.getByTestId('premium-MIG-2026/0504')).toHaveClass(/bg-danger-soft/);
+  for (const n of ['0501', '0502', '0505']) await expect(page.getByTestId(`premium-MIG-2026/${n}`)).toHaveAttribute('data-match', 'true');
+  // Every person of MIG-2026/0503 has an individual premium: 40 of 40, and they add up.
+  await expect(page.getByTestId('premium-MIG-2026/0503')).toHaveAttribute('data-match', 'true');
+  await expect(page.getByTestId('premium-MIG-2026/0503')).toContainText('Сходится');
+  await expect(page.getByTestId('premium-MIG-2026/0503').getByRole('cell').nth(4)).toHaveText('40');
 
   // Rows with errors were not written; the valid ones were.
   expect(((await api(page, 'GET', '/clients?q=409100001')).data as { total: number }).total).toBe(1);

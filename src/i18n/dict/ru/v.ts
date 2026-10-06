@@ -24,6 +24,7 @@ export const v = {
   'v.amountPositive': 'Сумма должна быть больше нуля',
   'v.amountAboveZero': 'Сумма больше нуля',
   'v.amountRequired': 'Укажите сумму',
+  'v.insuredRequired': 'Выберите застрахованного',
   'v.amountTooLarge': 'Слишком большая сумма',
   'v.rejectReasonRequired': 'Для отказа укажите причину',
   'v.justificationMin10': 'Обоснование: минимум 10 символов',

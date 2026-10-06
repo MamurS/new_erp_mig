@@ -170,6 +170,8 @@ export interface LimitUsage {
 export type ClaimStatus = 'new' | 'review' | 'medical_review' | 'approved' | 'rejected' | 'to_pay' | 'paid';
 export type ClaimCategory = 'medicines' | 'doctor_visit' | 'diagnostics' | 'dental' | 'inpatient';
 export type ClaimSource = 'app' | 'clinic_invoice' | 'operator' | 'assistance';
+/** How a claim registered by MIG staff reached MIG (HR letter, phone call, email, other). */
+export type ClaimIntakeChannel = 'hr_letter' | 'phone' | 'email' | 'other';
 
 export interface Attachment {
   id: UUID;
@@ -197,6 +199,7 @@ export interface Claim {
   clientName: string;
   category: ClaimCategory;
   source: ClaimSource;
+  intakeChannel?: ClaimIntakeChannel;      // только для убытков, заведённых сотрудником МИГ
   amountClaimed: Money;
   amountApproved?: Money;
   providerName: string;
@@ -417,6 +420,7 @@ export type AuditAction =
   | 'claim_decision_escalated'
   | 'claim_decision_rejected'
   | 'claim_reserve_changed'
+  | 'claim_created'
   | 'claim_flag_dismissed'
   | 'claim_appealed'
   | 'claim_appeal_resolved'

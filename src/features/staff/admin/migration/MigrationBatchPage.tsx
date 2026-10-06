@@ -201,6 +201,48 @@ function Reconciliation({ b }: { b: MigrationBatchView }) {
   );
 }
 
+/** Per contract: the sum of its insured persons' premiums against the contract's total premium. */
+function ContractPremiums({ b }: { b: MigrationBatchView }) {
+  if (b.contractPremiums.length === 0) return null;
+  const applied = b.contractPremiums.some((r) => r.number);
+  return (
+    <Card title={t('migration.premiums')} className="mb-3">
+      <p className="mb-2 text-[13px] text-muted">{t('migration.premiumsHint')}</p>
+      <TableScroll>
+        <table className="w-full text-[13px]" data-testid="contract-premiums">
+          <caption className="sr-only">{t('migration.premiumsCaption')}</caption>
+          <thead className="bg-rail">
+            <tr>
+              <th className={th}>{t('migration.col.oldNumber')}</th>
+              {applied && <th className={th}>{t('migration.col.newNumber')}</th>}
+              <th className={cn(th, 'text-right')}>{t('migration.col.contractPremium')}</th>
+              <th className={cn(th, 'text-right')}>{t('migration.col.insuredCount')}</th>
+              <th className={cn(th, 'text-right')}>{t('migration.col.individual')}</th>
+              <th className={cn(th, 'text-right')}>{t('migration.col.insuredSum')}</th>
+              <th className={cn(th, 'text-right')}>{t('migration.col.diff')}</th>
+              <th className={th}>{t('common.status')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {b.contractPremiums.map((r) => (
+              <tr key={r.oldNumber} data-testid={`premium-${r.oldNumber}`} data-match={r.match ? 'true' : 'false'} className={cn('border-t border-border-soft', !r.match && 'bg-danger-soft')}>
+                <td className={cn(td, 'num')}>{r.oldNumber}</td>
+                {applied && <td className={cn(td, 'num')}>{r.number ?? '—'}</td>}
+                <td className={cn(td, 'num text-right')}>{formatMoney(r.total)}</td>
+                <td className={cn(td, 'num text-right')}>{formatNumber(r.insured)}</td>
+                <td className={cn(td, 'num text-right')}>{r.individual ? formatNumber(r.individual) : '—'}</td>
+                <td className={cn(td, 'num text-right')}>{formatMoney(r.insuredSum)}</td>
+                <td className={cn(td, 'num text-right', !r.match && 'font-semibold text-danger-text')}>{r.diff === 0 ? '—' : formatMoney(r.diff)}</td>
+                <td className={td}>{r.match ? <Chip kind="success">{t('migration.reconOk')}</Chip> : <Chip kind="danger">{t('migration.reconMismatch')}</Chip>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
+    </Card>
+  );
+}
+
 function Rollback({ b }: { b: MigrationBatchView }) {
   const act = useMigrationReasonAction();
   const [open, setOpen] = useState(false);
@@ -413,6 +455,7 @@ export default function MigrationBatchPage() {
           ))}
           <DraftActions b={b} />
           <Reconciliation b={b} />
+          <ContractPremiums b={b} />
           <Contracts b={b} />
           <Rollback b={b} />
         </>
