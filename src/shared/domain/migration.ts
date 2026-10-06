@@ -34,7 +34,7 @@ export const MIGRATION_STEPS = ['clients', 'contracts', 'insured', 'limits', 'cl
 /** Columns of each file, in the order of the template. */
 export const MIGRATION_COLUMNS: Record<MigrationStep, readonly string[]> = {
   clients: ['name', 'legalForm', 'stir', 'bank', 'account', 'mfo', 'director', 'directorBasis', 'address', 'hrName', 'hrPhone', 'hrEmail'],
-  contracts: ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'premiumEmployee', 'premiumFamily', 'paymentFrequency', 'assistance'],
+  contracts: ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'premium_employee', 'premium_family', 'paymentFrequency', 'assistance'],
   insured: ['fullName', 'birthDate', 'pinfl', 'phone', 'oldCertificate', 'inclusionDate', 'contractOldNumber', 'position', 'familyMembers', 'premium'],
   limits: ['pinfl', 'oldCertificate', 'category', 'usedAmount'],
   claims: ['oldNumber', 'pinfl', 'oldCertificate', 'category', 'serviceDate', 'provider', 'amountClaimed', 'reserve', 'status'],
@@ -74,8 +74,8 @@ const EXAMPLE: Record<MigrationStep, Record<string, string>> = {
     endDate: '2027-02-28',
     program: 'standard',
     premium: '6300000',
-    premiumEmployee: '3500000',
-    premiumFamily: '2800000',
+    premium_employee: '3500000',
+    premium_family: '2800000',
     paymentFrequency: 'quarterly',
     assistance: '',
   },
@@ -393,7 +393,7 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
   }
 
   // ---- insured
-  const batchContracts = new Map((out.contracts?.valid ?? []).map((v) => [v.data.oldNumber.toUpperCase(), { row: v.row, facts: v.data as ContractFacts }]));
+  const batchContracts = new Map((out.contracts?.valid ?? []).map((v) => [v.data.oldNumber.toUpperCase(), { row: v.row, facts: { program: v.data.program, startDate: v.data.startDate, endDate: v.data.endDate, premiumEmployee: v.data.premium_employee, premiumFamily: v.data.premium_family } as ContractFacts }]));
   const contractOf = (old: string): { ref: MigrationRef; facts: ContractFacts } | null => {
     const key = old.toUpperCase();
     const b = batchContracts.get(key);

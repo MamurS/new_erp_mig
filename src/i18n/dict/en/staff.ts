@@ -277,6 +277,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.insuredCard.createClaim': 'Create claim',
   'staff.insuredCard.amountUzs': 'Amount, UZS',
   'staff.insuredCard.serviceDate': 'Service date',
+  'staff.insuredCard.eventDate': 'Event date',
   'staff.insuredCard.provider': 'Clinic or pharmacy',
   'staff.insuredCard.intakeChannel': 'Source of the request',
   'staff.insuredCard.changeInsured': 'Change',

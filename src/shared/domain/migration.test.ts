@@ -156,15 +156,15 @@ describe('premiums of insured persons', () => {
   });
 
   it('a contract without premiums by type is valid; each of its insured rows without an own premium is an error', () => {
-    const res = run(contract({ premiumEmployee: '', premiumFamily: '', premium: '9000000' }), [person(1, { premium: '9000000' }), person(2, { premium: '' })]);
+    const res = run(contract({ premium_employee: '', premium_family: '', premium: '9000000' }), [person(1, { premium: '9000000' }), person(2, { premium: '' })]);
     expect(res.contracts!.errorRows).toBe(0);
     expect(res.insured!.issues.filter((i) => i.level === 'error')).toEqual([{ row: 3, field: 'premium', level: 'error', message: 'migration.v.noPremium' }]);
     expect(res.insured!.valid.map((v) => [v.row, v.ref.premium, v.ref.premiumSource])).toEqual([[2, 9_000_000, 'individual']]);
     // The row with the error is excluded: the contract's check counts the rows to be written only.
     expect(res.contractPremiums).toEqual([{ oldNumber: 'MIG-2026/0458', total: 9_000_000, insured: 1, individual: 1, insuredSum: 9_000_000, diff: 0, match: true }]);
     // Premiums by type: bad values are errors of the contract row.
-    expect(keys(run(contract({ premiumEmployee: 'abc', premiumFamily: '-1' }), []).contracts!.issues)).toEqual(['error:premiumEmployee:migration.v.money', 'error:premiumFamily:migration.v.money']);
-    expect(keys(run(contract({ premiumEmployee: '0' }), []).contracts!.issues)).toEqual(['error:premiumEmployee:v.min']);
+    expect(keys(run(contract({ premium_employee: 'abc', premium_family: '-1' }), []).contracts!.issues)).toEqual(['error:premium_employee:migration.v.money', 'error:premium_family:migration.v.money']);
+    expect(keys(run(contract({ premium_employee: '0' }), []).contracts!.issues)).toEqual(['error:premium_employee:v.min']);
     expect(keys(run(contract({}), [person(1, { premium: '0' })]).insured!.issues)).toEqual(['error:premium:v.min']);
   });
 

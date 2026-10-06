@@ -85,7 +85,7 @@ test('migration: the demo batch is transferred, reconciled, found by the old num
   await expect(page.getByTestId('issues-claims')).toContainText('Переносятся только открытые убытки');
   // Premiums: a person without an individual premium in a contract without premiums by type is an error;
   // a contract whose insured premiums do not add up is a warning and a highlighted row before applying.
-  await expect(page.getByTestId('issues-insured')).toContainText('Нет премии: укажите premium в строке или premiumEmployee и premiumFamily в договоре');
+  await expect(page.getByTestId('issues-insured')).toContainText('Нет премии: укажите premium в строке или premium_employee и premium_family в договоре');
   await expect(page.getByTestId('issues-insured')).toContainText('Договор MIG-2026/0504: сумма премий застрахованных 221 400 000 не равна премии договора 223 900 000');
   await expect(page.getByTestId('premium-MIG-2026/0504')).toHaveAttribute('data-match', 'false');
   await expect(page.getByTestId('premium-MIG-2026/0503')).toHaveAttribute('data-match', 'true');

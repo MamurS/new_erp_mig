@@ -5,8 +5,8 @@
  * is set to the claimed amount at once (history + audit) and the claim lands in the claims officer's «Новые».
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { ClaimDetail, SessionResponse } from '@/shared/types/dto';
-import type { Claim, QueueItem } from '@/shared/types';
+import type { ClaimDetail, QueueItem, SessionResponse } from '@/shared/types/dto';
+import type { Claim } from '@/shared/types';
 import { tm } from '@/i18n/core';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';

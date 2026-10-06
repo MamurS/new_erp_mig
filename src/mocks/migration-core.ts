@@ -282,8 +282,8 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
     applied.dealIds.push(deal.id);
     // Tariff for later changes of the list: the premiums by type of the file, else the program's base tariff.
     const base = defaultTariff(r.program);
-    const premiumEmployee = r.premiumEmployee ?? base.employee;
-    const premiumFamily = r.premiumFamily ?? base.family;
+    const premiumEmployee = r.premium_employee ?? base.employee;
+    const premiumFamily = r.premium_family ?? base.family;
     const c: Contract = {
       id: randomId(),
       number: contractNumber(year, d.contractSeq, numbering()),

@@ -174,8 +174,8 @@ export function migrationDemoFiles(): Record<MigrationStep, string> {
     endDate: c.endDate,
     program: c.program,
     premium: String(persons.filter((p) => p.contractOldNumber === c.oldNumber).reduce((s, p) => s + premiumOf(p), 0) + c.offset),
-    premiumEmployee: c.byType ? String(c.byType.employee) : '',
-    premiumFamily: c.byType ? String(c.byType.family) : '',
+    premium_employee: c.byType ? String(c.byType.employee) : '',
+    premium_family: c.byType ? String(c.byType.family) : '',
     paymentFrequency: c.paymentFrequency,
     assistance: c.assistance,
   }));

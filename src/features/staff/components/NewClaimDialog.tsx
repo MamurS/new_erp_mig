@@ -123,7 +123,7 @@ export function NewClaimDialog({ open, onOpenChange, insured }: { open: boolean;
             />
           )}
         </Field>
-        <Field label={t('staff.insuredCard.serviceDate')} error={tm(form.formState.errors.serviceDate?.message)}>
+        <Field label={t('staff.insuredCard.eventDate')} error={tm(form.formState.errors.serviceDate?.message)}>
           {(a) => (
             <Controller
               control={form.control}

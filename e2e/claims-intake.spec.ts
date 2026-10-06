@@ -43,7 +43,7 @@ async function fillClaim(page: Page, amount: string, provider: string) {
   await dialog.getByLabel('Источник обращения').selectOption({ label: 'Звонок' });
   await dialog.getByLabel('Категория').selectOption({ label: 'Приём врача' });
   await dialog.getByLabel('Сумма, UZS').fill(amount);
-  await dialog.getByLabel('Дата услуги').fill(yesterday());
+  await dialog.getByLabel('Дата события').fill(yesterday());
   await dialog.getByLabel('Клиника или аптека').fill(provider);
   return dialog;
 }

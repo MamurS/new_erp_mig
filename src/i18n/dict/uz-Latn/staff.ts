@@ -281,6 +281,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.insuredCard.createClaim': 'Zarar yaratish',
   'staff.insuredCard.amountUzs': 'Summa, soʻm',
   'staff.insuredCard.serviceDate': 'Xizmat sanasi',
+  'staff.insuredCard.eventDate': 'Hodisa sanasi',
   'staff.insuredCard.provider': 'Klinika yoki dorixona',
   'staff.insuredCard.intakeChannel': 'Murojaat manbai',
   'staff.insuredCard.changeInsured': 'Oʻzgartirish',

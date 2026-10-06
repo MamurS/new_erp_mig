@@ -137,8 +137,8 @@ export const migrationContractRowSchema = z
      * Premium per person by type: an employee, a family member. Optional: without them every insured
      * person of the contract needs an individual premium (checked on the insured file, row by row).
      */
-    premiumEmployee: optionalMoney({ min: 1 }),
-    premiumFamily: optionalMoney(),
+    premium_employee: optionalMoney({ min: 1 }),
+    premium_family: optionalMoney(),
     paymentFrequency: code(MIGRATION_FREQUENCIES, msg('migration.v.frequency'), 'single'),
     /** Name of the assistance company; empty — MIG serves the client itself. */
     assistance: optional(120),

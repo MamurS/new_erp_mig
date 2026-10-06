@@ -45,7 +45,7 @@ describe('demo files of the portfolio transfer', () => {
     const contracts = parseMigrationCsv('contracts', files.contracts);
     const insured = parseMigrationCsv('insured', files.insured);
     if ('error' in contracts || 'error' in insured) throw new Error('unreadable');
-    const byType = contracts.rows.filter((c) => c.premiumEmployee && c.premiumFamily).map((c) => c.oldNumber);
+    const byType = contracts.rows.filter((c) => c.premium_employee && c.premium_family).map((c) => c.oldNumber);
     expect(byType).toEqual(['MIG-2026/0501', 'MIG-2026/0502', 'MIG-2026/0504', 'MIG-2026/0505']);
     const of0503 = insured.rows.filter((r) => r.contractOldNumber === 'MIG-2026/0503');
     // Every person of the contract without premiums by type has an individual premium, except the one error row.

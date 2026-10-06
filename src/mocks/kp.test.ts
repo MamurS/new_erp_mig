@@ -58,6 +58,20 @@ describe('KP API', () => {
     expect(data.letter).toMatchObject({ clientName: 'Toshkent Agrologistika', createdByEmail: 'underwriter@demo.mig.uz', policyId: policy.id });
   });
 
+  it('renewal premium per person: transferred persons count with their stored premium, others unchanged', async () => {
+    const sid = await login('underwriter@demo.mig.uz');
+    const clientId = demoClientId();
+    const before = (await call<KpDefaults>(`/clients/${clientId}/kp-defaults`, { sid })).data.params.premiumEmployee;
+    const d = db();
+    const policy = d.policies.find((p) => p.clientId === clientId && p.status === 'active')!;
+    const active = d.insured.filter((i) => i.clientId === clientId && i.status === 'active');
+    // Without transferred persons: the even share of the policy premium, rounded to thousands (unchanged).
+    expect(before).toBe(Math.round(policy.premium / Math.max(1, policy.insuredCount || active.length) / 1000) * 1000);
+    for (const i of active) i.migratedPremium = { amount: 7_000_000, source: 'individual' };
+    const after = (await call<KpDefaults>(`/clients/${clientId}/kp-defaults`, { sid })).data.params;
+    expect(after).toMatchObject({ premiumEmployee: 7_000_000, premiumFamily: 7_000_000 });
+  });
+
   it('underwriter creates a draft with number, template version, total and audit', async () => {
     const sid = await login('underwriter@demo.mig.uz');
     const kp = await createDraft(sid);

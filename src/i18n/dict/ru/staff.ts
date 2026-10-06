@@ -273,6 +273,7 @@ export const staff = {
   'staff.insuredCard.createClaim': 'Создать убыток',
   'staff.insuredCard.amountUzs': 'Сумма, UZS',
   'staff.insuredCard.serviceDate': 'Дата услуги',
+  'staff.insuredCard.eventDate': 'Дата события',
   'staff.insuredCard.provider': 'Клиника или аптека',
   'staff.insuredCard.intakeChannel': 'Источник обращения',
   'staff.insuredCard.changeInsured': 'Изменить',
