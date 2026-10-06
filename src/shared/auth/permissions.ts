@@ -210,6 +210,9 @@ export const PERMISSIONS = {
   'ai.coverage.mig': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
   'ai.feedback': { operator: yes, underwriter: no, doctor_expert: yes, accountant: no, admin: no, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: 'own', asst_doctor: 'own', asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: yes },
   'ai.admin': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  // ---- transfer of the existing portfolio (/staff/admin/migration): an admin prepares a batch, a second admin applies it ----
+  'migration.manage': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: yes, hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
+  'migration.approve': { operator: no, underwriter: no, doctor_expert: no, accountant: no, admin: 'except_own', hr: no, insured: no, clinic_registrar: no, clinic_admin: no, asst_operator: no, asst_doctor: no, asst_billing: no, asst_admin: no, sales_manager: no, legal: no, claims_officer: no },
 } as const satisfies Record<string, Row>;
 
 export type Action = keyof typeof PERMISSIONS;

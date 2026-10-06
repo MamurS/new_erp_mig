@@ -58,7 +58,7 @@ export const claimHandlers = [
       const term = q(url);
       if (term)
         list = list.filter(
-          (c) => matchesSearch(term, c.number, c.insuredName, c.clientName),
+          (c) => matchesSearch(term, c.number, c.insuredName, c.clientName, c.externalNumber),
         );
       const sorted = sortBy(
         list,

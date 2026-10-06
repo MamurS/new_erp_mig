@@ -13,6 +13,7 @@ import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
 import { t } from '@/i18n';
+import { CreateMenu } from '@/features/shell/CreateMenu';
 
 interface ClinicNav {
   to: string;
@@ -75,6 +76,7 @@ export default function ClinicLayout() {
               )}
             </div>
             <LanguageButton className="ml-auto" />
+            <CreateMenu />
           </header>
           <ContentScroll className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8">
             <Outlet />

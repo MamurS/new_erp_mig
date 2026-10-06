@@ -9,10 +9,11 @@ const DB_KEY = 'mig.mock.db';
 const SESS_KEY = 'mig.mock.sessions';
 /**
  * Version of the seed and of the stored shape. Bump it when the seed changes in a way a saved state
- * must not survive (2: Latin names, legal form codes, ASCII document numbers): a stored database with
+ * must not survive (2: Latin names, legal form codes, ASCII document numbers; 3: migration batches and the
+ * transfer marks of records): a stored database with
  * another or no version is discarded and the fresh seed is used.
  */
-export const MOCK_DB_VERSION = 2;
+export const MOCK_DB_VERSION = 3;
 
 type Snapshot = Omit<Db, 'sessions'> & { schemaVersion?: number };
 
@@ -27,7 +28,7 @@ export function loadSnapshot(): Db | null {
     }
     const sessions = JSON.parse(sessionStorage.getItem(SESS_KEY) ?? '[]') as Db['sessions'];
     // A snapshot from an older build lacks newer tables: start from a fresh seed instead.
-    if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries) || !Array.isArray(db.policyChanges) || !Array.isArray(db.rebills) || !db.dmsParams || !Array.isArray(db.deals) || !db.ai || !Array.isArray(db.bankPayments) || !Array.isArray(db.statementKeys)) return null;
+    if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries) || !Array.isArray(db.policyChanges) || !Array.isArray(db.rebills) || !db.dmsParams || !Array.isArray(db.deals) || !db.ai || !Array.isArray(db.bankPayments) || !Array.isArray(db.statementKeys) || !Array.isArray(db.migrationBatches)) return null;
     return { ...db, sessions };
   } catch {
     return null;

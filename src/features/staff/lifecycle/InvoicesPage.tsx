@@ -100,7 +100,21 @@ export default function InvoicesPage() {
   };
 
   const columns: Column<InvoiceView>[] = [
-    { key: 'num', header: t('staffLc.contract.invoice'), sortKey: 'number', cell: (i) => <span className="num font-medium">{i.number}</span> },
+    {
+      key: 'num',
+      header: t('staffLc.contract.invoice'),
+      sortKey: 'number',
+      cell: (i) => (
+        <span className="flex flex-col">
+          <span className="num font-medium">{i.number}</span>
+          {i.migration && (
+            <span className="text-[12px] text-muted" title={t('migration.markDetail', { date: formatDate(i.migration.at), name: i.migration.byName })}>
+              {t('migration.mark')} · <span className="num">{t('migration.oldNumberChip', { number: i.externalNumber ?? '—' })}</span>
+            </span>
+          )}
+        </span>
+      ),
+    },
     { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (i) => i.clientName },
     legalFormColumn<InvoiceView>((i) => i.clientLegalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     {

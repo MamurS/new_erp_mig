@@ -33,7 +33,7 @@ import {
 } from '@/shared/schemas/forms';
 import { detectMime } from '@/shared/lib/image';
 import { db, type ChangeRequestRow, type Db } from '../db';
-import { API, audit, body, byLegalForm, byLegalName, conflict, type Ctx, filterLegalForm, forbidden, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route, sortBy } from '../http';
+import { API, audit, body, byLegalForm, byLegalName, conflict, type Ctx, filterLegalForm, forbidden, HttpError, httpErrorOf, notFound, param, q as searchTerm, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { tzIso } from '../time';
 import { toClient } from '../views';
@@ -187,7 +187,7 @@ function overridesFrom(kind: Kind, input: { clauseId: string; text: string }[], 
   });
 }
 
-async function readScan(request: Request): Promise<{ side: Side; bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'application/pdf' }> {
+export async function readScan(request: Request): Promise<{ side: Side; bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'application/pdf' }> {
   let form: FormData;
   try {
     form = await request.formData();
@@ -527,6 +527,9 @@ export const contractHandlers = [
       if (status) list = list.filter((c) => status.split(',').includes(c.status));
       const clientId = url.searchParams.get('clientId');
       if (clientId) list = list.filter((c) => c.clientId === clientId);
+      // `?q=`: the new number, the number in the previous system (transferred contracts) or the client.
+      const term = searchTerm(url);
+      if (term) list = list.filter((c) => c.number.toLowerCase().includes(term) || (c.externalNumber ?? '').toLowerCase().includes(term) || c.clientName.toLowerCase().includes(term));
       const views = filterLegalForm(
         list.map((c) => forViewer(user, contractView(d, c))),
         url,

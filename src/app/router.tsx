@@ -97,6 +97,10 @@ const staffRoutes: RouteObject[] = [
   guarded('admin/users', sectionRoles('/staff/admin/users'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/UsersPage')) }]),
   guarded('admin/ai', sectionRoles('/staff/admin/ai'), [{ index: true, lazy: lazy(() => import('@/features/staff/admin/AiAdminPage')) }]),
   guarded('admin/parameters', sectionRoles('/staff/admin/parameters'), [{ index: true, lazy: lazy(() => import('@/features/staff/pages/ParametersPage')) }]),
+  guarded('admin/migration', sectionRoles('/staff/admin/migration'), [
+    { index: true, lazy: lazy(() => import('@/features/staff/admin/migration/MigrationPage')) },
+    { path: ':batchId', lazy: lazy(() => import('@/features/staff/admin/migration/MigrationBatchPage')) },
+  ]),
 ];
 
 const hrRoutes: RouteObject[] = [

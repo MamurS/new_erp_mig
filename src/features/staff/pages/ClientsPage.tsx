@@ -1,7 +1,7 @@
 import { t, tm, tp, type I18nKey } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDownUp, Columns3, Mail, Plus } from 'lucide-react';
+import { ArrowDownUp, Columns3, Mail } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
@@ -13,6 +13,7 @@ import { useCan } from '@/shared/auth/guards';
 import { CLIENT_STATUS_LABEL, PROGRAM_LABEL } from '@/shared/domain/labels';
 import { formatDateTime, formatMoney, formatMoneyShort, formatNumber, formatPercent } from '@/shared/lib/format';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { cn } from '@/shared/lib/cn';
 import { maskPinfl } from '@/shared/lib/masks';
 import { Button } from '@/shared/ui/button';
@@ -70,14 +71,9 @@ export default function ClientsPage() {
   const canWrite = useCan('clients.write');
   const lossWarn = useDmsParam('lossRatioWarn');
   const [createOpen, setCreateOpen] = useState(false);
-  useTopbar(
-    [{ label: t('staff.clients.title') }],
-    canWrite ? (
-      <Button onClick={() => setCreateOpen(true)}>
-        <Plus className="h-3.5 w-3.5" aria-hidden /> {t('staff.clients.newClient')}
-      </Button>
-    ) : null,
-  );
+  useTopbar([{ label: t('staff.clients.title') }]);
+  // «Новый клиент» starts from «+ Создать» in the top bar.
+  useCreateIntent('client', canWrite, setCreateOpen, true);
   const [f, setF] = useUrlFilters(['view', 'status', 'program', 'managerId', 'form', 'sort', 'page', 'panel'] as const);
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());

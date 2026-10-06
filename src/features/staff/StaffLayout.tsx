@@ -12,13 +12,15 @@ import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@
 import { Breadcrumbs } from '@/shared/ui/page';
 import { t } from '@/i18n';
 import { QUEUE_NAV, STAFF_NAV_GROUP_LABEL, STAFF_NAV_GROUPS, STAFF_SECTIONS } from './nav';
-import { CommandPalette } from './CommandPalette';
+import { CommandPalette, type PaletteMode } from './CommandPalette';
 import { useTopbarState } from './topbar';
+import { CreateMenu } from '@/features/shell/CreateMenu';
 
 export default function StaffLayout() {
   const user = useUser();
   const loc = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<PaletteMode>('search');
   const { crumbs, action } = useTopbarState();
   const dashboard = useDashboard();
 
@@ -26,6 +28,7 @@ export default function StaffLayout() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        setPaletteMode('search');
         setPaletteOpen((v) => !v);
       }
     };
@@ -34,6 +37,10 @@ export default function StaffLayout() {
   }, []);
 
   if (!user) return null;
+  const openSearch = () => {
+    setPaletteMode('search');
+    setPaletteOpen(true);
+  };
   const sections = STAFF_SECTIONS.filter((s) => s.inNav && (s.roles as string[]).includes(user.role));
   // The longest matching section wins: «Резервы» lives under «Отчёты», «Ручная разноска» under «Счета».
   const current = sections.filter((s) => (s.path === '/staff' ? loc.pathname === '/staff' : loc.pathname === s.path || loc.pathname.startsWith(`${s.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]?.path;
@@ -60,7 +67,7 @@ export default function StaffLayout() {
           activePath={current}
           user={{ name: user.displayName, role: ROLE_LABEL[user.role], portal: t('shell.portal.staff') }}
           onLogout={() => void logout()}
-          onSearch={() => setPaletteOpen(true)}
+          onSearch={openSearch}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header data-testid="topbar" className="relative z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
@@ -70,7 +77,7 @@ export default function StaffLayout() {
             </div>
             <button
               type="button"
-              onClick={() => setPaletteOpen(true)}
+              onClick={openSearch}
               className="hidden h-8 w-64 items-center gap-2 rounded-btn border border-border bg-bg px-2 text-muted hover:text-text md:flex"
               aria-label={t('staff.layout.openSearch')}
             >
@@ -78,7 +85,7 @@ export default function StaffLayout() {
               <span className="flex-1 text-left">{t('shell.panel.search')}</span>
               <kbd className="rounded-sm border border-border px-1 text-[10px]">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
             </button>
-            <button type="button" onClick={() => setPaletteOpen(true)} className="rounded-btn p-2 text-muted md:hidden" aria-label={t('staff.layout.openSearch')}>
+            <button type="button" onClick={openSearch} className="rounded-btn p-2 text-muted md:hidden" aria-label={t('staff.layout.openSearch')}>
               <Search className="h-4 w-4" />
             </button>
             <LanguageButton />
@@ -86,12 +93,28 @@ export default function StaffLayout() {
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden /> MFA · VPN
             </span>
             {action}
+            <CreateMenu
+              onCommand={(c) => {
+                if (c === 'pick-insured-for-claim') {
+                  setPaletteMode('claim');
+                  setPaletteOpen(true);
+                }
+              }}
+            />
           </header>
           <ContentScroll className="p-4 lg:p-5">
             <Outlet />
           </ContentScroll>
         </div>
-        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} user={user} />
+        <CommandPalette
+          open={paletteOpen}
+          mode={paletteMode}
+          onOpenChange={(v) => {
+            setPaletteOpen(v);
+            if (!v) setPaletteMode('search');
+          }}
+          user={user}
+        />
         <IdleWatcher />
       </div>
     </SidebarProvider>

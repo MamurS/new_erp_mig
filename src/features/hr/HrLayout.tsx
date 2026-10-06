@@ -7,6 +7,7 @@ import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useHrOverview } from '@/shared/api/queries/hr';
+import { CreateMenu } from '@/features/shell/CreateMenu';
 import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
@@ -62,6 +63,7 @@ export default function HrLayout() {
               )}
             </div>
             <LanguageButton className="ml-auto" />
+            <CreateMenu />
           </header>
           <ContentScroll className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">
             <Outlet />

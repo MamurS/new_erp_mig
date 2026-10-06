@@ -46,6 +46,7 @@ import type {
   WebhookEndpoint,
   Insured,
   Invoice,
+  LimitCategory,
   KpDocument,
   LimitChangeRequest,
   Policy,
@@ -53,6 +54,7 @@ import type {
   StaffUser,
   UUID,
 } from '@/shared/types';
+import type { MigrationBatchStatus, MigrationIssue, MigrationStep, MigrationStepStatus, MigrationTotals } from '@/shared/types/migration';
 
 export interface StaffRow extends StaffUser {
   password: string;
@@ -159,6 +161,8 @@ export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMask
   /** Last change of the person's status (added, excluded) — `updatedSince` of the assistance roster. */
   updatedAt?: string;
   userId: UUID;
+  /** Used limits by category as of the migration date (transferred from the previous system). */
+  migratedUsed?: Partial<Record<LimitCategory, number>>;
 }
 /** Change request of the insured list; personal data of a new person stays on the server only. */
 export interface PolicyChangeRow extends PolicyChange {
@@ -321,6 +325,54 @@ export interface Db {
   // ---- AI coverage check (AI_COVERAGE_SPEC): settings with four-eyes changes, the call log ----
   /** `rebillFlags`: registry line id → reason of the AI precheck flag `ai_disagrees`. */
   ai: { settings: AiSettings; changes: AiSettingsChange[]; logs: AiCallLog[]; rebillFlags: Record<UUID, string> };
+  // ---- transfer of the existing portfolio (/staff/admin/migration) ----
+  migrationBatches: MigrationBatchRow[];
+}
+
+/**
+ * A batch of the portfolio transfer. The parsed files (with personal data) stay on the server; `applied`
+ * lists what the batch created, so it can be rolled back, and the client fields it changed.
+ */
+export interface MigrationBatchRow {
+  id: UUID;
+  seq: number;
+  kind: 'csv' | 'manual';
+  status: MigrationBatchStatus;
+  migrationDate: string;
+  createdAt: string;
+  createdById: UUID;
+  createdByName: string;
+  files: Partial<Record<MigrationStep, { rows: Record<string, string>[]; uploadedAt: string; uploadedByName: string }>>;
+  /** `validRows`: CSV rows that were valid when the step was confirmed (they must stay the same until applied). */
+  steps: Partial<Record<MigrationStep, { status: MigrationStepStatus; excludeErrors: boolean; validRows?: number[] }>>;
+  /** Report of the dry run kept after applying (the files themselves are dropped then). */
+  totals?: Partial<Record<MigrationStep, { fileTotals: MigrationTotals; validTotals: MigrationTotals; errorRows: number; warningRows: number; issues: MigrationIssue[] }>>;
+  submittedAt?: string;
+  decidedAt?: string;
+  decidedById?: UUID;
+  decidedByName?: string;
+  rejectReason?: string;
+  appliedAt?: string;
+  rolledBackAt?: string;
+  rolledBackByName?: string;
+  rollbackReason?: string;
+  applied?: {
+    clientIds: UUID[];
+    dealIds: UUID[];
+    contractIds: UUID[];
+    policyIds: UUID[];
+    insuredIds: UUID[];
+    claimIds: UUID[];
+    invoiceIds: UUID[];
+    documentIds: UUID[];
+    /** Existing clients the batch gave a contract: their fields before, restored by a rollback. */
+    clientsBefore: { id: UUID; fields: Pick<ClientRow, 'activePolicyId' | 'status' | 'program' | 'premium' | 'renewalDate' | 'assistanceId'> }[];
+    /** Limits transferred for persons already in the system (category → amount). */
+    limitsOnExisting: { insuredId: UUID; used: Partial<Record<LimitCategory, number>> }[];
+    limitsCount: number;
+    /** Audit entries existing at the moment of applying: later entries on the batch's records are new actions. */
+    auditMark: string;
+  };
 }
 
 let current: Db | null = null;

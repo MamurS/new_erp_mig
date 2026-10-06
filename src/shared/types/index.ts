@@ -39,6 +39,15 @@ export interface Program {
   limits: Record<LimitCategory, Money>;
 }
 
+/** Record transferred from the previous system by a migration batch («Перенесено из старой системы»). */
+export interface MigrationMark {
+  batchId: UUID;
+  /** When the batch was applied (after the second administrator's confirmation). */
+  at: ISODateTime;
+  /** Administrator who prepared the batch. */
+  byName: string;
+}
+
 export type ClientStatus = 'lead' | 'draft' | 'negotiation' | 'active' | 'renewal' | 'expired';
 
 export interface Client {
@@ -62,6 +71,7 @@ export interface Client {
   requisites?: ClientRequisites;           // реквизиты для договора (LIFECYCLE_SPEC §3)
   estimatedHeadcount?: number;             // ориентировочная численность (лид)
   currentInsurer?: string;                 // текущий страховщик (лид)
+  migration?: MigrationMark;               // перенесён из старой системы
 }
 
 export interface ClientRequisites {
@@ -144,6 +154,8 @@ export interface Insured {
   status: 'active' | 'excluded';
   certificateNumber?: string;              // 'SERT-2026-000123-0001' (LIFECYCLE_SPEC §10)
   contractId?: UUID;
+  externalCertificateNumber?: string;      // номер сертификата в старой системе
+  migration?: MigrationMark;
 }
 
 export type PiiField = 'pinfl' | 'phone' | 'birthDate' | 'email';
@@ -205,6 +217,8 @@ export interface Claim {
   appeal?: ClaimAppeal;
   handledBy?: 'mig' | 'assistance';        // кто рассматривает возмещение (handlesReimbursements)
   receiptFiscal?: ReceiptFiscal;           // фискальные данные чека, распознанные сервером по фото
+  externalNumber?: string;                 // номер убытка в старой системе
+  migration?: MigrationMark;
 }
 
 /** Fiscal data printed on a receipt (Uzbekistan online cash registers). */
@@ -410,7 +424,13 @@ export type AuditAction =
   | 'ai_settings_changed'
   | 'ai_settings_rejected'
   | 'ai_kill_switch'
-  | 'ai_feedback';
+  | 'ai_feedback'
+  | 'migration_validated'
+  | 'migration_submitted'
+  | 'migration_applied'
+  | 'migration_rejected'
+  | 'migration_rolled_back'
+  | 'migration_scan_attached';
 
 export interface AuditEntry {
   id: UUID;
@@ -419,7 +439,7 @@ export interface AuditEntry {
   actorName: string;
   actorRole: Role;
   action: AuditAction;
-  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill' | 'parameter' | 'deal' | 'quote' | 'contract' | 'endorsement' | 'invoice' | 'ai';
+  targetType: 'insured' | 'claim' | 'policy' | 'client' | 'export' | 'user' | 'session' | 'kp' | 'clinic' | 'visit' | 'guarantee' | 'registry' | 'integration' | 'assistance' | 'case' | 'rebill' | 'parameter' | 'deal' | 'quote' | 'contract' | 'endorsement' | 'invoice' | 'ai' | 'migration';
   targetId?: UUID;
   targetLabel?: string;                    // без ПДн: номер полиса или убытка, либо «Застрахованный #a1b2»
   reason?: string;
@@ -454,6 +474,8 @@ export interface Invoice {
   contractId?: UUID;                       // счёт по графику платежей договора (LIFECYCLE_SPEC §9)
   endorsementId?: UUID;                    // счёт на доплату по доп. соглашению
   paid?: Money;                            // оплачено (частичная оплата допустима)
+  externalNumber?: string;                 // номер счёта в старой системе
+  migration?: MigrationMark;
 }
 
 export interface ClientDocument {
@@ -1060,6 +1082,11 @@ export interface Contract {
   policyId?: UUID;
   terminatedAt?: ISODate;
   activatedAt?: ISODateTime;
+  /** Number of the contract in the previous system of MIG (searchable). */
+  externalNumber?: string;
+  migration?: MigrationMark;
+  /** Signed scan attached after the transfer. */
+  migratedScan?: { fileId: UUID; uploadedAt: ISODateTime; uploadedByName: string };
 }
 
 export interface Payment {

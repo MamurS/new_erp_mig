@@ -28,6 +28,7 @@ import { SlaCell } from '../components/cells';
 import { Rich } from '../components/rich';
 import { CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
+import { MigratedBadge } from '../components/MigratedBadge';
 import { useDmsParam } from '@/shared/api/queries/params';
 import { isNearLimit } from '@/shared/domain/limits';
 import { SettlementPanel } from '../claims/SettlementPanel';
@@ -71,6 +72,7 @@ export default function ClaimCardPage() {
             {t('staff.claimCard.sla')}
             <SlaCell claim={c} />
           </p>
+          <MigratedBadge mark={c.migration} oldNumber={c.externalNumber} />
         </div>
         <TransitionButtons claim={c} onPick={setPending} />
       </div>

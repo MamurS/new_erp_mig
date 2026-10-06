@@ -15,6 +15,7 @@ import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@
 import { Breadcrumbs } from '@/shared/ui/page';
 import { Skeleton } from '@/shared/ui/states';
 import { useTopbarState } from '@/features/staff/topbar';
+import { CreateMenu } from '@/features/shell/CreateMenu';
 import { ASSIST_NAV_GROUP_LABEL, ASSIST_NAV_GROUPS, ASSIST_SECTIONS } from './nav';
 import { t } from '@/i18n';
 
@@ -66,6 +67,7 @@ export default function AssistLayout() {
             </div>
             <LanguageButton />
             {action}
+            <CreateMenu />
           </header>
           <ContentScroll className="p-4 lg:p-5">
             <Outlet />

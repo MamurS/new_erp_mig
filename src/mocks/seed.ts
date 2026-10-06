@@ -845,6 +845,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     changeRequests: [],
     endorsements: [],
     smsOutbox: [],
+    migrationBatches: [],
   };
   // Core helpers used below read the DMS parameters (number templates) through db(): let them see the
   // database being seeded instead of starting another seed.

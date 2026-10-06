@@ -51,6 +51,9 @@ const DEMO_TOOLS = [
   'Решить все ГП в пределах полномочий',
   'Выставить счёт МИГ за месяц',
   'assist-simulator',
+  // Demo files of the portfolio transfer
+  'migration-samples',
+  'Navoiy Textile Group',
 ];
 
 describe('build without VITE_DEMO_MODE', () => {

@@ -58,6 +58,8 @@ export function toInsured(i: InsuredRow): Insured {
     attachedClinicId: i.attachedClinicId,
     insuredFrom: i.insuredFrom,
     status: i.status,
+    ...(i.externalCertificateNumber ? { externalCertificateNumber: i.externalCertificateNumber } : {}),
+    ...(i.migration ? { migration: i.migration } : {}),
   };
 }
 
@@ -120,6 +122,8 @@ export function limitsFor(d: Db, i: InsuredRow): LimitUsage[] {
     if (parseIso(c.serviceDate) < from - 7 * DAY) continue;
     used[CLAIM_TO_LIMIT[c.category]] += c.amountApproved ?? c.amountClaimed;
   }
+  // Used before the transfer from the previous system (as of the migration date) counts too.
+  for (const [cat, amount] of Object.entries(i.migratedUsed ?? {}) as [LimitCategory, number][]) used[cat] += amount;
   // Lines accepted by an assistance count as used; approved guarantee letters reserve the limit.
   const extra = limitExtras(d, i, from);
   return (['outpatient', 'dental', 'medicines', 'inpatient'] as const).map((category) => ({

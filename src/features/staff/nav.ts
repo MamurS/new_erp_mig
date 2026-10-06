@@ -1,4 +1,4 @@
-import { BadgeCheck, Banknote, BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FilePen, FileSignature, FileText, Handshake, Hospital, Kanban, LayoutDashboard, Landmark, PiggyBank, Receipt, ReceiptText, ScrollText, Settings2, SlidersHorizontal, Sparkles, type LucideIcon, UserPlus, Users } from 'lucide-react';
+import { BadgeCheck, FolderInput, Banknote, BarChart3, Building2, CalendarClock, ClipboardList, FileCheck, FilePen, FileSignature, FileText, Handshake, Hospital, Kanban, LayoutDashboard, Landmark, PiggyBank, Receipt, ReceiptText, ScrollText, Settings2, SlidersHorizontal, Sparkles, type LucideIcon, UserPlus, Users } from 'lucide-react';
 import { defineLabels, t, type I18nKey } from '@/i18n';
 import type { StaffRole } from '@/shared/types';
 import type { QueueType } from '@/shared/types/dto';
@@ -63,6 +63,7 @@ export const STAFF_SECTIONS: StaffSection[] = [
   section('/staff/admin/users', 'users', Users, ['admin'], true, 'admin'),
   section('/staff/admin/parameters', 'parameters', Settings2, ALL, true, 'admin'),
   section('/staff/admin/ai', 'ai', Sparkles, ['admin'], true, 'admin'),
+  section('/staff/admin/migration', 'migration', FolderInput, ['admin'], true, 'admin'),
 ];
 
 export const INSURED_CARD_ROLES: StaffRole[] = ['operator', 'underwriter', 'doctor_expert', 'claims_officer'];

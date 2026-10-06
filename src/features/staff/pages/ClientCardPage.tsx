@@ -26,6 +26,7 @@ import { RenewalCell } from '../components/cells';
 import { monthShort } from '../components/months';
 import { INSURED_CARD_ROLES } from '../nav';
 import { useTopbar } from '../topbar';
+import { MigratedBadge } from '../components/MigratedBadge';
 import { ClientDocumentsTable } from '../components/ClientDocumentsTable';
 import { HrLetterDialog } from '../components/HrLetterDialog';
 import { AssistanceBlock } from '../assistance/AssistanceBlock';
@@ -70,6 +71,7 @@ export default function ClientCardPage() {
               <span className="num">{c.inn}</span> · <StatusDot tone={CLIENT_TONE[c.status]}>{CLIENT_STATUS_LABEL[c.status]}</StatusDot>
               {t('staff.clientCard.manager', { name: c.managerName })}
             </p>
+            <MigratedBadge mark={c.migration} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -1,5 +1,6 @@
 import { common } from './common';
 import { shell } from './shell';
+import { create } from './create';
 import { errors } from './errors';
 import { v } from './v';
 import { labels } from './labels';
@@ -18,10 +19,12 @@ import { kp } from './kp';
 import { ai } from './ai';
 import { coverage } from './coverage';
 import { srv } from './srv';
+import { migration } from './migration';
 
 export const en = {
   ...common,
   ...shell,
+  ...create,
   ...errors,
   ...v,
   ...labels,
@@ -40,4 +43,5 @@ export const en = {
   ...ai,
   ...coverage,
   ...srv,
+  ...migration,
 };

@@ -59,4 +59,7 @@ export const demo: Translation<typeof Ru> = {
   'demo.assist.noUnpaid': 'Toʻlanmagan qabul qilingan qatorlar yoʻq',
   'demo.assist.payDone': 'Klinikaga toʻlov belgilandi: {n} ta qator',
   'demo.assist.rebillDone': '{number} hisobi MIGga chiqarildi: {n} ta qator',
+  'demo.migration.title': 'Demo: koʻchirish fayllari',
+  'demo.migration.hint': 'Eski tizimning tayyor fayllari: 5 mijoz, 5 shartnoma, 200 sugʻurtalangan, limitlar, 10 ochiq zarar va hisoblar, tekshiruv hisoboti uchun bir nechta xatoli qatorlar bilan. Koʻchirish sanasi — {date}.',
+  'demo.migration.download': 'Demo fayl: {step}',
 };

@@ -27,6 +27,7 @@ import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims
 import { addDaysISO, formatDate, formatDateTime, formatMoney, formatTime, todayISO } from '@/shared/lib/format';
 import { maskMoney, parseMoney } from '@/shared/lib/masks';
 import { useDocumentTitle } from '@/shared/lib/hooks';
+import { useCreateIntent } from '@/shared/lib/createIntent';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
 import { Chip, StatusDot } from '@/shared/ui/chips';
@@ -43,6 +44,7 @@ import { RevealField } from '../components/RevealField';
 import { LimitRequestDialog } from '../components/LimitRequestDialog';
 import { APPT_TONE, CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
+import { MigratedBadge } from '../components/MigratedBadge';
 import { TableScroll } from '@/shared/ui/table-scroll';
 
 export default function InsuredCardPage() {
@@ -57,6 +59,7 @@ export default function InsuredCardPage() {
   const canLimit = useCan('limits.request_change');
   const canClaims = useCan('claims.read');
   const [dialog, setDialog] = useState<null | 'book' | 'letter' | 'claim' | 'limit'>(null);
+  useCreateIntent('claim', canCreateClaim, setDialog, 'claim');
   const claims = useInsuredClaims(insuredId);
   const openClaim = claims.data?.find((c) => ['new', 'review', 'medical_review'].includes(c.status));
 
@@ -80,6 +83,7 @@ export default function InsuredCardPage() {
             <Chip kind={p.status === 'active' ? 'success' : 'neutral'}>{p.status === 'active' ? t('staff.clientCard.insuredActive') : t('staff.clientCard.insuredExcluded')}</Chip>
             {p.myIdVerified && <Chip kind="accent">MyID ✓</Chip>}
             {p.appStatus === 'active' ? <Chip kind="sky">{t('staff.insuredCard.inApp')}</Chip> : <Chip>{t('staff.insuredCard.notInApp')}</Chip>}
+            <MigratedBadge mark={p.migration} oldCertificate={p.externalCertificateNumber} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
