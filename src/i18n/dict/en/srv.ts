@@ -365,4 +365,10 @@ export const srv: Translation<typeof Ru> = {
   'srv.time.chooseFuture': 'Choose a time in the future',
   'srv.users.emailInUse': 'Email is already in use',
   'srv.users.emailTaken': 'A user with this email already exists',
+  'srv.family.consentAdultsOnly': 'Only an adult family member can give this permission in their own profile',
+  'srv.family.employeeOnly': 'Only the employee can add a family member',
+  'srv.family.noEmployee': 'The employee is not among the company\'s insured persons',
+  'srv.family.phoneTaken': 'This phone is already used to sign in by another insured person',
+  'srv.family.requestDecided': 'The request has already been decided',
+  'srv.policy.principalNotInList': 'No employee with this PINFL in the list',
 };

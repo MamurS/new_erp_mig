@@ -17,7 +17,7 @@ import type { StubRenderInput } from './render';
  * Documents keep their own language (Russian) whatever the interface language is: labels are read
  * from the Russian dictionary, dates and money use the fixed document formats.
  */
-const docLabel = (prefix: 'labels.limitCategory' | 'labels.program' | 'labels.role', id: string): string =>
+const docLabel = (prefix: 'labels.limitCategory' | 'labels.program' | 'labels.role' | 'labels.censusRelation', id: string): string =>
   translate('ru', `${prefix}.${id}` as I18nKey);
 
 /**
@@ -91,7 +91,8 @@ export function contractDocument(c: ContractView, opts: DocBuildOptions = {}): S
     signatures: { mig: sideLine(c.signing.mig), client: sideLine(c.signing.client) },
     tables: {
       program: (Object.keys(limits) as LimitCategory[]).map((k) => [docLabel('labels.limitCategory', k), formatMoney(limits[k])]),
-      insured: c.insuredRows.map((x, i) => [String(i + 1), x.fullName, x.position, String(x.familyMembers)]),
+      // A row per person with the relation (FAMILY_SPEC «Котировка и договор»).
+      insured: c.insuredRows.map((x, i) => [String(i + 1), x.fullName, x.position, docLabel('labels.censusRelation', x.relation)]),
       schedule: c.params.paymentSchedule.map((p, i) => [String(i + 1), formatDate(p.dueDate), formatMoney(p.amount)]),
     },
   };

@@ -536,4 +536,7 @@ export const staff = {
   'staff.params.history': 'История изменений',
   'staff.params.decidedApplied': ' · подтвердил {name}',
   'staff.params.decidedRejected': ' · отклонил {name}',
+  'staff.insuredCard.family': 'Семья',
+  'staff.insuredCard.relation': 'Кем приходится',
+  'staff.insuredCard.student': 'студент',
 } satisfies Record<string, string>;

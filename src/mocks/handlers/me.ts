@@ -1,14 +1,18 @@
 import { msg } from '@/i18n/core';
 import { delay, http } from 'msw';
-import { chatSchema, consentSchema, myAppointmentSchema, myClaimSchema } from '@/shared/schemas/forms';
+import { chatSchema, consentSchema, familyConsentSchema, familyRequestSchema, myAppointmentSchema, myClaimSchema, payoutCardSchema } from '@/shared/schemas/forms';
 import type { SessionUser } from '@/shared/types';
-import type { AssistanceBrief, CardToken, MePolicy, MeProfile, RecognizeResult } from '@/shared/types/dto';
+import type { AssistanceBrief, CardToken, FamilyProfile, MePolicy, MeProfile, RecognizeResult } from '@/shared/types/dto';
+import { can } from '@/shared/auth/permissions';
+import { isAdultMember } from '@/shared/domain/family';
 import { detectMime, RECEIPT_LIMITS } from '@/shared/lib/image';
 import { CARD_TOKEN_TTL_MS, formatShortCode, shortCodeFrom } from '@/shared/domain/clinics';
 import { createAppointment, emitWebhook, pushEvent } from '../clinic-core';
 import { currentAssistance } from '../assistance-core';
-import { db, type ClaimRow, type InsuredRow } from '../db';
-import { API, body, conflict, forbidden, HttpError, notFound, param, requireSession, route, validate } from '../http';
+import { db, type ClaimRow, type Db, type FamilyRequestRow, type InsuredRow } from '../db';
+import { API, audit, body, conflict, forbidden, HttpError, insuredLabel, notFound, param, requireSession, route, validate } from '../http';
+import { accessOf, ageLimits, familyOf, hasConsent, isDependent, payoutCardOf, personFor, personIdParam, todayIso } from '../family-core';
+import { toFamilyRequest } from '../family-requests';
 import { maskCard, maskPhone, maskPinfl } from '../mask';
 import { scheduleSaveDb } from '../persist';
 import { randomId, randomToken } from '../rng';
@@ -26,6 +30,42 @@ function requireInsured(request: Request): { user: SessionUser; me: InsuredRow }
   const me = db().insured.find((i) => i.id === user.insuredId);
   if (!me) throw notFound();
   return { user, me };
+}
+
+/** An appointment of a person whose medical data the signed-in person may see; anything else is 404. */
+function myAppointment(d: Db, me: InsuredRow, id: string) {
+  const a = d.appointments.find((x) => x.id === id);
+  const who = a ? d.insured.find((x) => x.id === a.insuredId) : undefined;
+  if (!a || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
+  return a;
+}
+
+/** A claim of a person whose medical data the signed-in person may see; anything else is 404. */
+export function myClaimOf(d: Db, me: InsuredRow, id: string): { c: ClaimRow; who: InsuredRow } {
+  const c = d.claims.find((x) => x.id === id);
+  const who = c ? d.insured.find((x) => x.id === c.insuredId) : undefined;
+  if (!c || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
+  return { c, who };
+}
+
+function firstName(fullName: string): string {
+  return fullName.split(' ')[1] ?? fullName;
+}
+
+function profileOf(d: Db, me: InsuredRow, p: InsuredRow): FamilyProfile | null {
+  const access = accessOf(d, me, p);
+  if (access === 'none') return null;
+  return {
+    id: p.id,
+    fullName: p.fullName,
+    firstName: firstName(p.fullName),
+    relation: p.relation,
+    access,
+    status: p.status,
+    ...(p.certificateNumber ? { certificateNumber: p.certificateNumber } : {}),
+    dependentChild: isDependent(p),
+    ownLogin: !!p.phone && isAdultMember(p, todayIso(), ageLimits()),
+  };
 }
 
 const REPLIES = [
@@ -63,8 +103,11 @@ export const meHandlers = [
         companyName: me.clientName,
         phoneMasked: maskPhone(me.phone),
         pinflMasked: maskPinfl(me.pinfl),
-        payoutCardMasked: maskCard(me.payoutCard),
+        payoutCardMasked: maskCard(payoutCardOf(db(), me).card),
         consentGivenAt: me.consentGivenAt,
+        relation: me.relation,
+        payoutCardOwn: payoutCardOf(db(), me).own,
+        ...(me.principalId ? { familyConsentGranted: hasConsent(db(), me.id, me.principalId) } : {}),
       };
       return out;
     }),
@@ -80,31 +123,120 @@ export const meHandlers = [
   ),
   http.get(
     `${API}/me/policy`,
-    route(({ request }) => {
+    route(({ request, url }) => {
       const { me } = requireInsured(request);
-      const p = db().policies.find((x) => x.id === me.policyId)!;
+      const d = db();
+      const { person } = personFor(d, me, personIdParam(url), 'card');
+      const p = d.policies.find((x) => x.id === person.policyId)!;
       const out: MePolicy = {
         number: p.number,
         program: p.program,
         programName: PROGRAMS[p.program].name,
-        companyName: me.clientName,
+        companyName: person.clientName,
         startDate: p.startDate,
         endDate: p.endDate,
         limits: PROGRAMS[p.program].limits,
-        ...(me.certificateNumber ? { certificateNumber: me.certificateNumber } : {}),
+        ...(person.certificateNumber ? { certificateNumber: person.certificateNumber } : {}),
       };
       return out;
     }),
   ),
   http.get(
     `${API}/me/limits`,
-    route(({ request }) => limitsFor(db(), requireInsured(request).me)),
+    route(({ request, url }) => {
+      const { me } = requireInsured(request);
+      const d = db();
+      return limitsFor(d, personFor(d, me, personIdParam(url), 'medical').person);
+    }),
   ),
+  // ---- family members (FAMILY_SPEC): the profiles of the switcher, consent, payout card, add requests ----
   http.get(
-    `${API}/me/card-token`,
+    `${API}/me/family`,
     route(({ request }) => {
       const { me } = requireInsured(request);
       const d = db();
+      const people = me.relation === 'employee' ? [me, ...familyOf(d, me.id).filter((x) => x.status === 'active')] : [me];
+      return people.map((p) => profileOf(d, me, p)).filter((p): p is FamilyProfile => !!p);
+    }),
+  ),
+  http.post(
+    `${API}/me/family/consent`,
+    route(async ({ request }) => {
+      const { user, me } = requireInsured(request);
+      if (!can(user, 'family.self_service', { insuredId: me.id })) throw forbidden();
+      // Only an adult family member decides about their own data; the employee and a child have nothing to grant.
+      if (!me.principalId || !isAdultMember(me, todayIso(), ageLimits())) throw conflict('srv.family.consentAdultsOnly');
+      const { granted } = await body(request, familyConsentSchema);
+      const d = db();
+      const now = tzIso(Date.now());
+      const active = d.familyConsents.find((c) => c.ownerId === me.id && c.viewerId === me.principalId && !c.revokedAt);
+      if (granted && !active) d.familyConsents.unshift({ id: randomId(), ownerId: me.id, viewerId: me.principalId, grantedAt: now });
+      if (!granted && active) active.revokedAt = now;
+      if (granted !== !!active) audit(user, granted ? 'family_consent_granted' : 'family_consent_revoked', { targetType: 'insured', targetId: me.id, targetLabel: insuredLabel(me.id) });
+      return { granted };
+    }),
+  ),
+  http.post(
+    `${API}/me/payout-card`,
+    route(async ({ request }) => {
+      const { user, me } = requireInsured(request);
+      if (!can(user, 'family.self_service', { insuredId: me.id })) throw forbidden();
+      const { card } = await body(request, payoutCardSchema);
+      // The employee's card is the default of the family: only a family member may go back to it.
+      if (card === null && me.relation === 'employee') throw new HttpError(422, 'validation', 'errors.validation', { fields: { card: msg('v.cardFormat') } });
+      me.payoutCard = card ?? '';
+      audit(user, 'payout_card_changed', { targetType: 'insured', targetId: me.id, targetLabel: insuredLabel(me.id) });
+      const { card: current, own } = payoutCardOf(db(), me);
+      return { payoutCardMasked: maskCard(current), payoutCardOwn: own };
+    }),
+  ),
+  http.get(
+    `${API}/me/family/requests`,
+    route(({ request }) => {
+      const { me } = requireInsured(request);
+      const d = db();
+      return d.familyRequests.filter((r) => r.employeeId === me.id).map((r) => toFamilyRequest(d, r));
+    }),
+  ),
+  http.post(
+    `${API}/me/family/requests`,
+    route(async ({ request }) => {
+      const { user, me } = requireInsured(request);
+      if (!can(user, 'family.self_service', { insuredId: me.id })) throw forbidden();
+      if (me.relation !== 'employee') throw conflict('srv.family.employeeOnly');
+      const input = await body(request, familyRequestSchema);
+      const d = db();
+      if (d.insured.some((i) => i.pinfl === input.pinfl && i.clientId === me.clientId && i.status === 'active')) {
+        throw new HttpError(409, 'conflict', 'srv.hr.pinflInsured', { fields: { pinfl: msg('srv.hr.alreadyListed') } });
+      }
+      if (d.familyRequests.some((r) => r.pinfl === input.pinfl && r.status === 'pending') || d.policyChanges.some((c) => c.status === 'pending' && c.newPerson?.pinfl === input.pinfl)) {
+        throw new HttpError(409, 'conflict', 'srv.policyChanges.alreadySent', { fields: { pinfl: msg('srv.policyChanges.sentShort') } });
+      }
+      const now = tzIso(Date.now());
+      const row: FamilyRequestRow = {
+        id: randomId(),
+        employeeId: me.id,
+        clientId: me.clientId,
+        fullName: input.fullName,
+        birthDate: input.birthDate,
+        pinfl: input.pinfl,
+        relation: input.relation,
+        ...(input.isStudent ? { isStudent: true } : {}),
+        consentAt: now,
+        status: 'pending',
+        createdAt: now,
+      };
+      d.familyRequests.unshift(row);
+      audit(user, 'family_request_created', { targetType: 'insured', targetId: me.id, targetLabel: insuredLabel(me.id) });
+      return toFamilyRequest(d, row);
+    }),
+  ),
+  http.get(
+    `${API}/me/card-token`,
+    route(({ request, url }) => {
+      const { me: viewer } = requireInsured(request);
+      const d = db();
+      const me = personFor(d, viewer, personIdParam(url), 'card').person;
       const now = Date.now();
       const bytes = new Uint8Array(8);
       crypto.getRandomValues(bytes);
@@ -120,21 +252,23 @@ export const meHandlers = [
   ),
   http.get(
     `${API}/me/claims`,
-    route(({ request }) => {
-      const { me } = requireInsured(request);
-      return db()
-        .claims.filter((c) => c.insuredId === me.id)
+    route(({ request, url }) => {
+      const { me: viewer } = requireInsured(request);
+      const d = db();
+      const me = personFor(d, viewer, personIdParam(url), 'medical').person;
+      return d.claims
+        .filter((c) => c.insuredId === me.id)
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-        .map((c) => toMyClaim(c, me));
+        .map((c) => toMyClaim(d, c, me));
     }),
   ),
   http.get(
     `${API}/me/claims/:id`,
     route((ctx) => {
       const { me } = requireInsured(ctx.request);
-      const c = db().claims.find((x) => x.id === param(ctx, 'id'));
-      if (!c || c.insuredId !== me.id) throw notFound();
-      return toMyClaim(c, me);
+      const d = db();
+      const { c, who } = myClaimOf(d, me, param(ctx, 'id'));
+      return toMyClaim(d, c, who);
     }),
   ),
   http.post(
@@ -153,8 +287,10 @@ export const meHandlers = [
   ),
   http.post(
     `${API}/me/claims`,
-    route(async ({ request }) => {
-      const { me } = requireInsured(request);
+    route(async ({ request, url }) => {
+      const { me: viewer } = requireInsured(request);
+      // A receipt for a family member is filed by the employee (a child, or an adult who allowed it).
+      const me = personFor(db(), viewer, personIdParam(url), 'medical').person;
       const form = await readForm(request);
       const files = form.getAll('files').filter((f): f is File => f instanceof File);
       if (files.length === 0) throw new HttpError(422, 'validation', 'srv.receipt.addPhoto', { fields: { files: msg('srv.receipt.addPhoto') } });
@@ -203,24 +339,26 @@ export const meHandlers = [
       };
       d.claims.unshift(claim);
       refreshFlags(d, claim);
-      return toMyClaim(claim, me);
+      return toMyClaim(d, claim, me);
     }),
   ),
   http.get(
     `${API}/me/appointments`,
-    route(({ request }) => {
-      const { me } = requireInsured(request);
-      return db()
-        .appointments.filter((a) => a.insuredId === me.id)
-        .sort((a, b) => (a.startsAt < b.startsAt ? 1 : -1));
+    route(({ request, url }) => {
+      const { me: viewer } = requireInsured(request);
+      const d = db();
+      const me = personFor(d, viewer, personIdParam(url), 'medical').person;
+      return d.appointments.filter((a) => a.insuredId === me.id).sort((a, b) => (a.startsAt < b.startsAt ? 1 : -1));
     }),
   ),
   http.post(
     `${API}/me/appointments`,
-    route(async ({ request }) => {
-      const { me } = requireInsured(request);
+    route(async ({ request, url }) => {
+      const { me: viewer } = requireInsured(request);
+      const d = db();
+      const me = personFor(d, viewer, personIdParam(url), 'medical').person;
       const input = await body(request, myAppointmentSchema);
-      const a = await createAppointment(db(), me, input);
+      const a = await createAppointment(d, me, input);
       return a;
     }),
   ),
@@ -229,8 +367,7 @@ export const meHandlers = [
     route(async (ctx) => {
       const { me } = requireInsured(ctx.request);
       const d = db();
-      const a = d.appointments.find((x) => x.id === param(ctx, 'id'));
-      if (!a || a.insuredId !== me.id) throw notFound();
+      const a = myAppointment(d, me, param(ctx, 'id'));
       if (a.status !== 'requested' && a.status !== 'confirmed') throw conflict('srv.appointment.cannotCancel');
       a.status = 'cancelled';
       a.proposedStartsAt = undefined;
@@ -244,8 +381,7 @@ export const meHandlers = [
     route((ctx) => {
       const { me } = requireInsured(ctx.request);
       const d = db();
-      const a = d.appointments.find((x) => x.id === param(ctx, 'id'));
-      if (!a || a.insuredId !== me.id) throw notFound();
+      const a = myAppointment(d, me, param(ctx, 'id'));
       if (a.status !== 'requested' || !a.proposedStartsAt) throw conflict('srv.appointment.noProposal');
       a.startsAt = a.proposedStartsAt;
       a.proposedStartsAt = undefined;

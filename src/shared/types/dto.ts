@@ -35,6 +35,9 @@ import type {
   ISODate,
   ISODateTime,
   Insured,
+  InsuredRelation,
+  FamilyMemberBrief,
+  FamilyRelation,
   Invoice,
   KpDocument,
   KpParams,
@@ -121,7 +124,8 @@ export type QueueType =
   | 'param_change'
   | 'authority_change'
   | 'ai_change'
-  | 'integration_error';
+  | 'integration_error'
+  | 'age_limit';
 export interface QueueItem {
   id: UUID;
   type: QueueType;
@@ -135,7 +139,7 @@ export interface QueueItem {
   /** Client id for renewal rows (offer is prepared on the client's active policy). */
   policyId?: UUID;
   /** What `entityId` points to when the type alone does not say (payouts, scans). */
-  subject?: 'claim' | 'registry' | 'contract' | 'endorsement';
+  subject?: 'claim' | 'registry' | 'contract' | 'endorsement' | 'insured';
   /** Legal form of `who` when the row's subject is a legal entity (client, clinic, assistance, payer). */
   legalForm?: LegalFormCode;
 }
@@ -209,8 +213,8 @@ export interface InsuredDetail extends Insured {
   emailMasked: string;
 }
 /** accountant sees only name-level data. */
-export type InsuredListItem = Pick<Insured, 'id' | 'fullName' | 'clientId' | 'clientName' | 'policyId' | 'position' | 'status' | 'appStatus'> &
-  Partial<Pick<Insured, 'pinflMasked' | 'phoneMasked' | 'birthDateMasked'>>;
+export type InsuredListItem = Pick<Insured, 'id' | 'fullName' | 'clientId' | 'clientName' | 'policyId' | 'position' | 'status' | 'appStatus' | 'relation'> &
+  Partial<Pick<Insured, 'pinflMasked' | 'phoneMasked' | 'birthDateMasked' | 'principalId' | 'principalName'>>;
 export interface RevealResponse {
   value: string;
   expiresInSec: number;
@@ -295,7 +299,8 @@ export interface HrEmployee {
   position: string;
   program: ProgramCode;
   insuredFrom: ISODate;
-  familyMembersCount: number;
+  /** People of the employee's family on the policy (names and relation only, no medical data). */
+  family: FamilyMemberBrief[];
   appStatus: AppStatus;
   /** pending / rejected: a request of HR that MIG has not approved (POLICY_SPEC §5.1). */
   status: 'active' | 'excluded' | 'pending' | 'rejected';
@@ -340,6 +345,12 @@ export interface MeProfile {
   pinflMasked: string;
   payoutCardMasked: string;
   consentGivenAt?: ISODateTime;
+  /** Who the signed-in person is to the policy (an adult family member has an own login). */
+  relation: InsuredRelation;
+  /** false: reimbursements go to the employee's card (default for a family member). */
+  payoutCardOwn: boolean;
+  /** An adult family member: the employee may see this person's claims and appointments. */
+  familyConsentGranted?: boolean;
 }
 export interface MePolicy {
   number: string;
@@ -702,7 +713,7 @@ export interface ContractView extends Contract {
   migSignatory: SignatoryOption | null;
   signatories: SignatoryOption[];
   /** Appendix 2 without PINFL and phones. */
-  insuredRows: { fullName: string; position: string; familyMembers: number }[];
+  insuredRows: { fullName: string; position: string; relation: InsuredRelation }[];
   invoices: Invoice[];
   payments: Payment[];
   endorsements: EndorsementSummary[];
@@ -881,4 +892,65 @@ export interface AiGoldenResult {
   correct: number;
   accuracy: number;
   errors: { text: string; expectedCodes: string[]; gotCodes: string[]; expectedDecision: CoverageVerdictDecision; gotDecision: CoverageVerdictDecision }[];
+}
+
+// ---- family members (FAMILY_SPEC) ----
+/**
+ * What the signed-in insured person may see about a person of the family: `self`; `full` — a child under the
+ * age limit, or an adult who allowed it; `basic` — an adult family member: the fact of insurance, the
+ * certificate and the QR only.
+ */
+export type FamilyAccess = 'self' | 'full' | 'basic';
+/** GET /api/me/family: the profiles the app can switch between (the signed-in person first). */
+export interface FamilyProfile {
+  id: UUID;
+  fullName: string;
+  firstName: string;
+  relation: InsuredRelation;
+  access: FamilyAccess;
+  status: 'active' | 'excluded';
+  certificateNumber?: string;
+  /** A child under the age limit (`maxChildAge`, `studentMaxAge` for a student): lives in the parent's app. */
+  dependentChild: boolean;
+  /** The person signs in with an own phone (an adult family member). */
+  ownLogin: boolean;
+}
+export type FamilyRequestStatus = 'pending' | 'approved' | 'rejected';
+/** A family member the employee asked to add from the app; HR approves it into a change request. */
+export interface FamilyRequest {
+  id: UUID;
+  employeeId: UUID;
+  employeeName: string;
+  fullName: string;
+  relation: FamilyRelation;
+  birthDateMasked: string;
+  pinflMasked: string;
+  isStudent?: boolean;
+  /** Age on the day of the request (the premium is by the age group). */
+  age: number;
+  status: FamilyRequestStatus;
+  createdAt: ISODateTime;
+  consentAt: ISODateTime;
+  decidedAt?: ISODateTime;
+  decidedByName?: string;
+  rejectionReason?: string;
+  /** The change request created on approval (POLICY_SPEC §5.1). */
+  policyChangeId?: UUID;
+}
+/** GET /api/hr/family: family members of the company's employees, without medical data. */
+export interface HrFamilyMember {
+  id: UUID;
+  fullName: string;
+  relation: FamilyRelation;
+  employeeId: UUID;
+  employeeName: string;
+  /** pending / rejected: an HR request MIG has not approved yet. */
+  status: 'active' | 'excluded' | 'pending' | 'rejected';
+  insuredFrom: ISODate;
+  certificateNumber?: string;
+  isStudent?: boolean;
+  /** A child that reached the age limit: MIG decides on the exclusion (no automatic exclusion). */
+  overAgeLimit?: boolean;
+  appStatus: AppStatus;
+  rejectionReason?: string;
 }

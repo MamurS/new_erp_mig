@@ -363,4 +363,10 @@ export const srv = {
   'srv.time.chooseFuture': 'Выберите время в будущем',
   'srv.users.emailInUse': 'Email уже используется',
   'srv.users.emailTaken': 'Пользователь с таким email уже есть',
+  'srv.family.consentAdultsOnly': 'Разрешение даёт только взрослый член семьи в своём профиле',
+  'srv.family.employeeOnly': 'Добавить члена семьи может только сотрудник',
+  'srv.family.noEmployee': 'Сотрудник не найден среди застрахованных компании',
+  'srv.family.phoneTaken': 'Этот телефон уже используется для входа другого застрахованного',
+  'srv.family.requestDecided': 'По заявке уже принято решение',
+  'srv.policy.principalNotInList': 'Сотрудник с этим ПИНФЛ не найден в списке',
 } satisfies Record<string, string>;

@@ -166,6 +166,8 @@ const AI_TABLE: Record<string, string> = {
 const AI_ACTIONS = Object.keys(AI_TABLE) as Action[];
 /** Transfer of the existing portfolio (DECISIONS: «Перенос портфеля»): admin only, the second admin applies. */
 const MIGRATION_ACTIONS: Action[] = ['migration.manage', 'migration.approve'];
+/** Family members (FAMILY_SPEC, DECISIONS «Члены семьи»): the insured app's self-service, HR's decision on app requests. */
+const FAMILY_ACTIONS: Action[] = ['family.self_service', 'family.requests.decide'];
 const lifecycleRows = [...multi(LIFECYCLE_TABLE), ...multi(LIFECYCLE_READ_TABLE)];
 const rows = parse(TABLE);
 const paramRows = parse(PARAMS_TABLE);
@@ -185,7 +187,7 @@ describe('permissions matrix (SPEC §4)', () => {
     const earlier = [...rows, ...clinicRows, ...policyRows, ...assistRows, ...paramRows].map((r) => r.action);
     // LIFECYCLE §14 also restates `kp.send` and `rebills.review` of the earlier tables.
     const added = lifecycleRows.map((r) => r.action).filter((a) => !earlier.includes(a));
-    expect([...earlier, ...added, ...AI_ACTIONS, ...MIGRATION_ACTIONS].sort()).toEqual([...ACTIONS].sort());
+    expect([...earlier, ...added, ...AI_ACTIONS, ...MIGRATION_ACTIONS, ...FAMILY_ACTIONS].sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -505,5 +507,19 @@ describe('claim registration (SPEC §4 `claims.create` + DECISIONS: «Регис
   it('the claims officer registers the claim together with its reserve; the operator has no reserve right', () => {
     expect(can(userFor('claims_officer'), 'claims.reserves')).toBe(true);
     expect(can(userFor('operator'), 'claims.reserves')).toBe(false);
+  });
+});
+
+describe('family members permissions (FAMILY_SPEC)', () => {
+  const ALL: Role[] = [...ROLES, ...ASSIST_ROLES, 'sales_manager', 'legal', 'claims_officer'];
+  it('the self-service of the app: the insured person only, for their own record', () => {
+    for (const role of ALL) expect(can(userFor(role), 'family.self_service'), role).toBe(role === 'insured');
+    expect(can(userFor('insured'), 'family.self_service', { insuredId: INSURED })).toBe(true);
+    expect(can(userFor('insured'), 'family.self_service', { insuredId: OTHER_INSURED })).toBe(false);
+  });
+  it('requests from the app are decided by HR of the company only', () => {
+    for (const role of ALL) expect(can(userFor(role), 'family.requests.decide'), role).toBe(role === 'hr');
+    expect(can(userFor('hr'), 'family.requests.decide', { companyId: COMPANY })).toBe(true);
+    expect(can(userFor('hr'), 'family.requests.decide', { companyId: OTHER_COMPANY })).toBe(false);
   });
 });

@@ -8,6 +8,8 @@ export function maskPinfl(pinfl: string): string {
 /** `+998901234567` → `+998 •• ••• •• 67` */
 export function maskPhone(phone: string): string {
   const d = phone.replace(/\D/g, '');
+  // A child without an own phone: nothing to show.
+  if (!d) return '';
   return `+998 ${DOT.repeat(2)} ${DOT.repeat(3)} ${DOT.repeat(2)} ${d.slice(-2)}`;
 }
 

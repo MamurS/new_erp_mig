@@ -13,7 +13,12 @@ export const BASE_TARIFF: Record<ProgramCode, Money> = {
 export const FAMILY_SHARE = 0.8;
 export const POLICY_CSV_MAX_ROWS = 5000;
 export const POLICY_CSV_MAX_BYTES = 5 * 1024 * 1024;
-export const POLICY_CSV_HEADER = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'familyMembers'] as const;
+/**
+ * A row per person (FAMILY_SPEC): a family member has `relation` (spouse, child, parent, other) and the employee's
+ * PINFL in `principal_pinfl`; `student` = 1 for a child studying full time. Phone and position are optional for a
+ * family member.
+ */
+export const POLICY_CSV_HEADER = ['fullName', 'birthDate', 'pinfl', 'phone', 'position', 'relation', 'principal_pinfl', 'student'] as const;
 /** A policy that starts later than this is issued as a draft. */
 export const DRAFT_IF_STARTS_IN_DAYS = 30;
 export const MAX_POLICY_MONTHS = 12;
@@ -57,22 +62,20 @@ export function tariffOf(p: Pick<Policy, 'tariff' | 'premium' | 'insuredCount' |
 }
 
 /**
- * Pro-rata change of the premium when a person is added (+) or excluded (−) from `effective`
- * until the end of the policy, both days included. Outside the period the change is 0.
+ * Pro-rata change of the premium when a person with the annual premium `annual` is added (+) or excluded (−)
+ * from `effective` until the end of the policy, both days included. Outside the period the change is 0.
  */
-export function proRataDelta(
-  policy: Pick<Policy, 'startDate' | 'endDate'>,
-  tariff: PolicyTariff,
-  kind: PolicyChangeKind,
-  effective: ISODate,
-  familyMembers = 0,
-): Money {
+export function proRataAmount(policy: Pick<Policy, 'startDate' | 'endDate'>, annual: Money, kind: PolicyChangeKind, effective: ISODate): Money {
   if (effective < policy.startDate || effective > policy.endDate) return 0;
   const total = daysInclusive(policy.startDate, policy.endDate);
   const left = daysInclusive(effective, policy.endDate);
-  const annual = tariff.employee + tariff.family * familyMembers;
   const delta = round1000((annual * left) / total);
   return kind === 'add' ? delta : -delta;
+}
+
+/** Pro-rata change for an employee by the policy tariff. */
+export function proRataDelta(policy: Pick<Policy, 'startDate' | 'endDate'>, tariff: PolicyTariff, kind: PolicyChangeKind, effective: ISODate): Money {
+  return proRataAmount(policy, tariff.employee, kind, effective);
 }
 
 /** Why a change date does not fit the policy, or null. */

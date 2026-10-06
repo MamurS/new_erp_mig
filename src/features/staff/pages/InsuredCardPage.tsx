@@ -40,6 +40,8 @@ import { useTopbar } from '../topbar';
 import { MigratedBadge } from '../components/MigratedBadge';
 import { NewClaimDialog } from '../components/NewClaimDialog';
 import { TableScroll } from '@/shared/ui/table-scroll';
+import { FamilyNames } from '@/shared/ui/family-names';
+import { RELATION_LABEL } from '@/shared/domain/family';
 
 export default function InsuredCardPage() {
   const { insuredId = '' } = useParams();
@@ -158,10 +160,30 @@ export default function InsuredCardPage() {
                   <dt className="text-muted">{t('staff.insuredCard.insuredFrom')}</dt>
                   <dd>{formatDate(p.insuredFrom)}</dd>
                 </div>
-                <div className="flex justify-between gap-2 py-1.5">
-                  <dt className="text-muted">{t('staff.insuredCard.familyCount')}</dt>
-                  <dd>{p.familyMembersCount}</dd>
-                </div>
+                {p.relation === 'employee' ? (
+                  <div className="flex justify-between gap-2 py-1.5">
+                    <dt className="text-muted">{t('staff.insuredCard.family')}</dt>
+                    <dd className="text-right">
+                      <FamilyNames family={p.family} to={(id) => `/staff/insured/${id}`} />
+                    </dd>
+                  </div>
+                ) : (
+                  <div className="flex justify-between gap-2 py-1.5">
+                    <dt className="text-muted">{t('staff.insuredCard.relation')}</dt>
+                    <dd className="text-right" data-testid="insured-relation">
+                      {RELATION_LABEL[p.relation]}
+                      {p.isStudent ? ` · ${t('staff.insuredCard.student')}` : ''}
+                      {p.principalId && p.principalName ? (
+                        <>
+                          {' · '}
+                          <Link to={`/staff/insured/${p.principalId}`} className="text-accent-text hover:underline">
+                            {p.principalName}
+                          </Link>
+                        </>
+                      ) : null}
+                    </dd>
+                  </div>
+                )}
               </dl>
               <p className="mt-3 text-[12px] text-muted">{t('staff.insuredCard.viewsAudited')}</p>
             </Card>

@@ -1,9 +1,10 @@
 /*
- * Demo files of the portfolio transfer: 5 clients, 5 contracts, 200 insured persons, used limits,
- * 10 open claims and a few unpaid invoices, plus rows with errors that show the validation report
- * (they are excluded explicitly, so the whole flow completes).
+ * Demo files of the portfolio transfer: 5 clients, 5 contracts, 200 employees with their family members
+ * (a row per person: `relation` and the employee's PINFL in `principal_pinfl`), used limits, 10 open claims and a
+ * few unpaid invoices, plus rows with errors that show the validation report (they are excluded explicitly, so
+ * the whole flow completes).
  * Premiums: most contracts give premiums per employee and per family member; MIG-2026/0503 has none and
- * every insured person carries an individual premium; MIG-2026/0505 mixes both (two individual premiums
+ * every insured person (each family member too) carries an individual premium; MIG-2026/0505 mixes both (two individual premiums
  * win over the type) and its total is 1 сум off (within the tolerance); MIG-2026/0504's total premium
  * deliberately differs from the sum of its insured persons' premiums (a highlighted mismatch). Deterministic: the same files every time;
  * the e2e fixtures (e2e/fixtures/migration) are these files, checked by migrationSamples.test.ts.
@@ -68,20 +69,22 @@ const CONTRACTS: DemoContract[] = [
   { oldNumber: 'MIG-2026/0505', client: 4, startDate: '2026-05-01', endDate: '2027-04-30', program: 'standard', byType: { employee: 3_800_000, family: 3_040_000 }, individual: [1, 2], offset: -1, paymentFrequency: 'single', assistance: 'Shifo Assistans Group', people: 20 },
 ];
 
-/** Individual premium of a person (deterministic): by age, plus the family members. */
-function individualPremium(birthDate: string, family: number): number {
+/** Individual premium of an employee (deterministic): by age. */
+function individualPremium(birthDate: string): number {
   const age = 2026 - Number(birthDate.slice(0, 4));
-  return 1_800_000 + Math.floor(age / 10) * 150_000 + family * 1_450_000;
+  return 1_800_000 + Math.floor(age / 10) * 150_000;
 }
+/** Individual premium of a family member. */
+const FAMILY_INDIVIDUAL_PREMIUM = 1_450_000;
 
 /** Premium of a person by the rules of the files: individual, else by type. */
 function premiumOf(p: Person): number {
   const c = CONTRACTS.find((x) => x.oldNumber === p.contractOldNumber)!;
   if (p.premium) return Number(p.premium);
-  return c.byType!.employee + c.byType!.family * Number(p.familyMembers);
+  return p.relation === 'employee' ? c.byType!.employee : c.byType!.family;
 }
 
-interface Person {
+type Person = {
   fullName: string;
   birthDate: string;
   pinfl: string;
@@ -90,9 +93,13 @@ interface Person {
   inclusionDate: string;
   contractOldNumber: string;
   position: string;
-  familyMembers: string;
+  relation: string;
+  principal_pinfl: string;
   premium: string;
-}
+};
+
+/** An employee of the files with the number of family members drawn for them. */
+type Employee = Person & { family: number; female: boolean; first: string; seq: number };
 
 const pad = (n: number, w: number) => String(n).padStart(w, '0');
 
@@ -102,10 +109,10 @@ function pinflOf(female: boolean, birthDate: string, seq: number): string {
   return `${female ? 4 : 3}${d}${m}${y.slice(2)}${pad(1_000_000 + seq, 7)}`;
 }
 
-function people(): Person[] {
+function employees(): Employee[] {
   const r = rng(20261001);
   const pick = <T>(list: readonly T[]) => list[Math.floor(r() * list.length)]!;
-  const out: Person[] = [];
+  const out: Employee[] = [];
   let seq = 0;
   CONTRACTS.forEach((c) => {
     for (let k = 1; k <= c.people; k++) {
@@ -117,7 +124,7 @@ function people(): Person[] {
       const father = seq === 1 ? 'Karim' : pick(FATHER);
       const birthDate = seq === 1 ? '1988-05-14' : `${1965 + Math.floor(r() * 38)}-${pad(1 + Math.floor(r() * 12), 2)}-${pad(1 + Math.floor(r() * 28), 2)}`;
       const late = k > c.people - 3;
-      const familyMembers = String(Math.floor(r() * 3));
+      const family = Math.floor(r() * 3);
       const individual = !c.byType || c.individual.includes(k);
       out.push({
         fullName: `${surname}${female ? 'a' : ''} ${first} ${father}${female ? 'ovna' : 'ovich'}`,
@@ -129,8 +136,13 @@ function people(): Person[] {
         inclusionDate: late ? '2026-09-15' : c.startDate,
         contractOldNumber: c.oldNumber,
         position: pick(POSITION),
-        familyMembers,
-        premium: individual ? String(individualPremium(birthDate, Number(familyMembers))) : '',
+        relation: 'employee',
+        principal_pinfl: '',
+        premium: individual ? String(individualPremium(birthDate)) : '',
+        family,
+        female,
+        first,
+        seq,
       });
     }
   });
@@ -142,13 +154,58 @@ function people(): Person[] {
   return out;
 }
 
+/**
+ * Family members of an employee (no random draws: the employees stay the same): the first one is the spouse
+ * with an own phone, the second a child without one. An employee with an individual premium has family members
+ * with individual premiums too.
+ */
+function familyOf(e: Employee): Person[] {
+  const surname = e.fullName.split(' ')[0]!.replace(/a$/, '');
+  const out: Person[] = [];
+  const spouseFirst = e.female ? MALE[(e.seq * 7) % MALE.length]! : FEMALE[(e.seq * 7) % FEMALE.length]!;
+  for (let k = 0; k < e.family; k++) {
+    const spouse = k === 0;
+    const female = spouse ? !e.female : e.seq % 2 === 0;
+    const year = spouse ? Number(e.birthDate.slice(0, 4)) + 2 : Math.max(Number(e.birthDate.slice(0, 4)) + 24, 2010 + (e.seq % 12));
+    const birthDate = `${Math.min(year, 2024)}-${pad(1 + ((e.seq + k * 5) % 12), 2)}-${pad(1 + ((e.seq * 3 + k) % 28), 2)}`;
+    const first = spouse ? spouseFirst : female ? FEMALE[(e.seq + 3) % FEMALE.length]! : MALE[(e.seq + 3) % MALE.length]!;
+    // The child's patronymic: the father's given name (the employee's or the spouse's).
+    const fatherName = e.female ? spouseFirst : e.first;
+    const patronymic = spouse ? (e.female ? `${FATHER[e.seq % FATHER.length]}ovich` : `${FATHER[(e.seq + 1) % FATHER.length]}ovna`) : `${fatherName}${female ? 'ovna' : 'ovich'}`;
+    out.push({
+      fullName: `${surname}${female ? 'a' : ''} ${first} ${patronymic}`,
+      birthDate,
+      pinfl: pinflOf(female, birthDate, 500_000 + e.seq * 3 + k),
+      phone: spouse ? `+99878${pad(e.seq, 7)}` : '',
+      oldCertificate: `${e.oldCertificate}-${k + 1}`,
+      inclusionDate: e.inclusionDate,
+      contractOldNumber: e.contractOldNumber,
+      position: '',
+      relation: spouse ? 'spouse' : 'child',
+      principal_pinfl: e.pinfl,
+      premium: e.premium ? String(FAMILY_INDIVIDUAL_PREMIUM) : '',
+    });
+  }
+  return out;
+}
+
+/** A row per person: each employee followed by the family members. */
+function people(list: readonly Employee[]): Person[] {
+  return list.flatMap((e) => {
+    const { family: _f, female: _x, first: _n, seq: _s, ...row } = e;
+    return [row, ...familyOf(e)];
+  });
+}
+
 function rows(step: MigrationStep, list: Record<string, string>[]): string {
   const cols = MIGRATION_COLUMNS[step];
   return toCsv(cols, list.map((x) => cols.map((c) => x[c] ?? '')));
 }
 
 export function migrationDemoFiles(): Record<MigrationStep, string> {
-  const persons = people();
+  const staff = employees();
+  const persons = staff.map(({ family: _f, female: _x, first: _n, seq: _s, ...row }) => row as Person);
+  const everyone = people(staff);
   const clients = CLIENTS.map((c, k) => ({
     name: c.name,
     legalForm: c.legalForm,
@@ -173,20 +230,28 @@ export function migrationDemoFiles(): Record<MigrationStep, string> {
     startDate: c.startDate,
     endDate: c.endDate,
     program: c.program,
-    premium: String(persons.filter((p) => p.contractOldNumber === c.oldNumber).reduce((s, p) => s + premiumOf(p), 0) + c.offset),
+    premium: String(everyone.filter((p) => p.contractOldNumber === c.oldNumber).reduce((s, p) => s + premiumOf(p), 0) + c.offset),
     premium_employee: c.byType ? String(c.byType.employee) : '',
     premium_family: c.byType ? String(c.byType.family) : '',
     paymentFrequency: c.paymentFrequency,
     assistance: c.assistance,
   }));
 
-  const insured: Record<string, string>[] = persons.map((p) => ({ ...p }));
-  // Error rows: a 13-digit PINFL, an unknown contract, an inclusion date before the contract.
-  insured.splice(10, 0, { ...persons[10]!, fullName: 'Ergashev Bobur Nodirovich', pinfl: '3120588100090', phone: '+998779000001', oldCertificate: 'C-0501-0901' });
-  insured.splice(70, 0, { ...persons[70]!, fullName: 'Saidova Lola Farhodovna', pinfl: '41503901009002', phone: '+998779000002', oldCertificate: 'C-0999-0001', contractOldNumber: 'MIG-2026/0999' });
-  insured.splice(150, 0, { ...persons[150]!, fullName: 'Umarov Aziz Akmalovich', pinfl: '30704851009003', phone: '+998779000003', oldCertificate: 'C-0503-0901', inclusionDate: '2026-01-10' });
-  // An error row: a person of the contract without premiums by type and without an individual premium.
-  insured.splice(140, 0, { ...persons[130]!, fullName: 'Xolmatova Zarina Akmalovna', birthDate: '1990-02-11', pinfl: '41102901009004', phone: '+998779000004', oldCertificate: 'C-0503-0902', premium: '' });
+  // A row per person; the error rows (employees without family) go before the employee they copy.
+  const insured: Record<string, string>[] = [];
+  const errorRows = new Map<number, Record<string, string>>([
+    // A 13-digit PINFL, an unknown contract, an inclusion date before the contract.
+    [10, { ...persons[10]!, fullName: 'Ergashev Bobur Nodirovich', pinfl: '3120588100090', phone: '+998779000001', oldCertificate: 'C-0501-0901' }],
+    [70, { ...persons[70]!, fullName: 'Saidova Lola Farhodovna', pinfl: '41503901009002', phone: '+998779000002', oldCertificate: 'C-0999-0001', contractOldNumber: 'MIG-2026/0999' }],
+    [150, { ...persons[150]!, fullName: 'Umarov Aziz Akmalovich', pinfl: '30704851009003', phone: '+998779000003', oldCertificate: 'C-0503-0901', inclusionDate: '2026-01-10' }],
+    // A person of the contract without premiums by type and without an individual premium.
+    [139, { ...persons[130]!, fullName: 'Xolmatova Zarina Akmalovna', birthDate: '1990-02-11', pinfl: '41102901009004', phone: '+998779000004', oldCertificate: 'C-0503-0902', premium: '' }],
+  ]);
+  staff.forEach((e, idx) => {
+    const error = errorRows.get(idx);
+    if (error) insured.push(error);
+    insured.push(...people([e]));
+  });
 
   // Used limits of every fifth person; the first person has 2 500 000 of outpatient care used.
   const cats = ['outpatient', 'dental', 'medicines'] as const;

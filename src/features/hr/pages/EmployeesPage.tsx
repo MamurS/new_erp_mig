@@ -21,6 +21,7 @@ import { Field } from '@/shared/ui/input';
 import { MaskedInput } from '@/shared/ui/masked-input';
 import { toast } from '@/shared/ui/toast';
 import { cn } from '@/shared/lib/cn';
+import { FamilyNames } from '@/shared/ui/family-names';
 import { invoicePdf, downloadPdf, pdfFileName } from '../pdf';
 import { AppStatusChip, HR_BTN, HrCard, HrHeader } from '../ui';
 import { t, tp, tm } from '@/i18n';
@@ -97,9 +98,9 @@ export default function EmployeesPage() {
     {
       key: 'family',
       header: t('hr.employees.family'),
-      sortKey: 'familyMembersCount',
-      cell: (e) =>
-        e.familyMembersCount > 0 ? tp('hr.employees.people', e.familyMembersCount) : <span className="text-muted">—</span>,
+      sortKey: 'family',
+      // People of the family by name (FAMILY_SPEC: a list instead of «семья: N»).
+      cell: (e) => <FamilyNames family={e.family} />,
     },
     {
       key: 'app',

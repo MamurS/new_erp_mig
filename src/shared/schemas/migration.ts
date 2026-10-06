@@ -65,16 +65,6 @@ const optionalMoney = (opts: { min?: number } = {}) =>
     })
     .transform((v) => (v === '' ? undefined : Number(v)));
 
-const count = (min: number, max: number) =>
-  z
-    .union([z.string(), z.undefined()])
-    .transform((v) => (v ?? '').trim())
-    .superRefine((v, ctx) => {
-      if (v === '') return;
-      if (!/^\d{1,6}$/.test(v) || Number(v) < min || Number(v) > max) ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg('migration.v.count', { min, max }) });
-    })
-    .transform((v) => (v === '' ? min : Number(v)));
-
 /** A code of a fixed list, case-insensitive. */
 const code = <T extends string>(values: readonly T[], message: string, fallback?: T) =>
   z
@@ -147,24 +137,40 @@ export const migrationContractRowSchema = z
     if (v.endDate <= v.startDate) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: msg('v.endAfterStart') });
   });
 
-export const migrationInsuredRowSchema = z.object({
-  fullName: latinPersonName,
-  birthDate: date.pipe(z.string().refine((v) => Number(v.slice(0, 4)) >= 1920 && v <= new Date().toISOString().slice(0, 10), msg('v.birthDateCheck'))),
-  pinfl: cell(20).pipe(pinflInput),
-  /** Needed to sign in to the app; a row without it is loaded with a warning. */
-  phone: z
-    .union([z.string(), z.undefined()])
-    .transform((v) => (v ?? '').trim())
-    .pipe(z.union([z.literal('').transform(() => undefined), phoneInput])),
-  oldCertificate: oldNumber,
-  inclusionDate: date,
-  contractOldNumber: oldNumber,
-  position: optional(80),
-  /** Family members covered under this employee's certificate (they are not separate rows). */
-  familyMembers: count(0, 10),
-  /** Individual annual premium of this row (the employee with the family members); empty — by the contract's premiums by type. */
-  premium: optionalMoney({ min: 1 }),
-});
+export const MIGRATION_RELATIONS = ['employee', 'spouse', 'child', 'parent', 'other'] as const;
+
+/**
+ * A row per person (FAMILY_SPEC «Перенос портфеля»): an employee, or a family member with `relation` and the
+ * employee's PINFL in `principal_pinfl` (an employee of the same file or already in the system, same contract).
+ */
+export const migrationInsuredRowSchema = z
+  .object({
+    fullName: latinPersonName,
+    birthDate: date.pipe(z.string().refine((v) => Number(v.slice(0, 4)) >= 1920 && v <= new Date().toISOString().slice(0, 10), msg('v.birthDateCheck'))),
+    pinfl: cell(20).pipe(pinflInput),
+    /** Needed to sign in to the app; a row without it is loaded with a warning (not for a child). */
+    phone: z
+      .union([z.string(), z.undefined()])
+      .transform((v) => (v ?? '').trim())
+      .pipe(z.union([z.literal('').transform(() => undefined), phoneInput])),
+    oldCertificate: oldNumber,
+    inclusionDate: date,
+    contractOldNumber: oldNumber,
+    position: optional(80),
+    /** Who the person is: empty — an employee. */
+    relation: code(MIGRATION_RELATIONS, msg('v.relation'), 'employee'),
+    /** The employee's PINFL for a family member. */
+    principal_pinfl: z
+      .union([z.string(), z.undefined()])
+      .transform((v) => (v ?? '').trim())
+      .pipe(z.union([z.literal('').transform(() => undefined), pinflInput])),
+    /** Individual annual premium of this person; empty — by the contract's premium of the person's type. */
+    premium: optionalMoney({ min: 1 }),
+  })
+  .superRefine((v, ctx) => {
+    if (v.relation === 'employee' && v.principal_pinfl) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['principal_pinfl'], message: msg('v.principalForEmployee') });
+    if (v.relation !== 'employee' && !v.principal_pinfl) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['principal_pinfl'], message: msg('v.principalRequired') });
+  });
 
 export const migrationLimitRowSchema = z
   .object({

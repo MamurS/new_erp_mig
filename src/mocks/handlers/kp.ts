@@ -82,8 +82,9 @@ export const kpHandlers = [
         sumInsured: sum,
         premiumEmployee: perPerson,
         premiumFamily: perPerson,
-        employees: Math.max(1, active.length),
-        familyMembers: active.reduce((s, i) => s + i.familyMembersCount, 0),
+        // A row per person: employees and family members are counted separately (FAMILY_SPEC).
+        employees: Math.max(1, active.filter((i) => i.relation === 'employee').length),
+        familyMembers: active.filter((i) => i.relation !== 'employee').length,
         coverageStart: isoDay(start),
         coverageEnd: isoDay(end.getTime() - DAY),
         validUntil: isoDay(today + dmsParam('kpValidityDays') * DAY),

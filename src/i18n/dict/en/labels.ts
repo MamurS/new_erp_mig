@@ -397,4 +397,8 @@ export const labels: Translation<typeof Ru> = {
   'labels.kpStatus.revoked': 'Revoked',
   'labels.kpStatus.accepted': 'Accepted by client',
   'labels.kpStatus.declined': 'Declined by client',
+  'labels.queue.age_limit': 'Age limit',
+  'labels.queueTab.age_limit': 'Children\'s age',
+  'labels.censusRelation.parent': 'Parent',
+  'labels.censusRelation.other': 'Other family member',
 };

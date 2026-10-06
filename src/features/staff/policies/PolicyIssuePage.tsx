@@ -3,7 +3,8 @@ import { defineLabels, t, tm } from '@/i18n';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Download, FileUp } from 'lucide-react';
-import type { LimitCategory, ProgramCode } from '@/shared/types';
+import type { InsuredRelation, LimitCategory, ProgramCode } from '@/shared/types';
+import { RELATIONS, RELATION_LABEL } from '@/shared/domain/family';
 import type { PolicyListCheck } from '@/shared/types/dto';
 import { useClient } from '@/shared/api/queries/staff';
 import { useCheckPolicyList, useIssuePolicy } from '@/shared/api/queries/policies';
@@ -41,6 +42,12 @@ interface Terms {
 const toNumber = (v: string) => Number(v.replace(/\s/g, ''));
 const PREVIEW_ROWS = 200;
 
+/** Relation of a raw CSV row (empty — an employee); an unknown value is shown as is. */
+function relationCell(v: string | undefined): string {
+  const key = (v ?? '').trim().toLowerCase() || 'employee';
+  return (RELATIONS as readonly string[]).includes(key) ? RELATION_LABEL[key as InsuredRelation] : (v ?? '');
+}
+
 /** Rows of the file with the server's verdict: valid ones green, invalid ones red. No PINFL or phone on screen. */
 function ListPreview({ csv, result }: { csv: string; result: PolicyListCheck }) {
   const rows = parseCsv(csv).rows;
@@ -67,7 +74,7 @@ function ListPreview({ csv, result }: { csv: string; result: PolicyListCheck }) 
                 <td className="num px-2 py-1.5">{line}</td>
                 <td className="px-2 py-1.5">{r.fullName}</td>
                 <td className="px-2 py-1.5">{r.position}</td>
-                <td className="num px-2 py-1.5">{r.familyMembers || '0'}</td>
+                <td className="px-2 py-1.5">{relationCell(r.relation)}</td>
                 <td className={cn('px-2 py-1.5', errs ? 'text-danger-text' : 'text-success-text')}>
                   {errs ? errs.map((e) => `${e.field ? `${e.field}: ` : ''}${tm(e.message)}`).join('; ') : t('staffLc.issue.valid')}
                 </td>
@@ -146,7 +153,11 @@ export default function PolicyIssuePage() {
 
   const template = () => {
     // eslint-disable-next-line mig/no-cyrillic-ui -- sample row of the CSV template (data, not UI)
-    const rows = [['Ivanov Ivan Ivanovich', '15.03.1990', '31503900000001', '+998901234567', 'Инженер', 2]];
+    const rows = [
+      ['Ivanov Ivan Ivanovich', '15.03.1990', '31503900000001', '+998901234567', 'Инженер', 'employee', '', ''],
+      ['Ivanova Anna Petrovna', '02.04.1992', '40204920000002', '', '', 'spouse', '31503900000001', ''],
+      ['Ivanov Pavel Ivanovich', '10.10.2015', '31010150000003', '', '', 'child', '31503900000001', ''],
+    ];
     downloadText(toCsv(POLICY_CSV_HEADER, rows), 'policy-insured-template.csv');
   };
 

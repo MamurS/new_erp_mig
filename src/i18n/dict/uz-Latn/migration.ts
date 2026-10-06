@@ -177,7 +177,7 @@ export const migration: Translation<typeof Ru> = {
   'migration.col.insuredCount': 'Sugʻurtalanuvchilar',
   'migration.col.individual': 'Individual mukofot bilan',
   'migration.col.insuredSum': 'Sugʻurtalanuvchilar mukofotlari yigʻindisi',
-  'migration.v.noPremium': 'Mukofot yoʻq: qatorda premium yoki shartnomada premium_employee va premium_family koʻrsating',
+  'migration.v.noPremium': 'Mukofot yoʻq: qatorda premium yoki shartnomada xodim uchun premium_employee va oila aʼzosi uchun premium_family koʻrsating',
   'migration.v.premiumMismatch': 'Shartnoma {contract}: sugʻurtalanuvchilar mukofotlari yigʻindisi {sum} shartnoma mukofotiga {total} teng emas',
   'migration.field.paymentFrequency': 'Toʻlov jadvali',
   'migration.field.assistance': 'Assistans',
@@ -263,4 +263,6 @@ export const migration: Translation<typeof Ru> = {
   'srv.migration.authorOnly': 'Buni faqat paket muallifi qila oladi',
   'srv.migration.manualInvalid': 'Shartnoma maydonlarini tekshiring',
   'srv.migration.notMigrated': 'Shartnoma eski tizimdan koʻchirilmagan',
+  'migration.v.principalNotFound': 'Bu JShShIR bilan xodim na faylda, na sugʻurtalanganlar orasida topilmadi',
+  'migration.v.principalOtherContract': 'Xodim boshqa shartnoma boʻyicha sugʻurtalangan: oila aʼzosi xodimning shartnomasi boʻyicha koʻchiriladi',
 };

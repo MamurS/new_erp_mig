@@ -13,15 +13,17 @@ const templates = Object.fromEntries(MIGRATION_STEPS.map((s) => [s, rowsOf(s, mi
 const keys = (issues: { field: string; message: string; level: string }[]) => issues.map((i) => `${i.level}:${i.field}:${i.message.split('|')[0]}`);
 
 describe('templates', () => {
-  it('have the header and one example row; together they form a valid batch', () => {
+  it('have the header and one example row (the insured file: an employee and the spouse); together they form a valid batch', () => {
     for (const s of MIGRATION_STEPS) {
       const lines = migrationTemplateCsv(s).trim().split('\r\n');
       expect(lines[0]).toBe(MIGRATION_COLUMNS[s].join(','));
-      expect(lines).toHaveLength(2);
+      expect(lines).toHaveLength(s === 'insured' ? 3 : 2);
     }
     const res = validateBatch({ migrationDate: DATE, files: templates }, emptyDbRefs());
     for (const s of MIGRATION_STEPS) expect(res[s]!.errorRows, s).toBe(0);
     expect(res.limits!.valid[0]!.ref.insured).toEqual({ batch: 2 });
+    // A row per person: the spouse refers to the employee of the same file.
+    expect(res.insured!.valid.map((v) => v.ref.principal)).toEqual([undefined, { batch: 2 }]);
   });
 
   it('read back cells guarded against CSV injection and refuse files without required columns', () => {
@@ -34,7 +36,9 @@ describe('templates', () => {
 
 describe('row checks by file', () => {
   const run = (step: MigrationStep, patch: Record<string, string>, files: Partial<Record<MigrationStep, RawRow[]>> = {}) => {
-    const all = { ...templates, ...files, [step]: [{ ...templates[step][0]!, ...patch }] };
+    // One insured row (the employee alone): the contract's total is the employee's premium.
+    const single = step === 'insured' ? { contracts: [{ ...templates.contracts[0]!, premium: '3500000' }] } : {};
+    const all = { ...templates, ...single, ...files, [step]: [{ ...templates[step][0]!, ...patch }] };
     const upto = MIGRATION_STEPS.slice(0, MIGRATION_STEPS.indexOf(step) + 1);
     return validateBatch({ migrationDate: DATE, files: Object.fromEntries(upto.map((s) => [s, all[s]])) }, emptyDbRefs())[step]!;
   };
@@ -107,9 +111,11 @@ describe('reference order', () => {
     refs.contracts.set('MIG-2026/0458', { id: 'db-contract', program: 'standard', startDate: '2026-03-01', endDate: '2027-02-28', active: true, premiumEmployee: 4_000_000, premiumFamily: 3_000_000 });
     const viaDb = validateBatch({ migrationDate: DATE, files: { insured: templates.insured } }, refs).insured!.valid[0]!.ref;
     // The premium by type comes from the contract in the system; no per-contract check for contracts outside the batch.
-    expect(viaDb).toEqual({ contract: { db: 'db-contract' }, premium: 7_000_000, premiumSource: 'type' });
+    expect(viaDb).toEqual({ contract: { db: 'db-contract' }, premium: 4_000_000, premiumSource: 'type' });
+    const spouse = validateBatch({ migrationDate: DATE, files: { insured: templates.insured } }, refs).insured!.valid[1]!.ref;
+    expect(spouse).toEqual({ contract: { db: 'db-contract' }, premium: 3_000_000, premiumSource: 'type', principal: { batch: 2 } });
     refs.contracts.set('MIG-2026/0458', { id: 'db-contract', program: 'standard', startDate: '2026-03-01', endDate: '2027-02-28', active: false, premiumEmployee: 4_000_000, premiumFamily: 3_000_000 });
-    expect(validateBatch({ migrationDate: DATE, files: { insured: templates.insured } }, refs).insured!.errorRows).toBe(1);
+    expect(validateBatch({ migrationDate: DATE, files: { insured: templates.insured } }, refs).insured!.errorRows).toBe(2);
   });
 
   it('a step waits for every earlier step to be confirmed or skipped', () => {
@@ -126,7 +132,7 @@ describe('reconciliation', () => {
     const planned = reconcile(res, null);
     expect(planned.find((r) => r.metric === 'reserves')).toEqual({ metric: 'reserves', money: true, file: 1_250_000, excluded: 400_000, loaded: 850_000, match: false });
     expect(planned.find((r) => r.metric === 'premium')).toMatchObject({ file: 6_300_000, loaded: 6_300_000, match: true });
-    const loaded = loadedTotals({ clients: 1, contracts: [{ total: 6_300_000 }], insured: 1, limitsUsed: 1_250_000, claims: [{ reserve: 850_000 }], invoices: [{ amount: 31_250_000, paid: 0 }] });
+    const loaded = loadedTotals({ clients: 1, contracts: [{ total: 6_300_000 }], insured: 2, limitsUsed: 1_250_000, claims: [{ reserve: 850_000 }], invoices: [{ amount: 31_250_000, paid: 0 }] });
     const after = reconcile(res, loaded);
     expect(after.filter((r) => !r.match).map((r) => r.metric)).toEqual(['claims', 'reserves']);
     expect(after.find((r) => r.metric === 'invoicesOutstanding')).toMatchObject({ file: 31_250_000, loaded: 31_250_000, match: true });
@@ -144,15 +150,37 @@ describe('premiums of insured persons', () => {
   });
   const run = (contracts: RawRow[], insured: RawRow[]) => validateBatch({ migrationDate: DATE, files: { clients: templates.clients, contracts, insured } }, emptyDbRefs());
 
-  it('priority: the individual premium, else by type (employee plus family members), else none', () => {
+  it('priority: the individual premium, else by type (premium_employee or premium_family by the relation), else none', () => {
     const byType = { premiumEmployee: 4_000_000, premiumFamily: 3_000_000 };
-    expect(insuredPremium({ premium: 5_500_000, familyMembers: 2 }, byType)).toEqual({ premium: 5_500_000, source: 'individual' });
-    expect(insuredPremium({ premium: undefined, familyMembers: 2 }, byType)).toEqual({ premium: 10_000_000, source: 'type' });
-    expect(insuredPremium({ premium: undefined, familyMembers: 0 }, { premiumEmployee: 4_000_000 })).toEqual({ premium: 4_000_000, source: 'type' });
-    // Family members without a family premium, or no premium by type at all: no premium.
-    expect(insuredPremium({ premium: undefined, familyMembers: 1 }, { premiumEmployee: 4_000_000 })).toBeNull();
-    expect(insuredPremium({ premium: undefined, familyMembers: 0 }, {})).toBeNull();
-    expect(insuredPremium({ premium: 2_000_000, familyMembers: 0 }, {})).toEqual({ premium: 2_000_000, source: 'individual' });
+    expect(insuredPremium({ premium: 5_500_000, relation: 'employee' }, byType)).toEqual({ premium: 5_500_000, source: 'individual' });
+    expect(insuredPremium({ premium: undefined, relation: 'employee' }, byType)).toEqual({ premium: 4_000_000, source: 'type' });
+    expect(insuredPremium({ premium: undefined, relation: 'child' }, byType)).toEqual({ premium: 3_000_000, source: 'type' });
+    expect(insuredPremium({ premium: undefined, relation: 'employee' }, { premiumEmployee: 4_000_000 })).toEqual({ premium: 4_000_000, source: 'type' });
+    // A family member without a family premium, or no premium by type at all: no premium.
+    expect(insuredPremium({ premium: undefined, relation: 'spouse' }, { premiumEmployee: 4_000_000 })).toBeNull();
+    expect(insuredPremium({ premium: undefined, relation: 'employee' }, {})).toBeNull();
+    expect(insuredPremium({ premium: 2_000_000, relation: 'parent' }, {})).toEqual({ premium: 2_000_000, source: 'individual' });
+  });
+
+  it('a family member refers to an employee of the same contract: in the file or already transferred', () => {
+    const employee = person(1, {});
+    const child = person(2, { relation: 'child', principal_pinfl: employee.pinfl!, phone: '' });
+    const ok = run(templates.contracts, [employee, child]);
+    expect(ok.insured!.errorRows).toBe(0);
+    // A child without a phone is no warning (the child lives in the parent's app).
+    expect(ok.insured!.issues).toEqual([]);
+    expect(ok.insured!.valid[1]!.ref).toMatchObject({ principal: { batch: 2 }, premium: 2_800_000, premiumSource: 'type' });
+    // Reconciliation and the contract check count people.
+    expect(ok.contractPremiums![0]).toMatchObject({ insured: 2, insuredSum: 6_300_000, match: true });
+    expect(keys(run(templates.contracts, [employee, person(2, { relation: 'spouse' })]).insured!.issues)).toContain('error:principal_pinfl:v.principalRequired');
+    expect(keys(run(templates.contracts, [employee, person(2, { relation: 'spouse', principal_pinfl: '31111111111111' })]).insured!.issues)).toContain('error:principal_pinfl:migration.v.principalNotFound');
+    expect(keys(run(templates.contracts, [person(1, { principal_pinfl: '31111111111111' })]).insured!.issues)).toContain('error:principal_pinfl:v.principalForEmployee');
+    // The employee's row has an error: the family member cannot be written either.
+    const bad = run(templates.contracts, [person(1, { inclusionDate: '2025-01-01' }), child]);
+    expect(keys(bad.insured!.issues).filter((k) => k.startsWith('error'))).toEqual(['error:inclusionDate:migration.v.outsideTerm', 'error:principal_pinfl:migration.v.principalNotFound']);
+    // Another contract of the file: an error.
+    const two = [...templates.contracts, { ...templates.contracts[0]!, oldNumber: 'MIG-2026/0459' }];
+    expect(keys(run(two, [employee, { ...child, contractOldNumber: 'MIG-2026/0459', oldCertificate: 'C-0459-0001' }]).insured!.issues)).toContain('error:principal_pinfl:migration.v.principalOtherContract');
   });
 
   it('a contract without premiums by type is valid; each of its insured rows without an own premium is an error', () => {
@@ -170,17 +198,17 @@ describe('premiums of insured persons', () => {
 
   it('per contract: the sum of insured premiums equals the total premium within ±1 сум, else a warning before applying', () => {
     // Template: employee 3 500 000 + one family member 2 800 000 = 6 300 000, the contract's total.
-    expect(run(templates.contracts, templates.insured).contractPremiums).toEqual([{ oldNumber: 'MIG-2026/0458', total: 6_300_000, insured: 1, individual: 0, insuredSum: 6_300_000, diff: 0, match: true }]);
+    expect(run(templates.contracts, templates.insured).contractPremiums).toEqual([{ oldNumber: 'MIG-2026/0458', total: 6_300_000, insured: 2, individual: 0, insuredSum: 6_300_000, diff: 0, match: true }]);
     for (const [total, match] of [['6300001', true], ['6299999', true], ['6300002', false], ['6299998', false]] as const) {
       const res = run(contract({ premium: total }), templates.insured);
       expect(res.contractPremiums![0]!.match, total).toBe(match);
       expect(res.insured!.issues.some((i) => i.message.startsWith('migration.v.premiumMismatch')), total).toBe(!match);
     }
-    const off = run(contract({ premium: '7000000' }), [person(1, {}), person(2, { premium: '1000000', familyMembers: '0' })]);
-    expect(off.contractPremiums![0]).toMatchObject({ insured: 2, individual: 1, insuredSum: 7_300_000, diff: 300_000, match: false });
+    const off = run(contract({ premium: '7000000' }), [person(1, {}), person(3, { relation: 'spouse', principal_pinfl: person(1, {}).pinfl! }), person(2, { premium: '1000000' })]);
+    expect(off.contractPremiums![0]).toMatchObject({ insured: 3, individual: 1, insuredSum: 7_300_000, diff: 300_000, match: false });
     expect(off.insured!.issues).toEqual([{ row: 2, field: 'premium', level: 'warning', message: 'migration.v.premiumMismatch|{"contract":"MIG-2026/0458","sum":"7 300 000","total":"7 000 000"}' }]);
     // A warning does not exclude rows.
-    expect(off.insured!.valid).toHaveLength(2);
+    expect(off.insured!.valid).toHaveLength(3);
   });
 
   it('contractPremiumCheck sums by contract and keeps the new number', () => {

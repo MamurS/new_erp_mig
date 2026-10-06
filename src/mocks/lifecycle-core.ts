@@ -32,9 +32,10 @@ import { addLine, CHANGE_TYPE_LABEL, excludeLine, programChangeLine, REFUND_RULE
 import { TARIFF_BASE_KEY } from '@/shared/config/dmsParameters';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import type { ChangeRequestRow, ClientRow, Db, InsuredRow } from './db';
-import { createInsured, nextPolicyNumber, refreshPolicyTotals } from './policy-core';
+import { createInsured, createListedInsured, nextPolicyNumber, refreshPolicyTotals } from './policy-core';
 import { notifyAssistance, syncAssistance } from './assistance-core';
-import { dmsParam, nextDocNumber, numbering } from './params';
+import { dmsParam, nextDocNumber, numbering, paramValues } from './params';
+import { personAnnualPremium } from '@/shared/domain/family';
 import { conflict, notFound } from './http';
 import { randomId } from './rng';
 import { isoDay, parseIso, tzIso } from './time';
@@ -252,11 +253,11 @@ export async function activateContract(d: Db, c: Contract, on: string): Promise<
   d.assignments.push({ policyId: policy.id, assistanceId: c.params.assistanceId ?? null, from: c.params.startDate, setById: c.params.migSignatoryId, setAt: tzIso(Date.now()) });
   syncAssistance(d);
   const list = d.contractInsured.find((x) => x.contractId === c.id)?.rows ?? [];
-  list.forEach((r, k) => {
-    const person = createInsured(d, client, policy, r, c.params.startDate, 'invited');
+  // A certificate for every person of appendix 2, family members included (FAMILY_SPEC).
+  createListedInsured(d, client, policy, list, c.params.startDate, 'invited').forEach((person, k) => {
     person.certificateNumber = certificateNumber(c.number, k + 1, numbering());
     person.contractId = c.id;
-    d.smsOutbox.unshift({ at: tzIso(Date.now()), insuredId: person.id, text: `Вы застрахованы по ДМС. Сертификат ${person.certificateNumber}. Скачайте приложение MIG ДМС.` });
+    if (person.phone) d.smsOutbox.unshift({ at: tzIso(Date.now()), insuredId: person.id, text: `Вы застрахованы по ДМС. Сертификат ${person.certificateNumber}. Скачайте приложение MIG ДМС.` });
   });
   for (const person of d.insured.filter((i) => i.policyId === policy.id)) await notifyAssistance(d, c.params.assistanceId, 'insured.added', person.id);
   await notifyAssistance(d, c.params.assistanceId, 'policy.assigned', policy.id);
@@ -284,11 +285,11 @@ export async function activateContract(d: Db, c: Contract, on: string): Promise<
 
 /**
  * Annual premium of an insured person under the contract: a transferred person's own premium (from the
- * files of the previous system), else employee plus family members by the contract's tariff.
+ * files of the previous system), else by type — the employee's, or a family member's by the age group.
  */
-export function annualOf(c: Contract, i: Pick<InsuredRow, 'familyMembersCount' | 'migratedPremium'>): number {
+export function annualOf(c: Contract, i: Pick<InsuredRow, 'relation' | 'birthDate' | 'migratedPremium'>, on: string = c.params.startDate): number {
   if (i.migratedPremium) return i.migratedPremium.amount;
-  return c.params.premiumEmployee + c.params.premiumFamily * i.familyMembersCount;
+  return personAnnualPremium({ employee: c.params.premiumEmployee, family: c.params.premiumFamily }, i, on, paramValues());
 }
 
 export function claimsPaidFor(d: Db, insuredIds: readonly UUID[], from: string): number {
@@ -303,13 +304,16 @@ export function endorsementLines(d: Db, c: Contract, requests: readonly ChangeRe
   return requests.map((r) => {
     const label = r.description ?? CHANGE_TYPE_LABEL[r.type];
     if (r.type === 'add_insured') {
-      const family = Number(r.payload.familyMembers ?? r.newPerson?.familyMembers ?? 0);
-      const calc = addLine(c.params.premiumEmployee + c.params.premiumFamily * family, r.effectiveDate, c.params.startDate, c.params.endDate);
+      // The person's annual premium fixed with the request (a family member's by the age group), else by type now.
+      const person = r.insuredId ? d.insured.find((i) => i.id === r.insuredId) : undefined;
+      const fallback = person ?? (r.newPerson ? { relation: r.newPerson.relation, birthDate: r.newPerson.birthDate } : { relation: 'employee' as const, birthDate: '' });
+      const annual = typeof r.payload.annual === 'number' ? r.payload.annual : annualOf(c, fallback, r.effectiveDate);
+      const calc = addLine(annual, r.effectiveDate, c.params.startDate, c.params.endDate);
       return { changeRequestId: r.id, description: label, ...calc };
     }
     if (r.type === 'exclude_insured') {
       const person = d.insured.find((i) => i.id === r.insuredId);
-      const annual = person ? annualOf(c, person) : c.params.premiumEmployee;
+      const annual = person ? annualOf(c, person, r.effectiveDate) : c.params.premiumEmployee;
       const calc = excludeLine(annual, r.effectiveDate, c.params.startDate, c.params.endDate, refundRule(), claimsPaidFor(d, r.insuredId ? [r.insuredId] : [], c.params.startDate));
       return { changeRequestId: r.id, description: label, ...calc };
     }

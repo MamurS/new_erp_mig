@@ -177,7 +177,7 @@ export const migration: Translation<typeof Ru> = {
   'migration.col.insuredCount': 'Insured persons',
   'migration.col.individual': 'With an individual premium',
   'migration.col.insuredSum': 'Sum of insured premiums',
-  'migration.v.noPremium': 'No premium: fill premium in the row or premium_employee and premium_family in the contract',
+  'migration.v.noPremium': 'No premium: fill premium in the row, or premium_employee for an employee and premium_family for a family member in the contract',
   'migration.v.premiumMismatch': 'Contract {contract}: the insured premiums sum to {sum}, not the contract premium {total}',
   'migration.field.paymentFrequency': 'Payment schedule',
   'migration.field.assistance': 'Assistance',
@@ -263,4 +263,6 @@ export const migration: Translation<typeof Ru> = {
   'srv.migration.authorOnly': 'Only the author of the batch can do this',
   'srv.migration.manualInvalid': 'Check the contract fields',
   'srv.migration.notMigrated': 'The contract was not transferred from the previous system',
+  'migration.v.principalNotFound': 'No employee with this PINFL in the file or among the insured persons',
+  'migration.v.principalOtherContract': 'The employee is insured under another contract: a family member is transferred under the employee\'s contract',
 };

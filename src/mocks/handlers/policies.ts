@@ -1,21 +1,27 @@
 /* Policy issuance and the queue of insured-list changes (POLICY_SPEC §4, §5.2, §7). */
 import { msg } from '@/i18n/core';
 import { http } from 'msw';
-import type { Policy } from '@/shared/types';
+import type { Contract, Policy } from '@/shared/types';
 import type { PolicyChangeDecisionResult, PolicyListCheck } from '@/shared/types/dto';
 import { DRAFT_IF_STARTS_IN_DAYS, policyPeriodProblem, policyPremium } from '@/shared/domain/policies';
 import { policyChangeDecisionSchema, policyIssueSchema } from '@/shared/schemas/forms';
-import { db, type ChangeRequestRow, type HrUserRow } from '../db';
+import { db, type ChangeRequestRow, type Db, type HrUserRow, type PolicyChangeRow } from '../db';
 import { certificateNumber } from '@/shared/domain/contracts';
 import { COVERAGE_START_RULES, PERIODICITIES } from '@/shared/domain/endorsements';
 import { dmsParam, numbering } from '../params';
-import { createEndorsement } from '../lifecycle-core';
+import { annualOf, createEndorsement } from '../lifecycle-core';
 import { API, audit, body, conflict, HttpError, httpErrorOf, notFound, param, requirePermission, requireSession, route } from '../http';
 import { DEMO_PASSWORD } from '../credentials';
-import { activePolicyOf, createInsured, endorsementDoc, nextPolicyNumber, parsePolicyList, refreshPolicyTotals, toPolicyChange } from '../policy-core';
+import { activePolicyOf, createInsured, createListedInsured, endorsementDoc, nextPolicyNumber, parsePolicyList, refreshPolicyTotals, toListRow, toPolicyChange } from '../policy-core';
 import { currentAssistance, notifyAssistance } from '../assistance-core';
 import { randomId } from '../rng';
 import { DAY, isoDay, parseIso, tzIso } from '../time';
+
+/** Annual premium of the person of a change under the contract: a transferred person's own, else by type and age group. */
+function annualOfChange(d: Db, contract: Contract, r: PolicyChangeRow): number {
+  const person = r.insuredId ? d.insured.find((i) => i.id === r.insuredId) : undefined;
+  return annualOf(contract, person ?? { relation: r.relation, birthDate: r.newPerson?.birthDate ?? '' }, r.effectiveDate);
+}
 
 function clientOf(id: string) {
   const c = db().clients.find((x) => x.id === id);
@@ -31,7 +37,8 @@ export const policyHandlers = [
       requirePermission(user, 'policies.write');
       clientOf(param(ctx, 'id'));
       const { total, rows, errors } = parsePolicyList(await ctx.request.text());
-      const out: PolicyListCheck = { total, valid: rows.length, employees: rows.length, familyMembers: rows.reduce((s, r) => s + r.familyMembers, 0), errors };
+      const family = rows.filter((r) => r.relation !== 'employee').length;
+      const out: PolicyListCheck = { total, valid: rows.length, employees: rows.length - family, familyMembers: family, errors };
       return out;
     }),
   ),
@@ -52,7 +59,7 @@ export const policyHandlers = [
         throw new HttpError(409, 'conflict', 'srv.policy.emailOtherCompany', { fields: { email: msg('srv.users.emailInUse') } });
       }
       const now = Date.now();
-      const family = rows.reduce((s, r) => s + r.familyMembers, 0);
+      const family = rows.filter((r) => r.relation !== 'employee').length;
       const policy: Policy = {
         id: randomId(),
         number: nextPolicyNumber(d, Number(input.startDate.slice(0, 4))),
@@ -62,13 +69,13 @@ export const policyHandlers = [
         startDate: input.startDate,
         endDate: input.endDate,
         status: parseIso(input.startDate) - now > DRAFT_IF_STARTS_IN_DAYS * DAY ? 'draft' : 'active',
-        premium: policyPremium(input.tariff, rows.length, family),
+        premium: policyPremium(input.tariff, rows.length - family, family),
         insuredCount: rows.length,
         tariff: input.tariff,
         familyCount: family,
       };
       d.policies.unshift(policy);
-      for (const r of rows) createInsured(d, client, policy, r, input.startDate, 'not_invited');
+      createListedInsured(d, client, policy, rows.map(toListRow), input.startDate, 'not_invited');
       refreshPolicyTotals(d, policy);
       Object.assign(client, { status: 'active', activePolicyId: policy.id, program: policy.program, premium: policy.premium, renewalDate: policy.endDate, lossRatio: client.lossRatio ?? 0 });
       const today = isoDay(now);
@@ -139,7 +146,7 @@ export const policyHandlers = [
             if (r!.kind === 'add' && deferred) {
               // Coverage starts when the endorsement is signed: the person is created then.
             } else if (r!.kind === 'add') {
-              const person = createInsured(d, client, policy, { ...r!, ...r!.newPerson! }, r!.effectiveDate, 'invited');
+              const person = createInsured(d, client, policy, { ...r!, ...r!.newPerson!, principalId: r!.principalId }, r!.effectiveDate, 'invited');
               r!.insuredId = person.id;
               if (contract) {
                 person.contractId = contract.id;
@@ -163,13 +170,14 @@ export const policyHandlers = [
                 type: r!.kind === 'add' ? 'add_insured' : 'exclude_insured',
                 effectiveDate: r!.effectiveDate,
                 insuredId: r!.insuredId,
-                payload: { familyMembers: r!.familyMembers },
+                // The annual premium of the person (a family member's by the age group): the endorsement line uses it.
+                payload: { relation: r!.relation, annual: annualOfChange(d, contract, r!) },
                 requestedBy: { id: r!.requestedById, role: 'hr', name: r!.requestedByName },
                 status: 'pending',
                 createdAt: at,
                 description: `${r!.kind === 'add' ? 'Включение' : 'Исключение'}: ${short} (${r!.position})`,
                 policyChangeId: r!.id,
-                ...(r!.kind === 'add' && deferred ? { newPerson: { fullName: r!.fullName, position: r!.position, familyMembers: r!.familyMembers, ...r!.newPerson! } } : {}),
+                ...(r!.kind === 'add' && deferred ? { newPerson: { fullName: r!.fullName, position: r!.position, relation: r!.relation, ...(r!.principalId ? { principalId: r!.principalId } : {}), ...r!.newPerson! } } : {}),
               };
               d.changeRequests.unshift(cr);
               requests.push(cr);

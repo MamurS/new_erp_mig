@@ -367,7 +367,7 @@ export const staffLc: Translation<typeof Ru> = {
   'staffLc.issue.step.review': 'Review',
   'staffLc.issue.previewCaption': 'Rows of the member list file',
   'staffLc.issue.colRow': 'Row',
-  'staffLc.issue.colFamily': 'Family',
+  'staffLc.issue.colFamily': 'Relation',
   'staffLc.issue.colCheck': 'Check',
   'staffLc.issue.valid': 'Valid',
   'staffLc.issue.previewLimited': 'Showing the first {shown} of {total} rows; the totals above cover the whole file.',
@@ -407,7 +407,6 @@ export const staffLc: Translation<typeof Ru> = {
   'staffLc.changes.approvedToast': 'Requests approved: {n}. Endorsements: {endorsements}',
   'staffLc.changes.selectAria': 'Select: {name}',
   'staffLc.changes.clientPolicy': 'Client and policy',
-  'staffLc.changes.family': ' · family: {n}',
   'staffLc.changes.delta': 'Additional payment / refund',
   'staffLc.changes.request': 'Request',
   'staffLc.changes.actionsAria': 'Actions: {name}',
@@ -486,4 +485,5 @@ export const staffLc: Translation<typeof Ru> = {
   'staffLc.settle.reserveDesc': 'The change goes to the reserve history under your name.',
   'staffLc.settle.reserveChanged': 'Reserve changed',
   'staffLc.settle.reserveUzs': 'Reserve, UZS',
+  'staffLc.changes.familyOf': '{relation} · employee {name}',
 };

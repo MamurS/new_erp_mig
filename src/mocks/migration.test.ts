@@ -201,8 +201,11 @@ describe('portfolio migration', () => {
     expect(migrated.map((c) => c.externalNumber).sort()).toEqual(['MIG-2026/0501', 'MIG-2026/0502', 'MIG-2026/0503', 'MIG-2026/0504', 'MIG-2026/0505']);
     const demo = d.insured.find((i) => i.phone === MIGRATION_DEMO_PHONE)!;
     expect(demo.certificateNumber).toMatch(/^SERT-/);
-    // Premiums: by type (3 600 000 + 2 880 000 per family member) or individual; never an even split.
-    expect(demo.migratedPremium).toEqual({ amount: 3_600_000 + 2_880_000 * demo.familyMembersCount, source: 'type' });
+    // Premiums: by type (3 600 000 per employee, 2 880 000 per family member) or individual; never an even split.
+    expect(demo.migratedPremium).toEqual({ amount: 3_600_000, source: 'type' });
+    // A row per person: the family members are insured persons under the employee.
+    const demoFamily = d.insured.filter((i) => i.principalId === demo.id);
+    expect(demoFamily.every((i) => i.relation !== 'employee' && i.contractId === demo.contractId && i.migratedPremium?.amount === 2_880_000 && !!i.certificateNumber)).toBe(true);
     const c0501 = migrated.find((c) => c.externalNumber === 'MIG-2026/0501')!;
     expect(c0501.params).toMatchObject({ premiumEmployee: 3_600_000, premiumFamily: 2_880_000, total: 406_080_000 });
     expect(annualOf(c0501, demo)).toBe(demo.migratedPremium!.amount);

@@ -22,6 +22,7 @@ import { EmptyState } from '@/shared/ui/states';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
+import { RELATION_LABEL } from '@/shared/domain/family';
 
 const TABS = ['pending', 'approved', 'rejected'] as const;
 const TAB_LABEL = defineLabels('staffLc.changes.tab', TABS);
@@ -141,8 +142,7 @@ export default function PolicyChangesPage() {
         <span className="flex flex-col">
           <span className="font-medium">{r.fullName}</span>
           <span className="text-[12px] text-muted">
-            {r.position}
-            {r.familyMembers ? t('staffLc.changes.family', { n: r.familyMembers }) : ''}
+            {r.relation === 'employee' ? r.position : t('staffLc.changes.familyOf', { relation: RELATION_LABEL[r.relation], name: r.principalName ?? '' })}
           </span>
         </span>
       ),

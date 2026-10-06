@@ -546,4 +546,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.params.history': 'Oʻzgarishlar tarixi',
   'staff.params.decidedApplied': ' · {name} tasdiqladi',
   'staff.params.decidedRejected': ' · {name} rad etdi',
+  'staff.insuredCard.family': 'Oila',
+  'staff.insuredCard.relation': 'Kim boʻladi',
+  'staff.insuredCard.student': 'talaba',
 };

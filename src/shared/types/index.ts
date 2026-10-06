@@ -122,7 +122,10 @@ export interface PolicyChange {
   insuredId?: UUID;
   fullName: string;
   position: string;
-  familyMembers: number;
+  /** Who the person is to the policy; a family member is added under an employee (`principalId`). */
+  relation: InsuredRelation;
+  principalId?: UUID;
+  principalName?: string;
   effectiveDate: ISODate;
   premiumDelta: Money;                     // + доплата, − возврат
   status: PolicyChangeStatus;
@@ -136,6 +139,18 @@ export interface PolicyChange {
 
 export type AppStatus = 'active' | 'invited' | 'not_invited';
 
+/** Who the insured person is to the policy: the employee or a member of the employee's family. */
+export type InsuredRelation = 'employee' | 'spouse' | 'child' | 'parent' | 'other';
+export type FamilyRelation = Exclude<InsuredRelation, 'employee'>;
+
+/** A person of the employee's family as other screens list them (no personal data). */
+export interface FamilyMemberBrief {
+  id: UUID;
+  fullName: string;
+  relation: FamilyRelation;
+  status: 'active' | 'excluded';
+}
+
 export interface Insured {
   id: UUID;
   clientId: UUID;
@@ -146,7 +161,14 @@ export interface Insured {
   birthDateMasked: string;                 // '••.••.1987'
   pinflMasked: string;                     // '••••••••••1234'
   phoneMasked: string;                     // '+998 •• ••• •• 67'
-  familyMembersCount: number;
+  relation: InsuredRelation;
+  /** The employee whose family the person belongs to; absent for an employee. */
+  principalId?: UUID;
+  principalName?: string;
+  /** A child studying full time: covered up to `studentMaxAge` instead of `maxChildAge`. */
+  isStudent?: boolean;
+  /** People of the employee's family (an employee only; empty otherwise). */
+  family: FamilyMemberBrief[];
   appStatus: AppStatus;
   myIdVerified: boolean;
   attachedClinicId: UUID;
@@ -434,7 +456,12 @@ export type AuditAction =
   | 'migration_applied'
   | 'migration_rejected'
   | 'migration_rolled_back'
-  | 'migration_scan_attached';
+  | 'migration_scan_attached'
+  | 'family_consent_granted'
+  | 'family_consent_revoked'
+  | 'family_request_created'
+  | 'family_request_decided'
+  | 'payout_card_changed';
 
 export interface AuditEntry {
   id: UUID;
@@ -874,7 +901,10 @@ export type DmsParamKey =
   | 'kpNoAnswerDays'
   | 'fraudMaxClaimsPerMonth'
   | 'fraudPriceExcessShare'
-  | 'fraudDaysBeforeExclusion';
+  | 'fraudDaysBeforeExclusion'
+  | 'limitMode'
+  | 'maxChildAge'
+  | 'studentMaxAge';
 
 export type DmsParamValues = Record<DmsParamKey, number>;
 
@@ -967,7 +997,8 @@ export interface DealEvent {
   text: string;
 }
 
-export type CensusRelation = 'employee' | 'spouse' | 'child';
+/** Relation of a census row: the same as an insured person's (a row per person). */
+export type CensusRelation = InsuredRelation;
 
 export interface Census {
   id: UUID;

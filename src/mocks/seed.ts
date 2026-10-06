@@ -32,6 +32,7 @@ import { seedClinics } from './seed-clinics';
 import { seedPolicyChanges } from './seed-policies';
 import { seedAssistance } from './seed-assistance';
 import { seedLifecycle } from './seed-lifecycle';
+import { seedFamilyActivity, seedFamilyMembers } from './seed-family';
 import { defaultAiSettings } from '@/features/ai/settings';
 import type { LegalFormCode } from '@/shared/config/legalForms';
 import { docNumber } from '@/shared/domain/numbering';
@@ -181,6 +182,12 @@ function pickCategory(rng: Rng): ClaimCategory {
 }
 
 const NIL = '00000000-0000-4000-8000-000000000000';
+
+/**
+ * The family size of an employee was drawn at this point of the seed before family members became insured
+ * persons of their own: the draw stays, so everything seeded after it is unchanged.
+ */
+const asEmployee = (_formerFamilySize: number): 'employee' => 'employee';
 
 export interface SeedOptions {
   xss?: boolean;
@@ -399,7 +406,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
         phone: phone(rng),
         email: `emp${insured.length + 1}@client${ci + 1}.example.uz`,
         payoutCard: `8600${digits(rng, 12)}`,
-        familyMembersCount: pick(rng, [0, 0, 1, 1, 2, 3]),
+        relation: asEmployee(pick(rng, [0, 0, 1, 1, 2, 3])),
         appStatus,
         myIdVerified: appStatus === 'active' ? chance(rng, 0.9) : false,
         attachedClinicId: pick(rng, clinics).id,
@@ -420,7 +427,6 @@ export function createSeed(opts: SeedOptions = {}): Db {
         row.appStatus = 'active';
         row.myIdVerified = true;
         row.consentGivenAt = undefined;
-        row.familyMembersCount = 2;
         row.birthDate = '1987-05-12';
         row.pinfl = '31205870123456';
         row.insuredFrom = policy.startDate;
@@ -430,6 +436,20 @@ export function createSeed(opts: SeedOptions = {}): Db {
       insured.push(row);
     }
   }
+
+  // ---------- family members (FAMILY_SPEC): a row per person, under the employee ----------
+  const demoPerson = insured.find((x) => x.id === demoInsuredId)!;
+  const family = seedFamilyMembers(
+    {
+      demo: demoPerson,
+      // A man of the demo company (not the demo person) whose child has just reached the age limit.
+      other: insured.find((x) => x.clientId === demoPerson.clientId && x.id !== demoInsuredId && x.status === 'active' && !/a$/.test(x.fullName.split(' ')[0] ?? '')),
+      policy: policies.find((p) => p.id === demoPerson.policyId)!,
+      clinics,
+    },
+    { now },
+  );
+  insured.push(...family.rows);
 
   // premiums
   for (const policy of policies) {
@@ -475,7 +495,8 @@ export function createSeed(opts: SeedOptions = {}): Db {
   // ---------- claims ----------
   const claims: ClaimRow[] = [];
   const files: FileRow[] = [];
-  const insuredWithPolicy = insured.filter((x) => x.status === 'active');
+  // Random claims and appointments go to employees: the family members' own activity is seeded in seed-family.ts.
+  const insuredWithPolicy = insured.filter((x) => x.status === 'active' && x.relation === 'employee');
   const actorFor = (to: ClaimStatus, cat: ClaimCategory, amount: number) => {
     if (to === 'to_pay' || to === 'paid') return pick(rng, accountants);
     if (to === 'medical_review') return pick(rng, operators);
@@ -846,11 +867,14 @@ export function createSeed(opts: SeedOptions = {}): Db {
     endorsements: [],
     smsOutbox: [],
     migrationBatches: [],
+    familyConsents: [],
+    familyRequests: [],
   };
   // Core helpers used below read the DMS parameters (number templates) through db(): let them see the
   // database being seeded instead of starting another seed.
   replaceDb(out);
   seedAssistance(out, { now });
   seedLifecycle(out, { now });
+  seedFamilyActivity(out, family, { now });
   return out;
 }

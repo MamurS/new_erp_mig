@@ -52,7 +52,7 @@ export function dbRefs(d: Db): MigrationDbRefs {
   for (const i of d.insured) {
     if (i.status !== 'active') continue;
     const p = d.policies.find((x) => x.id === i.policyId);
-    const facts = { id: i.id, program: p?.program ?? 'standard', from: p?.startDate ?? i.insuredFrom };
+    const facts = { id: i.id, program: p?.program ?? 'standard', from: p?.startDate ?? i.insuredFrom, relation: i.relation, ...(i.contractId ? { contractId: i.contractId } : {}) };
     refs.insuredByPinfl.set(i.pinfl, facts);
     if (i.externalCertificateNumber) refs.insuredByCertificate.set(i.externalCertificateNumber.toUpperCase(), facts);
     if (i.phone) refs.phones.add(i.phone);
@@ -272,8 +272,9 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
     const r = v.data;
     const client = clientOf(v.ref.client);
     const members = insuredRows.filter((x) => 'batch' in x.ref.contract && x.ref.contract.batch === v.row);
-    const employees = members.length;
-    const family = members.reduce((s, x) => s + x.data.familyMembers, 0);
+    // A row per person: employees and family members are counted separately.
+    const family = members.filter((x) => x.data.relation !== 'employee').length;
+    const employees = members.length - family;
     const year = new Date().getFullYear();
     d.contractSeq += 1;
     d.dealSeq += 1;
@@ -315,7 +316,7 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
       createdAt: at,
       versions: [{ version: 1, at, byName: b.createdByName, changes: `Перенесён из старой системы: старый № ${r.oldNumber}, подтвердил ${approver.displayName}` }],
       activatedAt: at,
-      insuredCount: employees,
+      insuredCount: members.length,
       externalNumber: r.oldNumber,
       migration: mark,
     };
@@ -379,10 +380,20 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
 
   // ---- insured persons with new certificates
   const insuredByRow = new Map<number, InsuredRow>();
-  for (const v of insuredRows) {
+  // Employees first: a family member is created under the employee (a row of the batch or a person in the system).
+  for (const v of [...insuredRows].sort((a, b) => (a.data.relation === 'employee' ? 0 : 1) - (b.data.relation === 'employee' ? 0 : 1))) {
     const r = v.data;
     const { c, p, client } = contractOf(v.ref.contract);
-    const person = createInsured(d, client, p, { fullName: r.fullName, position: r.position ?? 'Сотрудник', birthDate: r.birthDate, pinfl: r.pinfl, phone: r.phone ?? '', familyMembers: r.familyMembers }, r.inclusionDate, r.phone ? 'invited' : 'not_invited');
+    const principal = v.ref.principal ? ('batch' in v.ref.principal ? insuredByRow.get(v.ref.principal.batch) : d.insured.find((x) => x.id === (v.ref.principal as { db: string }).db)) : undefined;
+    if (r.relation !== 'employee' && !principal) throw conflict('srv.migration.stale');
+    const person = createInsured(
+      d,
+      client,
+      p,
+      { fullName: r.fullName, position: r.position ?? (r.relation === 'employee' ? 'Сотрудник' : ''), birthDate: r.birthDate, pinfl: r.pinfl, phone: r.phone ?? '', relation: r.relation, ...(principal ? { principalId: principal.id } : {}) },
+      r.inclusionDate,
+      r.phone ? 'invited' : 'not_invited',
+    );
     person.contractId = c.id;
     person.certificateNumber = certificateNumber(c.number, d.insured.filter((i) => i.contractId === c.id).length, numbering());
     person.externalCertificateNumber = r.oldCertificate;

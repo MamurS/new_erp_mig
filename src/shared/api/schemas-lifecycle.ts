@@ -73,7 +73,7 @@ export const dealViews = z.array(dealViewBase);
 export const census: z.ZodType<T.Census> = z.object({
   id: uuid,
   dealId: uuid,
-  rows: z.array(z.object({ gender: z.enum(['m', 'f']), birthYear: z.number(), relation: z.enum(['employee', 'spouse', 'child']) })),
+  rows: z.array(z.object({ gender: z.enum(['m', 'f']), birthYear: z.number(), relation: z.enum(['employee', 'spouse', 'child', 'parent', 'other']) })),
   uploadedAt: isoDateTime,
 });
 export const censusUpload = z.object({ census, errors: z.array(z.object({ row: z.number(), message: z.string() })), dropped: z.array(z.string()) });
@@ -198,7 +198,7 @@ export const contractView: z.ZodType<D.ContractView> = z.object({
   dealNumber: z.string(),
   migSignatory: signatoryOption.nullable(),
   signatories: z.array(signatoryOption),
-  insuredRows: z.array(z.object({ fullName: z.string(), position: z.string(), familyMembers: z.number() })),
+  insuredRows: z.array(z.object({ fullName: z.string(), position: z.string(), relation: z.enum(['employee', 'spouse', 'child', 'parent', 'other']) })),
   invoices: z.array(S.invoice),
   payments: z.array(payment),
   endorsements: z.array(endorsementSummary),

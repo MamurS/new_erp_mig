@@ -365,4 +365,10 @@ export const srv: Translation<typeof Ru> = {
   'srv.time.chooseFuture': 'Kelajakdagi vaqtni tanlang',
   'srv.users.emailInUse': 'Email allaqachon ishlatilmoqda',
   'srv.users.emailTaken': 'Bunday emailli foydalanuvchi allaqachon bor',
+  'srv.family.consentAdultsOnly': 'Ruxsatni faqat voyaga yetgan oila aʼzosi oʻz profilida beradi',
+  'srv.family.employeeOnly': 'Oila aʼzosini faqat xodim qoʻsha oladi',
+  'srv.family.noEmployee': 'Xodim kompaniyaning sugʻurtalanganlari orasida topilmadi',
+  'srv.family.phoneTaken': 'Bu telefon boshqa sugʻurtalangan shaxsning kirishi uchun ishlatilmoqda',
+  'srv.family.requestDecided': 'Ariza boʻyicha qaror allaqachon qabul qilingan',
+  'srv.policy.principalNotInList': 'Bu JShShIR bilan xodim roʻyxatda topilmadi',
 };

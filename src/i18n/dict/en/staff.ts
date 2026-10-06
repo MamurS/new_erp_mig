@@ -539,4 +539,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.params.history': 'Change history',
   'staff.params.decidedApplied': ' · confirmed by {name}',
   'staff.params.decidedRejected': ' · rejected by {name}',
+  'staff.insuredCard.family': 'Family',
+  'staff.insuredCard.relation': 'Relation',
+  'staff.insuredCard.student': 'student',
 };

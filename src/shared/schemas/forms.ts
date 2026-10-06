@@ -175,6 +175,58 @@ export const hrEmployeeSchema = z.object({
 export type HrEmployeeInput = z.input<typeof hrEmployeeSchema>;
 export type HrEmployeePayload = z.output<typeof hrEmployeeSchema>;
 export const hrExcludeSchema = z.object({ excludeFrom: isoDateInput });
+
+// ---- family members (FAMILY_SPEC) ----
+/** «Surname Given Patronymic» in Latin script (as in the ID card), 2–4 words. */
+const LATIN_PERSON = /^[A-Za-zʻʼ'`’-]+(?: [A-Za-zʻʼ'`’-]+){1,3}$/;
+export const latinFullName = text(5, 120, msg('v.fullNameRequired'))
+  .transform((v) => v.replace(/\s+/g, ' '))
+  .pipe(z.string().regex(LATIN_PERSON, msg('v.fullNameLatin')));
+const familyRelationInput = z.enum(['spouse', 'child', 'parent', 'other'], { errorMap: () => ({ message: msg('v.relation') }) });
+const familyMemberFields = {
+  fullName: latinFullName,
+  birthDate: hrEmployeeSchema.shape.birthDate,
+  pinfl: pinflInput,
+  relation: familyRelationInput,
+  /** A child studying full time: covered up to `studentMaxAge`. */
+  isStudent: z.boolean().optional(),
+};
+/** HR adds a family member of an employee: a change request for MIG, like an employee. */
+export const hrFamilyMemberSchema = z.object({
+  employeeId: uuid,
+  ...familyMemberFields,
+  /** An adult family member's own phone: the login to the app. */
+  phone: z
+    .union([z.string(), z.undefined()])
+    .transform((v) => (v ?? '').trim())
+    .pipe(z.union([z.literal('').transform(() => undefined), phoneInput])),
+  startDate: isoDateInput,
+});
+export type HrFamilyMemberInput = z.input<typeof hrFamilyMemberSchema>;
+/** The employee asks to add a family member from the app; HR approves. */
+export const familyRequestSchema = z.object({
+  ...familyMemberFields,
+  /** The employee confirms the family member's consent to the processing of personal data. */
+  consent: z.literal(true, { errorMap: () => ({ message: msg('v.familyConsentRequired') }) }),
+});
+export type FamilyRequestInput = z.input<typeof familyRequestSchema>;
+export const familyRequestDecisionSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    /** Start of coverage; by default the next day. */
+    startDate: isoDateInput.optional(),
+    reason: z.string().trim().max(300, msg('v.tooLong', { max: 300 })).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.decision === 'reject' && (v.reason ?? '').length < 5) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reason'], message: msg('v.reasonMin5') });
+  });
+/** An adult family member allows (or stops allowing) the employee to see their claims and appointments. */
+export const familyConsentSchema = z.object({ granted: z.boolean() });
+/** Own card for reimbursements; null — back to the employee's card (a family member only). */
+export const payoutCardSchema = z.object({
+  card: z
+    .union([z.string().trim().max(23).transform((v) => digitsOnly(v)).refine((v) => /^\d{16}$/.test(v), msg('v.cardFormat')), z.null()]),
+});
 export const hrInviteSchema = z.object({
   ids: z.union([z.array(uuid).min(1).max(2000), z.literal('all_not_in_app')]),
 });
@@ -243,13 +295,48 @@ export const registryLineDecisionSchema = z.discriminatedUnion('decision', [
 const programInput = z.enum(['basic', 'standard', 'standard_plus', 'premium'], { errorMap: () => ({ message: msg('v.programRequired') }) });
 const tariffInput = z.number({ invalid_type_error: msg('v.tariffRequired') }).int().min(100_000, msg('v.min', { min: '100 000' })).max(1_000_000_000, msg('v.tariffTooLarge'));
 
-/** One row of the initial list of insured persons (CSV). */
-export const policyListRowSchema = hrEmployeeSchema.omit({ startDate: true }).extend({
-  familyMembers: z
-    .union([z.string(), z.number(), z.undefined()])
-    .transform((v) => (v === undefined || String(v).trim() === '' ? 0 : Number(String(v).trim())))
-    .pipe(z.number({ invalid_type_error: msg('v.familyCount') }).int(msg('v.familyCount')).min(0, msg('v.familyCount')).max(10, msg('v.familyCount'))),
-});
+/** Relation in a CSV cell: empty — an employee. */
+const relationCell = z
+  .union([z.string(), z.undefined()])
+  .transform((v) => (v ?? '').trim().toLowerCase() || 'employee')
+  .pipe(z.enum(['employee', 'spouse', 'child', 'parent', 'other'], { errorMap: () => ({ message: msg('v.relation') }) }));
+const optionalPinflCell = z
+  .union([z.string(), z.undefined()])
+  .transform((v) => digitsOnly(v ?? ''))
+  .refine((v) => v === '' || /^\d{14}$/.test(v), msg('v.pinflFormat'))
+  .transform((v) => (v === '' ? undefined : v));
+const optionalPhoneCell = z
+  .union([z.string(), z.undefined()])
+  .transform((v) => (v ?? '').trim())
+  .pipe(z.union([z.literal('').transform(() => ''), phoneInput]));
+const yesNoCell = z
+  .union([z.string(), z.boolean(), z.undefined()])
+  .transform((v) => v === true || ['1', 'yes', 'true', 'y', 'ha'].includes(String(v ?? '').trim().toLowerCase()));
+
+/**
+ * One row of the initial list of insured persons (CSV): a row per person. A family member has `relation`
+ * (spouse, child, parent, other) and the employee's PINFL in `principal_pinfl`; the phone and the position
+ * are optional for a family member.
+ */
+export const policyListRowSchema = hrEmployeeSchema
+  .omit({ startDate: true, phone: true, position: true })
+  .extend({
+    phone: optionalPhoneCell,
+    position: z
+      .union([z.string(), z.undefined()])
+      .transform((v) => (v ?? '').trim())
+      .pipe(z.string().max(80, msg('v.tooLong', { max: 80 }))),
+    relation: relationCell,
+    principal_pinfl: optionalPinflCell,
+    student: yesNoCell.optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.relation === 'employee') {
+      if (!v.phone) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phone'], message: msg('v.phoneRequired') });
+      if (v.position.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['position'], message: msg('v.tooShort', { min: 2 }) });
+      if (v.principal_pinfl) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['principal_pinfl'], message: msg('v.principalForEmployee') });
+    } else if (!v.principal_pinfl) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['principal_pinfl'], message: msg('v.principalRequired') });
+  });
 
 export const policyTermsSchema = z
   .object({

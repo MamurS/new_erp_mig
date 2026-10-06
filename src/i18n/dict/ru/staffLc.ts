@@ -364,7 +364,7 @@ export const staffLc = {
   'staffLc.issue.step.review': 'Проверка',
   'staffLc.issue.previewCaption': 'Строки файла со списком застрахованных',
   'staffLc.issue.colRow': 'Строка',
-  'staffLc.issue.colFamily': 'Семья',
+  'staffLc.issue.colFamily': 'Кем приходится',
   'staffLc.issue.colCheck': 'Проверка',
   'staffLc.issue.valid': 'Корректно',
   'staffLc.issue.previewLimited': 'Показаны первые {shown} строк из {total}; итоги выше посчитаны по всему файлу.',
@@ -404,7 +404,6 @@ export const staffLc = {
   'staffLc.changes.approvedToast': 'Подтверждено заявок: {n}. Допсоглашений: {endorsements}',
   'staffLc.changes.selectAria': 'Выбрать: {name}',
   'staffLc.changes.clientPolicy': 'Клиент и полис',
-  'staffLc.changes.family': ' · семья: {n}',
   'staffLc.changes.delta': 'Доплата / возврат',
   'staffLc.changes.request': 'Запрос',
   'staffLc.changes.actionsAria': 'Действия: {name}',
@@ -483,4 +482,5 @@ export const staffLc = {
   'staffLc.settle.reserveDesc': 'Изменение попадёт в историю резерва с вашим именем.',
   'staffLc.settle.reserveChanged': 'Резерв изменён',
   'staffLc.settle.reserveUzs': 'Резерв, UZS',
+  'staffLc.changes.familyOf': '{relation} · сотрудник {name}',
 } satisfies Record<string, string>;

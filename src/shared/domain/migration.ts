@@ -9,7 +9,7 @@
 import Papa from 'papaparse';
 import type { z } from 'zod';
 import { msg } from '@/i18n/core';
-import type { LimitCategory, Money, ProgramCode, UUID } from '@/shared/types';
+import type { InsuredRelation, LimitCategory, Money, ProgramCode, UUID } from '@/shared/types';
 import type { MigrationContractPremium, MigrationIssue, MigrationMetric, MigrationPremiumSource, MigrationReconRow, MigrationStep, MigrationTotals } from '@/shared/types/migration';
 import { PROGRAMS } from './programs';
 import { toCsv } from '@/shared/lib/csv';
@@ -35,7 +35,7 @@ export const MIGRATION_STEPS = ['clients', 'contracts', 'insured', 'limits', 'cl
 export const MIGRATION_COLUMNS: Record<MigrationStep, readonly string[]> = {
   clients: ['name', 'legalForm', 'stir', 'bank', 'account', 'mfo', 'director', 'directorBasis', 'address', 'hrName', 'hrPhone', 'hrEmail'],
   contracts: ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'premium_employee', 'premium_family', 'paymentFrequency', 'assistance'],
-  insured: ['fullName', 'birthDate', 'pinfl', 'phone', 'oldCertificate', 'inclusionDate', 'contractOldNumber', 'position', 'familyMembers', 'premium'],
+  insured: ['fullName', 'birthDate', 'pinfl', 'phone', 'oldCertificate', 'inclusionDate', 'contractOldNumber', 'position', 'relation', 'principal_pinfl', 'premium'],
   limits: ['pinfl', 'oldCertificate', 'category', 'usedAmount'],
   claims: ['oldNumber', 'pinfl', 'oldCertificate', 'category', 'serviceDate', 'provider', 'amountClaimed', 'reserve', 'status'],
   invoices: ['oldNumber', 'contractOldNumber', 'amount', 'paid', 'issuedAt', 'dueDate'],
@@ -88,7 +88,8 @@ const EXAMPLE: Record<MigrationStep, Record<string, string>> = {
     inclusionDate: '2026-03-01',
     contractOldNumber: 'MIG-2026/0458',
     position: 'Accountant',
-    familyMembers: '1',
+    relation: 'employee',
+    principal_pinfl: '',
     premium: '',
   },
   limits: { pinfl: '31405880123456', oldCertificate: 'C-0458-0001', category: 'outpatient', usedAmount: '1250000' },
@@ -96,10 +97,29 @@ const EXAMPLE: Record<MigrationStep, Record<string, string>> = {
   invoices: { oldNumber: 'INV-2026-0091', contractOldNumber: 'MIG-2026/0458', amount: '31250000', paid: '0', issuedAt: '2026-09-01', dueDate: '2026-09-15' },
 };
 
-/** Template: header and one example row (cells are CSV-injection safe). */
+/** More example rows: a family member of the example employee (a row per person, FAMILY_SPEC). */
+const MORE_EXAMPLES: Partial<Record<MigrationStep, Record<string, string>[]>> = {
+  insured: [
+    {
+      fullName: 'Rahimova Nilufar Akmalovna',
+      birthDate: '1990-11-02',
+      pinfl: '40211900123457',
+      phone: '+998901112244',
+      oldCertificate: 'C-0458-0002',
+      inclusionDate: '2026-03-01',
+      contractOldNumber: 'MIG-2026/0458',
+      position: '',
+      relation: 'spouse',
+      principal_pinfl: '31405880123456',
+      premium: '',
+    },
+  ],
+};
+
+/** Template: header and example rows (cells are CSV-injection safe). */
 export function migrationTemplateCsv(step: MigrationStep): string {
   const cols = MIGRATION_COLUMNS[step];
-  return toCsv(cols, [cols.map((c) => EXAMPLE[step][c] ?? '')]);
+  return toCsv(cols, [EXAMPLE[step], ...(MORE_EXAMPLES[step] ?? [])].map((r) => cols.map((c) => r[c] ?? '')));
 }
 
 /** File names carry no personal data. */
@@ -136,8 +156,8 @@ export interface MigrationDbRefs {
   /** Contracts transferred earlier, by their old number. */
   contracts: Map<string, { id: UUID; program: ProgramCode; startDate: string; endDate: string; active: boolean; premiumEmployee: Money; premiumFamily: Money }>;
   /** Active insured persons: by PINFL and by old certificate number (transferred ones). */
-  insuredByPinfl: Map<string, { id: UUID; program: ProgramCode; from: string }>;
-  insuredByCertificate: Map<string, { id: UUID; program: ProgramCode; from: string }>;
+  insuredByPinfl: Map<string, InsuredFacts>;
+  insuredByCertificate: Map<string, InsuredFacts>;
   /** Phones of active insured persons (the app login finds a person by phone). */
   phones: Set<string>;
   /** Old numbers of transferred claims and invoices. */
@@ -147,6 +167,17 @@ export interface MigrationDbRefs {
   assistances: Map<string, UUID>;
   /** Limits already transferred for a person: `insuredId:category`. */
   limits: Set<string>;
+}
+
+/** An insured person in the system as the validation sees it. */
+export interface InsuredFacts {
+  id: UUID;
+  program: ProgramCode;
+  from: string;
+  /** Who the person is; a family member refers to an employee by `principal_pinfl`. */
+  relation: InsuredRelation;
+  /** Contract the person is insured under (transferred contracts: their id). */
+  contractId?: UUID;
 }
 
 export const emptyDbRefs = (): MigrationDbRefs => ({
@@ -179,11 +210,13 @@ export interface StepResult<T, R = undefined> {
   validTotals: MigrationTotals;
 }
 
-/** A valid insured row: its contract and its resolved annual premium. */
+/** A valid insured row: its contract, its resolved annual premium and, for a family member, the employee. */
 export interface InsuredRef {
   contract: MigrationRef;
   premium: Money;
   premiumSource: MigrationPremiumSource;
+  /** The employee of a family member: a row of this file or a person in the system. */
+  principal?: MigrationRef;
 }
 
 export interface BatchResults {
@@ -304,17 +337,17 @@ const groupDigits = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' 
 export const MIGRATION_PREMIUM_TOLERANCE = 1;
 
 /**
- * Annual premium of an insured row, in this order: the row's individual premium; else by type from the
- * contract — an employee plus the family members covered under the certificate; else none (an error).
+ * Annual premium of a person (a row per person), in this order: the row's individual premium; else by type
+ * from the contract — `premium_employee` for an employee, `premium_family` for a family member; else none
+ * (an error).
  */
 export function insuredPremium(
-  row: Pick<MigrationInsuredRow, 'premium' | 'familyMembers'>,
+  row: Pick<MigrationInsuredRow, 'premium' | 'relation'>,
   contract: { premiumEmployee?: Money; premiumFamily?: Money },
 ): { premium: Money; source: MigrationPremiumSource } | null {
   if (row.premium !== undefined) return { premium: row.premium, source: 'individual' };
-  if (contract.premiumEmployee === undefined) return null;
-  if (row.familyMembers > 0 && contract.premiumFamily === undefined) return null;
-  return { premium: contract.premiumEmployee + (contract.premiumFamily ?? 0) * row.familyMembers, source: 'type' };
+  const byType = row.relation === 'employee' ? contract.premiumEmployee : contract.premiumFamily;
+  return byType === undefined ? null : { premium: byType, source: 'type' };
 }
 
 /** Per-contract premium check: the insured persons' premiums against the contract's total, within the tolerance. */
@@ -421,8 +454,10 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
       if (fc !== undefined) c.error(row, 'oldCertificate', msg('migration.v.repeatedInFile', { row: fc }));
       else certs.set(cert, row);
       if (!pinflMatchesBirthDate(p.pinfl, p.birthDate)) c.warn(row, 'pinfl', msg('migration.v.pinflBirthDate'));
-      if (!p.phone) c.warn(row, 'phone', msg('migration.v.noPhone'));
-      else {
+      // A child lives in the parent's app: no own phone is expected.
+      if (!p.phone) {
+        if (p.relation !== 'child') c.warn(row, 'phone', msg('migration.v.noPhone'));
+      } else {
         if (refs.phones.has(p.phone)) c.error(row, 'phone', msg('migration.v.phoneTaken'));
         const fph = phones.get(p.phone);
         if (fph !== undefined) c.error(row, 'phone', msg('migration.v.repeatedInFile', { row: fph }));
@@ -440,7 +475,23 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
         c.error(row, 'premium', msg('migration.v.noPremium'));
         return null;
       }
-      return { data: p, ref: { contract: contract.ref, premium: premium.premium, premiumSource: premium.source } };
+      return { data: p, ref: { contract: contract.ref, premium: premium.premium, premiumSource: premium.source } as InsuredRef };
+    });
+    // A family member refers to an employee of the same contract: a valid row of this file or a person already
+    // transferred (FAMILY_SPEC). Checked once every row is known.
+    const employeeRows = new Map(res.flatMap((x, idx) => (x && x.data.relation === 'employee' && !c.hasError(idx + 2) ? [[x.data.pinfl, { row: idx + 2, contract: x.data.contractOldNumber.toUpperCase() }] as const] : [])));
+    res.forEach((x, idx) => {
+      if (!x || x.data.relation === 'employee' || !x.data.principal_pinfl) return;
+      const row = idx + 2;
+      const inFile = employeeRows.get(x.data.principal_pinfl);
+      const inDb = refs.insuredByPinfl.get(x.data.principal_pinfl);
+      if (inFile) {
+        if (inFile.contract !== x.data.contractOldNumber.toUpperCase()) c.error(row, 'principal_pinfl', msg('migration.v.principalOtherContract'));
+        else x.ref.principal = { batch: inFile.row };
+      } else if (inDb && inDb.relation === 'employee') {
+        if (!('db' in x.ref.contract) || inDb.contractId !== x.ref.contract.db) c.error(row, 'principal_pinfl', msg('migration.v.principalOtherContract'));
+        else x.ref.principal = { db: inDb.id };
+      } else c.error(row, 'principal_pinfl', msg('migration.v.principalNotFound'));
     });
     // Per contract of the batch: the premiums of the rows to be written against the contract's total.
     const checks: MigrationContractPremium[] = [];

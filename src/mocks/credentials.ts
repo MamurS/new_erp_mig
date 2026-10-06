@@ -44,6 +44,8 @@ export const DEMO_STAFF: DemoStaff[] = [
 ];
 export const DEMO_HR = { email: 'hr@demo-client.uz', fullName: 'Tursunova Malika Zafarovna' };
 export const DEMO_INSURED_PHONE = '+998900000001';
+/** The demo insured person's spouse: an adult family member with an own login (FAMILY_SPEC). */
+export const DEMO_SPOUSE_PHONE = '+998900000002';
 export const DEMO_CLINIC_USERS: { role: 'clinic_registrar' | 'clinic_admin'; email: string; fullName: string }[] = [
   { role: 'clinic_registrar', email: 'registrar@demo-clinic.uz', fullName: 'Ahmedova Gulnora Xurshidovna' },
   { role: 'clinic_admin', email: 'admin@demo-clinic.uz', fullName: 'Karimov Baxtiyor Alisherovich' },

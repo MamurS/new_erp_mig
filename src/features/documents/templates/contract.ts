@@ -148,7 +148,7 @@ export const CONTRACT_TEMPLATE: DocTemplate = {
   ],
   tables: [
     { id: 'program', title: 'Лимиты программы', columns: ['Категория', 'Лимит на застрахованного'], source: 'PROGRAMS[Contract.params.program].limits' },
-    { id: 'insured', title: 'Список застрахованных', columns: ['№', 'ФИО', 'Должность', 'Членов семьи'], source: 'Список приложения 2 (формат HR-импорта), без ПИНФЛ и телефонов' },
+    { id: 'insured', title: 'Список застрахованных', columns: ['№', 'ФИО', 'Должность', 'Кем приходится'], source: 'Список приложения 2: строка на каждого застрахованного с отношением к сотруднику, без ПИНФЛ и телефонов' },
     { id: 'schedule', title: 'График платежей', columns: ['№', 'Срок оплаты', 'Сумма'], source: 'Contract.params.paymentSchedule' },
   ],
 };

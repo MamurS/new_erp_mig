@@ -37,7 +37,7 @@ import { API, audit, body, byLegalForm, byLegalName, conflict, type Ctx, filterL
 import { randomId } from '../rng';
 import { tzIso } from '../time';
 import { toClient } from '../views';
-import { parsePolicyList } from '../policy-core';
+import { parsePolicyList, toListRow } from '../policy-core';
 import { dmsParam, numbering } from '../params';
 import { assistanceName } from '../assistance-core';
 import {
@@ -137,7 +137,7 @@ function contractView(d: Db, c: Contract): ContractView {
     dealNumber: d.deals.find((x) => x.id === c.dealId)?.number ?? '—',
     migSignatory: signatory ? signatoryOption(signatory) : null,
     signatories: signatories(d),
-    insuredRows: (d.contractInsured.find((x) => x.contractId === c.id)?.rows ?? []).map((r) => ({ fullName: r.fullName, position: r.position, familyMembers: r.familyMembers })),
+    insuredRows: (d.contractInsured.find((x) => x.contractId === c.id)?.rows ?? []).map((r) => ({ fullName: r.fullName, position: r.position, relation: r.relation })),
     invoices: d.invoices.filter((i) => i.contractId === c.id).map(refreshInvoice),
     payments: d.payments.filter((p) => p.contractId === c.id),
     endorsements: d.endorsements.filter((e) => e.contractId === c.id).map(endorsementSummary),
@@ -704,7 +704,8 @@ export const contractHandlers = [
         throw new HttpError(422, 'validation', 'srv.census.fileErrors', {
           params: { count: parsed.errors.length, details: parsed.errors.slice(0, 3).map((e) => t('srv.census.rowError', { row: e.row, message: tm(e.message) })).join('; ') },
         });
-      const rows = parsed.rows.map((r) => ({ fullName: r.fullName, birthDate: r.birthDate, pinfl: r.pinfl, phone: r.phone, position: r.position, familyMembers: r.familyMembers ?? 0 }));
+      // Appendix 2: a row per person, family members with the relation and the employee's PINFL (FAMILY_SPEC).
+      const rows = parsed.rows.map(toListRow);
       d.contractInsured = [...d.contractInsured.filter((x) => x.contractId !== c.id), { contractId: c.id, rows }];
       c.insuredListId = c.id;
       c.insuredCount = rows.length;

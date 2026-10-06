@@ -367,7 +367,7 @@ export const staffLc: Translation<typeof Ru> = {
   'staffLc.issue.step.review': 'Tekshirish',
   'staffLc.issue.previewCaption': 'Sugʻurtalanganlar roʻyxati faylining qatorlari',
   'staffLc.issue.colRow': 'Qator',
-  'staffLc.issue.colFamily': 'Oila',
+  'staffLc.issue.colFamily': 'Kim boʻladi',
   'staffLc.issue.colCheck': 'Tekshirish',
   'staffLc.issue.valid': 'Toʻgʻri',
   'staffLc.issue.previewLimited': '{total} tadan dastlabki {shown} ta qator koʻrsatilgan; yuqoridagi natijalar butun fayl boʻyicha hisoblangan.',
@@ -407,7 +407,6 @@ export const staffLc: Translation<typeof Ru> = {
   'staffLc.changes.approvedToast': 'Tasdiqlangan arizalar: {n}. Qoʻshimcha kelishuvlar: {endorsements}',
   'staffLc.changes.selectAria': 'Tanlash: {name}',
   'staffLc.changes.clientPolicy': 'Mijoz va polis',
-  'staffLc.changes.family': ' · oila: {n}',
   'staffLc.changes.delta': 'Qoʻshimcha toʻlov / qaytarish',
   'staffLc.changes.request': 'Soʻrov',
   'staffLc.changes.actionsAria': 'Amallar: {name}',
@@ -486,4 +485,5 @@ export const staffLc: Translation<typeof Ru> = {
   'staffLc.settle.reserveDesc': 'Oʻzgarish ismingiz bilan zaxira tarixiga tushadi.',
   'staffLc.settle.reserveChanged': 'Zaxira oʻzgartirildi',
   'staffLc.settle.reserveUzs': 'Zaxira, soʻm',
+  'staffLc.changes.familyOf': '{relation} · xodim {name}',
 };

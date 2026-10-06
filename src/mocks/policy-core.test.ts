@@ -6,7 +6,7 @@ import { tm, translate } from '@/i18n/core';
 import { HttpError } from './http';
 import { parsePolicyList } from './policy-core';
 
-const HEADER = 'fullName,birthDate,pinfl,phone,position,familyMembers';
+const HEADER = 'fullName,birthDate,pinfl,phone,position,relation,principal_pinfl';
 function failure(fn: () => unknown): HttpError {
   try {
     fn();
@@ -16,16 +16,24 @@ function failure(fn: () => unknown): HttpError {
   }
   throw new Error('expected an HttpError');
 }
-const row = (k: number, family = '') => `Тестов Тест Тестович,15.03.1990,${String(31503900000000 + k)},901112233,Инженер,${family}`;
+const row = (k: number, relation = '', principal = '') => `Тестов Тест Тестович,15.03.1990,${String(31503900000000 + k)},901112233,Инженер,${relation},${principal}`;
+/** A child: no phone and no position, the employee's PINFL. */
+const child = (k: number, principal: number) => `Тестов Малыш Тестович,01.02.2016,${String(30102160000000 + k)},,,child,${String(31503900000000 + principal)}`;
 
 describe('initial list of insured persons', () => {
-  it('reads family members (empty = 0), reports duplicates and bad values by line', () => {
-    const r = parsePolicyList([HEADER, row(1, '2'), row(2), row(1), row(3, '11')].join('\n'));
-    expect(r.total).toBe(4);
-    expect(r.rows.map((x) => x.familyMembers)).toEqual([2, 0]);
+  it('a row per person: relation (empty = employee) and the employee of a family member; duplicates and bad values by line', () => {
+    const r = parsePolicyList([HEADER, row(1), child(5, 1), row(1), row(3, 'cousin'), row(4, 'spouse'), child(6, 9)].join('\n'));
+    expect(r.total).toBe(6);
+    expect(r.rows.map((x) => [x.relation, x.principal_pinfl ?? ''])).toEqual([
+      ['employee', ''],
+      ['child', '31503900000001'],
+    ]);
+    expect(r.rows[1]).toMatchObject({ phone: '', position: '' });
     expect(r.errors.map((e) => ({ ...e, message: tm(e.message) }))).toEqual([
       { row: 4, field: 'pinfl', message: 'ПИНФЛ повторяется в файле' },
-      { row: 5, field: 'familyMembers', message: 'Число от 0 до 10' },
+      { row: 5, field: 'relation', message: tm('v.relation') },
+      { row: 6, field: 'principal_pinfl', message: tm('v.principalRequired') },
+      { row: 7, field: 'principal_pinfl', message: tm('srv.policy.principalNotInList') },
     ]);
   });
 

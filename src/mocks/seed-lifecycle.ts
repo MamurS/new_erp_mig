@@ -281,8 +281,9 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
   const demoPolicy = d.policies.find((p) => p.id === demoClient.activePolicyId)!;
   const members = d.insured.filter((i) => i.policyId === demoPolicy.id);
   const tariff = tariffOf(demoPolicy);
-  const employees = members.length;
-  const family = members.reduce((s, i) => s + i.familyMembersCount, 0);
+  // A row per person (FAMILY_SPEC): employees and family members by type.
+  const family = members.filter((i) => i.relation !== 'employee').length;
+  const employees = members.length - family;
   demoClient.requisites = { bank: 'Demo Bank ATB', account: '20208000900123456789', mfo: '00000', director: 'Tursunov Baxtiyor Alisherovich', directorBasis: 'Устав', address: 'г. Ташкент, Юнусабадский р-н' };
   const demoDeal: Deal = {
     id: id(),
@@ -344,7 +345,11 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     m.contractId = demoContract.id;
     m.certificateNumber = docNumber('certificate', { year: demoContractYear, n: demoContractSeq, m: k + 1 });
   });
-  d.contractInsured.push({ contractId: demoContract.id, rows: members.map((m) => ({ fullName: m.fullName, birthDate: m.birthDate, pinfl: m.pinfl, phone: m.phone, position: m.position, familyMembers: m.familyMembersCount })) });
+  const pinflOf = (id: string | undefined) => members.find((m) => m.id === id)?.pinfl;
+  d.contractInsured.push({
+    contractId: demoContract.id,
+    rows: members.map((m) => ({ fullName: m.fullName, birthDate: m.birthDate, pinfl: m.pinfl, phone: m.phone, position: m.position, relation: m.relation, ...(m.principalId ? { principalPinfl: pinflOf(m.principalId) } : {}) })),
+  });
   for (const inv of d.invoices.filter((i) => i.clientId === demoClient.id)) {
     inv.contractId = demoContract.id;
     inv.paid = inv.status === 'paid' ? inv.amount : 0;
@@ -397,7 +402,7 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       type,
       effectiveDate: effective,
       insuredId,
-      payload: { familyMembers: members.find((m) => m.id === insuredId)?.familyMembersCount ?? 0 },
+      payload: { relation: members.find((m) => m.id === insuredId)?.relation ?? 'employee', annual: tariff.employee },
       requestedBy: { id: hr.id, role: 'hr', name: hr.fullName },
       status,
       createdAt: tzIso(parseIso(effective) - DAY),
@@ -407,12 +412,13 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
     return r;
   };
   const short = (name: string) => name.split(' ').map((w, k) => (k === 0 ? w : `${w[0]}.`)).join(' ');
-  const recent = members.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.insuredFrom > demoPolicy.startDate).sort((a, b) => (a.insuredFrom < b.insuredFrom ? -1 : 1));
-  const leavers = members.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.appStatus === 'active' && m.insuredFrom === demoPolicy.startDate);
+  const staffOnly = members.filter((m) => m.relation === 'employee');
+  const recent = staffOnly.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.insuredFrom > demoPolicy.startDate).sort((a, b) => (a.insuredFrom < b.insuredFrom ? -1 : 1));
+  const leavers = staffOnly.filter((m) => m.phone !== DEMO_INSURED_PHONE && m.status === 'active' && m.appStatus === 'active' && m.insuredFrom === demoPolicy.startDate);
   const refund = REFUND_RULES[DMS_DEFAULTS.refundRule]!;
   const line = (r: ChangeRequestRow) => {
-    const person = members.find((m) => m.id === r.insuredId)!;
-    const annual = tariff.employee + tariff.family * person.familyMembersCount;
+    // The requests of the seed are about employees: the employee's tariff.
+    const annual = tariff.employee;
     const calc =
       r.type === 'add_insured'
         ? addLine(annual, r.effectiveDate, demoContract.params.startDate, demoContract.params.endDate)

@@ -174,7 +174,7 @@ export const migration = {
   'migration.col.insuredCount': 'Застрахованных',
   'migration.col.individual': 'С индивидуальной премией',
   'migration.col.insuredSum': 'Сумма премий застрахованных',
-  'migration.v.noPremium': 'Нет премии: укажите premium в строке или premium_employee и premium_family в договоре',
+  'migration.v.noPremium': 'Нет премии: укажите premium в строке или в договоре premium_employee для сотрудника и premium_family для члена семьи',
   'migration.v.premiumMismatch': 'Договор {contract}: сумма премий застрахованных {sum} не равна премии договора {total}',
   'migration.field.paymentFrequency': 'График платежей',
   'migration.field.assistance': 'Ассистанс',
@@ -260,4 +260,6 @@ export const migration = {
   'srv.migration.authorOnly': 'Это может сделать только автор пакета',
   'srv.migration.manualInvalid': 'Проверьте поля договора',
   'srv.migration.notMigrated': 'Договор не перенесён из старой системы',
+  'migration.v.principalNotFound': 'Сотрудник с этим ПИНФЛ не найден ни в файле, ни среди застрахованных',
+  'migration.v.principalOtherContract': 'Сотрудник застрахован по другому договору: член семьи переносится по договору сотрудника',
 };
