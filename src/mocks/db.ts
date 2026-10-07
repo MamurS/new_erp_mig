@@ -1,6 +1,7 @@
 /*
  * In-memory "server" database. Rows hold full (unmasked) values; handlers mask on output.
  */
+import type { UserNotification, WorkTask } from '@/shared/types/dto';
 import type {
   AiCallLog,
   AiSettings,
@@ -376,6 +377,19 @@ export interface Db {
   familyRequests: FamilyRequestRow[];
   // ---- help (questions asked in «Задать вопрос», stored redacted) ----
   help: { questions: HelpQuestionStored[] };
+  // ---- next steps: tasks between roles («Попросить …», «Запросить у HR») and in-app notifications ----
+  tasks: TaskRow[];
+  notifications: NotificationRow[];
+}
+
+/** A task for a role (staff) or for the HR of a client (`toRole: 'hr'`, `clientId`). */
+export interface TaskRow extends WorkTask {
+  createdById: UUID;
+}
+
+/** An in-app notification of one person (e.g. «задача выполнена»). */
+export interface NotificationRow extends UserNotification {
+  userId: UUID;
 }
 
 /** A question of «Задать вопрос»: the text is redacted; `askerId` only lets the asker rate the answer. */

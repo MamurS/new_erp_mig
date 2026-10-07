@@ -16,7 +16,7 @@ import { detectFlags } from '@/shared/domain/settlement';
 import { statementLineKey } from '@/shared/domain/payments';
 import { DOC_TEMPLATES } from '@/features/documents/templates';
 import type { ChangeRequestRow, ClaimRow, ClientRow, Db } from './db';
-import { DEMO_INSURED_PHONE } from './credentials';
+import { DEMO_INSURED_PHONE, DEMO_PASSWORD } from './credentials';
 import { int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
 import { DAY, isoDay, parseIso, tzIso } from './time';
 import { PROGRAMS } from './programs';
@@ -165,6 +165,8 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       ...(status === 'accepted' ? { response: { at: at(daysAgo - 1), byName: client.hrContact.name, via: 'hr' as const } } : {}),
     };
     d.kp.unshift(kp);
+    // As on the server: sending the offer opens the HR cabinet of the client's contact.
+    if (!d.hrUsers.some((h) => h.companyId === client.id)) d.hrUsers.push({ id: id(), email: client.hrContact.email, password: DEMO_PASSWORD, fullName: client.hrContact.name, companyId: client.id });
     event(deal.id, daysAgo, sales.fullName, `КП ${kp.number} отправлено клиенту`);
     if (status === 'accepted') event(deal.id, daysAgo - 1, client.hrContact.name, `КП ${kp.number} принято клиентом в кабинете`);
     return kp;

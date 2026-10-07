@@ -1,4 +1,5 @@
 /* Карточка сделки (LIFECYCLE_SPEC §3): stage steps, the panel of the current stage, documents and events. */
+import { DealChecklist, MissingNote } from '@/features/next/DealChecklist';
 import { SideColumn } from '@/shared/ui/side-column';
 import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { defineLabels, t, tm } from '@/i18n';
@@ -111,6 +112,7 @@ function StagePanel({ deal }: { deal: DealCard }) {
             </Button>
           )}
           {quoteButton}
+          <MissingNote items={deal.checklist} />
         </>,
       );
     case 'quote': {
@@ -131,6 +133,7 @@ function StagePanel({ deal }: { deal: DealCard }) {
               {t('staffLc.deal.sendKp')}
             </Button>
           )}
+          <MissingNote items={deal.checklist} />
         </>,
       );
     }
@@ -198,9 +201,12 @@ function StagePanel({ deal }: { deal: DealCard }) {
         DEAL_STAGE_LABEL[deal.stage].toLowerCase(),
         deal.stage === 'awaiting_payment' ? t('staffLc.deal.awaitingPaymentText') : t('staffLc.deal.inContractText'),
         deal.contract && (
-          <Button size="sm" onClick={() => navigate(`/staff/contracts/${deal.contract!.id}`)}>
-            {t('staffLc.deal.openContract')}
-          </Button>
+          <>
+            <Button size="sm" onClick={() => navigate(`/staff/contracts/${deal.contract!.id}`)}>
+              {t('staffLc.deal.openContract')}
+            </Button>
+            <MissingNote items={deal.checklist} />
+          </>
         ),
       );
   }
@@ -358,6 +364,7 @@ export default function DealCardPage() {
           <StickySectionsCtx.Provider value>
             <div className="flex min-w-0 flex-col gap-4">
               <StagePanel deal={deal} />
+              <DealChecklist deal={deal} />
               <Documents deal={deal} />
               <Card title={t('staffLc.deal.events')} bodyClassName="p-0">
                 <ol className="divide-y divide-border-soft text-[13px]" data-testid="deal-events">

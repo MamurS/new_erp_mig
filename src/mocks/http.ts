@@ -163,7 +163,8 @@ export function requireSession(request: Request): Auth {
     throw unauthorized();
   }
   session.role = user.role;
-  session.lastActivity = now;
+  // A background poll (X-Background: 1, e.g. the notifications bell) is not the person's activity.
+  if (request.headers.get('X-Background') !== '1') session.lastActivity = now;
   return { user, session };
 }
 

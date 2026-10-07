@@ -9,6 +9,7 @@ import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useHrFamilyRequests, useHrOverview } from '@/shared/api/queries/hr';
 import { CreateMenu } from '@/features/shell/CreateMenu';
 import { HelpContextButton } from '@/features/help/HelpContextButton';
+import { NotificationsBell } from '@/features/next/NotificationsBell';
 import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
@@ -69,6 +70,7 @@ export default function HrLayout() {
               )}
             </div>
             <HelpContextButton className="ml-auto" />
+            <NotificationsBell />
             <LanguageButton />
             <CreateMenu />
           </header>

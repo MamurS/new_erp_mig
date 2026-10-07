@@ -18,9 +18,12 @@ import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
+import { EmptyState } from '@/shared/ui/states';
 import { PageHeader } from '@/shared/ui/page';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
+import { roleName } from '@/features/next/NextActions';
+import { EmptyHelp } from '@/features/clinic/emptyNext';
 import { t, tm } from '@/i18n';
 
 type Invite = z.input<typeof assistUserInviteSchema>;
@@ -131,7 +134,18 @@ export default function UsersPage() {
     <>
       <PageHeader title={t('assist.users.pageTitle')} actions={<Button onClick={() => setInviting(true)}>{t('assist.users.invite')}</Button>} />
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption={t('assist.users.title')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(u) => u.id} />
+        <DataTable caption={t('assist.users.title')} columns={columns} rows={q.data} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(u) => u.id}
+          empty={
+            <EmptyState
+              testId="users-empty"
+              title={t('emptyPartner.users.title')}
+              why={t('emptyPartner.users.why')}
+              next={t('emptyPartner.users.next', { role: roleName('asst_admin') })}
+              actions={<Button onClick={() => setInviting(true)}>{t('emptyPartner.users.invite')}</Button>}
+              help={<EmptyHelp article="portal-guides" section="guide-assistance" />}
+            />
+          }
+        />
       </div>
       {inviting && <InviteDialog onClose={() => setInviting(false)} />}
     </>

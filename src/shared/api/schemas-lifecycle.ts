@@ -4,6 +4,7 @@ import type * as D from '@/shared/types/dto';
 import type * as T from '@/shared/types';
 import * as S from './schemas';
 import { LEGAL_FORMS } from '@/shared/config/legalForms';
+import { TASK_ACTIONS } from '@/shared/domain/nextStep';
 
 const uuid = z.string().min(1);
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -308,6 +309,50 @@ export const dealCard: z.ZodType<D.DealCard> = dealViewBase.extend({
   contract: z.object({ id: uuid, number: z.string(), version: z.number(), status: contractStatus, total: money, startDate: isoDate, endDate: isoDate }).nullable(),
   events: z.array(z.object({ id: uuid, dealId: uuid, at: isoDateTime, actorName: z.string(), text: z.string() })),
   reminders: z.array(z.string()),
+  checklist: z.array(
+    z.object({ key: z.string(), label: z.string(), done: z.boolean(), required: z.boolean(), role: S.role, action: z.enum(TASK_ACTIONS).optional(), hint: z.string().optional() }),
+  ),
+  hasHr: z.boolean(),
+});
+
+// ---------------- next steps: tasks, notifications, client pipeline ----------------
+
+const workTask = z.object({
+  id: uuid,
+  action: z.enum(TASK_ACTIONS),
+  toRole: S.role,
+  subjectType: z.enum(['deal', 'contract', 'client']),
+  subjectId: uuid,
+  clientId: uuid,
+  clientName: z.string(),
+  title: z.string(),
+  comment: z.string(),
+  link: z.string(),
+  createdByName: z.string(),
+  createdAt: isoDateTime,
+  dueDate: isoDate.optional(),
+  status: z.enum(['open', 'done']),
+  doneAt: isoDateTime.optional(),
+  doneByName: z.string().optional(),
+  contractId: uuid.optional(),
+  contractNumber: z.string().optional(),
+}) satisfies z.ZodType<D.WorkTask>;
+export const workTaskView: z.ZodType<D.WorkTask> = workTask;
+export const workTasks: z.ZodType<D.WorkTask[]> = z.array(workTask);
+export const userNotifications: z.ZodType<D.UserNotification[]> = z.array(
+  z.object({ id: uuid, text: z.string(), detail: z.string().optional(), link: z.string().optional(), createdAt: isoDateTime, read: z.boolean() }),
+);
+export const clientPipeline: z.ZodType<D.ClientPipeline> = z.object({
+  hasPolicy: z.boolean(),
+  hasHr: z.boolean(),
+  dealId: uuid.optional(),
+  dealNumber: z.string().optional(),
+  stage: dealStage.optional(),
+  contractId: uuid.optional(),
+  contractNumber: z.string().optional(),
+  contractStatus: contractStatus.optional(),
+  invoiceId: uuid.optional(),
+  invoiceNumber: z.string().optional(),
 });
 
 const reportRow = z.object({ key: z.string(), label: z.string(), claims: z.number(), reserve: money });

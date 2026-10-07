@@ -2,6 +2,7 @@
 import { defineLabels, msg } from '@/i18n';
 import type { ISODate, Money, Policy, PolicyChangeKind, PolicyChangeStatus, PolicyTariff, ProgramCode } from '@/shared/types';
 import { DMS_DEFAULTS, TARIFF_BASE_KEY } from '@/shared/config/dmsParameters';
+import { toCsv } from '@/shared/lib/csv';
 
 /** Demo annual tariff per employee: the base rates of «Параметры ДМС». A family member costs FAMILY_SHARE of it. */
 export const BASE_TARIFF: Record<ProgramCode, Money> = {
@@ -98,4 +99,13 @@ export function policyPeriodProblem(start: ISODate, end: ISODate): string | null
   if (end > maxEnd) return msg('dom.policies.maxMonths', { n: MAX_POLICY_MONTHS });
   if (daysInclusive(start, end) < 28) return msg('dom.policies.minMonth');
   return null;
+}
+
+/** Template of the list of insured persons (appendix 2 of a contract, the policy issue): a row per person. */
+export function annex2TemplateCsv(): string {
+  return toCsv(POLICY_CSV_HEADER, [
+    ['Ivanov Ivan Ivanovich', '15.03.1990', '31503900000001', '+998901234567', 'Muhandis', 'employee', '', ''],
+    ['Ivanova Anna Petrovna', '02.04.1992', '40204920000002', '', '', 'spouse', '31503900000001', ''],
+    ['Ivanov Pavel Ivanovich', '10.10.2015', '31010150000003', '', '', 'child', '31503900000001', ''],
+  ]);
 }

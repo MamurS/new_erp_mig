@@ -168,6 +168,8 @@ const AI_ACTIONS = Object.keys(AI_TABLE) as Action[];
 const MIGRATION_ACTIONS: Action[] = ['migration.manage', 'migration.approve'];
 /** Family members (FAMILY_SPEC, DECISIONS «Члены семьи»): the insured app's self-service, HR's decision on app requests. */
 const FAMILY_ACTIONS: Action[] = ['family.self_service', 'family.requests.decide'];
+/** Next steps of empty sections (DECISIONS «Пустые состояния»): tasks between roles and HR requests. */
+const TASK_ACTIONS: Action[] = ['tasks.ask', 'tasks.receive', 'tasks.request_hr'];
 const lifecycleRows = [...multi(LIFECYCLE_TABLE), ...multi(LIFECYCLE_READ_TABLE)];
 const rows = parse(TABLE);
 const paramRows = parse(PARAMS_TABLE);
@@ -187,7 +189,7 @@ describe('permissions matrix (SPEC §4)', () => {
     const earlier = [...rows, ...clinicRows, ...policyRows, ...assistRows, ...paramRows].map((r) => r.action);
     // LIFECYCLE §14 also restates `kp.send` and `rebills.review` of the earlier tables.
     const added = lifecycleRows.map((r) => r.action).filter((a) => !earlier.includes(a));
-    expect([...earlier, ...added, ...AI_ACTIONS, ...MIGRATION_ACTIONS, ...FAMILY_ACTIONS].sort()).toEqual([...ACTIONS].sort());
+    expect([...earlier, ...added, ...AI_ACTIONS, ...MIGRATION_ACTIONS, ...FAMILY_ACTIONS, ...TASK_ACTIONS].sort()).toEqual([...ACTIONS].sort());
   });
 
   for (const { action, cells } of rows) {
@@ -521,5 +523,21 @@ describe('family members permissions (FAMILY_SPEC)', () => {
     for (const role of ALL) expect(can(userFor(role), 'family.requests.decide'), role).toBe(role === 'hr');
     expect(can(userFor('hr'), 'family.requests.decide', { companyId: COMPANY })).toBe(true);
     expect(can(userFor('hr'), 'family.requests.decide', { companyId: OTHER_COMPANY })).toBe(false);
+  });
+});
+
+describe('next steps: tasks between roles (DECISIONS «Пустые состояния со следующим шагом»)', () => {
+  const ALL: Role[] = [...ROLES, ...ASSIST_ROLES, 'sales_manager', 'legal', 'claims_officer'];
+  const STAFF: Role[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer'];
+  it('«Попросить …»: every MIG employee; HR only about its own company; partners and the insured never', () => {
+    for (const role of ALL) expect(can(userFor(role), 'tasks.ask', { companyId: COMPANY }), role).toBe(STAFF.includes(role) || role === 'hr');
+    expect(can(userFor('hr'), 'tasks.ask', { companyId: OTHER_COMPANY })).toBe(false);
+  });
+  it('tasks are received by MIG roles and by HR of its own company', () => {
+    for (const role of ALL) expect(can(userFor(role), 'tasks.receive', { companyId: COMPANY }), role).toBe(STAFF.includes(role) || role === 'hr');
+    expect(can(userFor('hr'), 'tasks.receive', { companyId: OTHER_COMPANY })).toBe(false);
+  });
+  it('«Запросить у HR»: the manager and the underwriter (those who prepare the contract)', () => {
+    expect(ALL.filter((r) => can(userFor(r), 'tasks.request_hr')).sort()).toEqual(['sales_manager', 'underwriter']);
   });
 });

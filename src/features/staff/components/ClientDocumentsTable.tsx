@@ -1,7 +1,7 @@
 /* «Документы» tab of the client card: commercial offers and other documents in one list. */
 import { t } from '@/i18n';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Send, Undo2 } from 'lucide-react';
 import type { ClientDocument, KpDocument } from '@/shared/types';
 import { useClientDocuments } from '@/shared/api/queries/staff';
@@ -19,6 +19,7 @@ import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { KpDownloadButton } from '@/features/kp/KpDownloadButton';
 import { kpPath } from '@/features/kp/paths';
+import { AskButton, HelpMore, roleName } from '@/features/next/NextActions';
 
 type Row = { type: 'kp'; id: string; date: string; kp: KpDocument } | { type: 'doc'; id: string; date: string; doc: ClientDocument };
 
@@ -27,6 +28,7 @@ export function ClientDocumentsTable({ clientId, highlightId }: { clientId: stri
   const offers = useClientKp(clientId);
   const navigate = useNavigate();
   const canSend = useCan('kp.send');
+  const canDeals = useCan('deals.manage');
   const action = useKpAction();
   const [revokeFor, setRevokeFor] = useState<KpDocument | null>(null);
 
@@ -112,7 +114,24 @@ export function ClientDocumentsTable({ clientId, highlightId }: { clientId: stri
           void docs.refetch();
           void offers.refetch();
         }}
-        empty={<EmptyState title={t('staff.docs.empty')} />}
+        empty={
+          <EmptyState
+            testId="client-docs-next"
+            title={t('emptyStaff.docs.title')}
+            why={t('emptyStaff.docs.why')}
+            next={t('emptyStaff.docs.next', { role: roleName('sales_manager') })}
+            actions={
+              canDeals ? (
+                <Button variant="secondary" asChild>
+                  <Link to="/staff/deals">{t('emptyStaff.openDeals')}</Link>
+                </Button>
+              ) : (
+                <AskButton role="sales_manager" action="kp_send" subjectType="client" subjectId={clientId} />
+              )
+            }
+            help={<HelpMore article="new-client" section="kp" />}
+          />
+        }
       />
       <ConfirmDialog
         open={!!revokeFor}

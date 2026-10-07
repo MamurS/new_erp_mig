@@ -60,6 +60,21 @@ MIG xodimlari, HR, klinikalar va assistanslar email, parol va bir martalik kod b
 - Yon ustunlar — oʻngdagi karta, ish stoli bloklari («Eʼtibor talab qiladi», «Integratsiyalar»), kartalardagi maʼlumotlar va tarix, TT va shartnoma muharrirlaridagi hujjatni oldindan koʻrish — sahifa aylantirilganda joyidan siljimaydi. Uzun ustun oʻzi aylanadi: ustun sarlavhasi va tugmalari joyida qoladi, joriy boʻlim sarlavhasi esa butun boʻlim aylanib oʻtguncha ustun sarlavhasi ostida turadi. Kengligi 1280 pikseldan kichik ekranda karta jadval ustidan ochiladi, boshqa ustunlar esa asosiy mazmun ostiga tushadi.
 - «Ustunlar» tugmasi keraksiz ustunlarni yashiradi, «CSV ga eksport» jadvalni yuklab beradi (JShShIR, telefonlar va tashxislarsiz).
 
+### Boʻsh boʻlimlardagi maslahatlar {#empty-hints}
+
+<!-- audience: all -->
+
+Roʻyxat, yorliq yoki boʻlim maʼlumotlar hali kiritilmagani uchun boʻsh boʻlsa, tizim «Maʼlumot yoʻq» demaydi, keyingi qadamni koʻrsatadi:
+
+- **nega boʻsh** — bosqich va holatni hisobga olgan holda (lid uchun: «Sugʻurtalanganlar shartnoma kuchga kirgandan keyin paydo boʻladi»);
+- **nima qilish kerak va kim masʼul** — rol nomi;
+- **amal tugmasi**, agar buni oʻzingiz qila olsangiz: u toʻgʻridan-toʻgʻri kerakli joyga, ochiq shakl bilan olib boradi (masalan, baholash maʼlumotlari yoki 2-ilova faylini tanlash), fayl kerak boʻlsa yonida — «Shablonni yuklab olish»;
+- **«{rol}dan soʻrash»**, agar boshqa xodim masʼul boʻlsa: izohingiz va havola bilan vazifa ish stolida ushbu rol navbatida, «Hamkasblardan vazifalar» yorligʻida paydo boʻladi. Vazifa bajarilganda bildirishnoma olasiz (yuqori paneldagi qoʻngʻiroqcha); <!-- audience: staff hr -->
+- **«HRdan soʻrash»**, agar maʼlumotni mijoz berishi kerak boʻlsa: vazifa HR kabinetida «MIGdan vazifalar» blokida paydo boʻladi. Mijozda hali kabinet boʻlmasa (TTgacha lid), CSV shabloni bilan tayyor xat ochiladi — matnni nusxalab, oʻz pochtangizdan yuboring; <!-- audience: staff -->
+- **«Batafsil maʼlumotnomada»** — ushbu qadam haqidagi qoʻllanma boʻlimi.
+
+Agar roʻyxat filtrlar yoki qidiruv sababli boʻsh boʻlsa, avvalgidek «Hech narsa topilmadi» koʻrsatiladi.
+
 ### Seans {#session}
 
 <!-- audience: all -->
@@ -234,7 +249,7 @@ Bu bosqichda **ismlar, JShShIR va telefonlar kerak emas** — agar ular faylda b
 
 1. Tijorat taklifi qabul qilingandan soʻng bitimda «Shartnomani tayyorlash» tugmasi paydo boʻladi. Shartnoma tijorat taklifidan yaratiladi.
 2. Muharrirda chapda — parametrlar: sanalar, dastur, sugʻurta mukofotlari, toʻlovlar jadvali (bir martalik, choraklik yoki oylik), kuchga kirish qoidasi (boshlanish sanasidan yoki birinchi toʻlovdan keyin), ikkala tomonning imzolovchilari, muddat oʻrtasida kiritilgan odamlar uchun sugʻurta mukofotini hisoblash usuli (turi boʻyicha yoki yosh shkalasi boʻyicha).
-3. 2-ilova — sugʻurtalanganlar roʻyxati: uni HR oʻz kabinetida yoki menejer import formatida yuklaydi.
+3. 2-ilova — sugʻurtalanganlar roʻyxati: uni menejer import formatida yoki HR oʻz kabinetida («HRdan soʻrash» vazifasi boʻyicha) yuklaydi. 2-ilovasiz shartnomani kelishuvga yuborib boʻlmaydi.
 4. Oʻngda — barcha sahifalarning oldindan koʻrinishi.
 5. **Bandni oʻzgartirish.** Har bir bandda «Matnni oʻzgartirish» tugmasi bor. Oʻzgartirilgan band asl matn yonida ajratib koʻrsatiladi va shartnoma **albatta yuristga ketadi**. Yurist maʼqullaydi yoki izoh bilan qaytaradi. Oʻzgarishlar boʻlmasa, yurist bosqichi oʻtkazib yuboriladi.
 6. Agar moliyaviy shartlar tasdiqlangan kotirovkadan farq qilsa, ularni anderrayter tasdiqlaydi.
@@ -242,6 +257,37 @@ Bu bosqichda **ismlar, JShShIR va telefonlar kerak emas** — agar ular faylda b
 8. Yuborilgan shartnomani oʻzgartirish uchun «Yangi versiya» tugmasini bosing — bunda imzolar bekor qilinadi.
 
 Keyin — imzolash, toʻlov va polisni chiqarish (boʻlim 6).
+
+### Keyingi bosqich uchun nima kerak {#stage-checklist}
+
+<!-- audience: staff -->
+
+Bitim kartasida har bir bosqichda «Keyingi bosqich uchun nima kerak» bloki bor: nima talab qilinadi, tayyor yoki yoʻq, kim masʼul va amal tugmasi (boshqa xodim masʼul boʻlsa — «{rol}dan soʻrash», maʼlumotni mijoz bersa — «HRdan soʻrash»).
+
+- **Lid, baholash maʼlumotlari:** baholash uchun maʼlumotlar (menejer).
+- **Kotirovka:** kotirovkani hisoblash va tasdiqlash (anderrayter).
+- **TT yuborildi:** mijozning TTga javobi (mijoz HR xodimi).
+- **TT qabul qilindi:** shartnoma loyihasi (menejer).
+- **Shartnoma:** mijoz rekvizitlari (STIR, vakolat asosi), 2-ilova, ikki tomonning imzolovchilari; anderrayter tasdigʻi — faqat shartlar kotirovkadan farq qilsa; yurist kelishuvi — bandlar oʻzgartirilgan boʻlsa (kelishuvga yuborilgandan keyin).
+- **Imzolash:** mijoz va MIG imzolari. **Toʻlov kutilmoqda:** birinchi badal.
+
+Majburiy band bajarilmaguncha keyingi bosqichga oʻtib boʻlmaydi: oʻtish tugmasi («Kotirovkani hisoblash», «TTni yuborish», «Kelishuvga yuborish») faol emas, ostida «Yetishmaydi: …» yozilgan. Server ham xuddi shuni tekshiradi.
+
+### HRdan maʼlumot soʻrash {#request-hr}
+
+<!-- audience: staff hr -->
+
+<!-- audience: staff -->
+**Kim:** menejer yoki anderrayter. «HRdan soʻrash» tugmasi boʻsh 2-ilovada, baholash maʼlumotlarida, mijoz kartasining «Sugʻurtalanganlar» yorligʻida va bitim roʻyxatida bor.
+
+1. Mijozda HR kabineti allaqachon boʻlsa (u TT yuborilganda ochiladi), izoh yozing va «Vazifani yuborish» tugmasini bosing. Vazifa muddati — 7 kun.
+2. Kabinet hali boʻlmasa, mijozga xat ochiladi: matnni nusxalang, pochtani oching va CSV shablonini ilova qiling. Olingan faylni oʻzingiz yuklang.
+3. HR vazifani bajarganda bildirishnoma olasiz (yuqori paneldagi qoʻngʻiroqcha), roʻyxat bandi tayyor boʻladi.
+<!-- /audience -->
+
+<!-- audience: hr -->
+**Mijoz HR xodimi.** Kabinet bosh sahifasida «MIGdan vazifalar» bloki paydo boʻladi, masalan «… shartnomasi uchun xodimlar roʻyxatini 15.10 gacha yuklang». «Roʻyxatni yuklash» tugmasi faylni shu yerning oʻzida yuklaydi (shablon — «Shablonni yuklab olish»); boshqa vazifalar «Bajarildi» tugmasi bilan belgilanadi. Bajarilgandan keyin vazifa yoʻqoladi, MIG menejeri bildirishnoma oladi.
+<!-- /audience -->
 
 ## 6. Imzolash, toʻlov va polisni chiqarish {#signing}
 

@@ -22,6 +22,7 @@ import { contractHandlers } from './contracts';
 import { settlementHandlers } from './settlement';
 import { migrationHandlers } from './migration';
 import { helpHandlers } from './help';
+import { taskHandlers } from './tasks';
 import { API, notFound, route } from '../http';
 
 /*
@@ -31,6 +32,7 @@ import { API, notFound, route } from '../http';
 export const handlers = [
   ...authHandlers,
   ...dashboardHandlers,
+  ...taskHandlers,
   ...policyHandlers,
   ...clientHandlers,
   ...insuredHandlers,

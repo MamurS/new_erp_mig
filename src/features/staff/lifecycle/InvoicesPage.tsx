@@ -20,7 +20,9 @@ import { formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
+import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { HelpMore, roleName } from '@/features/next/NextActions';
 import { useTopbar } from '../topbar';
 import { CsvFileButton } from './common';
 
@@ -88,6 +90,22 @@ export default function InvoicesPage() {
   const import1c = useImport1c();
   const [pay, setPay] = useState<InvoiceView | null>(null);
   const [result, setResult] = useState<ImportPaymentsResult | null>(null);
+
+  const empty =
+    f.status || forms.length ? undefined : (
+      <EmptyState
+        testId="invoices-next"
+        title={t('emptyStaff.invoices.title')}
+        why={t('emptyStaff.invoices.why')}
+        next={t('emptyStaff.invoices.next', { role: roleName('accountant') })}
+        actions={
+          <Button variant="secondary" asChild>
+            <Link to="/staff/contracts">{t('emptyStaff.openContracts')}</Link>
+          </Button>
+        }
+        help={<HelpMore article="finance" section="invoices" />}
+      />
+    );
 
   const onStatement = async (csv: string) => {
     try {
@@ -203,7 +221,7 @@ export default function InvoicesPage() {
         </Select>
       </div>
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption={t('staffLc.contract.invoices')} columns={columns} rows={q.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(i) => i.id} empty={t('staffLc.invoices.empty')} />
+        <DataTable caption={t('staffLc.contract.invoices')} columns={columns} rows={q.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(i) => i.id} empty={empty} />
       </div>
       {pay && <PaymentDialog invoice={pay} onClose={() => setPay(null)} />}
     </>

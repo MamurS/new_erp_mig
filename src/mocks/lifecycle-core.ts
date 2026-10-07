@@ -3,6 +3,7 @@
  * contracts and endorsements, invoices, coming into force (policy, insured persons, certificates),
  * endorsement lines and their application, termination and expiry.
  */
+import type { ChecklistInput } from '@/shared/domain/nextStep';
 import type {
   ChangeRequest,
   ClientDocument,
@@ -450,4 +451,34 @@ export const pendingRequests = (d: Db, contractId: UUID): ChangeRequestRow[] => 
 export function toChangeRequest(r: ChangeRequestRow): ChangeRequest {
   const { newPerson: _n, policyChangeId: _p, ...out } = r;
   return out;
+}
+
+/** What the checklist of the deal's stage is computed from (src/shared/domain/nextStep.ts). */
+export function checklistInput(d: Db, deal: Deal): ChecklistInput {
+  const c = dealContract(d, deal.id);
+  const client = d.clients.find((x) => x.id === deal.clientId);
+  const kp = dealKp(d, deal.id);
+  const quote = latestQuote(d, deal.id);
+  return {
+    stage: deal.stage,
+    census: d.censuses.some((x) => x.dealId === deal.id),
+    ...(quote ? { quote: { status: quote.status } } : {}),
+    ...(kp ? { kp: { status: kp.status } } : {}),
+    ...(c
+      ? {
+          contract: {
+            status: c.status,
+            insuredCount: c.insuredCount ?? 0,
+            clientInn: client?.inn ?? '',
+            clientSignatory: c.params.clientSignatory,
+            migSignatoryId: c.params.migSignatoryId,
+            clauseChanges: c.clauseOverrides.length,
+            financeDiffers: !!c.financeDiffers,
+            financeApproved: !!c.financeApprovedByName,
+            signing: c.signing,
+          },
+        }
+      : {}),
+    invoicePaid: !!c && d.invoices.some((i) => i.contractId === c.id && i.status === 'paid'),
+  };
 }

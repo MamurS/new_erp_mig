@@ -2,6 +2,7 @@
  * Sales part of the lifecycle (LIFECYCLE_SPEC §2–6): staff authority changes (four-eyes), leads, deals,
  * the anonymous census, quotes with authority routing, the offer from an approved quote, the client's answer.
  */
+import { dealChecklist } from '@/shared/domain/nextStep';
 import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { AuthorityChange, Deal, KpDocument, KpParams, Quote, SessionUser, StaffAuthority } from '@/shared/types';
@@ -33,7 +34,8 @@ import { toClient } from '../views';
 import { PROGRAMS } from '../programs';
 import { DEMO_PASSWORD } from '../credentials';
 import { dmsParam, numbering, paramValues } from '../params';
-import { clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView, todayIso } from '../lifecycle-core';
+import { completeTasks } from '../tasks-core';
+import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView, todayIso } from '../lifecycle-core';
 
 function requireMig(request: Request): SessionUser {
   const { user } = requireSession(request);
@@ -127,6 +129,8 @@ function dealCard(d: Db, deal: Deal): DealCard {
     contract: contract ? toContractSummary(contract) : null,
     events: d.dealEvents.filter((e) => e.dealId === deal.id).slice(0, 100),
     reminders,
+    checklist: dealChecklist(checklistInput(d, deal)),
+    hasHr: d.hrUsers.some((h) => h.companyId === deal.clientId),
   };
 }
 
@@ -401,6 +405,7 @@ export const lifecycleHandlers = [
       d.censuses.push(c);
       moveDeal(d, deal.id, 'census', user.displayName, `Загружены данные для оценки: ${parsed.rows.length} человек${parsed.dropped.length ? `, отброшены столбцы с ПДн: ${parsed.dropped.length}` : ''}`);
       audit(user, 'census_uploaded', { targetType: 'deal', targetId: deal.id, targetLabel: `${deal.number}: ${parsed.rows.length} строк` });
+      completeTasks(d, 'census_upload', { dealId: deal.id, clientId: deal.clientId }, user.displayName);
       return { census: c, errors: parsed.errors, dropped: parsed.dropped };
     }),
   ),
@@ -438,6 +443,7 @@ export const lifecycleHandlers = [
       if (!deal.underwriterId) deal.underwriterId = user.id;
       moveDeal(d, deal.id, 'quote', user.displayName, `Котировка: программа ${PROGRAMS[q.program].name}, премия ${q.total}`);
       audit(user, 'quote_saved', { targetType: 'quote', targetId: q.id, targetLabel: deal.number });
+      completeTasks(d, 'quote_calculate', { dealId: deal.id, clientId: deal.clientId }, user.displayName);
       return HttpResponse.json(quoteView(d, q, user), { status: 201 });
     }),
   ),
@@ -507,6 +513,7 @@ export const lifecycleHandlers = [
       const deal = dealOf(d, q.dealId);
       dealEvent(d, deal.id, user.displayName, 'Котировка утверждена');
       audit(user, 'quote_approved', { targetType: 'quote', targetId: q.id, targetLabel: deal.number, reason: comment });
+      completeTasks(d, 'quote_approve', { dealId: deal.id, clientId: deal.clientId }, user.displayName);
       return quoteView(d, q, user);
     }),
   ),
@@ -592,6 +599,7 @@ export const lifecycleHandlers = [
       }
       moveDeal(d, deal.id, 'kp_sent', user.displayName, `КП ${kp.number} отправлено клиенту`);
       audit(user, 'kp_sent', { targetType: 'kp', targetId: kp.id, targetLabel: kp.number });
+      completeTasks(d, 'kp_send', { dealId: deal.id, clientId: deal.clientId }, user.displayName);
       return HttpResponse.json(kp, { status: 201 });
     }),
   ),
@@ -612,6 +620,7 @@ export const lifecycleHandlers = [
         kp.status = kind === 'accept' ? 'accepted' : 'declined';
         kp.response = { at: tzIso(Date.now()), byName: user.displayName, via: user.role === 'hr' ? 'hr' : 'manager', ...(reason ? { reason } : {}) };
         ensureRenewalDeal(d, kp, user);
+        if (kind === 'accept' && kp.dealId) completeTasks(d, 'kp_respond', { dealId: kp.dealId, clientId: kp.clientId }, user.displayName);
         if (kind === 'accept') moveDeal(d, kp.dealId, 'kp_accepted', user.displayName, `КП ${kp.number} принято клиентом${user.role === 'hr' ? ' в кабинете' : ' (отметка менеджера)'}`);
         else if (kp.dealId) dealEvent(d, kp.dealId, user.displayName, `КП ${kp.number} отклонено: ${reason}`);
         audit(user, kind === 'accept' ? 'kp_accepted' : 'kp_declined', { targetType: 'kp', targetId: kp.id, targetLabel: kp.number, reason });

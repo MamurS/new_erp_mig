@@ -12,6 +12,8 @@ import type {
   ChangeRequest,
   ClaimDecisionKind,
   Contract,
+  DealStage,
+  Role,
   Deal,
   DealEvent,
   Endorsement,
@@ -125,7 +127,8 @@ export type QueueType =
   | 'authority_change'
   | 'ai_change'
   | 'integration_error'
-  | 'age_limit';
+  | 'age_limit'
+  | 'request';
 export interface QueueItem {
   id: UUID;
   type: QueueType;
@@ -138,6 +141,8 @@ export interface QueueItem {
   action: 'confirm' | 'open' | 'prepare_offer';
   /** Client id for renewal rows (offer is prepared on the client's active policy). */
   policyId?: UUID;
+  /** Where a `request` row (a task from a colleague or HR) leads: the place the task is about. */
+  link?: string;
   /** What `entityId` points to when the type alone does not say (payouts, scans). */
   subject?: 'claim' | 'registry' | 'contract' | 'endorsement' | 'insured';
   /** Legal form of `who` when the row's subject is a legal entity (client, clinic, assistance, payer). */
@@ -681,6 +686,95 @@ export interface DealCard extends DealView {
   contract: ContractSummary | null;
   events: DealEvent[];
   reminders: string[];
+  /** «Что нужно для следующего этапа»: what the current stage requires, its state and who is responsible. */
+  checklist: DealChecklistItem[];
+  /** The client already has an HR account: «Запросить у HR» creates a task in the HR cabinet. */
+  hasHr: boolean;
+}
+
+// ---------------- next steps: tasks between roles, notifications, checklists ----------------
+
+/** What a task asks for: each action closes the task by itself once done (or by «Выполнено»). */
+export type TaskAction =
+  | 'census_upload'
+  | 'quote_calculate'
+  | 'quote_approve'
+  | 'kp_send'
+  | 'kp_respond'
+  | 'contract_draft'
+  | 'contract_requisites'
+  | 'insured_list'
+  | 'legal_review'
+  | 'sign_mig'
+  | 'sign_client'
+  | 'invoice_pay'
+  | 'other';
+
+export type TaskSubjectType = 'deal' | 'contract' | 'client';
+
+/** A request from one person to a role («Попросить …», «Запросить у HR»): a row of that role's queue. */
+export interface WorkTask {
+  id: UUID;
+  action: TaskAction;
+  toRole: Role;
+  subjectType: TaskSubjectType;
+  subjectId: UUID;
+  clientId: UUID;
+  clientName: string;
+  /** Packed message: what is asked. */
+  title: string;
+  comment: string;
+  /** The place the task is about, in the receiver's portal. */
+  link: string;
+  createdByName: string;
+  createdAt: ISODateTime;
+  dueDate?: ISODate;
+  status: 'open' | 'done';
+  doneAt?: ISODateTime;
+  doneByName?: string;
+  /** The contract the HR task is about (number and id for the action in place). */
+  contractId?: UUID;
+  contractNumber?: string;
+}
+
+export interface UserNotification {
+  id: UUID;
+  /** Packed message. */
+  text: string;
+  /** Packed second line (e.g. the title of the task that was done). */
+  detail?: string;
+  link?: string;
+  createdAt: ISODateTime;
+  read: boolean;
+}
+
+/** Where a client is on the way to a policy: what the empty «Застрахованные» tab explains. */
+export interface ClientPipeline {
+  hasPolicy: boolean;
+  hasHr: boolean;
+  dealId?: UUID;
+  dealNumber?: string;
+  stage?: DealStage;
+  contractId?: UUID;
+  contractNumber?: string;
+  contractStatus?: Contract['status'];
+  invoiceId?: UUID;
+  invoiceNumber?: string;
+}
+
+export interface DealChecklistItem {
+  key: string;
+  /** Packed message. */
+  label: string;
+  done: boolean;
+  /** Blocks the move to the next stage until done. */
+  required: boolean;
+  /** Who is responsible. */
+  role: Role;
+  /** What the responsible person does (button for them, «Попросить» for others). */
+  action?: TaskAction;
+  /** Why the item is required or not (packed), e.g. «изменено пунктов: 2». */
+  hint?: string;
 }
 
 export interface ContractSummary {

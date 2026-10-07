@@ -19,7 +19,6 @@ export const migration: Translation<typeof Ru> = {
   'migration.templateFor': 'Template: {step}',
   'migration.templateDownloaded': 'Template downloaded',
   'migration.batches': 'Batches',
-  'migration.batchesEmpty': 'No batches yet',
   'migration.col.seq': 'No.',
   'migration.col.date': 'Transfer date',
   'migration.col.kind': 'Type',

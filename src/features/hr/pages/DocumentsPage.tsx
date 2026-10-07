@@ -10,8 +10,10 @@ import { DataTable, type Column } from '@/shared/ui/data-table';
 import { EmptyState, QueryState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { KpDownloadButton } from '@/features/kp/KpDownloadButton';
+import { AskButton, HelpMore, roleName } from '@/features/next/NextActions';
+import { useUser } from '@/shared/auth/session';
 import { documentPdf, downloadPdf, invoicePdf, pdfFileName } from '../pdf';
-import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
+import { HrCard, HrHeader, HrSectionTitle } from '../ui';
 import { t, defineLabels } from '@/i18n';
 
 const INVOICE_STATUS_KIND: Record<Invoice['status'], string> = { unpaid: 'sun', paid: 'success', overdue: 'danger' };
@@ -26,6 +28,7 @@ export default function DocumentsPage() {
   const overview = useHrOverview().data;
   const company = overview?.companyName;
   const companyForm = overview?.companyLegalForm;
+  const companyId = useUser()?.companyId;
 
   const downloadInvoice = (inv: Invoice) => {
     downloadPdf(invoicePdf(inv, company, companyForm), pdfFileName('invoice'));
@@ -82,7 +85,7 @@ export default function DocumentsPage() {
           loading={invoices.isLoading}
           error={invoices.isError ? invoices.error : undefined}
           onRetry={() => void invoices.refetch()}
-          empty={<EmptyState title={t('hr.docs.noInvoices')} description={t('hr.docs.noInvoicesHint')} action={<HelpLink />} />}
+          empty={<EmptyState testId="hr-invoices-next" title={t('hr.docs.noInvoices')} why={t('emptyStaff.hrInvoices.why')} next={t('emptyStaff.hrInvoices.next')} help={<HelpMore article="signing" section="payment" />} />}
         />
       </section>
 
@@ -94,7 +97,14 @@ export default function DocumentsPage() {
           {(docs) => {
             const offers = docs.filter((d) => d.kind === 'kp' && d.kpId);
             return offers.length === 0 ? (
-              <EmptyState title={t('hr.docs.noOffers')} description={t('hr.docs.noOffersHint')} />
+              <EmptyState
+                testId="hr-offers-next"
+                title={t('hr.docs.noOffers')}
+                why={t('emptyStaff.hrOffers.why')}
+                next={t('emptyStaff.hrOffers.next', { role: roleName('sales_manager') })}
+                actions={companyId ? <AskButton role="sales_manager" action="kp_send" subjectType="client" subjectId={companyId} /> : null}
+                help={<HelpMore article="new-client" section="kp" />}
+              />
             ) : (
               <ul className="divide-y divide-border-soft" aria-label={t('hr.docs.offers')}>
                 {offers.map((d) => (
@@ -126,7 +136,14 @@ export default function DocumentsPage() {
           {(all) => {
             const docs = all.filter((d) => d.kind !== 'kp');
             return docs.length === 0 ? (
-              <EmptyState title={t('hr.docs.noDocs')} description={t('hr.docs.noDocsHint')} action={<HelpLink />} />
+              <EmptyState
+                testId="hr-docs-next"
+                title={t('hr.docs.noDocs')}
+                why={t('emptyStaff.hrDocs.why')}
+                next={t('emptyStaff.hrDocs.next')}
+                actions={companyId ? <AskButton role="sales_manager" action="other" subjectType="client" subjectId={companyId} /> : null}
+                help={<HelpMore article="portal-guides" section="guide-hr" />}
+              />
             ) : (
               <ul className="divide-y divide-border-soft">
                 {docs.map((d) => (
@@ -155,10 +172,3 @@ export default function DocumentsPage() {
   );
 }
 
-function HelpLink() {
-  return (
-    <Button asChild variant="secondary" className={HR_BTN}>
-      <Link to="/hr/help">{t('hr.docs.contactManager')}</Link>
-    </Button>
-  );
-}

@@ -46,6 +46,20 @@ const plusDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:0
 const ru = (iso: string) => iso.split('-').reverse().join('.');
 const csvFile = (name: string, text: string) => ({ name, mimeType: 'text/csv', buffer: Buffer.from(text, 'utf8') });
 
+/** Uploads a two-person appendix 2 through the in-page mock (CSV body). */
+async function uploadAnnex2(page: Page, contractId: string): Promise<number> {
+  const csv = ['fullName,birthDate,pinfl,phone,position,relation,principal_pinfl,student', 'Testov Test Testovich,15.03.1990,31503900000201,+998935550201,Engineer,employee,,', 'Testova Testa Testovna,01.07.1988,40107880000202,+998935550202,Accountant,employee,,'].join('\n');
+  return page.evaluate(
+    async ({ id, csv }) => {
+      const raw = sessionStorage.getItem('mig.session');
+      const sid = raw ? (JSON.parse(raw) as { sessionId: string }).sessionId : '';
+      const res = await fetch(`/api/contracts/${id}/insured-list`, { method: 'POST', headers: { Authorization: `Bearer ${sid}`, 'Content-Type': 'text/csv' }, body: csv });
+      return res.status;
+    },
+    { id: contractId, csv },
+  );
+}
+
 /** Puts a deal's KP-accepted contract into «sent» through the API (setup for the signing scenarios). */
 async function sentContract(page: Page): Promise<{ id: string; number: string }> {
   const deals = (await api(page, 'GET', '/deals')).data as { id: string; stage: string; kpId?: string; type: string }[];
@@ -53,6 +67,8 @@ async function sentContract(page: Page): Promise<{ id: string; number: string }>
   expect(deal, 'a seeded deal with a sent KP').toBeTruthy();
   expect((await api(page, 'POST', `/kp/${deal.kpId}/accept`)).status).toBe(200);
   const c = (await api(page, 'POST', '/contracts', { dealId: deal.id })).data as { id: string; number: string };
+  // Appendix 2 is required before the approval («Что нужно для следующего этапа»).
+  expect(await uploadAnnex2(page, c.id)).toBe(200);
   expect((await api(page, 'POST', `/contracts/${c.id}/submit-legal`)).status).toBe(200);
   expect((await api(page, 'POST', `/contracts/${c.id}/send`)).status).toBe(200);
   return c;

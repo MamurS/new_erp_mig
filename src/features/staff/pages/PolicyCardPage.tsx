@@ -17,7 +17,8 @@ import { StatusDot } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Card, Kv } from '@/shared/ui/page';
-import { ErrorState, SkeletonRows } from '@/shared/ui/states';
+import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
+import { AskButton, HelpMore, roleName } from '@/features/next/NextActions';
 import { kpNewPath } from '@/features/kp/paths';
 import { LimitRequestDialog } from '../components/LimitRequestDialog';
 import { RenewalCell } from '../components/cells';
@@ -140,6 +141,7 @@ function PolicyInsured({ clientId }: { clientId: string }) {
   const user = useUser();
   const navigate = useNavigate();
   const canOpen = !!user && (INSURED_CARD_ROLES as string[]).includes(user.role);
+  const canRequest = useCan('endorsements.manage');
   const cols: Column<InsuredListItem>[] = [
     { key: 'name', header: t('common.fullName'), cell: (i) => <span className="font-medium">{i.fullName}</span> },
     // A family member is listed as a person of their own: the relation and the employee instead of a position.
@@ -161,6 +163,24 @@ function PolicyInsured({ clientId }: { clientId: string }) {
         pageSize={25}
         total={list.data?.total}
         onPageChange={setPage}
+        empty={
+          <EmptyState
+            testId="policy-insured-next"
+            title={t('emptyStaff.policyInsured.title')}
+            why={t('emptyStaff.policyInsured.why')}
+            next={t('emptyStaff.policyInsured.next', { role: roleName('sales_manager') })}
+            actions={
+              canRequest ? (
+                <Button variant="secondary" asChild>
+                  <Link to="/staff/endorsements?create=request">{t('emptyStaff.requests.create')}</Link>
+                </Button>
+              ) : (
+                <AskButton role="sales_manager" action="insured_list" subjectType="client" subjectId={clientId} />
+              )
+            }
+            help={<HelpMore article="signing" section="policy-issue" />}
+          />
+        }
       />
     </Card>
   );

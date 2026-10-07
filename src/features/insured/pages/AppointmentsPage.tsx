@@ -14,6 +14,7 @@ import { toast } from '@/shared/ui/toast';
 import { BIG, CardSkeletons, Empty, LoadError, ScreenHeader, Section } from '../components';
 import { isUpcomingAppointment, upcomingAppointments } from '../lib';
 import { MedicalGate, PersonNote, usePerson } from '../person';
+import { HelpMore } from '@/features/next/NextActions';
 
 const TONE: Record<AppointmentStatus, string> = {
   requested: 'bg-sun text-sun-text',
@@ -115,7 +116,10 @@ function Appointments() {
         <LoadError error={q.error} onRetry={() => void q.refetch()} />
       ) : (q.data ?? []).length === 0 ? (
         <Empty
+          testId="appointments-empty"
           title={t('app.appointments.empty')}
+          why={t('emptyPartner.app.appointments.why')}
+          help={<HelpMore article="medical" section="appointment" />}
           action={
             <Button asChild className={BIG}>
               <Link to="/app/booking">{t('app.appointments.book')}</Link>
@@ -128,6 +132,8 @@ function Appointments() {
             {upcoming.length === 0 ? (
               <Empty
                 title={t('app.appointments.empty')}
+                why={t('emptyPartner.app.appointments.why')}
+                help={<HelpMore article="medical" section="appointment" />}
                 action={
                   <Button asChild className={BIG}>
                     <Link to="/app/booking">{t('app.appointments.book')}</Link>

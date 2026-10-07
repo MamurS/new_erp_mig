@@ -63,6 +63,8 @@ export interface RequestOptions<S extends z.ZodTypeAny | undefined> {
   /** Return raw text (CSV) or blob (files) instead of JSON. */
   as?: 'json' | 'text' | 'blob';
   signal?: AbortSignal;
+  /** A background poll (e.g. notifications): not the person's activity, does not extend the session. */
+  background?: boolean;
 }
 
 export function buildUrl(path: string, query?: Query): string {
@@ -89,8 +91,8 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
   path: string,
   opts: RequestOptions<S> = {},
 ): Promise<S extends z.ZodTypeAny ? z.infer<S> : unknown> {
-  markActivity();
-  const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
+  if (!opts.background) markActivity();
+  const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers, ...(opts.background ? { 'X-Background': '1' } : {}) };
   const sid = getSessionId();
   if (sid) headers.Authorization = `Bearer ${sid}`;
   let body: BodyInit | undefined;

@@ -1,6 +1,6 @@
 /* Small pieces shared by the lifecycle screens: a reason dialog and a stage stepper. */
 import { t, tm } from '@/i18n';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, FileUp } from 'lucide-react';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { errorMessage } from '@/shared/api/client';
@@ -96,11 +96,29 @@ export function Stepper<S extends string>({ steps, current, labels, failed }: { 
 }
 
 /** «Загрузить CSV»: reads a small text file (size checked before reading) and passes its text on. */
-export function CsvFileButton({ label, ariaLabel, busy, maxBytes, onText }: { label: string; ariaLabel: string; busy?: boolean; maxBytes: number; onText: (text: string) => void }) {
+/**
+ * A CSV file picker. `focus`: opened from a next step («Загрузить …» of an empty section) — the picker is
+ * scrolled into view, focused and highlighted, so the person only has to choose the file.
+ */
+export function CsvFileButton({ label, ariaLabel, busy, maxBytes, onText, focus, testId }: { label: string; ariaLabel: string; busy?: boolean; maxBytes: number; onText: (text: string) => void; focus?: boolean; testId?: string }) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    input.current?.scrollIntoView?.({ block: 'center' });
+    input.current?.focus({ preventScroll: true });
+  }, [focus]);
   return (
-    <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-btn border border-border bg-surface px-3 text-[13px] font-medium hover:bg-rail">
+    <label
+      data-testid={testId}
+      data-focused={focus || undefined}
+      className={cn(
+        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-btn border border-border bg-surface px-3 text-[13px] font-medium hover:bg-rail has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent',
+        focus && 'ring-2 ring-accent ring-offset-2',
+      )}
+    >
       <FileUp className="h-3.5 w-3.5" aria-hidden /> {busy ? t('staffLc.common.uploading') : label}
       <input
+        ref={input}
         type="file"
         accept=".csv,text/csv"
         className="sr-only"

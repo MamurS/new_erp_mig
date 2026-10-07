@@ -18,7 +18,9 @@ import { Chip } from '@/shared/ui/chips';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { Card } from '@/shared/ui/page';
+import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { HelpMore } from '@/features/next/NextActions';
 import { DocPrintButton } from './DocPreview';
 import type { StubRenderInput } from './render';
 
@@ -199,12 +201,24 @@ export function SigningPanel({ kind, doc, mode, printInput }: { kind: DocKind; d
   };
 
   const pendingScans = s.pendingScans ?? [];
+  const nothingYet = !s.mig && !s.client && !s.edoPending && pendingScans.length === 0;
   return (
     <Card title={t('documents.signing.title')} actions={<DocPrintButton input={printInput} label={t('documents.signing.printTwo')} aria-label={t('documents.signing.printTwo')} />}>
       <div className="grid gap-3 sm:grid-cols-2">
         <SideState doc={doc} side="mig" />
         <SideState doc={doc} side="client" />
       </div>
+      {nothingYet && (
+        <EmptyState
+          testId="signing-next"
+          className="px-2 py-4"
+          icon={<FileSignature className="h-6 w-6" aria-hidden />}
+          title={t('emptyStaff.signing.title')}
+          why={openForMig || openForClient ? t('emptyStaff.signing.why') : t('emptyStaff.signing.whyClosed')}
+          next={mode === 'staff' ? t('emptyStaff.signing.nextStaff') : openForClient ? t('emptyStaff.signing.nextHrOpen') : t('emptyStaff.signing.nextHr')}
+          help={<HelpMore article="signing" section="signing-methods" />}
+        />
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         {mode === 'staff' && canSignMig && !s.mig && openForMig && (
           <>

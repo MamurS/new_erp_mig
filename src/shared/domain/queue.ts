@@ -40,6 +40,7 @@ export const QUEUE_TYPES = [
   'ai_change',
   'integration_error',
   'age_limit',
+  'request',
 ] as const satisfies readonly QueueType[];
 
 type Right = { action: Action; ctx?: PermissionContext };
@@ -101,6 +102,7 @@ export const QUEUE_TYPE_META: Record<QueueType, QueueTypeMeta> = {
   ai_change: meta('ai_change', 'sky', [{ action: 'ai.admin' }]),
   integration_error: meta('integration_error', 'danger', [{ action: 'audit.read' }]),
   age_limit: meta('age_limit', 'warning', [{ action: 'policy_changes.decide' }]),
+  request: meta('request', 'accent', [{ action: 'tasks.receive' }]),
 };
 
 /** Whether items of this type may be shown to the user at all (the server checks each item). */

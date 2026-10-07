@@ -7,6 +7,7 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { BIG, CardSkeletons, ClaimStepBar, Empty, LoadError, ScreenHeader, StatusPill } from '../components';
 import { MedicalGate, PersonNote, usePerson } from '../person';
+import { HelpMore } from '@/features/next/NextActions';
 
 export default function ClaimsPage() {
   const { t } = useI18n();
@@ -41,7 +42,10 @@ function Claims() {
           <LoadError error={q.error} onRetry={() => void q.refetch()} />
         ) : !q.data || q.data.length === 0 ? (
           <Empty
+            testId="claims-empty"
             title={t('app.claims.empty')}
+            why={t('emptyPartner.app.claims.why')}
+            help={<HelpMore article="medical" section="receipt-refund" />}
             action={
               <Button asChild variant="secondary" className={BIG}>
                 <Link to="/app/claims/new">{t('app.claims.new')}</Link>

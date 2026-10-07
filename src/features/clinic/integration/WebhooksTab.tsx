@@ -17,7 +17,10 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Input } from '@/shared/ui/input';
 import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { useCan } from '@/shared/auth/guards';
+import { roleName } from '@/features/next/NextActions';
 import { Panel } from '../components';
+import { EmptyHelp } from '../emptyNext';
 import { SecretReveal } from './SecretReveal';
 import { t, tm, defineLabels } from '@/i18n';
 
@@ -89,6 +92,10 @@ export function WebhooksTab() {
   const test = useTestWebhook(partner.base);
   const retry = useRetryDelivery(partner.base);
   const [creating, setCreating] = useState(false);
+  const isClinic = partner.type === 'clinic';
+  const canManage = useCan(isClinic ? 'clinic.integration.manage' : 'assist.integration.manage');
+  const helpArticle = isClinic ? 'clinics' : 'administration';
+  const helpSection = isClinic ? 'clinic-mis' : 'admin-integrations';
   const [secret, setSecret] = useState<string | null>(null);
 
   const run = async <T,>(p: Promise<T>, ok: string) => {
@@ -123,7 +130,19 @@ export function WebhooksTab() {
     <div className="flex flex-col gap-4">
       <Panel title={t('clinic.webhooks.addresses')} actions={<Button onClick={() => setCreating(true)}>{t('clinic.webhooks.add')}</Button>}>
         {(hooks.data ?? []).length === 0 ? (
-          <p className="p-4 text-muted">{hooks.isLoading ? t('common.loading') : t('clinic.webhooks.empty')}</p>
+          hooks.isLoading ? (
+            <p className="p-4 text-muted">{t('common.loading')}</p>
+          ) : (
+            <EmptyState
+              testId="webhooks-empty"
+              className="py-6"
+              title={t('clinic.webhooks.empty')}
+              why={t('emptyPartner.webhooks.why')}
+              next={t('emptyPartner.webhooks.next', { role: roleName(isClinic ? 'clinic_admin' : 'asst_admin') })}
+              actions={canManage ? <Button variant="secondary" onClick={() => setCreating(true)}>{t('emptyPartner.webhooks.create')}</Button> : undefined}
+              help={<EmptyHelp article={helpArticle} section={helpSection} contact={!canManage} />}
+            />
+          )
         ) : (
           <ul className="divide-y divide-border-soft">
             {(hooks.data ?? []).map((h) => (
@@ -155,7 +174,7 @@ export function WebhooksTab() {
           loading={deliveries.isLoading}
           error={deliveries.error}
           onRetry={() => void deliveries.refetch()}
-          empty={<EmptyState title={t('clinic.webhooks.deliveriesEmpty')} />}
+          empty={<EmptyState testId="deliveries-empty" title={t('clinic.webhooks.deliveriesEmpty')} why={t('emptyPartner.webhooks.deliveriesWhy')} help={<EmptyHelp article={helpArticle} section={helpSection} />} />}
         />
       </Panel>
       {creating && (

@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
 import { CaseStatus, KpiGrid, RebillStatus, SlaBadge, Stat } from '@/features/assist/components';
 import { QaVerdict } from './QaPage';
+import { HelpMore, roleName } from '@/features/next/NextActions';
 import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
 
@@ -154,7 +155,13 @@ function IntegrationTab({ c }: { c: AssistanceCardView }) {
       </div>
       <Card title={t('staffOps.clinicCard.keys')} bodyClassName="p-0">
         {c.keys.length === 0 ? (
-          <EmptyState title={t('staffOps.clinicCard.noKeys')} />
+          <EmptyState
+            testId="assistance-keys-next"
+            title={t('emptyStaff.clinicKeys.title')}
+            why={t('emptyStaff.asstKeys.why')}
+            next={t('emptyStaff.responsible', { role: roleName('asst_admin') })}
+            help={<HelpMore article="administration" section="admin-integrations" />}
+          />
         ) : (
           <ul className="divide-y divide-border-soft">
             {c.keys.map((k) => (
@@ -353,6 +360,15 @@ export default function AssistanceCardPage() {
                   rows={c.clients}
                   rowKey={(x) => x.id}
                   onRowClick={(x) => navigate(`/staff/clients/${x.id}`)}
+                  empty={
+                    <EmptyState
+                      testId="assistance-clients-next"
+                      title={t('emptyStaff.asstClients.title')}
+                      why={t('emptyStaff.asstClients.why')}
+                      next={t('emptyStaff.responsible', { role: roleName('underwriter') })}
+                      help={<HelpMore article="assistance" section="assistance-assignment" />}
+                    />
+                  }
                 />
               </div>
             </TabsContent>
@@ -372,6 +388,15 @@ export default function AssistanceCardPage() {
                   ]}
                   rows={c.users}
                   rowKey={(u) => u.id}
+                  empty={
+                    <EmptyState
+                      testId="assistance-users-next"
+                      title={t('emptyStaff.asstUsers.title')}
+                      why={t('emptyStaff.asstUsers.why')}
+                      next={t('emptyStaff.responsible', { role: roleName('admin') })}
+                      help={<HelpMore article="administration" section="admin-partners" />}
+                    />
+                  }
                 />
               </div>
             </TabsContent>
@@ -393,7 +418,15 @@ export default function AssistanceCardPage() {
                   rows={c.rebills}
                   rowKey={(b) => b.id}
                   onRowClick={(b) => navigate(`/staff/rebills/${b.id}`)}
-                  empty={t('staffOps.rebills.empty')}
+                  empty={
+                    <EmptyState
+                      testId="assistance-rebills-next"
+                      title={t('emptyStaff.rebills.title')}
+                      why={t('emptyStaff.rebills.why')}
+                      next={t('emptyStaff.rebills.next', { role: roleName('claims_officer') })}
+                      help={<HelpMore article="assistance" section="assistance-rebill" />}
+                    />
+                  }
                 />
               </div>
             </TabsContent>

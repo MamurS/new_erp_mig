@@ -6,16 +6,20 @@ import { SideColumn } from '@/shared/ui/side-column';
 import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Pencil, RotateCcw } from 'lucide-react';
 import type { ActivationRule, PaymentFrequency, PricingBasis, ProgramCode } from '@/shared/types';
 import type { ContractView } from '@/shared/types/dto';
-import { useContract, useContractAction, useDocStep, usePatchContract, useTerminate, useUploadInsuredList } from '@/shared/api/queries/lifecycle';
+import { useContract, useContractAction, useDeal, useDocStep, usePatchContract, useTerminate, useUploadInsuredList } from '@/shared/api/queries/lifecycle';
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { ACTIVATION_RULE_LABEL, CONTRACT_STATUS_CHIP, CONTRACT_STATUS_LABEL, ENDORSEMENT_STATUS_LABEL, INVOICE_STATUS_LABEL, PAYMENT_FREQUENCY_LABEL } from '@/shared/domain/contracts';
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
-import { POLICY_CSV_HEADER } from '@/shared/domain/policies';
+import { annex2TemplateCsv, POLICY_CSV_HEADER } from '@/shared/domain/policies';
+import { missingItems } from '@/shared/domain/nextStep';
+import { downloadText } from '@/shared/lib/csv';
+import { AskButton, HelpMore, RequestHrButton, roleName } from '@/features/next/NextActions';
+import { MissingNote } from '@/features/next/DealChecklist';
 import { PRICING_BASES, PRICING_BASIS_LABEL, pricingProblem } from '@/shared/domain/pricing';
 import { clauseOverrideSchema, contractParamsSchema, legalApproveSchema, legalReturnSchema, terminateSchema } from '@/shared/schemas/forms';
 import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
@@ -31,7 +35,7 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/shared/ui/input';
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Card, Kv, PageHeader } from '@/shared/ui/page';
-import { QueryState } from '@/shared/ui/states';
+import { EmptyState, QueryState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { CsvFileButton, ReasonDialog } from './common';
@@ -318,23 +322,45 @@ function Clauses({ c, editable }: { c: ContractView; editable: boolean }) {
   );
 }
 
-function InsuredList({ c, editable }: { c: ContractView; editable: boolean }) {
+function InsuredList({ c, editable, hasHr, focus }: { c: ContractView; editable: boolean; hasHr: boolean; focus: boolean }) {
   const upload = useUploadInsuredList();
+  const picker = editable && (
+    <CsvFileButton
+      label={c.insuredCount ? t('staffLc.contract.replaceList') : t('staffLc.contract.uploadList')}
+      ariaLabel={t('staffLc.contract.annex2File')}
+      busy={upload.isPending}
+      maxBytes={5 * 1024 * 1024}
+      onText={(csv) => void attempt(() => upload.mutateAsync({ id: c.id, csv }), t('staffLc.contract.annex2Uploaded'))}
+      focus={focus && !c.insuredCount}
+      testId="annex2-upload"
+    />
+  );
   return (
-    <Card title={c.insuredCount ? t('staffLc.contract.annex2Count', { n: c.insuredCount }) : t('staffLc.contract.annex2')}>
-      <p className="text-[13px] text-muted">
-        {t('staffLc.contract.annex2Help', { columns: POLICY_CSV_HEADER.join(', ') })}
-      </p>
-      {editable && (
-        <div className="mt-2">
-          <CsvFileButton
-            label={c.insuredCount ? t('staffLc.contract.replaceList') : t('staffLc.contract.uploadList')}
-            ariaLabel={t('staffLc.contract.annex2File')}
-            busy={upload.isPending}
-            maxBytes={5 * 1024 * 1024}
-            onText={(csv) => void attempt(() => upload.mutateAsync({ id: c.id, csv }), t('staffLc.contract.annex2Uploaded'))}
-          />
-        </div>
+    <Card title={c.insuredCount ? t('staffLc.contract.annex2Count', { n: c.insuredCount }) : t('staffLc.contract.annex2')} bodyClassName={c.insuredCount ? undefined : 'p-0'}>
+      {c.insuredCount ? (
+        <>
+          <p className="text-[13px] text-muted">{t('staffLc.contract.annex2Help', { columns: POLICY_CSV_HEADER.join(', ') })}</p>
+          {picker && <div className="mt-2">{picker}</div>}
+        </>
+      ) : (
+        <EmptyState
+          testId="annex2-next"
+          title={t('next.annex2.title')}
+          why={t('next.annex2.why')}
+          next={t('next.annex2.next', { role: roleName('sales_manager') })}
+          actions={
+            editable ? (
+              <>
+                {picker}
+                <RequestHrButton hasHr={hasHr} clientName={c.clientName} action="insured_list" subjectType="contract" subjectId={c.id} />
+              </>
+            ) : (
+              <AskButton role="sales_manager" action="insured_list" subjectType="contract" subjectId={c.id} />
+            )
+          }
+          template={{ onDownload: () => downloadText(annex2TemplateCsv(), 'annex2-template.csv') }}
+          help={<HelpMore article="new-client" section="contract" />}
+        />
       )}
     </Card>
   );
@@ -460,6 +486,11 @@ function ContractEditor({ c }: { c: ContractView }) {
   const input = useMemo(() => contractDocument(c, { showChanges: true }), [c]);
   const doc = useStubDocument(input);
   const financePending = !!c.financeDiffers && !c.financeApprovedByName;
+  // «Что нужно для следующего этапа» of the deal: the items that block sending for approval.
+  const deal = useDeal(c.dealId ?? '', { enabled: !!c.dealId });
+  const checklist = c.status === 'draft' && deal.data?.stage === 'contract_draft' ? deal.data.checklist : [];
+  const missing = missingItems(checklist);
+  const [params] = useSearchParams();
   const signingStage = ['approved', 'sent', 'signing', 'signed', 'active', 'terminated', 'expired'].includes(c.status);
 
   return (
@@ -508,7 +539,8 @@ function ContractEditor({ c }: { c: ContractView }) {
             )}
             {canDraft && c.status === 'draft' && (
               <Button
-                disabled={financePending}
+                disabled={financePending || missing.length > 0}
+                aria-describedby={missing.length ? 'contract-missing' : undefined}
                 loading={step.isPending}
                 onClick={() =>
                   void attempt(
@@ -546,6 +578,11 @@ function ContractEditor({ c }: { c: ContractView }) {
           </>
         }
       />
+      {canDraft && c.status === 'draft' && missing.length > 0 && (
+        <div className="mb-3 rounded-card bg-warning-soft px-3 py-2">
+          <MissingNote items={checklist} id="contract-missing" />
+        </div>
+      )}
       {financePending && (
         <p role="status" className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
           {t('staffLc.contract.financeDiffers')}
@@ -561,7 +598,7 @@ function ContractEditor({ c }: { c: ContractView }) {
         <div className="flex min-w-0 flex-col gap-4">
           <ParamsForm c={c} editable={editable} />
           <Clauses c={c} editable={editable} />
-          <InsuredList c={c} editable={editable} />
+          <InsuredList c={c} editable={editable} hasHr={deal.data?.hasHr ?? false} focus={params.get('upload') === 'annex2'} />
         </div>
       </StickySectionsCtx.Provider>
       {doc && (

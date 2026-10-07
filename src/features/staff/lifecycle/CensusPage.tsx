@@ -1,7 +1,7 @@
 /* Данные для оценки (LIFECYCLE_SPEC §4): anonymous census — gender, birth year and relation only. */
 import { t, tm } from '@/i18n';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useDeal, useUploadCensus } from '@/shared/api/queries/lifecycle';
@@ -14,7 +14,8 @@ import { formatDateTime, formatNumber, formatPercent, todayISO } from '@/shared/
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Card, PageHeader } from '@/shared/ui/page';
-import { QueryState } from '@/shared/ui/states';
+import { EmptyState, QueryState } from '@/shared/ui/states';
+import { AskButton, HelpMore, RequestHrButton, roleName } from '@/features/next/NextActions';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { CsvFileButton } from './common';
@@ -28,6 +29,9 @@ export default function CensusPage() {
   const q = useDeal(dealId);
   const upload = useUploadCensus();
   const canUpload = useCan('census.upload');
+  // «Загрузить данные для оценки» of an empty section leads here with ?upload=1: the picker is focused.
+  const [params] = useSearchParams();
+  const focusUpload = params.get('upload') === '1';
   const [result, setResult] = useState<{ errors: { row: number; message: string }[]; dropped: string[] } | null>(null);
   useDocumentTitle(t('staffLc.census.title'));
   useTopbar([{ label: t('staffLc.deals.title'), to: '/staff/deals' }, { label: q.data?.number ?? t('staffLc.deal.fallback'), to: `/staff/deals/${dealId}` }, { label: t('staffLc.census.title') }]);
@@ -66,7 +70,17 @@ export default function CensusPage() {
                 <Button variant="secondary" size="sm" onClick={() => downloadText(censusTemplateCsv(), 'census-template.csv')}>
                   <Download className="h-3.5 w-3.5" aria-hidden /> {t('staffLc.census.downloadTemplate')}
                 </Button>
-                {canUpload && !closed && <CsvFileButton label={deal.census ? t('staffLc.census.reupload') : t('staffLc.census.uploadCsv')} ariaLabel={t('staffLc.census.fileAria')} busy={upload.isPending} maxBytes={CENSUS_MAX_BYTES} onText={(text) => void onText(text)} />}
+                {canUpload && !closed && (
+                  <CsvFileButton
+                    label={deal.census ? t('staffLc.census.reupload') : t('staffLc.census.uploadCsv')}
+                    ariaLabel={t('staffLc.census.fileAria')}
+                    busy={upload.isPending}
+                    maxBytes={CENSUS_MAX_BYTES}
+                    onText={(text) => void onText(text)}
+                    focus={focusUpload && !deal.census}
+                    testId="census-upload"
+                  />
+                )}
               </div>
               {result && result.dropped.length > 0 && (
                 <p role="alert" className="mt-3 rounded-btn bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="census-dropped">
@@ -116,7 +130,23 @@ export default function CensusPage() {
                 </Card>
               </div>
             ) : (
-              <p className="mt-4 text-[13px] text-muted">{t('staffLc.census.noData')}</p>
+              <Card className="mt-4" bodyClassName="p-0">
+                <EmptyState
+                  testId="census-next"
+                  title={t('next.census.title')}
+                  why={t('next.census.why')}
+                  next={t('next.census.next', { role: roleName('sales_manager') })}
+                  actions={
+                    !canUpload && !closed ? (
+                      <AskButton role="sales_manager" action="census_upload" subjectType="deal" subjectId={deal.id} />
+                    ) : canUpload && !closed ? (
+                      <RequestHrButton hasHr={deal.hasHr} clientName={deal.clientName} action="census_upload" subjectType="deal" subjectId={deal.id} />
+                    ) : undefined
+                  }
+                  template={{ onDownload: () => downloadText(censusTemplateCsv(), 'census-template.csv') }}
+                  help={<HelpMore article="new-client" section="census" />}
+                />
+              </Card>
             )}
           </>
         );

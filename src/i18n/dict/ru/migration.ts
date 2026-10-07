@@ -16,7 +16,6 @@ export const migration = {
   'migration.templateFor': 'Шаблон: {step}',
   'migration.templateDownloaded': 'Шаблон скачан',
   'migration.batches': 'Пакеты',
-  'migration.batchesEmpty': 'Пакетов пока нет',
   'migration.col.seq': '№',
   'migration.col.date': 'Дата переноса',
   'migration.col.kind': 'Тип',

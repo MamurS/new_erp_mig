@@ -21,6 +21,7 @@ import { MaskedInput } from '@/shared/ui/masked-input';
 import { Skeleton } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { BIG, CardSkeletons, ChoiceChip, Empty, LoadError, ScreenHeader, Section } from '../components';
+import { HelpMore } from '@/features/next/NextActions';
 
 const REQUEST_TONE: Record<FamilyRequestStatus, string> = {
   pending: 'bg-sun text-sun-text',
@@ -261,7 +262,17 @@ function EmployeeFamily() {
         ) : family.isError ? (
           <LoadError error={family.error} onRetry={() => void family.refetch()} />
         ) : members.length === 0 ? (
-          <Empty title={t('app.family.noMembers')} />
+          <Empty
+            testId="family-members-empty"
+            title={t('app.family.noMembers')}
+            why={t('emptyPartner.app.family.why')}
+            action={
+              <Button variant="secondary" onClick={() => setAdding(true)} className={BIG}>
+                {t('emptyPartner.app.family.request')}
+              </Button>
+            }
+            help={<HelpMore article="servicing" section="family" />}
+          />
         ) : (
           <ul className="flex flex-col gap-3" aria-label={t('app.family.members')}>
             {members.map((p) => (
@@ -276,7 +287,7 @@ function EmployeeFamily() {
         ) : requests.isError ? (
           <LoadError error={requests.error} onRetry={() => void requests.refetch()} />
         ) : (requests.data ?? []).length === 0 ? (
-          <Empty title={t('app.family.noRequests')} />
+          <Empty testId="family-requests-empty" title={t('app.family.noRequests')} why={t('emptyPartner.app.familyRequests.why')} help={<HelpMore article="servicing" section="family" />} />
         ) : (
           <ul className="flex flex-col gap-3" aria-label={t('app.family.requests')}>
             {(requests.data ?? []).map((r) => (

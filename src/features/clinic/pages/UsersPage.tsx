@@ -18,8 +18,11 @@ import { ConfirmDialog } from '@/shared/ui/confirm-dialog';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
+import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { PageTitle, Panel } from '../components';
+import { roleName } from '@/features/next/NextActions';
+import { EmptyHelp } from '../emptyNext';
 import { t, tm } from '@/i18n';
 
 type Invite = z.input<typeof clinicUserInviteSchema>;
@@ -133,7 +136,18 @@ export default function UsersPage() {
     <>
       <PageTitle title={t('clinic.nav.users')} actions={<Button onClick={() => setInviting(true)}>{t('clinic.users.inviteTitle')}</Button>} />
       <Panel>
-        <DataTable caption={t('clinic.users.caption')} columns={columns} rows={q.data} rowKey={(u) => u.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} />
+        <DataTable caption={t('clinic.users.caption')} columns={columns} rows={q.data} rowKey={(u) => u.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}
+          empty={
+            <EmptyState
+              testId="users-empty"
+              title={t('emptyPartner.users.title')}
+              why={t('emptyPartner.users.why')}
+              next={t('emptyPartner.users.next', { role: roleName('clinic_admin') })}
+              actions={<Button onClick={() => setInviting(true)}>{t('emptyPartner.users.invite')}</Button>}
+              help={<EmptyHelp article="portal-guides" section="guide-clinic" />}
+            />
+          }
+        />
       </Panel>
       {inviting && <InviteDialog onClose={() => setInviting(false)} />}
       <ConfirmDialog
