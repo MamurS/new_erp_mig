@@ -2,7 +2,7 @@ import { ContentScroll } from '@/shared/ui/content-scroll';
 /* Clinic cabinet shell (CLINIC_SPEC §4): client theme for the content, the common side panel for navigation. */
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
-import { CalendarClock, ClipboardList, FileCheck, FolderOpen, House, PlugZap, ScanLine, Users, type LucideIcon } from 'lucide-react';
+import { BookOpen, CalendarClock, ClipboardList, FileCheck, FolderOpen, House, PlugZap, ScanLine, Users, type LucideIcon } from 'lucide-react';
 import { can, type Action } from '@/shared/auth/permissions';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
@@ -14,6 +14,7 @@ import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@
 import { Skeleton } from '@/shared/ui/states';
 import { t } from '@/i18n';
 import { CreateMenu } from '@/features/shell/CreateMenu';
+import { HelpContextButton } from '@/features/help/HelpContextButton';
 
 interface ClinicNav {
   to: string;
@@ -57,6 +58,7 @@ export default function ClinicLayout() {
           activePath={current}
           user={{ name: user?.displayName ?? '', role: user ? ROLE_LABEL[user.role] : t('shell.portal.clinic'), portal: clinicName ? t('clinic.layout.portalNamed', { name: clinicName }) : t('shell.portal.clinic') }}
           onLogout={() => void logout()}
+          footer={[{ path: '/clinic/help', label: t('help.nav'), icon: BookOpen }]}
         />
         <div data-theme="client" className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg text-text">
           <IdleWatcher />
@@ -75,7 +77,8 @@ export default function ClinicLayout() {
                 <Skeleton className="mt-1 h-4 w-40" />
               )}
             </div>
-            <LanguageButton className="ml-auto" />
+            <HelpContextButton className="ml-auto" />
+            <LanguageButton />
             <CreateMenu />
           </header>
           <ContentScroll className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8">

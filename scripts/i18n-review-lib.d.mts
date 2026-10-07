@@ -8,10 +8,12 @@ export function readDicts(dictRoot: string): {
 };
 export function findUsages(srcRoot: string, keys: string[], repoRoot: string): Map<string, string>;
 export function toCsv(rows: string[][]): string;
+export const GUIDE_PREFIX: string;
+export function guideTitles(repoRoot: string): Record<Locale, Map<string, string>>;
 export function buildRows(dictRoot: string, srcRoot: string, repoRoot: string): string[][];
 export function normalizeUz(s: string): string;
 export function applyCsv(
   csvText: string,
   dictRoot: string,
   opts?: { dryRun?: boolean },
-): { updated: number; unchanged: number; unknown: string[]; added: number };
+): { updated: number; unchanged: number; unknown: string[]; added: number; guide: number };

@@ -60,6 +60,8 @@ export interface AppSidebarProps {
   onLogout: () => void;
   /** The command palette, where the portal has one. */
   onSearch?: () => void;
+  /** Items pinned to the bottom of the panel, above the user menu («Справка»). Active on their sub-paths too. */
+  footer?: SidebarItem[];
 }
 
 const PREVIEW_OPEN_MS = 200;
@@ -383,9 +385,11 @@ function SidebarBody({
   user,
   onLogout,
   onSearch,
+  footer,
   mode,
 }: AppSidebarProps & { mode: 'docked' | 'preview' | 'drawer' }) {
   const s = useSidebar();
+  const { pathname } = useLocation();
   const body = (
     <>
       <div
@@ -443,6 +447,15 @@ function SidebarBody({
           </div>
         ))}
       </div>
+      {footer && footer.length > 0 && (
+        <ul className="flex shrink-0 flex-col gap-px px-2 pb-2" data-testid="sidebar-footer">
+          {footer.map((it) => (
+            <li key={it.path}>
+              <SidebarLink item={it} active={it.path === activePath || pathname === it.path || pathname.startsWith(`${it.path}/`)} />
+            </li>
+          ))}
+        </ul>
+      )}
       <UserBlock user={user} onLogout={onLogout} />
     </>
   );

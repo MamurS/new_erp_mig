@@ -66,6 +66,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/staff/admin/parameters': 'admin-params',
   '/staff/admin/migration': 'portfolio-migration',
   '/staff/admin/migration/:batchId': 'migration-apply',
+  '/staff/help': 'getting-started',
+  '/staff/help/:anchor': 'getting-started',
   // HR cabinet
   '/hr': 'guide-hr',
   '/hr/employees/new': 'enrolment',
@@ -80,6 +82,7 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/hr/endorsements/:endorsementId': 'signing-methods',
   '/hr/stats': 'guide-hr',
   '/hr/help': 'guide-hr',
+  '/hr/help/:anchor': 'guide-hr',
   // clinic cabinet
   '/clinic': 'guide-clinic',
   '/clinic/check': 'patient-check',
@@ -91,6 +94,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/clinic/registries/:registryId': 'monthly-registry',
   '/clinic/users': 'guide-clinic',
   '/clinic/integration': 'admin-integrations',
+  '/clinic/help': 'guide-clinic',
+  '/clinic/help/:anchor': 'guide-clinic',
   // assistance portal
   '/assist': 'guide-assistance',
   '/assist/insured': 'assistance-daily',
@@ -108,6 +113,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/assist/clinics': 'guide-assistance',
   '/assist/users': 'guide-assistance',
   '/assist/integration': 'admin-integrations',
+  '/assist/help': 'guide-assistance',
+  '/assist/help/:anchor': 'guide-assistance',
   // the insured person's app
   '/app': 'guide-insured',
   '/app/card': 'guide-insured',
@@ -122,6 +129,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/app/certificate': 'guide-insured',
   '/app/family': 'family',
   '/app/coverage': 'coverage-check',
+  '/app/help': 'guide-insured',
+  '/app/help/:anchor': 'guide-insured',
 };
 
 export type Portal = 'staff' | 'hr' | 'clinic' | 'assist' | 'app';
@@ -240,21 +249,21 @@ export const SCREENS: readonly ScreenLink[] = [
   { names: ['Счета и документы'], portal: 'hr', route: '/hr/documents', labelKey: 'hr.nav.documents' },
   { names: ['Статистика'], portal: 'hr', route: '/hr/stats', labelKey: 'hr.nav.stats' },
   // the app
-  { names: ['Записаться к врачу'], portal: 'app', route: '/app/booking' },
-  { names: ['Вернуть деньги за чек'], portal: 'app', route: '/app/claims/new' },
-  { names: ['Карточка для клиники', 'Карточку для клиники'], portal: 'app', route: '/app/card' },
-  { names: ['Моя семья'], portal: 'app', route: '/app/family' },
-  { names: ['Покрывается ли?'], portal: 'app', route: '/app/coverage' },
-  { names: ['Мой сертификат'], portal: 'app', route: '/app/certificate' },
+  { names: ['Записаться к врачу'], portal: 'app', route: '/app/booking', labelKey: 'app.tile.booking' },
+  { names: ['Вернуть деньги за чек'], portal: 'app', route: '/app/claims/new', labelKey: 'app.tile.refund' },
+  { names: ['Карточка для клиники', 'Карточку для клиники'], portal: 'app', route: '/app/card', labelKey: 'app.home.cardButton' },
+  { names: ['Моя семья'], portal: 'app', route: '/app/family', labelKey: 'app.family.title' },
+  { names: ['Покрывается ли?'], portal: 'app', route: '/app/coverage', labelKey: 'app.coverage.title' },
+  { names: ['Мой сертификат'], portal: 'app', route: '/app/certificate', labelKey: 'app.profile.certificate' },
   { names: ['Профиль'], portal: 'app', route: '/app/profile', labelKey: 'app.nav.profile' },
   { names: ['Клиники рядом'], portal: 'app', route: '/app/clinics', labelKey: 'app.nav.clinics' },
-  { names: ['Написать нам'], portal: 'app', route: '/app/chat' },
+  { names: ['Написать нам'], portal: 'app', route: '/app/chat', labelKey: 'app.tile.chat' },
   // clinic cabinet
   { names: ['Проверить пациента'], portal: 'clinic', route: '/clinic/check', labelKey: 'clinic.nav.check' },
   { names: ['Записи'], portal: 'clinic', route: '/clinic/appointments', labelKey: 'clinic.nav.appointments' },
   { names: ['Гарантийные письма'], portal: 'clinic', route: '/clinic/guarantees', labelKey: 'clinic.nav.guarantees' },
   { names: ['Реестры'], portal: 'clinic', route: '/clinic/registries', labelKey: 'clinic.nav.registries' },
-  { names: ['Документы'], portal: 'clinic', route: '/clinic/documents' },
+  { names: ['Документы'], portal: 'clinic', route: '/clinic/documents', labelKey: 'common.documents' },
   { names: ['Пользователи'], portal: 'clinic', route: '/clinic/users', labelKey: 'clinic.nav.users' },
   { names: ['Интеграция'], portal: 'clinic', route: '/clinic/integration', labelKey: 'clinic.nav.integration' },
   // assistance portal

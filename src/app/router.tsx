@@ -101,6 +101,8 @@ const staffRoutes: RouteObject[] = [
     { index: true, lazy: lazy(() => import('@/features/staff/admin/migration/MigrationPage')) },
     { path: ':batchId', lazy: lazy(() => import('@/features/staff/admin/migration/MigrationBatchPage')) },
   ]),
+  { path: 'help', lazy: lazy(() => import('@/features/help/HelpPage')) },
+  { path: 'help/:anchor', lazy: lazy(() => import('@/features/help/HelpPage')) },
 ];
 
 const hrRoutes: RouteObject[] = [
@@ -117,6 +119,7 @@ const hrRoutes: RouteObject[] = [
   { path: 'endorsements/:endorsementId', lazy: async () => ({ Component: (await import('@/features/hr/pages/HrDocumentPage')).HrEndorsementPage }) },
   { path: 'stats', lazy: lazy(() => import('@/features/hr/pages/StatsPage')) },
   { path: 'help', lazy: lazy(() => import('@/features/hr/pages/HelpPage')) },
+  { path: 'help/:anchor', lazy: lazy(() => import('@/features/hr/pages/HelpPage')) },
 ];
 
 const onlyFor = (action: Parameters<typeof RequirePermission>[0]['action'], children: RouteObject[]): RouteObject => ({
@@ -141,6 +144,8 @@ const clinicRoutes: RouteObject[] = [
   ]),
   onlyFor('clinic.users.manage', [{ path: 'users', lazy: lazy(() => import('@/features/clinic/pages/UsersPage')) }]),
   onlyFor('clinic.integration.manage', [{ path: 'integration', lazy: lazy(() => import('@/features/clinic/integration/IntegrationPage')) }]),
+  { path: 'help', lazy: lazy(() => import('@/features/help/HelpPage')) },
+  { path: 'help/:anchor', lazy: lazy(() => import('@/features/help/HelpPage')) },
 ];
 
 const assistRoutes: RouteObject[] = [
@@ -170,6 +175,8 @@ const assistRoutes: RouteObject[] = [
   { path: 'clinics', lazy: lazy(() => import('@/features/assist/pages/ClinicsPage')) },
   guarded('users', assistRoles('/assist/users'), [{ index: true, lazy: lazy(() => import('@/features/assist/pages/UsersPage')) }]),
   guarded('integration', assistRoles('/assist/integration'), [{ index: true, lazy: lazy(() => import('@/features/assist/pages/IntegrationPage')) }]),
+  { path: 'help', lazy: lazy(() => import('@/features/help/HelpPage')) },
+  { path: 'help/:anchor', lazy: lazy(() => import('@/features/help/HelpPage')) },
 ];
 
 const appRoutes: RouteObject[] = [
@@ -186,6 +193,8 @@ const appRoutes: RouteObject[] = [
   { path: 'certificate', lazy: lazy(() => import('@/features/insured/pages/CertificatePage')) },
   { path: 'family', lazy: lazy(() => import('@/features/insured/pages/FamilyPage')) },
   { path: 'coverage', lazy: lazy(() => import('@/features/insured/pages/CoveragePage')) },
+  { path: 'help', lazy: lazy(() => import('@/features/help/HelpPage')) },
+  { path: 'help/:anchor', lazy: lazy(() => import('@/features/help/HelpPage')) },
 ];
 
 export const routes: RouteObject[] = [

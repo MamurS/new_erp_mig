@@ -5,6 +5,7 @@ import { ContentScroll } from '@/shared/ui/content-scroll';
  */
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
+import { BookOpen } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
@@ -16,6 +17,7 @@ import { Breadcrumbs } from '@/shared/ui/page';
 import { Skeleton } from '@/shared/ui/states';
 import { useTopbarState } from '@/features/staff/topbar';
 import { CreateMenu } from '@/features/shell/CreateMenu';
+import { HelpContextButton } from '@/features/help/HelpContextButton';
 import { ASSIST_NAV_GROUP_LABEL, ASSIST_NAV_GROUPS, ASSIST_SECTIONS } from './nav';
 import { t } from '@/i18n';
 
@@ -47,6 +49,7 @@ export default function AssistLayout() {
           activePath={current}
           user={{ name: user.displayName, role: ROLE_LABEL[user.role], portal: name ? t('assist.layout.partnerPortalOf', { name }) : t('assist.layout.partnerPortal') }}
           onLogout={() => void logout()}
+          footer={[{ path: '/assist/help', label: t('help.nav'), icon: BookOpen }]}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header data-testid="topbar" className="relative z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
@@ -65,6 +68,7 @@ export default function AssistLayout() {
             <div className="min-w-0 flex-1">
               <Breadcrumbs items={crumbs.length ? crumbs : [{ label: t('assist.nav.dashboard') }]} />
             </div>
+            <HelpContextButton />
             <LanguageButton />
             {action}
             <CreateMenu />
