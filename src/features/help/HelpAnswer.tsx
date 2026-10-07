@@ -1,84 +1,23 @@
 /*
- * «Задайте вопрос своими словами»: the AI scenario `help` answers only from the guide the role may read
- * (short answer, numbered steps, warnings, «Подробнее» links to the source subsections, «Открыть раздел»).
- * No answer → an honest «В справке нет ответа» and the portal's support channel. Switched off in the AI
- * settings (or «Отключить ИИ везде») → the box is disabled; the search keeps working.
+ * The answer of «Спросить» (HelpFinder.tsx): the AI scenario `help` answers only from the guide the role may
+ * read (short answer, numbered steps, warnings, «Подробнее» links to the source subsections, «Открыть
+ * раздел», «Полезно / Не полезно»). No answer → an honest «В справке нет ответа» and the portal's support
+ * channel.
  */
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, MessageCircleQuestion, ThumbsDown, ThumbsUp } from 'lucide-react';
-import { t, tm, useLocale } from '@/i18n';
+import { AlertTriangle, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { t } from '@/i18n';
 import type { Role } from '@/shared/types';
 import type { HelpAnswer } from '@/shared/types/help';
-import { useAiStatus } from '@/shared/api/queries/ai';
-import { useHelpAnswer, useHelpFeedback } from '@/shared/api/queries/help';
+import { useHelpFeedback } from '@/shared/api/queries/help';
 import { errorMessage } from '@/shared/api/client';
-import { helpAnswerRequestSchema } from '@/shared/schemas/forms';
 import { Button } from '@/shared/ui/button';
 import { toast } from '@/shared/ui/toast';
 import { helpHref } from './paths';
 import { OpenSectionLinks, SupportLink } from './HelpLinks';
 
-export function HelpAsk({ role, base, support }: { role: Role; base: string; support?: ReactNode }) {
-  const locale = useLocale();
-  const id = useId();
-  const status = useAiStatus();
-  const ask = useHelpAnswer();
-  const [question, setQuestion] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [answer, setAnswer] = useState<HelpAnswer | null>(null);
-  const off = status.data ? !status.data.scenarios.help : false;
-  const disabled = off || answer?.status === 'disabled';
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    const parsed = helpAnswerRequestSchema.safeParse({ question, locale });
-    if (!parsed.success) return setError(tm(parsed.error.issues[0]?.message) || t('help.ask.length'));
-    setError(null);
-    try {
-      setAnswer(await ask.mutateAsync(parsed.data));
-    } catch (err) {
-      toast.error(errorMessage(err));
-    }
-  };
-
-  return (
-    <section aria-labelledby={`${id}-title`} className="rounded-card border border-border bg-surface p-4" data-testid="help-ask">
-      <form onSubmit={(e) => void submit(e)} noValidate>
-        <label id={`${id}-title`} htmlFor={`${id}-q`} className="flex items-center gap-2 font-semibold">
-          <MessageCircleQuestion className="h-4 w-4 text-accent" aria-hidden />
-          {t('help.ask.label')}
-        </label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <input
-            id={`${id}-q`}
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            maxLength={300}
-            disabled={disabled}
-            placeholder={t('help.ask.placeholder')}
-            aria-invalid={!!error || undefined}
-            aria-describedby={`${id}-hint`}
-            className="h-10 min-w-0 flex-1 rounded-btn border border-border bg-bg px-3 text-[14px] text-text placeholder:text-muted focus:outline-2 focus:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
-          />
-          <Button type="submit" size="md" className="h-10" loading={ask.isPending} disabled={disabled}>
-            {t('help.ask.submit')}
-          </Button>
-        </div>
-        <p id={`${id}-hint`} className={error ? 'mt-1.5 text-[12px] text-danger-text' : 'mt-1.5 text-[12px] text-muted'} role={error ? 'alert' : undefined}>
-          {error ?? (disabled ? t('help.ask.disabled') : t('help.ask.hint'))}
-        </p>
-      </form>
-      {answer && answer.status !== 'disabled' && (
-        <div aria-live="polite">
-          <AnswerView key={answer.id ?? 'x'} answer={answer} role={role} base={base} support={support} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function AnswerView({ answer, role, base, support }: { answer: HelpAnswer; role: Role; base: string; support?: ReactNode }) {
+export function AnswerView({ answer, role, base, support }: { answer: HelpAnswer; role: Role; base: string; support?: ReactNode }) {
   const feedback = useHelpFeedback();
   const [rated, setRated] = useState(false);
   if (answer.status === 'no_answer') {

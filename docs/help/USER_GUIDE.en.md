@@ -75,6 +75,21 @@ When a list, tab or section is empty because the data has not been entered yet, 
 
 If the list is empty because of filters or search, “Nothing found” is shown as before.
 
+### Help {#using-help}
+
+<!-- audience: all -->
+
+The help opens from “Help” at the bottom of the side panel, from “?” in the top bar (right on the article about the current screen) or, in the app, from “Help” in the profile. You see only the articles available to your role.
+
+- **One field at the top — “Find a term or ask a question”.** As you type, the results appear under the field: “Terms” and “Articles”, the match highlighted.
+- **The first row of the list — “Ask: “…””.** It gives a step-by-step answer: a short answer, steps, warnings, “More” links to the subsections and “Open the section” buttons. Under the answer — “Helpful” or “Not helpful”.
+- **A question is answered by itself.** If the text looks like a question — ends with “?”, starts with “how”, “where”, “what”, “who”, “why”, “when”, “can” (also the Russian and Uzbek question words) or is longer than five words — the answer appears a moment after you pause typing, as a card above the results. A short query (“STIR”, “PINFL”) only searches.
+- **Keyboard:** ↑ and ↓ move through the rows, Enter on a row opens it, Enter with no row chosen asks, Esc closes the list.
+- **If there is no answer**, the help says so honestly — “The help has no answer to this question” — and offers to write to the coordinator (or the support of your portal).
+- **If answers are switched off by the administrator**, there is no “Ask” row; the search works.
+- **“Download PDF”** — the whole help or the current article, only the sections available to your role.
+- **Ctrl+K** in the MIG portal: the first row of the “Help” group is “Ask the help: “…””; it opens the help with the answer ready. <!-- audience: staff -->
+
 ### Session {#session}
 
 <!-- audience: all -->

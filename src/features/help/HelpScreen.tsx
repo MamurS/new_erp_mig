@@ -26,8 +26,7 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '@/features/staff/topbar';
 import { HelpMarkdown } from './HelpMarkdown';
 import { termRenderer } from './HelpText';
-import { HelpSearch } from './HelpSearch';
-import { HelpAsk } from './HelpAsk';
+import { HelpFinder } from './HelpFinder';
 import { HelpPrint, type PrintScope } from './HelpPrint';
 import { OpenSectionLinks } from './HelpLinks';
 import { cleanAnchor, helpBase, helpHref } from './paths';
@@ -40,6 +39,11 @@ export interface HelpScreenProps {
   aside?: ReactNode;
 }
 
+/** Router state of a jump into the help with a question to answer at once. */
+export interface HelpLocationState {
+  helpAsk?: string;
+}
+
 export function HelpScreen({ support, aside }: HelpScreenProps) {
   const user = useUser();
   if (!user) return null;
@@ -50,7 +54,9 @@ function HelpScreenFor({ role, support, aside }: HelpScreenProps & { role: Role 
   const locale = useLocale();
   const navigate = useNavigate();
   const { anchor: rawAnchor } = useParams();
-  const { hash } = useLocation();
+  const { hash, state } = useLocation();
+  // «Спросить в справке» of Ctrl+K: the question comes in the router state (never in the URL).
+  const initialQuestion = typeof (state as HelpLocationState | null)?.helpAsk === 'string' ? (state as HelpLocationState).helpAsk! : null;
   const base = helpBase(role);
   const portal = portalOfRole(role);
   const narrow = portal === 'app';
@@ -81,6 +87,10 @@ function HelpScreenFor({ role, support, aside }: HelpScreenProps & { role: Role 
   }, [a, section, portal]);
 
   const open = useCallback((to: string) => navigate(to), [navigate]);
+  // The question of Ctrl+K is asked once: the history entry forgets it (Back does not ask again).
+  useEffect(() => {
+    if (initialQuestion) navigate({ hash }, { replace: true, state: null });
+  }, [initialQuestion, hash, navigate]);
   // Links inside the guide text are plain <a href>: handle them in the app without reloading the page.
   const onArticleClick = (e: MouseEvent<HTMLElement>) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -123,8 +133,7 @@ function HelpScreenFor({ role, support, aside }: HelpScreenProps & { role: Role 
       </div>
       {!crumbsInTopbar && <Breadcrumbs items={crumbs} />}
 
-      <HelpAsk role={role} base={base} support={support} />
-      <HelpSearch base={base} onOpen={open} />
+      <HelpFinder role={role} base={base} support={support} onOpen={open} initialQuestion={initialQuestion} />
 
       {/*
         The table of contents is the start column of the portal (≥ 1280 px): it stays in place and scrolls by

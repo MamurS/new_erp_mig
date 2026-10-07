@@ -57,25 +57,27 @@ describe('help screen', () => {
     await loginAs('operator');
     const user = userEvent.setup();
     const { router } = renderRoutes(routes('staff'), '/staff/help');
-    const box = await screen.findByRole('combobox', { name: 'Поиск по справке' });
+    const box = await screen.findByRole('combobox', { name: 'Найдите термин или задайте вопрос' });
     await user.type(box, 'гп');
     const list = await screen.findByRole('listbox', { name: 'Результаты поиска по справке' });
     const terms = await within(list).findByRole('group', { name: 'Термины' });
     expect(within(terms).getAllByRole('option')[0]).toHaveTextContent(/гарантийное письмо/i);
     expect(within(list).getByRole('group', { name: 'Статьи' })).toBeInTheDocument();
     expect(list.querySelector('mark')).not.toBeNull();
+    // The first row is «Спросить: «гп»»; ↓ chooses it, the next ↓ the first term.
+    expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Спросить: «гп»');
+    await user.keyboard('{ArrowDown}');
     await user.keyboard('{ArrowDown}');
     expect(box.getAttribute('aria-activedescendant')).toBe(within(list).getAllByRole('option')[1]!.id);
     await user.keyboard('{Enter}');
     expect(router.state.location.pathname).toMatch(/^\/staff\/help\/[a-z-]+$/);
   });
 
-  it('«Задать вопрос»: steps and a source link; «Полезно» is accepted', async () => {
+  it('«Спросить»: a question is answered by itself — steps and a source link; «Полезно» is accepted', async () => {
     await loginAs('accountant');
     const user = userEvent.setup();
     renderRoutes(routes('staff'), '/staff/help');
-    await user.type(await screen.findByRole('textbox', { name: 'Задайте вопрос своими словами' }), 'как разнести платёж от другой компании');
-    await user.click(screen.getByRole('button', { name: 'Спросить' }));
+    await user.type(await screen.findByRole('combobox', { name: 'Найдите термин или задайте вопрос' }), 'как разнести платёж от другой компании');
     const answer = await screen.findByTestId('help-answer');
     expect(within(answer).getByTestId('help-answer-steps').querySelectorAll('li').length).toBeGreaterThan(0);
     expect(within(answer).getByTestId('help-answer-sources').querySelector('a[href^="/staff/help/finance"]')).not.toBeNull();

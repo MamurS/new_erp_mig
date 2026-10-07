@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Command } from 'cmdk';
 import { matchesSearch } from '@/shared/lib/searchNormalize';
 import * as D from '@radix-ui/react-dialog';
-import { BookOpen, Building2, FileSignature, FileText, Receipt, Tag, User, CornerDownLeft } from 'lucide-react';
+import { BookOpen, MessageCircleQuestion, Building2, FileSignature, FileText, Receipt, Tag, User, CornerDownLeft } from 'lucide-react';
 import type { SessionUser } from '@/shared/types';
 import { can } from '@/shared/auth/permissions';
 import { useClaims, useClients, useInsuredList, usePolicies } from '@/shared/api/queries/staff';
@@ -11,6 +11,8 @@ import { useContracts } from '@/shared/api/queries/lifecycle';
 import { useDebounced } from '@/shared/lib/hooks';
 import { t, useLocale } from '@/i18n';
 import { useHelpSearch } from '@/shared/api/queries/help';
+import { useAiStatus } from '@/shared/api/queries/ai';
+import type { HelpLocationState } from '@/features/help/HelpScreen';
 import { GLOSSARY_ANCHOR } from '@/shared/help/glossary';
 import { helpHref } from '@/features/help/paths';
 import { INSURED_CARD_ROLES, STAFF_SECTIONS } from './nav';
@@ -44,6 +46,9 @@ export function CommandPalette({ open, onOpenChange, user, mode = 'search' }: { 
   const help = useHelpSearch(helpOn ? term : '', locale);
   const helpTerms = helpOn ? (help.data?.terms.slice(0, 2) ?? []) : [];
   const helpArticles = helpOn ? (help.data?.articles.slice(0, 5) ?? []) : [];
+  // «Спросить в справке: «…»» — the first row of the group; hidden while the AI scenario is off.
+  const ai = useAiStatus();
+  const helpAsk = helpOn && term.length >= 3 && !!ai.data?.scenarios.help;
 
   useEffect(() => {
     if (!open) setQ('');
@@ -128,8 +133,22 @@ export function CommandPalette({ open, onOpenChange, user, mode = 'search' }: { 
                   ))}
                 </Command.Group>
               )}
-              {helpTerms.length + helpArticles.length > 0 && (
+              {(helpAsk || helpTerms.length + helpArticles.length > 0) && (
                 <Command.Group heading={t('help.nav')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                  {helpAsk && (
+                    <Command.Item
+                      value="help-ask"
+                      // The question goes in the router state, never in the URL (it may contain personal data).
+                      onSelect={() => {
+                        onOpenChange(false);
+                        navigate('/staff/help', { state: { helpAsk: term } satisfies HelpLocationState });
+                      }}
+                      className={itemCls}
+                      data-testid="palette-help-ask"
+                    >
+                      <MessageCircleQuestion className="h-4 w-4 shrink-0 text-accent" aria-hidden /> <span className="truncate">{t('help.palette.ask', { text: term })}</span>
+                    </Command.Item>
+                  )}
                   {helpTerms.map((h) => (
                     <Command.Item key={`ht-${h.term.id}`} value={`ht-${h.term.id}`} onSelect={() => go(helpHref('/staff/help', GLOSSARY_ANCHOR))} className={itemCls}>
                       <Tag className="h-4 w-4 shrink-0 text-muted" aria-hidden /> <span className="truncate">{h.term.term}</span>
