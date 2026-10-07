@@ -861,6 +861,10 @@ const dmsParamKey = z.enum([
   'limitMode',
   'maxChildAge',
   'studentMaxAge',
+  'minGroupSize',
+  'minGroupCountsFamily',
+  'allowedLegalForms',
+  'belowMinDuringTerm',
 ]);
 /** Portals other than the MIG one receive only part of the values. */
 export const dmsParamValues: z.ZodType<Partial<T.DmsParamValues>> = z.record(dmsParamKey, z.number());
