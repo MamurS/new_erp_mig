@@ -1,4 +1,5 @@
 import { t } from '@/i18n';
+import { SideSection } from '@/shared/ui/sticky-sections';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Flag } from 'lucide-react';
@@ -244,8 +245,7 @@ function ClaimPanel({ id, showReserve, onClose, onOpen }: { id: string; showRese
             )}
             <Kv label={t('staff.claimCard.created')}>{formatDateTime(c.createdAt)}</Kv>
           </dl>
-          <section>
-            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clientCard.tab.history')}</h3>
+          <SideSection title={t('staff.clientCard.tab.history')} testId="claim-panel-history">
             <ol className="flex flex-col gap-2 border-l border-border pl-3">
               {[...c.history]
                 .reverse()
@@ -262,7 +262,7 @@ function ClaimPanel({ id, showReserve, onClose, onOpen }: { id: string; showRese
                   </li>
                 ))}
             </ol>
-          </section>
+          </SideSection>
         </div>
       )}
     </DetailPanel>

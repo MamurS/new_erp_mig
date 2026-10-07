@@ -174,6 +174,7 @@ export const clientHandlers = [
       const lastInv = d.invoices.filter((i) => i.clientId === c.id).sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1))[0];
       if (lastInv) activity.push({ at: tzIso(parseIso(lastInv.issuedAt)), text: `Выставлен счёт ${lastInv.number} на ${formatMoney(lastInv.amount)}` });
       if (policy) activity.push({ at: tzIso(parseIso(policy.startDate)), text: `Начало действия полиса ${policy.number}` });
+      for (const e of c.log ?? []) activity.push(e);
       activity.push({ at: c.createdAt, text: 'Клиент добавлен в систему' });
       const detail: ClientDetail = {
         ...toClient(d, c),

@@ -57,6 +57,7 @@ MIG xodimlari, HR, klinikalar va assistanslar email, parol va bir martalik kod b
 
 - Ustun sarlavhasiga bosish saralaydi, jadval ustidagi tugmalar filtrlaydi. Ustun nomlari qatori aylantirishda koʻrinib turadi.
 - Qatorga bosish oʻngda kartani ochadi. ↑ va ↓ strelkalari yozuvlarni almashtiradi, Enter toʻliq kartani ochadi, Esc yopadi. Bunda jadval ochiq qoladi.
+- Yon ustunlar — oʻngdagi karta, ish stoli bloklari («Eʼtibor talab qiladi», «Integratsiyalar»), kartalardagi maʼlumotlar va tarix, TT va shartnoma muharrirlaridagi hujjatni oldindan koʻrish — sahifa aylantirilganda joyidan siljimaydi. Uzun ustun oʻzi aylanadi: ustun sarlavhasi va tugmalari joyida qoladi, joriy boʻlim sarlavhasi esa butun boʻlim aylanib oʻtguncha ustun sarlavhasi ostida turadi. Kengligi 1280 pikseldan kichik ekranda karta jadval ustidan ochiladi, boshqa ustunlar esa asosiy mazmun ostiga tushadi.
 - «Ustunlar» tugmasi keraksiz ustunlarni yashiradi, «CSV ga eksport» jadvalni yuklab beradi (JShShIR, telefonlar va tashxislarsiz).
 
 ### Seans {#session}

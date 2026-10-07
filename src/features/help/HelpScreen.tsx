@@ -5,6 +5,8 @@
  * terms with their definitions, «Открыть раздел» for screens the role may open and «Скачать PDF».
  * Everything comes from /api/help already filtered for the role and in the interface language.
  */
+import { useDocked } from '@/shared/ui/detail-panel';
+import { SideColumn } from '@/shared/ui/side-column';
 import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Download, Languages, Link2, ListTree } from 'lucide-react';
@@ -89,6 +91,14 @@ function HelpScreenFor({ role, support, aside }: HelpScreenProps & { role: Role 
     navigate(href);
   };
 
+  const docked = useDocked() && !narrow;
+  const tocBody = toc.isLoading ? (
+    <SkeletonRows rows={10} />
+  ) : toc.data ? (
+    <TocNav toc={toc.data} base={base} current={a?.anchor ?? null} section={section} onPick={() => setTocOpen(false)} />
+  ) : (
+    <ErrorState error={toc.error} onRetry={() => void toc.refetch()} />
+  );
   return (
     <div className="flex flex-col gap-4" data-testid="help-screen">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -116,16 +126,23 @@ function HelpScreenFor({ role, support, aside }: HelpScreenProps & { role: Role 
       <HelpAsk role={role} base={base} support={support} />
       <HelpSearch base={base} onOpen={open} />
 
-      {/* The app is a phone column: the table of contents is always behind its button there. */}
-      <div className={cn('grid gap-4', !narrow && 'lg:grid-cols-[260px_minmax(0,1fr)]')}>
-        <div className="min-w-0">
-          <Button variant="secondary" size="md" className={cn('w-full justify-start', !narrow && 'lg:hidden')} aria-expanded={tocOpen} onClick={() => setTocOpen((v) => !v)}>
-            <ListTree className="h-4 w-4" aria-hidden /> {t('help.tocToggle')}
-          </Button>
-          <div className={cn('mt-2', !narrow && 'lg:sticky lg:top-0 lg:mt-0 lg:block', !tocOpen && 'hidden')}>
-            {toc.isLoading ? <SkeletonRows rows={10} /> : toc.data ? <TocNav toc={toc.data} base={base} current={a?.anchor ?? null} section={section} onPick={() => setTocOpen(false)} /> : <ErrorState error={toc.error} onRetry={() => void toc.refetch()} />}
+      {/*
+        The table of contents is the start column of the portal (≥ 1280 px): it stays in place and scrolls by
+        itself. Below that, and in the app (a phone column), it is behind its button above the article.
+      */}
+      <div className="grid gap-4">
+        {docked ? (
+          <SideColumn position="start" label={t('help.toc')} width={280} testId="help-toc-column">
+            {tocBody}
+          </SideColumn>
+        ) : (
+          <div className="min-w-0">
+            <Button variant="secondary" size="md" className="w-full justify-start" aria-expanded={tocOpen} onClick={() => setTocOpen((v) => !v)}>
+              <ListTree className="h-4 w-4" aria-hidden /> {t('help.tocToggle')}
+            </Button>
+            <div className={cn('mt-2', !tocOpen && 'hidden')}>{tocBody}</div>
           </div>
-        </div>
+        )}
         <div className="flex min-w-0 flex-col gap-4">
           {article.isLoading || (!requested && toc.isLoading) ? (
             <SkeletonRows rows={12} />

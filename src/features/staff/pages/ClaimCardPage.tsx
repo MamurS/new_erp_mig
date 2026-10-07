@@ -1,4 +1,6 @@
 import { t, tm } from '@/i18n';
+import { SideColumn } from '@/shared/ui/side-column';
+import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AlertTriangle, FileImage, ZoomIn, ZoomOut } from 'lucide-react';
@@ -76,71 +78,73 @@ export default function ClaimCardPage() {
         </div>
         <TransitionButtons claim={c} onPick={setPending} />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(min-content,1fr)_320px]">
-        <div className="flex flex-col gap-4">
-          <Card title={t('staff.insuredCard.data')}>
-            <dl className="divide-y divide-border-soft">
-              <Kv label={t('common.insured')}>
-                {canOpenInsured ? (
-                  <Link to={`/staff/insured/${c.insuredId}`} className="text-accent-text hover:underline">
-                    {c.insuredName}
-                  </Link>
-                ) : (
-                  c.insuredName
-                )}
-              </Kv>
-              <Kv label={t('common.client')}>{c.clientName}</Kv>
-              <Kv label={t('common.source')}>{SOURCE_LABEL[c.source]}</Kv>
-              {c.intakeChannel && <Kv label={t('staff.claimCard.intakeChannel')}>{CLAIM_INTAKE_LABEL[c.intakeChannel]}</Kv>}
-              <Kv label={t('staff.claimCard.where')}>{c.providerName}</Kv>
-              <Kv label={t('staff.insuredCard.serviceDate')}>{formatDate(c.serviceDate)}</Kv>
-              <Kv label={t('staff.claimCard.claimed')}>
-                <span className="num">{formatMoney(c.amountClaimed)}</span>
-              </Kv>
-              {c.amountApproved !== undefined && (
-                <Kv label={t('staff.claimCard.approved')}>
-                  <span className="num font-semibold">{formatMoney(c.amountApproved)}</span>
-                </Kv>
-              )}
-              <Kv label={t('staff.claimCard.created')}>{formatDateTime(c.createdAt)}</Kv>
-            </dl>
-          </Card>
-          {c.receiptFiscal && (
-            <Card title={t('staff.claimCard.fiscalTitle')}>
-              <dl className="divide-y divide-border-soft" data-testid="receipt-fiscal">
-                <Kv label={t('staff.claimCard.fiscalNumber')}>{c.receiptFiscal.fiscalNumber ? <span className="num">{c.receiptFiscal.fiscalNumber}</span> : <span className="text-muted">{t('staff.claimCard.notRecognized')}</span>}</Kv>
-                <Kv label={t('staff.claimCard.dateTime')}>
-                  <span className="num">
-                    {formatDate(c.receiptFiscal.issuedAt.slice(0, 10))} {c.receiptFiscal.issuedAt.slice(11, 16)}
-                  </span>
-                </Kv>
-                <Kv label={t('staff.claimCard.receiptAmount')}>
-                  <span className="num">{formatMoney(c.receiptFiscal.amount)}</span>
-                </Kv>
-                <Kv label={t('staff.claimCard.sellerInn')}>
-                  <span className="num">{c.receiptFiscal.sellerInn}</span>
-                </Kv>
-              </dl>
-              <p className="mt-2 text-[12px] text-muted">{t('staff.claimCard.fiscalHint')}</p>
-            </Card>
-          )}
-          <Card title={t('staff.claimCard.attachments')} bodyClassName="p-2">
-            {c.attachments.length === 0 ? (
-              <p className="p-2 text-muted">{t('staff.claimCard.noAttachments')}</p>
-            ) : (
-              <ul className="grid grid-cols-2 gap-2">
-                {c.attachments.map((a) => (
-                  <AttachmentThumb key={a.id} a={a} />
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
+      <StickySectionsCtx.Provider value>
         <div className="flex min-w-0 flex-col gap-4">
           <LimitCheckCard claim={c} />
           <AiHint subject={{ type: 'claim', id: c.id }} />
           <SettlementPanel claim={c} />
         </div>
+      </StickySectionsCtx.Provider>
+      <SideColumn position="start" label={t('staff.claimCard.dataColumn')} testId="claim-data-column" inlineClassName="mt-0">
+        <Card title={t('staff.insuredCard.data')}>
+          <dl className="divide-y divide-border-soft">
+            <Kv label={t('common.insured')}>
+              {canOpenInsured ? (
+                <Link to={`/staff/insured/${c.insuredId}`} className="text-accent-text hover:underline">
+                  {c.insuredName}
+                </Link>
+              ) : (
+                c.insuredName
+              )}
+            </Kv>
+            <Kv label={t('common.client')}>{c.clientName}</Kv>
+            <Kv label={t('common.source')}>{SOURCE_LABEL[c.source]}</Kv>
+            {c.intakeChannel && <Kv label={t('staff.claimCard.intakeChannel')}>{CLAIM_INTAKE_LABEL[c.intakeChannel]}</Kv>}
+            <Kv label={t('staff.claimCard.where')}>{c.providerName}</Kv>
+            <Kv label={t('staff.insuredCard.serviceDate')}>{formatDate(c.serviceDate)}</Kv>
+            <Kv label={t('staff.claimCard.claimed')}>
+              <span className="num">{formatMoney(c.amountClaimed)}</span>
+            </Kv>
+            {c.amountApproved !== undefined && (
+              <Kv label={t('staff.claimCard.approved')}>
+                <span className="num font-semibold">{formatMoney(c.amountApproved)}</span>
+              </Kv>
+            )}
+            <Kv label={t('staff.claimCard.created')}>{formatDateTime(c.createdAt)}</Kv>
+          </dl>
+        </Card>
+        {c.receiptFiscal && (
+          <Card title={t('staff.claimCard.fiscalTitle')}>
+            <dl className="divide-y divide-border-soft" data-testid="receipt-fiscal">
+              <Kv label={t('staff.claimCard.fiscalNumber')}>{c.receiptFiscal.fiscalNumber ? <span className="num">{c.receiptFiscal.fiscalNumber}</span> : <span className="text-muted">{t('staff.claimCard.notRecognized')}</span>}</Kv>
+              <Kv label={t('staff.claimCard.dateTime')}>
+                <span className="num">
+                  {formatDate(c.receiptFiscal.issuedAt.slice(0, 10))} {c.receiptFiscal.issuedAt.slice(11, 16)}
+                </span>
+              </Kv>
+              <Kv label={t('staff.claimCard.receiptAmount')}>
+                <span className="num">{formatMoney(c.receiptFiscal.amount)}</span>
+              </Kv>
+              <Kv label={t('staff.claimCard.sellerInn')}>
+                <span className="num">{c.receiptFiscal.sellerInn}</span>
+              </Kv>
+            </dl>
+            <p className="mt-2 text-[12px] text-muted">{t('staff.claimCard.fiscalHint')}</p>
+          </Card>
+        )}
+        <Card title={t('staff.claimCard.attachments')} bodyClassName="p-2">
+          {c.attachments.length === 0 ? (
+            <p className="p-2 text-muted">{t('staff.claimCard.noAttachments')}</p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-2">
+              {c.attachments.map((a) => (
+                <AttachmentThumb key={a.id} a={a} />
+              ))}
+            </ul>
+          )}
+        </Card>
+      </SideColumn>
+      <SideColumn label={t('staff.clientCard.tab.history')} testId="claim-history-column" inlineClassName="mt-0">
         <Card title={t('staff.clientCard.tab.history')} bodyClassName="p-3">
           <ol className="flex flex-col gap-3 border-l border-border pl-3">
             {[...c.history].reverse().map((h, i) => (
@@ -158,7 +162,7 @@ export default function ClaimCardPage() {
             ))}
           </ol>
         </Card>
-      </div>
+      </SideColumn>
       {pending && <TransitionDialog claim={c} to={pending} onClose={() => setPending(null)} />}
     </div>
   );

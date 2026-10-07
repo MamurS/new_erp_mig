@@ -274,6 +274,28 @@
   }
 }
 
+/*
+ * Pinned section headings (src/shared/ui/sticky-sections.tsx): inside a side column, a details card or
+ * a long card, the heading of each section sticks inside its own section right under the column's
+ * pinned header (--column-head-h, measured; 0 in the content area), so the next heading pushes the
+ * previous one up. A table in such a section pins its header below the section heading.
+ */
+@layer components {
+  [data-section-head] {
+    position: sticky;
+    top: var(--column-head-h, 0px);
+    z-index: 3;
+    background: var(--color-surface);
+  }
+  [data-section-head][data-stuck] {
+    border-radius: 0;
+    box-shadow: 0 1px 0 var(--color-border);
+  }
+  [data-sticky-section] .table-scroll :is(thead > tr > th, [data-sticky-head]) {
+    top: calc(var(--column-head-h, 0px) + var(--section-head-h, 0px));
+  }
+}
+
 @media print {
   /* The page prints whole: the shell and the content area do not clip it. */
   .portal-shell,
@@ -282,6 +304,7 @@
     overflow: visible;
   }
   .table-scroll :is(thead > tr > th, [data-sticky-head], tfoot > tr > :is(td, th), [data-sticky-foot]),
+  [data-section-head],
   .table-pager {
     position: static;
     box-shadow: none;

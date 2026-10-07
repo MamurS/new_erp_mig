@@ -1,4 +1,5 @@
 import { t, tm, tp } from '@/i18n';
+import { SideColumn } from '@/shared/ui/side-column';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, KeyRound, PlugZap } from 'lucide-react';
@@ -186,7 +187,7 @@ export default function DashboardPage() {
 
   const now = new Date();
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(min-content,1fr)_320px]">
+    <>
       <div className="flex min-w-0 flex-col gap-4">
         <div>
           <h1 className="text-[22px] font-bold">
@@ -245,8 +246,8 @@ export default function DashboardPage() {
           />
         </Card>
       </div>
-      <aside className="flex flex-col gap-4" aria-label={t('staff.dashboard.summary')}>
-        <Card title={t('staff.dashboard.attention')} bodyClassName="p-2">
+      <SideColumn label={t('staff.dashboard.summary')} testId="dashboard-side">
+        <Card title={t('staff.dashboard.attention')} bodyClassName="p-2" testId="dashboard-attention">
           {dashboard.isLoading ? (
             <SkeletonRows rows={3} />
           ) : dashboard.data?.attention.length ? (
@@ -268,8 +269,8 @@ export default function DashboardPage() {
         </Card>
         <IntegrationsCard />
         {showMedical && <MedicalAccessCard />}
-      </aside>
-    </div>
+      </SideColumn>
+    </>
   );
 }
 
@@ -278,7 +279,7 @@ function IntegrationsCard() {
   const tone = { ok: 'success', degraded: 'warning', down: 'danger' } as const;
   const label = { ok: t('staff.dashboard.intOk'), degraded: t('staff.dashboard.intDegraded'), down: t('staff.dashboard.intDown') };
   return (
-    <Card title={<span className="flex items-center gap-1.5"><PlugZap className="h-4 w-4" aria-hidden /> {t('staff.dashboard.integrations')}</span>} bodyClassName="p-2">
+    <Card title={<span className="flex items-center gap-1.5"><PlugZap className="h-4 w-4" aria-hidden /> {t('staff.dashboard.integrations')}</span>} bodyClassName="p-2" testId="dashboard-integrations">
       {q.isLoading ? (
         <SkeletonRows rows={4} />
       ) : q.isError ? (

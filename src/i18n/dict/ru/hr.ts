@@ -144,6 +144,7 @@ export const hr = {
   'hr.docs.contactManager': 'Связаться с менеджером',
   'hr.doc.contractSubtitle': '{status} · общая премия {total}',
   'hr.doc.annex2': 'Приложение 2 — список застрахованных',
+  'hr.doc.actions': 'Подписание и действия',
   'hr.doc.loaded': 'Загружено: {n}.',
   'hr.doc.notLoaded': 'Список ещё не загружен.',
   'hr.doc.format': 'Формат как при импорте сотрудников:',

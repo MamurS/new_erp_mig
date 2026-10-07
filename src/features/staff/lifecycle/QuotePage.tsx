@@ -1,4 +1,6 @@
 /* Калькулятор андеррайтера (LIFECYCLE_SPEC §5): tariff by age bands, manual adjustments, approval by authority. */
+import { SideColumn } from '@/shared/ui/side-column';
+import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { defineLabels, t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -135,7 +137,7 @@ function Calculator({ quote }: { quote: QuoteView }) {
         </p>
       )}
       {!quote.census && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">{t('staffLc.quote.censusFirst')}</p>}
-      <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+      <StickySectionsCtx.Provider value>
         <div className="flex min-w-0 flex-col gap-4">
           <Card title={t('common.rate')}>
             <div className="mb-3 max-w-xs">
@@ -213,64 +215,64 @@ function Calculator({ quote }: { quote: QuoteView }) {
             </div>
           </Card>
         </div>
-        <div className="flex flex-col gap-4">
-          <Card title={t('staffLc.quote.result')}>
-            <dl className="text-[13px]" data-testid="quote-total">
-              <Kv label={t('staffLc.quote.perEmployee')}>
-                <span className="num">{formatMoney(shown.premiumEmployee)}</span>
-              </Kv>
-              <Kv label={t('staffLc.quote.perFamily')}>
-                <span className="num">{formatMoney(shown.premiumFamily)}</span>
-              </Kv>
-              <Kv label={t('staffLc.quote.discountFromTariff')}>
-                <span className="num">{formatPercent(shown.discountFromTariffPct, 1)}</span>
-              </Kv>
-              <div className="mt-1 flex justify-between border-t border-border-soft pt-2 text-[15px] font-bold">
-                <dt>{t('staffLc.quote.premiumPerYear')}</dt>
-                <dd className="num">{formatMoney(shown.total)}</dd>
-              </div>
-            </dl>
-            {authority && (
-              <p className="mt-3 text-[12px] text-muted">
-                {authority.quotePremiumMax !== undefined
-                  ? t('staffLc.quote.authorityBoth', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0), premium: formatMoney(authority.quotePremiumMax) })
-                  : t('staffLc.quote.authorityDiscount', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0) })}
-              </p>
-            )}
-          </Card>
-          <Card title={t('staffLc.pricing.basis')}>
-            <Field label={t('staffLc.pricing.basis')} hint={t('staffLc.pricing.quoteHint')}>
-              {(a) => (
-                <Select {...a} disabled={!editable} value={pricingBasis} onChange={(e) => setPricingBasis(e.target.value as PricingBasis)} data-testid="quote-pricing-basis">
-                  {PRICING_BASES.map((b) => (
-                    <option key={b} value={b}>
-                      {PRICING_BASIS_LABEL[b]}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            {pricingBasis === 'age_banded' && shown.ageBandRates.length > 0 && (
-              <div className="mt-3">
-                <p className="mb-1 text-[12px] text-muted">{t('staffLc.pricing.tableTitle')}</p>
-                <AgeBandTable rates={shown.ageBandRates} />
-              </div>
-            )}
-          </Card>
-          {quote.approvals.length > 0 && (
-            <Card title={t('staffLc.quote.approvals')}>
-              <ul className="text-[13px]">
-                {quote.approvals.map((a) => (
-                  <li key={a.at} className="py-1">
-                    {a.byName} · <span className="num text-muted">{formatDateTime(a.at)}</span>
-                    {a.comment && <p className="text-muted">{a.comment}</p>}
-                  </li>
-                ))}
-              </ul>
-            </Card>
+      </StickySectionsCtx.Provider>
+      <SideColumn label={t('staffLc.quote.result')} testId="quote-result-column">
+        <Card title={t('staffLc.quote.result')}>
+          <dl className="text-[13px]" data-testid="quote-total">
+            <Kv label={t('staffLc.quote.perEmployee')}>
+              <span className="num">{formatMoney(shown.premiumEmployee)}</span>
+            </Kv>
+            <Kv label={t('staffLc.quote.perFamily')}>
+              <span className="num">{formatMoney(shown.premiumFamily)}</span>
+            </Kv>
+            <Kv label={t('staffLc.quote.discountFromTariff')}>
+              <span className="num">{formatPercent(shown.discountFromTariffPct, 1)}</span>
+            </Kv>
+            <div className="mt-1 flex justify-between border-t border-border-soft pt-2 text-[15px] font-bold">
+              <dt>{t('staffLc.quote.premiumPerYear')}</dt>
+              <dd className="num">{formatMoney(shown.total)}</dd>
+            </div>
+          </dl>
+          {authority && (
+            <p className="mt-3 text-[12px] text-muted">
+              {authority.quotePremiumMax !== undefined
+                ? t('staffLc.quote.authorityBoth', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0), premium: formatMoney(authority.quotePremiumMax) })
+                : t('staffLc.quote.authorityDiscount', { discount: formatPercent(authority.quoteDiscountMaxPct ?? 0) })}
+            </p>
           )}
-        </div>
-      </div>
+        </Card>
+        <Card title={t('staffLc.pricing.basis')}>
+          <Field label={t('staffLc.pricing.basis')} hint={t('staffLc.pricing.quoteHint')}>
+            {(a) => (
+              <Select {...a} disabled={!editable} value={pricingBasis} onChange={(e) => setPricingBasis(e.target.value as PricingBasis)} data-testid="quote-pricing-basis">
+                {PRICING_BASES.map((b) => (
+                  <option key={b} value={b}>
+                    {PRICING_BASIS_LABEL[b]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          {pricingBasis === 'age_banded' && shown.ageBandRates.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-1 text-[12px] text-muted">{t('staffLc.pricing.tableTitle')}</p>
+              <AgeBandTable rates={shown.ageBandRates} />
+            </div>
+          )}
+        </Card>
+        {quote.approvals.length > 0 && (
+          <Card title={t('staffLc.quote.approvals')}>
+            <ul className="text-[13px]">
+              {quote.approvals.map((a) => (
+                <li key={a.at} className="py-1">
+                  {a.byName} · <span className="num text-muted">{formatDateTime(a.at)}</span>
+                  {a.comment && <p className="text-muted">{a.comment}</p>}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+      </SideColumn>
       <ReasonDialog
         open={dialog === 'approve'}
         onClose={() => setDialog(null)}

@@ -1,4 +1,6 @@
 /* Карточка сделки (LIFECYCLE_SPEC §3): stage steps, the panel of the current stage, documents and events. */
+import { SideColumn } from '@/shared/ui/side-column';
+import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { defineLabels, t, tm } from '@/i18n';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -353,7 +355,7 @@ export default function DealCardPage() {
               {tm(r)}
             </p>
           ))}
-          <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+          <StickySectionsCtx.Provider value>
             <div className="flex min-w-0 flex-col gap-4">
               <StagePanel deal={deal} />
               <Documents deal={deal} />
@@ -370,8 +372,10 @@ export default function DealCardPage() {
                 </ol>
               </Card>
             </div>
+          </StickySectionsCtx.Provider>
+          <SideColumn label={t('staffLc.deal.fallback')} width={340} testId="deal-info-column">
             <DealInfo deal={deal} />
-          </div>
+          </SideColumn>
           <ReasonDialog
             open={lostOpen}
             onClose={() => setLostOpen(false)}

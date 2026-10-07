@@ -331,7 +331,10 @@ export function createSeed(opts: SeedOptions = {}): Db {
       renewalDate: hasPolicy && status !== 'expired' ? isoDay(end) : undefined,
       createdAt: tzIso(now - int(rng, 400, 1400) * DAY),
     };
-    if (i === demoIdx) client.lossRatio = 0.62;
+    if (i === demoIdx) {
+      client.lossRatio = 0.62;
+      client.log = clientLog(now);
+    }
     clients.push(client);
     if (hasPolicy && policyId) {
       const number = docNumber('policy', { year: new Date(start).getFullYear(), n: policySeq++ });
@@ -878,4 +881,19 @@ export function createSeed(opts: SeedOptions = {}): Db {
   seedLifecycle(out, { now });
   seedFamilyActivity(out, family, { now });
   return out;
+}
+
+/** Work log of the demo client: 40 events every few days back (a long «Активность»); no rng draws. */
+function clientLog(now: number): { at: string; text: string }[] {
+  const kinds = [
+    'Звонок HR: уточнение списка застрахованных',
+    'Встреча с HR: итоги квартала',
+    'Отправлено письмо HR с отчётом по убыткам',
+    'Получен запрос на включение сотрудников',
+    'Согласован график медосмотров',
+    'Звонок HR: вопрос по лимиту стоматологии',
+    'Отправлена памятка застрахованным',
+    'Обсуждение условий продления',
+  ];
+  return Array.from({ length: 40 }, (_, k) => ({ at: tzIso(now - (3 + k * 6) * DAY - (k % 5) * 3_600_000), text: kinds[k % kinds.length]! }));
 }

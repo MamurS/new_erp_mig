@@ -2,6 +2,8 @@
  * Редактор договора (LIFECYCLE_SPEC §7.3–7.4): parameters and clauses on the left, preview of all pages on
  * the right; status, version and actions on top; signing, invoices, endorsements and versions below.
  */
+import { SideColumn } from '@/shared/ui/side-column';
+import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -555,14 +557,18 @@ function ContractEditor({ c }: { c: ContractView }) {
         </p>
       )}
       {c.originalOverdue && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">{t('staffLc.contract.originalOverdue')}</p>}
-      <div className="grid gap-4 xl:grid-cols-[minmax(min-content,1fr)_minmax(min-content,1fr)]">
+      <StickySectionsCtx.Provider value>
         <div className="flex min-w-0 flex-col gap-4">
           <ParamsForm c={c} editable={editable} />
           <Clauses c={c} editable={editable} />
           <InsuredList c={c} editable={editable} />
         </div>
-        <div className="min-w-0">{doc && <DocPreview doc={doc} label={t('staffLc.contract.preview')} className="sticky top-16" />}</div>
-      </div>
+      </StickySectionsCtx.Provider>
+      {doc && (
+        <SideColumn label={t('staffLc.contract.preview')} width="45%" testId="contract-preview-column">
+          <DocPreview doc={doc} label={t('staffLc.contract.preview')} />
+        </SideColumn>
+      )}
       {c.migration ? (
         <div className="mt-4">
           <MigratedScanCard c={c} />

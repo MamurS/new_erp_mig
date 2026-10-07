@@ -7,7 +7,8 @@
  *   with the page.
  * - Docked (≥ 1280 px): the content area narrows by the card's width. The card spans from the top
  *   bar's bottom edge to the bottom of the window: its header (title, chips, close) is pinned at the
- *   top, the actions at the bottom, the body scrolls by itself. The left edge is dragged (360–640 px;
+ *   top, the actions at the bottom, the body scrolls by itself (<ColumnFrame>, sticky-sections.tsx);
+ *   section headings (<SideSection>) pin under the header in turn. The left edge is dragged (360–640 px;
  *   double click → 420; arrows ±16 px on the focused separator, Home/End → min/max), the width is
  *   remembered (storage.ts, a UI preference). Esc closes it unless something inside handled Esc first.
  * - Overlay (< 1280 px): the card opens over the table on the right with a light backdrop (modal
@@ -33,6 +34,7 @@ import * as D from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { clampDetailWidth, DETAIL_WIDTH, getDetailWidth, setDetailWidth } from '@/shared/lib/storage';
 import { t } from '@/i18n';
+import { ColumnFrame, useStickySections } from './sticky-sections';
 
 /** Below this width the card opens over the table instead of next to it. */
 export const DETAIL_DOCK_QUERY = '(min-width: 1280px)';
@@ -43,21 +45,37 @@ export const DETAIL_STEP = 16;
 
 interface HostState {
   slot: HTMLElement | null;
+  /** Places of the side columns of a page (<SideColumn>, side-column.tsx): before and after the content area. */
+  startSlot: HTMLElement | null;
+  endSlot: HTMLElement | null;
   /** The overlay card is open: the content area under it must not scroll. */
   setOverlay: (open: boolean) => void;
 }
 
 const HostCtx = createContext<HostState | null>(null);
 
-/** The row [content area][card slot]; `children` gets whether an overlay card locks the content area. */
+/** The place of side columns and details cards; null outside a portal layout (unit tests). */
+export function useSplitHost(): HostState | null {
+  return useContext(HostCtx);
+}
+
+/**
+ * The row [start column slot][content area][end column slot][card slot]; `children` gets whether an
+ * overlay card locks the content area. Pinned section headings of all columns: useStickySections().
+ */
 export function DetailPanelHost({ children }: { children: (locked: boolean) => ReactNode }) {
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  const [startSlot, setStartSlot] = useState<HTMLDivElement | null>(null);
+  const [endSlot, setEndSlot] = useState<HTMLDivElement | null>(null);
   const [overlay, setOverlay] = useState(false);
-  const value = useMemo<HostState>(() => ({ slot, setOverlay }), [slot]);
+  const value = useMemo<HostState>(() => ({ slot, startSlot, endSlot, setOverlay }), [slot, startSlot, endSlot]);
+  useStickySections();
   return (
     <HostCtx.Provider value={value}>
       <div data-split-view="" className="flex min-h-0 min-w-0 flex-1">
+        <div ref={setStartSlot} data-side-slot="start" className="contents" />
         {children(overlay)}
+        <div ref={setEndSlot} data-side-slot="end" className="contents" />
         <div ref={setSlot} data-detail-slot="" className="contents" />
       </div>
     </HostCtx.Provider>
@@ -73,6 +91,11 @@ function subscribeDock(cb: () => void): () => void {
   return () => mq.removeEventListener('change', cb);
 }
 const isDockNow = () => (typeof window.matchMedia === 'function' ? window.matchMedia(DETAIL_DOCK_QUERY).matches : true);
+
+/** ≥ 1280 px: cards and side columns stand next to the content area; below, cards overlay and columns stack. */
+export function useDocked(): boolean {
+  return useSyncExternalStore(subscribeDock, isDockNow, () => true);
+}
 
 // ---------------------------------------------------------------- width
 
@@ -166,7 +189,7 @@ export interface DetailPanelProps {
 
 export function DetailPanel(p: DetailPanelProps) {
   const host = useContext(HostCtx);
-  const docked = useSyncExternalStore(subscribeDock, isDockNow, () => true);
+  const docked = useDocked();
   const [width, setWidth] = useDetailWidth();
   const { onClose } = p;
   const label = p.label ?? t('shell.sidePanel.label');
@@ -195,31 +218,32 @@ export function DetailPanel(p: DetailPanelProps) {
     </button>
   );
   const inner = (TitleTag: 'h2' | typeof D.Title) => (
-    <>
-      <header data-testid="detail-panel-header" className="shrink-0 border-b border-border px-4 py-3">
-        <div className="flex items-start gap-2">
-          {TitleTag === 'h2' ? (
-            <h2 data-testid="detail-panel-title" className="min-w-0 flex-1 truncate text-[16px] font-bold">
-              {p.title}
-            </h2>
-          ) : (
-            <D.Title data-testid="detail-panel-title" className="min-w-0 flex-1 truncate text-[16px] font-bold">
-              {p.title}
-            </D.Title>
-          )}
-          {close}
-        </div>
-        {p.meta && <div className="mt-1.5 flex flex-wrap items-center gap-2">{p.meta}</div>}
-      </header>
-      <div data-testid="detail-panel-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-        {p.children}
-      </div>
-      {p.footer && (
-        <footer data-testid="detail-panel-footer" className="flex shrink-0 flex-wrap gap-2 border-t border-border px-4 py-3">
-          {p.footer}
-        </footer>
-      )}
-    </>
+    <ColumnFrame
+      testIds={{ scroll: 'detail-panel-body', header: 'detail-panel-header', footer: 'detail-panel-footer' }}
+      headerClassName="border-b border-border px-4 py-3"
+      bodyClassName="p-4"
+      footerClassName="flex flex-wrap gap-2 border-t border-border px-4 py-3"
+      header={
+        <>
+          <div className="flex items-start gap-2">
+            {TitleTag === 'h2' ? (
+              <h2 data-testid="detail-panel-title" className="min-w-0 flex-1 truncate text-[16px] font-bold">
+                {p.title}
+              </h2>
+            ) : (
+              <D.Title data-testid="detail-panel-title" className="min-w-0 flex-1 truncate text-[16px] font-bold">
+                {p.title}
+              </D.Title>
+            )}
+            {close}
+          </div>
+          {p.meta && <div className="mt-1.5 flex flex-wrap items-center gap-2">{p.meta}</div>}
+        </>
+      }
+      footer={p.footer}
+    >
+      {p.children}
+    </ColumnFrame>
   );
 
   if (!docked) {

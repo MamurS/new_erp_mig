@@ -143,6 +143,7 @@ export const hr: Translation<typeof Ru> = {
   'hr.docs.contactManager': 'Contact the manager',
   'hr.doc.contractSubtitle': '{status} · total premium {total}',
   'hr.doc.annex2': 'Annex 2 — member list',
+  'hr.doc.actions': 'Signing and actions',
   'hr.doc.loaded': 'Uploaded: {n}.',
   'hr.doc.notLoaded': 'The list has not been uploaded yet.',
   'hr.doc.format': 'Same format as the employee import:',

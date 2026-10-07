@@ -86,7 +86,9 @@ function reveal(row: HTMLElement | undefined): void {
     return;
   }
   const table = row.closest('table');
-  const head = table?.tHead?.offsetHeight ?? 0;
+  // In a section with a pinned heading the table header pins below that heading.
+  const sectionHead = row.closest('[data-sticky-section]') ? parseFloat(getComputedStyle(row).getPropertyValue('--section-head-h')) || 0 : 0;
+  const head = (table?.tHead?.offsetHeight ?? 0) + sectionHead;
   const foot = table?.tFoot?.offsetHeight ?? 0;
   const pager = parseFloat(getComputedStyle(row).getPropertyValue('--pager-h')) || 0;
   const box = scroller.getBoundingClientRect();
