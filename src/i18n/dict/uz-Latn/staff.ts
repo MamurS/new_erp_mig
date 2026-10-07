@@ -542,6 +542,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.params.colValue': 'Qiymat',
   'staff.params.colAllowed': 'Ruxsat etilgan',
   'staff.params.demo': 'demo qiymat',
+  'staff.params.needsDecision': 'MIG qarorini talab qiladi',
+  'staff.params.forms': 'Ruxsat etilgan shakllar',
   'staff.params.pendingChip': 'tasdiqlashda',
   'staff.params.editAria': 'Oʻzgartirish: {label}',
   'staff.params.history': 'Oʻzgarishlar tarixi',

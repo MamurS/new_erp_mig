@@ -9,10 +9,18 @@ import type { DmsParamKey, DmsParamValues, NumberingParamKey, ParamKey, ProgramC
 import { DEFAULT_NUMBERING, DOC_NUMBER_KINDS, docNumber, numberingTemplateProblem, renderDocNumber, REQUIRED_PLACEHOLDERS, type DocNumberKind, type NumberingTemplates } from '@/shared/domain/numbering';
 import { formatMoney, formatNumber } from '@/shared/lib/format';
 import { defineLabels, msg, t, tKey } from '@/i18n';
+import { LEGAL_FORMS, legalFormShort, type LegalFormCode } from '@/shared/config/legalForms';
 
-export type DmsParamUnit = 'uzs' | 'percent' | 'days' | 'workdays' | 'minutes' | 'count' | 'ratio' | 'option' | 'years';
+/** Bit of a legal form in the mask of `allowedLegalForms`. */
+export const formBit = (f: LegalFormCode): number => 1 << LEGAL_FORMS.indexOf(f);
+export const ALL_FORMS_MASK = (1 << LEGAL_FORMS.length) - 1;
+/** The forms of a mask, in the order of LEGAL_FORMS. */
+export const formsOfMask = (mask: number): LegalFormCode[] => LEGAL_FORMS.filter((f) => (mask & formBit(f)) !== 0);
+export const maskOfForms = (forms: readonly LegalFormCode[]): number => forms.reduce((m, f) => m | formBit(f), 0);
 
-export const DMS_PARAM_GROUPS = ['guarantee', 'assistance', 'clinics', 'limits', 'family', 'kp', 'tariff', 'contracts', 'claims', 'security'] as const;
+export type DmsParamUnit = 'uzs' | 'percent' | 'days' | 'workdays' | 'minutes' | 'count' | 'ratio' | 'option' | 'years' | 'forms';
+
+export const DMS_PARAM_GROUPS = ['clients', 'guarantee', 'assistance', 'clinics', 'limits', 'family', 'kp', 'tariff', 'contracts', 'claims', 'security'] as const;
 export type DmsParamGroup = (typeof DMS_PARAM_GROUPS)[number];
 /** Section titles of the parameters page, in the current language. */
 export const DMS_PARAM_GROUP_LABEL = defineLabels<DmsParamGroup>('params.group', DMS_PARAM_GROUPS);
@@ -31,6 +39,8 @@ export interface DmsParameterDef {
   audience: 'staff' | 'all';
   /** Unit `option`: labels of the choices, the value is the index. */
   options?: readonly string[];
+  /** The demo value is a proposal MIG has to decide on («требует решения МИГ»). */
+  needsMigDecision?: boolean;
 }
 
 /** A parameter without its texts; `options`: the number of choices. */
@@ -421,6 +431,47 @@ const SPECS: Record<DmsParamKey, DmsParamSpec> = {
     integer: true,
     audience: 'all',
   },
+  // Clients: DMS only for legal entities with a minimal group (DECISIONS «Только корпоративные клиенты»).
+  minGroupSize: {
+    group: 'clients',
+    unit: 'count',
+    defaultValue: 10,
+    min: 1,
+    max: 10_000,
+    integer: true,
+    audience: 'all',
+  },
+  minGroupCountsFamily: {
+    group: 'clients',
+    unit: 'option',
+    defaultValue: 0,
+    min: 0,
+    max: 1,
+    integer: true,
+    audience: 'all',
+    options: 2,
+  },
+  /** A set of legal forms stored as a bit mask over LEGAL_FORMS (bit i = LEGAL_FORMS[i]). */
+  allowedLegalForms: {
+    group: 'clients',
+    unit: 'forms',
+    defaultValue: ALL_FORMS_MASK & ~formBit('sole_proprietor'),
+    min: 1,
+    max: ALL_FORMS_MASK,
+    integer: true,
+    audience: 'all',
+    needsMigDecision: true,
+  },
+  belowMinDuringTerm: {
+    group: 'clients',
+    unit: 'option',
+    defaultValue: 0,
+    min: 0,
+    max: 1,
+    integer: true,
+    audience: 'staff',
+    options: 2,
+  },
 };
 
 export const DMS_PARAM_KEYS = Object.keys(SPECS) as DmsParamKey[];
@@ -469,6 +520,7 @@ const UNIT_SUFFIX: Record<DmsParamUnit, () => string> = {
   ratio: () => '',
   option: () => '',
   years: () => t('params.unit.years'),
+  forms: () => '',
 };
 
 export function dmsUnitLabel(unit: DmsParamUnit): string {
@@ -479,6 +531,7 @@ export function dmsUnitLabel(unit: DmsParamUnit): string {
 export function formatDmsParam(key: DmsParamKey, value: number): string {
   const { unit, options } = DMS_PARAMETERS[key];
   if (unit === 'option') return options?.[value] ?? String(value);
+  if (unit === 'forms') return formsOfMask(value).map((f) => legalFormShort(f)).join(', ') || '—';
   if (unit === 'ratio') return `×${String(value).replace('.', ',')}`;
   if (unit === 'percent') return `${String(Math.round(value * 1000) / 10).replace('.', ',')}%`;
   if (unit === 'uzs') return formatMoney(value);

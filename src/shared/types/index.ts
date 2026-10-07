@@ -28,6 +28,8 @@ export interface StaffAuthority {
   quoteDiscountMaxPct?: number;    // максимальная скидка от тарифа без согласования, доля 0..1
   quotePremiumMax?: Money;         // максимальная годовая премия котировки без согласования
   claimDecisionMax?: Money;        // максимальная сумма решения по убытку без согласования
+  /** May approve a quote below the minimal group size (an exception with a mandatory comment). */
+  allowBelowMinGroup?: boolean;
 }
 
 export type ProgramCode = 'basic' | 'standard' | 'standard_plus' | 'premium';
@@ -908,7 +910,11 @@ export type DmsParamKey =
   | 'fraudDaysBeforeExclusion'
   | 'limitMode'
   | 'maxChildAge'
-  | 'studentMaxAge';
+  | 'studentMaxAge'
+  | 'minGroupSize'
+  | 'minGroupCountsFamily'
+  | 'allowedLegalForms'
+  | 'belowMinDuringTerm';
 
 export type DmsParamValues = Record<DmsParamKey, number>;
 

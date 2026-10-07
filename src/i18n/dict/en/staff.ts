@@ -535,6 +535,8 @@ export const staff: Translation<typeof Ru> = {
   'staff.params.colValue': 'Value',
   'staff.params.colAllowed': 'Allowed',
   'staff.params.demo': 'demo value',
+  'staff.params.needsDecision': 'needs a MIG decision',
+  'staff.params.forms': 'Allowed forms',
   'staff.params.pendingChip': 'awaiting confirmation',
   'staff.params.editAria': 'Change: {label}',
   'staff.params.history': 'Change history',

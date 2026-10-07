@@ -2,6 +2,8 @@
  * «Параметры ДМС»: business parameters in one place. Every MIG role can read them; an admin proposes a
  * change, a second admin or an underwriter confirms it (four-eyes), and only then it applies.
  */
+import { LEGAL_FORMS, legalFormFull, legalFormShort } from '@/shared/config/legalForms';
+import { formBit } from '@/shared/config/dmsParameters';
 import { defineLabels, t, tm } from '@/i18n';
 import { useState } from 'react';
 import type { DmsParamChange, DmsParameter, NumberingParameter, ParamKey } from '@/shared/types';
@@ -84,17 +86,36 @@ function ProposeDialog({ p, onClose }: { p: DmsParameter; onClose: () => void })
     >
       <p className="mb-3 text-[13px] text-muted">{def.description}</p>
       <div className="grid gap-3">
-        <p className="text-[13px]">
-          <Rich
-            k="staff.params.current"
-            values={{
-              value: <span className="num font-semibold">{formatDmsParam(p.key, p.value)}</span>,
-              min: formatDmsParam(p.key, def.min),
-              max: formatDmsParam(p.key, def.max),
-            }}
-          />
-        </p>
-        {def.options ? (
+        {def.unit !== 'forms' && (
+          <p className="text-[13px]">
+            <Rich
+              k="staff.params.current"
+              values={{
+                value: <span className="num font-semibold">{formatDmsParam(p.key, p.value)}</span>,
+                min: formatDmsParam(p.key, def.min),
+                max: formatDmsParam(p.key, def.max),
+              }}
+            />
+          </p>
+        )}
+        {def.unit === 'forms' ? (
+          <fieldset className="grid gap-1.5 sm:grid-cols-2" data-testid="param-forms">
+            <legend className="mb-1 text-[13px] font-medium">{t('staff.params.forms')}</legend>
+            {LEGAL_FORMS.map((f) => {
+              const mask = Number(value) || 0;
+              const on = (mask & formBit(f)) !== 0;
+              return (
+                <label key={f} className="flex items-center gap-2 text-[13px]">
+                  <input type="checkbox" checked={on} onChange={() => setValue(String(on ? mask & ~formBit(f) : mask | formBit(f)))} />
+                  <span>
+                    <span className="font-medium">{legalFormShort(f)}</span> <span className="text-muted">{legalFormFull(f)}</span>
+                  </span>
+                </label>
+              );
+            })}
+            {errors.value && <p className="text-[12px] text-danger-text sm:col-span-2">{tm(errors.value)}</p>}
+          </fieldset>
+        ) : def.options ? (
           <Field label={t('staff.params.newValue')} error={tm(errors.value)}>
             {(a) => (
               <Select {...a} value={value} onChange={(e) => setValue(e.target.value)}>
@@ -404,9 +425,16 @@ export default function ParametersPage() {
                                   {formatDmsParam(p.key, p.value)}
                                 </span>
                                 {p.isDemo ? (
-                                  <Chip kind="peach" className="mt-1">
-                                    {t('staff.params.demo')}
-                                  </Chip>
+                                  <>
+                                    <Chip kind="peach" className="mt-1">
+                                      {t('staff.params.demo')}
+                                    </Chip>
+                                    {def.needsMigDecision && (
+                                      <Chip kind="warning" className="ml-1 mt-1">
+                                        {t('staff.params.needsDecision')}
+                                      </Chip>
+                                    )}
+                                  </>
                                 ) : (
                                   <span className="mt-1 block text-[11px] text-muted">
                                     {p.changedAt && formatDateTime(p.changedAt)}
@@ -415,7 +443,7 @@ export default function ParametersPage() {
                                 )}
                               </td>
                               <td className="hidden whitespace-nowrap px-4 py-2.5 align-top text-muted md:table-cell">
-                                {formatDmsParam(p.key, def.min)} — {formatDmsParam(p.key, def.max)}
+                                {def.unit === 'forms' ? '—' : `${formatDmsParam(p.key, def.min)} — ${formatDmsParam(p.key, def.max)}`}
                               </td>
                               {canPropose && (
                                 <td className="px-4 py-2.5 text-right align-top">
