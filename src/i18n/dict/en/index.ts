@@ -21,6 +21,9 @@ import { coverage } from './coverage';
 import { srv } from './srv';
 import { migration } from './migration';
 import { help } from './help';
+import { next } from './next';
+import { emptyStaff } from './emptyStaff';
+import { emptyPartner } from './emptyPartner';
 
 export const en = {
   ...common,
@@ -46,4 +49,7 @@ export const en = {
   ...srv,
   ...migration,
   ...help,
+  ...next,
+  ...emptyStaff,
+  ...emptyPartner,
 };

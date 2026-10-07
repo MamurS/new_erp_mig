@@ -20,6 +20,7 @@ import { EmptyState } from '@/shared/ui/states';
 import { HR_BTN, HrHeader } from '../ui';
 import { FamilyStatusChip } from '../family/FamilyStatusChip';
 import { employeesOf, filterFamily, isFamilyRelationFilter } from '../family/familyList';
+import { HelpMore } from '@/features/next/NextActions';
 import { t } from '@/i18n';
 
 const FILTER_KEYS = ['employee', 'relation'] as const;
@@ -154,13 +155,16 @@ export default function FamilyPage() {
               />
             ) : (
               <EmptyState
+                testId="hr-family-next"
                 title={t('hr.family.empty')}
-                description={t('hr.family.emptyHint')}
+                why={t('emptyStaff.hrFamily.why')}
+                next={t('emptyStaff.hrFamily.next')}
                 action={
                   <Link to="/hr/family/new" className={cn(buttonVariants({ variant: 'primary' }), HR_BTN)}>
                     {t('hr.familyAdd.title')}
                   </Link>
                 }
+                help={<HelpMore article="servicing" section="family" />}
               />
             )
           }

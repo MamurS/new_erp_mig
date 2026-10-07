@@ -60,6 +60,21 @@ MIG staff, HR, clinics and assistance companies sign in with an email, a passwor
 - Side columns — the card on the right, the dashboard blocks (“Needs attention”, “Integrations”), the data and history of full cards, the document preview of the commercial proposal and contract editors — do not move when the page scrolls. A long column scrolls by itself: its header and buttons stay in place, and the heading of the current section stays under the column header until the whole section has scrolled by. On a screen narrower than 1280 pixels the card opens over the table, and the other columns move below the main content.
 - The “Columns” button hides unneeded columns, “Export to CSV” downloads the table (without PINFL, phone numbers and diagnoses).
 
+### Hints in empty sections {#empty-hints}
+
+<!-- audience: all -->
+
+When a list, tab or section is empty because the data has not been entered yet, the system does not say “No data” but shows the next step:
+
+- **why it is empty** — taking the stage and status into account (for a lead: “Insured persons appear once the contract is in force”);
+- **what to do and who is responsible** — the role name;
+- **an action button** if you can do it yourself: it leads straight to the right place with the form open (e.g. choosing the assessment data or appendix 2 file), next to it “Download the template” if a file is expected;
+- **“Ask {role}”** if another employee is responsible: a task with your comment and a link appears in that role’s queue on the dashboard, tab “Tasks from colleagues”. When it is done you are notified (the bell in the top bar); <!-- audience: staff hr -->
+- **“Request from HR”** if the client must provide the data: the task appears in the HR cabinet under “Tasks from MIG”. If the client has no cabinet yet (a lead before the commercial proposal), a ready letter with the CSV template opens — copy the text and send it from your mailbox; <!-- audience: staff -->
+- **“More in the help”** — the section of the guide about this step.
+
+If the list is empty because of filters or search, “Nothing found” is shown as before.
+
 ### Session {#session}
 
 <!-- audience: all -->
@@ -234,7 +249,7 @@ At this stage **names, PINFL and phone numbers are not needed** — if they are 
 
 1. After the commercial proposal is accepted, the “Prepare the contract” button appears in the deal. The contract is created from the proposal.
 2. In the editor on the left are the parameters: dates, plan, premiums, payment schedule (single payment, quarterly or monthly), the rule of entry into force (from the start date or after the first payment), signatories of both parties, the way the premium is calculated for people included in mid-term (by type or by age scale).
-3. Annex 2 — the member list: uploaded by HR in their portal or by the manager in the import format.
+3. Annex 2 — the member list: uploaded by the manager in the import format or by HR in their portal (on a “Request from HR” task). Without appendix 2 the contract cannot be sent for approval.
 4. On the right is a preview of all pages.
 5. **Changing a clause.** Each clause has an “Edit wording” button. A changed clause is highlighted next to the original text, and the contract **must go to the lawyer**. The lawyer approves it or returns it with a comment. Without changes the lawyer stage is skipped.
 6. If the financial terms differ from the approved quote, they are approved by the underwriter.
@@ -242,6 +257,37 @@ At this stage **names, PINFL and phone numbers are not needed** — if they are 
 8. To change a sent contract, click “New version” — the signatures are reset.
 
 Next come signing, payment and policy issue (section 6).
+
+### What the next stage needs {#stage-checklist}
+
+<!-- audience: staff -->
+
+At every stage the deal card has the block “What the next stage needs”: what is required, whether it is done, who is responsible and the action button (or “Ask {role}” when another employee is responsible, and “Request from HR” when the client provides the data).
+
+- **Lead, assessment data:** the assessment data (manager).
+- **Quote:** calculation and approval of the quote (underwriter).
+- **Commercial proposal sent:** the client’s reply (client HR).
+- **Commercial proposal accepted:** the draft contract (manager).
+- **Contract:** client details (TIN, basis of authority), appendix 2, signatories of both parties; underwriter approval — only if the terms differ from the quote; lawyer approval — if clauses were changed (after sending for approval).
+- **Signing:** the client’s and MIG’s signatures. **Awaiting payment:** the first installment.
+
+While a required item is not done, the deal cannot move to the next stage: the transition button (“Calculate the quote”, “Send the commercial proposal”, “Send for approval”) is disabled and says “Missing: …” under it. The server checks the same.
+
+### Requesting data from HR {#request-hr}
+
+<!-- audience: staff hr -->
+
+<!-- audience: staff -->
+**Who:** manager or underwriter. “Request from HR” is in an empty appendix 2, in the assessment data, in the “Insured” tab of the client card and in the deal checklist.
+
+1. If the client already has an HR cabinet (it opens when the commercial proposal is sent), write a comment and click “Send the task”. The task is due in 7 days.
+2. If there is no cabinet yet, a letter to the client opens: copy the text, open your mail and attach the CSV template. Upload the received file yourself.
+3. When HR completes the task you are notified (the bell in the top bar) and the checklist item becomes done.
+<!-- /audience -->
+
+<!-- audience: hr -->
+**Client HR.** The home page of the cabinet shows the block “Tasks from MIG”, e.g. “Upload the list of employees for contract … by 15.10”. “Upload the list” uploads the file right there (template — “Download the template”); other tasks are marked with “Done”. Once done the task disappears and the MIG manager is notified.
+<!-- /audience -->
 
 ## 6. Signing, payment and policy issue {#signing}
 

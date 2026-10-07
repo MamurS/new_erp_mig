@@ -8,6 +8,9 @@ import { formatDate, formatDateTime, formatMoney, formatPercent } from '@/shared
 import { cn } from '@/shared/lib/cn';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
+import { EmptyState } from '@/shared/ui/states';
+import { roleName } from '@/features/next/NextActions';
+import { EmptyHelp } from '@/features/clinic/emptyNext';
 import { useDmsParam } from '@/shared/api/queries/params';
 import { defineLabels, t, tm } from '@/i18n';
 
@@ -163,7 +166,16 @@ export function RebillLinesTable({ lines, actions }: { lines: RebillLine[]; acti
   ];
   return (
     <div className="rounded-card border border-border bg-surface">
-      <DataTable caption={t('assist.line.caption')} columns={columns} rows={lines} rowKey={(l) => l.id} empty={t('assist.line.empty')} />
+      <DataTable caption={t('assist.line.caption')} columns={columns} rows={lines} rowKey={(l) => l.id} empty={
+          <EmptyState
+            testId="rebill-lines-empty"
+            title={t('assist.line.empty')}
+            why={t('emptyPartner.assist.lines.why')}
+            next={t('emptyPartner.assist.lines.next', { role: roleName('admin') })}
+            help={<EmptyHelp article="assistance" section="assistance-rebill" contact />}
+          />
+        }
+      />
     </div>
   );
 }

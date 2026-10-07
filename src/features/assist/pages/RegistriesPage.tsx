@@ -9,6 +9,9 @@ import { Chip } from '@/shared/ui/chips';
 import { legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { PageHeader } from '@/shared/ui/page';
+import { EmptyState } from '@/shared/ui/states';
+import { roleName } from '@/features/next/NextActions';
+import { EmptyHelp } from '@/features/clinic/emptyNext';
 import { useTopbar } from '@/features/staff/topbar';
 import { SlaBadge } from '../components';
 import { t } from '@/i18n';
@@ -48,7 +51,15 @@ export default function RegistriesPage() {
           rowKey={(r) => r.id}
           onRowClick={(r) => navigate(`/assist/registries/${r.id}`)}
           onRowOpen={(r) => navigate(`/assist/registries/${r.id}`)}
-          empty={t('assist.registries.empty')}
+          empty={
+            <EmptyState
+              testId="assist-registries-empty"
+              title={t('assist.registries.empty')}
+              why={t('emptyPartner.assist.registries.why')}
+              next={t('emptyPartner.assist.registries.next', { role: roleName('clinic_admin'), checker: roleName('asst_billing') })}
+              help={<EmptyHelp article="clinics" section="monthly-registry" contact />}
+            />
+          }
         />
       </div>
     </>

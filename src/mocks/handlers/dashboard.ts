@@ -503,6 +503,23 @@ const adminItems: Builder = (d, user) => {
   return out;
 };
 
+/** Tasks from colleagues and HR («Попросить …»): open tasks for the role, each leads to its place. */
+const requestItems: Builder = (d, user) =>
+  d.tasks
+    .filter((t) => t.status === 'open' && t.toRole === user.role)
+    .map((t) => ({
+      id: t.id,
+      type: 'request' as const,
+      entityId: t.id,
+      who: t.clientName,
+      details: t.title,
+      status: msg('srv.dash.st.requestFrom', { name: t.createdByName }),
+      statusTone: 'info' as const,
+      dueAt: t.dueDate ? tzIso(parseIso(t.dueDate)) : t.createdAt,
+      action: 'open' as const,
+      link: t.link,
+    }));
+
 /** What each role works on (one place to read the whole map of the dashboard). */
 const ROLE_QUEUE: Partial<Record<SessionUser['role'], Builder[]>> = {
   operator: [appointmentItems, assistanceServiceItems],
@@ -532,6 +549,8 @@ function whoLegalForm(d: Db, i: QueueItem): LegalFormCode | undefined {
     case 'kp':
     case 'deal':
       return dealClient(i.entityId);
+    case 'request':
+      return clientLegalFormOf(d, d.tasks.find((x) => x.id === i.entityId)?.clientId);
     case 'quote':
       return dealClient(d.quotes.find((x) => x.id === i.entityId)?.dealId ?? '');
     case 'contract':
@@ -562,7 +581,7 @@ function whoLegalForm(d: Db, i: QueueItem): LegalFormCode | undefined {
 }
 
 export function queueFor(d: Db, user: SessionUser, type: QueueType | 'all' | 'assistance', now: number): QueueItem[] {
-  const builders = ROLE_QUEUE[user.role] ?? [];
+  const builders = [...(ROLE_QUEUE[user.role] ?? []), requestItems];
   // Every item passes the permission matrix: a builder can never leak a type the role may not see.
   const all = builders
     .flatMap((b) => b(d, user, now))

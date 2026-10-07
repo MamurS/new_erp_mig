@@ -26,6 +26,7 @@ import { Card, Kv } from '@/shared/ui/page';
 import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { toast } from '@/shared/ui/toast';
+import { HelpMore, roleName } from '@/features/next/NextActions';
 import { useTopbar } from '../topbar';
 import { useDmsParam } from '@/shared/api/queries/params';
 
@@ -233,7 +234,7 @@ export default function ClinicCardPage() {
           <Card
             title={t('staffOps.clinicCard.clinicUsers')}
             actions={
-              canInvite && !hasAdmin ? (
+              canInvite && !hasAdmin && card.users.length > 0 ? (
                 <Button size="sm" onClick={() => setInviting(true)}>
                   {t('staffOps.clinicCard.inviteAdmin')}
                 </Button>
@@ -241,7 +242,23 @@ export default function ClinicCardPage() {
             }
           >
             {hasAdmin && canInvite && <p className="mb-2 text-[12px] text-muted">{t('staffOps.clinicCard.othersInvitedByAdmin')}</p>}
-            <DataTable caption={t('staffOps.clinicCard.clinicUsers')} columns={userCols} rows={card.users} rowKey={(u) => u.id} empty={<EmptyState title={t('staffOps.clinicCard.noUsers')} />} />
+            <DataTable caption={t('staffOps.clinicCard.clinicUsers')} columns={userCols} rows={card.users} rowKey={(u) => u.id} empty={
+                <EmptyState
+                  testId="clinic-users-next"
+                  title={t('emptyStaff.clinicUsers.title')}
+                  why={t('emptyStaff.clinicUsers.why')}
+                  next={canInvite ? t('emptyStaff.clinicUsers.nextCan') : t('emptyStaff.responsible', { role: roleName('admin') })}
+                  actions={
+                    canInvite && !hasAdmin ? (
+                      <Button variant="secondary" onClick={() => setInviting(true)}>
+                        {t('staffOps.clinicCard.inviteAdmin')}
+                      </Button>
+                    ) : null
+                  }
+                  help={<HelpMore article="administration" section="admin-partners" />}
+                />
+              }
+            />
           </Card>
         </TabsContent>
         <TabsContent value="integration">
@@ -259,7 +276,16 @@ export default function ClinicCardPage() {
             ))}
           </div>
           <Card title={t('staffOps.clinicCard.keysTitle')}>
-            <DataTable caption={t('staffOps.clinicCard.keys')} columns={keyCols} rows={card.keys} rowKey={(k) => k.id} empty={<EmptyState title={t('staffOps.clinicCard.noKeys')} />} />
+            <DataTable caption={t('staffOps.clinicCard.keys')} columns={keyCols} rows={card.keys} rowKey={(k) => k.id} empty={
+                <EmptyState
+                  testId="clinic-keys-next"
+                  title={t('emptyStaff.clinicKeys.title')}
+                  why={t('emptyStaff.clinicKeys.why')}
+                  next={t('emptyStaff.responsible', { role: roleName('clinic_admin') })}
+                  help={<HelpMore article="administration" section="admin-integrations" />}
+                />
+              }
+            />
           </Card>
         </TabsContent>
         {canGuarantees && (
@@ -289,7 +315,15 @@ export default function ClinicCardPage() {
                 loading={registries.isLoading}
                 error={registries.error}
                 onRowClick={(r) => navigate(`/staff/registries/${r.id}`)}
-                empty={<EmptyState title={t('staffOps.registries.empty')} />}
+                empty={
+                  <EmptyState
+                    testId="clinic-registries-next"
+                    title={t('emptyStaff.registries.title')}
+                    why={t('emptyStaff.registries.why')}
+                    next={t('emptyStaff.registries.next', { role: roleName('operator') })}
+                    help={<HelpMore article="clinics" section="monthly-registry" />}
+                  />
+                }
               />
             </Card>
           </TabsContent>

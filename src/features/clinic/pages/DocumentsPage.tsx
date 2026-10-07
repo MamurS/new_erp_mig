@@ -1,4 +1,5 @@
 /* Clinic documents (CLINIC_SPEC §4.6): contract with MIG, price list, reconciliation acts. */
+import { Link } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import type { PriceListItem } from '@/shared/types';
 import { useClinicDocuments, useClinicPriceList } from '@/shared/api/queries/clinic';
@@ -9,14 +10,18 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
-import { QueryState, SkeletonRows } from '@/shared/ui/states';
+import { EmptyState, QueryState, SkeletonRows } from '@/shared/ui/states';
+import { useCan } from '@/shared/auth/guards';
+import { roleName } from '@/features/next/NextActions';
 import { PageTitle, Panel } from '../components';
+import { EmptyHelp } from '../emptyNext';
 import { t } from '@/i18n';
 
 export default function DocumentsPage() {
   useDocumentTitle(t('clinic.docsPage.docTitle'));
   const docs = useClinicDocuments();
   const prices = useClinicPriceList();
+  const canRegistries = useCan('registries.submit');
   const columns: Column<PriceListItem>[] = [
     { key: 'code', header: t('clinic.docsPage.code'), cell: (p) => <span className="num">{p.code}</span> },
     { key: 'name', header: t('common.service'), cell: (p) => p.name },
@@ -42,7 +47,21 @@ export default function DocumentsPage() {
             </Panel>
             <Panel title={t('clinic.docsPage.acts')}>
               {d.acts.length === 0 ? (
-                <p className="p-4 text-muted">{t('clinic.docsPage.noActs')}</p>
+                <EmptyState
+                  testId="clinic-acts-empty"
+                  className="py-6"
+                  title={t('emptyPartner.clinic.acts.title')}
+                  why={t('emptyPartner.clinic.acts.why')}
+                  next={t('emptyPartner.clinic.acts.next', { role: roleName('clinic_admin') })}
+                  actions={
+                    canRegistries ? (
+                      <Button size="sm" asChild>
+                        <Link to="/clinic/registries">{t('emptyPartner.clinic.acts.open')}</Link>
+                      </Button>
+                    ) : undefined
+                  }
+                  help={<EmptyHelp article="clinics" section="monthly-registry" contact={!canRegistries} />}
+                />
               ) : (
                 <ul className="divide-y divide-border-soft">
                   {d.acts.map((a) => (
@@ -84,7 +103,17 @@ export default function DocumentsPage() {
           </Button>
         }
       >
-        <DataTable caption={t('clinic.docsPage.priceCaption')} columns={columns} rows={prices.data} rowKey={(p) => p.code} loading={prices.isLoading} error={prices.error} onRetry={() => void prices.refetch()} />
+        <DataTable caption={t('clinic.docsPage.priceCaption')} columns={columns} rows={prices.data} rowKey={(p) => p.code} loading={prices.isLoading} error={prices.error} onRetry={() => void prices.refetch()}
+          empty={
+            <EmptyState
+              testId="clinic-prices-empty"
+              title={t('emptyPartner.clinic.prices.title')}
+              why={t('emptyPartner.clinic.prices.why')}
+              next={t('emptyPartner.clinic.prices.next', { role: roleName('operator') })}
+              help={<EmptyHelp article="clinics" section="clinic-prices" contact />}
+            />
+          }
+        />
       </Panel>
     </>
   );

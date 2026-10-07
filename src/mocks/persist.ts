@@ -11,10 +11,10 @@ const SESS_KEY = 'mig.mock.sessions';
  * Version of the seed and of the stored shape. Bump it when the seed changes in a way a saved state
  * must not survive (2: Latin names, legal form codes, ASCII document numbers; 3: migration batches and the
  * transfer marks of records; 4: premiums of transferred insured persons and the per-contract premium check; 5: family members as insured persons,
- * family consents and requests; 7: the work log of the demo client): a stored database with
+ * family consents and requests; 7: the work log of the demo client; 8: tasks, notifications, HR cabinets of clients with a sent offer): a stored database with
  * another or no version is discarded and the fresh seed is used.
  */
-export const MOCK_DB_VERSION = 7;
+export const MOCK_DB_VERSION = 8;
 
 type Snapshot = Omit<Db, 'sessions'> & { schemaVersion?: number };
 
@@ -29,7 +29,7 @@ export function loadSnapshot(): Db | null {
     }
     const sessions = JSON.parse(sessionStorage.getItem(SESS_KEY) ?? '[]') as Db['sessions'];
     // A snapshot from an older build lacks newer tables: start from a fresh seed instead.
-    if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries) || !Array.isArray(db.policyChanges) || !Array.isArray(db.rebills) || !db.dmsParams || !Array.isArray(db.deals) || !db.ai || !Array.isArray(db.bankPayments) || !Array.isArray(db.statementKeys) || !Array.isArray(db.migrationBatches) || !Array.isArray(db.familyConsents) || !Array.isArray(db.familyRequests) || !db.help || !db.ai.settings?.scenarios?.help) return null;
+    if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries) || !Array.isArray(db.policyChanges) || !Array.isArray(db.rebills) || !db.dmsParams || !Array.isArray(db.deals) || !db.ai || !Array.isArray(db.bankPayments) || !Array.isArray(db.statementKeys) || !Array.isArray(db.migrationBatches) || !Array.isArray(db.familyConsents) || !Array.isArray(db.familyRequests) || !Array.isArray(db.tasks) || !Array.isArray(db.notifications) || !db.help || !db.ai.settings?.scenarios?.help) return null;
     return { ...db, sessions };
   } catch {
     return null;

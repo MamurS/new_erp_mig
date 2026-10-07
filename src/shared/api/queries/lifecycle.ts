@@ -38,6 +38,10 @@ function useLifecycleMutation<V, R>(fn: (v: V) => Promise<R>) {
       void qc.invalidateQueries({ queryKey: ['claims'] });
       void qc.invalidateQueries({ queryKey: ['claim'] });
       void qc.invalidateQueries({ queryKey: ['hr'] });
+      // A done action closes the tasks about it and notifies their authors.
+      void qc.invalidateQueries({ queryKey: ['tasks'] });
+      void qc.invalidateQueries({ queryKey: ['notifications'] });
+      void qc.invalidateQueries({ queryKey: ['pipeline'] });
       void qc.invalidateQueries({ queryKey: ['kp'] });
       void qc.invalidateQueries({ queryKey: ['admin'] });
     },
@@ -56,7 +60,7 @@ export const useDecideAuthority = () =>
 
 // ---------------- deals ----------------
 export const useDeals = (p: Record<string, string> = {}) => useQuery({ queryKey: lk.deals(p), queryFn: () => request('/deals', { query: p, schema: L.dealViews }) });
-export const useDeal = (id: string) => useQuery({ queryKey: lk.deal(id), queryFn: () => request(`/deals/${id}`, { schema: L.dealCard }) });
+export const useDeal = (id: string, opts: { enabled?: boolean } = {}) => useQuery({ queryKey: lk.deal(id), queryFn: () => request(`/deals/${id}`, { schema: L.dealCard }), enabled: opts.enabled ?? true });
 export const useCreateLead = () => useLifecycleMutation((v: z.input<typeof leadCreateSchema>) => request('/leads', { method: 'POST', body: v, schema: L.dealView }));
 export const useDealLost = () => useLifecycleMutation((v: { id: string; reason: string }) => request(`/deals/${v.id}/stage`, { method: 'POST', body: { reason: v.reason }, schema: L.dealCard }));
 export const usePatchDeal = () =>

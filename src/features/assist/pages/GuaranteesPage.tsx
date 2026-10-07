@@ -8,6 +8,9 @@ import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { PageHeader } from '@/shared/ui/page';
+import { EmptyState } from '@/shared/ui/states';
+import { roleName } from '@/features/next/NextActions';
+import { EmptyHelp } from '@/features/clinic/emptyNext';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { useTopbar } from '@/features/staff/topbar';
 import { SlaBadge } from '../components';
@@ -70,7 +73,19 @@ export default function GuaranteesPage() {
           rowKey={(g) => g.id}
           onRowClick={(g) => navigate(`/assist/guarantees/${g.id}`)}
           onRowOpen={(g) => navigate(`/assist/guarantees/${g.id}`)}
-          empty={t('assist.guarantees.empty')}
+          empty={
+            status === 'all' ? (
+              <EmptyState
+                testId="assist-gp-empty"
+                title={t('assist.guarantees.empty')}
+                why={t('emptyPartner.assist.gp.why')}
+                next={t('emptyPartner.assist.gp.next', { role: roleName('asst_doctor') })}
+                help={<EmptyHelp article="medical" section="guarantee-letter" />}
+              />
+            ) : (
+              t('assist.guarantees.empty')
+            )
+          }
         />
       </div>
     </>

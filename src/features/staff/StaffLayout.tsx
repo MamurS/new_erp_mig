@@ -16,6 +16,7 @@ import { CommandPalette, type PaletteMode } from './CommandPalette';
 import { useTopbarState } from './topbar';
 import { CreateMenu } from '@/features/shell/CreateMenu';
 import { HelpContextButton } from '@/features/help/HelpContextButton';
+import { NotificationsBell } from '@/features/next/NotificationsBell';
 
 export default function StaffLayout() {
   const user = useUser();
@@ -91,6 +92,7 @@ export default function StaffLayout() {
               <Search className="h-4 w-4" />
             </button>
             <HelpContextButton />
+            <NotificationsBell />
             <LanguageButton />
             <span className="hidden items-center gap-1.5 rounded-btn bg-success-soft px-2 py-1 text-[12px] font-medium text-success-text lg:inline-flex" title={t('staff.layout.mfaHint')}>
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden /> MFA · VPN

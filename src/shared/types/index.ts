@@ -463,7 +463,9 @@ export type AuditAction =
   | 'family_consent_revoked'
   | 'family_request_created'
   | 'family_request_decided'
-  | 'payout_card_changed';
+  | 'payout_card_changed'
+  | 'task_created'
+  | 'task_done';
 
 export interface AuditEntry {
   id: UUID;

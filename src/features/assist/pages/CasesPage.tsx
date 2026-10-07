@@ -1,5 +1,5 @@
 /* Call-centre cases (§5.1): list with SLA, filters by status and type; a former client's cases are read-only. */
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { AssistCaseView } from '@/shared/types/dto';
 import { useAssistCases } from '@/shared/api/queries/assist';
 import { CASE_CHANNEL_LABEL, CASE_STATUS_LABEL, CASE_TYPE_LABEL } from '@/shared/domain/assistance';
@@ -9,6 +9,11 @@ import { Chip } from '@/shared/ui/chips';
 import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-table';
 import { FilterChip } from '@/shared/ui/filter-chip';
 import { PageHeader } from '@/shared/ui/page';
+import { Button } from '@/shared/ui/button';
+import { EmptyState } from '@/shared/ui/states';
+import { useCan } from '@/shared/auth/guards';
+import { roleName } from '@/features/next/NextActions';
+import { EmptyHelp } from '@/features/clinic/emptyNext';
 import { useTopbar } from '@/features/staff/topbar';
 import { CaseStatus, SlaBadge } from '../components';
 import { t } from '@/i18n';
@@ -21,6 +26,8 @@ export default function CasesPage() {
   const navigate = useNavigate();
   const [f, setF] = useUrlFilters(KEYS);
   const sort = parseSort(f.sort);
+  const filtered = !!(f.status || f.type);
+  const canFind = useCan('assist.insured.search');
   const q = useAssistCases({ ...(f.status ? { status: f.status } : {}), ...(f.type ? { type: f.type } : {}), ...(f.sort ? { sort: f.sort } : {}) });
   const columns: Column<AssistCaseView>[] = [
     { key: 'number', header: t('common.number'), sortKey: 'number', cell: (c) => <span className="num font-medium">{c.number}</span> },
@@ -62,7 +69,26 @@ export default function CasesPage() {
           onSortChange={(s) => setF({ sort: formatSort(s) ?? null })}
           onRowClick={(c) => navigate(`/assist/cases/${c.id}`)}
           onRowOpen={(c) => navigate(`/assist/cases/${c.id}`)}
-          empty={t('assist.cases.empty')}
+          empty={
+            filtered ? (
+              t('assist.cases.empty')
+            ) : (
+              <EmptyState
+                testId="assist-cases-empty"
+                title={t('assist.cases.empty')}
+                why={t('emptyPartner.assist.cases.why')}
+                next={t('emptyPartner.assist.cases.next', { role: roleName('asst_operator') })}
+                actions={
+                  canFind ? (
+                    <Button asChild>
+                      <Link to="/assist/insured">{t('emptyPartner.assist.cases.find')}</Link>
+                    </Button>
+                  ) : undefined
+                }
+                help={<EmptyHelp article="assistance" section="assistance-daily" />}
+              />
+            )
+          }
         />
       </div>
     </>

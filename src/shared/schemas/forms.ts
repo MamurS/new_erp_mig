@@ -655,3 +655,22 @@ export const helpAnswerRequestSchema = z.object({
   locale: helpLocaleSchema.default('ru'),
 });
 export const helpFeedbackSchema = z.object({ helpful: z.boolean() });
+
+// ---------------- next steps: «Попросить …» and «Запросить у HR» (DECISIONS «Пустые состояния») ----------------
+const taskAction = z.enum(['census_upload', 'quote_calculate', 'quote_approve', 'kp_send', 'kp_respond', 'contract_draft', 'contract_requisites', 'insured_list', 'legal_review', 'sign_mig', 'sign_client', 'invoice_pay', 'other']);
+const taskSubject = { subjectType: z.enum(['deal', 'contract', 'client']), subjectId: uuid };
+/** «Попросить {роль}»: the role, what is asked, what it is about and a comment (optional). */
+export const taskAskSchema = z.object({
+  toRole: z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer']),
+  action: taskAction,
+  ...taskSubject,
+  comment: z.string().trim().max(500, msg('v.tooLong', { max: 500 })).default(''),
+});
+export type TaskAskInput = z.input<typeof taskAskSchema>;
+/** «Запросить у HR»: a task in the HR cabinet of the client. */
+export const taskRequestHrSchema = z.object({
+  action: z.enum(['insured_list', 'census_upload', 'sign_client', 'kp_respond', 'invoice_pay', 'other']),
+  ...taskSubject,
+  comment: z.string().trim().max(500, msg('v.tooLong', { max: 500 })).default(''),
+});
+export type TaskRequestHrInput = z.input<typeof taskRequestHrSchema>;

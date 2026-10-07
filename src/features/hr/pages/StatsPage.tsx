@@ -12,6 +12,7 @@ import { cn } from '@/shared/lib/cn';
 import { HR_BTN, HrCard, HrHeader, HrSectionTitle } from '../ui';
 import { useDmsParam } from '@/shared/api/queries/params';
 import { limitWarnRatio } from '@/shared/config/dmsParameters';
+import { HelpMore } from '@/features/next/NextActions';
 import { t, tm } from '@/i18n';
 
 function TooFew() {
@@ -58,8 +59,11 @@ function StatsView({ s }: { s: HrStats }) {
     return (
       <HrCard>
         <EmptyState
+          testId="hr-stats-next"
           title={t('hr.stats.emptyTitle')}
-          description={t('hr.stats.emptyText')}
+          why={t('emptyStaff.hrStats.why')}
+          next={t('emptyStaff.hrStats.next')}
+          help={<HelpMore article="portal-guides" section="guide-hr" />}
           action={
             <Link to="/hr/employees/new" className={cn(buttonVariants({ variant: 'primary' }), HR_BTN)}>
               {t('hr.add.title')}

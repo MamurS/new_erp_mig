@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { HrTasks } from '@/features/next/HrTasks';
 import { Link } from 'react-router-dom';
 import { Download, FileText, MoreHorizontal, Plus, Send, ShieldCheck, Upload, UserMinus, BellRing, UsersRound } from 'lucide-react';
 import type { HrEmployee, HrOverview } from '@/shared/types/dto';
@@ -178,6 +179,7 @@ export default function EmployeesPage() {
         }
       />
 
+      <HrTasks />
       <OverviewCards overview={overview} />
 
       <div className="mb-6 flex items-start gap-3 rounded-card bg-sky p-4 text-sky-text">

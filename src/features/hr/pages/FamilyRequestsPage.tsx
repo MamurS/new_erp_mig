@@ -22,6 +22,7 @@ import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { HR_BTN, HrCard, HrHeader } from '../ui';
 import { FAMILY_REQUEST_TABS, requestsOf, type FamilyRequestTab } from '../family/familyList';
+import { HelpMore } from '@/features/next/NextActions';
 import { defineLabels, t, tm, tp } from '@/i18n';
 
 const TAB_LABEL = defineLabels('hr.familyReq.tab', FAMILY_REQUEST_TABS);
@@ -64,7 +65,13 @@ export default function FamilyRequestsPage() {
         <ErrorState className="rounded-card border border-border bg-surface" error={all.error} onRetry={() => void all.refetch()} />
       ) : rows.length === 0 ? (
         <HrCard>
-          <EmptyState title={t(tab === 'pending' ? 'hr.familyReq.emptyPending' : 'hr.familyReq.empty')} description={t('hr.familyReq.emptyHint')} />
+          <EmptyState
+            testId="hr-family-requests-next"
+            title={t(tab === 'pending' ? 'hr.familyReq.emptyPending' : 'hr.familyReq.empty')}
+            why={t('emptyStaff.hrFamilyReq.why')}
+            next={t('emptyStaff.hrFamilyReq.next')}
+            help={<HelpMore article="servicing" section="family" />}
+          />
         </HrCard>
       ) : (
         <ul className="flex flex-col gap-3" data-testid="family-requests">

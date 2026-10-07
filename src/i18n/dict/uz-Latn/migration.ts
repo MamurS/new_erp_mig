@@ -19,7 +19,6 @@ export const migration: Translation<typeof Ru> = {
   'migration.templateFor': 'Shablon: {step}',
   'migration.templateDownloaded': 'Shablon yuklab olindi',
   'migration.batches': 'Paketlar',
-  'migration.batchesEmpty': 'Hozircha paketlar yoʻq',
   'migration.col.seq': '№',
   'migration.col.date': 'Koʻchirish sanasi',
   'migration.col.kind': 'Turi',

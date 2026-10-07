@@ -1,9 +1,16 @@
 import { t, tm } from '@/i18n';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
 import { Mail, FilePlus2 } from 'lucide-react';
-import type { InsuredListItem } from '@/shared/types/dto';
+import type { ClientPipeline, InsuredListItem } from '@/shared/types/dto';
+import { useClientPipeline } from '@/shared/api/queries/tasks';
+import { insuredTabState, staffActionPath } from '@/shared/domain/nextStep';
+import { CONTRACT_STATUS_LABEL, DEAL_STAGE_LABEL } from '@/shared/domain/contracts';
+import { censusTemplateCsv } from '@/shared/domain/census';
+import { annex2TemplateCsv } from '@/shared/domain/policies';
+import { downloadText } from '@/shared/lib/csv';
+import { AskButton, HelpMore, RequestHrButton, roleName } from '@/features/next/NextActions';
 import { RELATION_LABEL } from '@/shared/domain/family';
 import type { Policy } from '@/shared/types';
 import { useClient, useClientHistory, useClientInsured, usePolicies } from '@/shared/api/queries/staff';
@@ -48,7 +55,10 @@ export default function ClientCardPage() {
   const canOffer = useCan('kp.create');
   const canIssue = useCan('policies.write');
   const canPolicies = useCan('policies.read');
-  const canInsured = useCan('insured.read');
+  // The manager sees the tab for its next step (the list itself needs insured.read).
+  const canInsuredList = useCan('insured.read');
+  const canDeals = useCan('deals.manage');
+  const canInsured = canInsuredList || canDeals;
   const navigate = useNavigate();
   const [{ tab, highlight }, setF] = useUrlFilters(TAB_KEYS);
   const [letterOpen, setLetterOpen] = useState(false);
@@ -129,7 +139,7 @@ export default function ClientCardPage() {
         </TabsContent>
         {canInsured && (
           <TabsContent value="insured">
-            <InsuredTab clientId={c.id} />
+            <InsuredTab clientName={c.name} clientId={c.id} />
           </TabsContent>
         )}
         {canPolicies && (
@@ -179,7 +189,129 @@ export default function ClientCardPage() {
   );
 }
 
-function InsuredTab({ clientId }: { clientId: string }) {
+/**
+ * «Застрахованные»: the list once the client has a policy. Before that the tab explains where the client is
+ * on the way to it (by the stage of the deal) and what the next step is (InsuredNextStep).
+ */
+function InsuredTab({ clientId, clientName }: { clientId: string; clientName: string }) {
+  const pipeline = useClientPipeline(clientId);
+  const canList = useCan('insured.read');
+  if (pipeline.isLoading) return <SkeletonRows rows={4} />;
+  if (pipeline.data && insuredTabState(pipeline.data) !== 'list')
+    return (
+      <Card bodyClassName="p-0">
+        <InsuredNextStep p={pipeline.data} clientId={clientId} clientName={clientName} />
+      </Card>
+    );
+  if (!canList)
+    return (
+      <Card bodyClassName="p-0">
+        <EmptyState title={t('next.insured.noAccessTitle')} why={t('next.insured.noAccessWhy')} help={<HelpMore article="roles" />} />
+      </Card>
+    );
+  return <InsuredList clientId={clientId} />;
+}
+
+function InsuredNextStep({ p, clientId, clientName }: { p: ClientPipeline; clientId: string; clientName: string }) {
+  const isManager = useCan('deals.manage');
+  const state = insuredTabState(p);
+  const manager = roleName('sales_manager');
+  const dealRefs = { subjectType: 'deal' as const, subjectId: p.dealId ?? clientId, clientId, dealId: p.dealId, contractId: p.contractId };
+  if (state === 'pre_contract' && p.dealId && p.stage)
+    return (
+      <EmptyState
+        testId="insured-next"
+        title={t('next.insured.preTitle')}
+        why={t('next.insured.preWhy', { deal: p.dealNumber ?? '', stage: DEAL_STAGE_LABEL[p.stage] })}
+        next={t('next.insured.preNext', { role: manager })}
+        actions={
+          isManager ? (
+            <>
+              <Button asChild>
+                <Link to={staffActionPath('census_upload', dealRefs)} data-testid="do-census_upload">
+                  {t('next.action.census_upload')}
+                </Link>
+              </Button>
+              <RequestHrButton hasHr={p.hasHr} clientName={clientName} action="census_upload" subjectType="deal" subjectId={p.dealId} />
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" asChild>
+                <Link to={`/staff/deals/${p.dealId}/census`}>{t('next.action.openDeal')}</Link>
+              </Button>
+              <AskButton role="sales_manager" action="census_upload" subjectType="deal" subjectId={p.dealId} />
+            </>
+          )
+        }
+        template={isManager ? { onDownload: () => downloadText(censusTemplateCsv(), 'census-template.csv') } : undefined}
+        help={<HelpMore article="new-client" section="census" />}
+      />
+    );
+  if (state === 'contract' && p.contractId)
+    return (
+      <EmptyState
+        testId="insured-next"
+        title={t('next.insured.contractTitle')}
+        why={t('next.insured.contractWhy', { contract: p.contractNumber ?? '', status: p.contractStatus ? CONTRACT_STATUS_LABEL[p.contractStatus] : '' })}
+        next={t('next.insured.contractNext', { role: manager })}
+        actions={
+          isManager ? (
+            <>
+              <Button asChild>
+                <Link to={staffActionPath('insured_list', dealRefs)} data-testid="do-insured_list">
+                  {t('next.action.insured_list')}
+                </Link>
+              </Button>
+              <RequestHrButton hasHr={p.hasHr} clientName={clientName} action="insured_list" subjectType="contract" subjectId={p.contractId} />
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" asChild>
+                <Link to={`/staff/contracts/${p.contractId}`}>{t('next.action.openContract')}</Link>
+              </Button>
+              <AskButton role="sales_manager" action="insured_list" subjectType="contract" subjectId={p.contractId} />
+            </>
+          )
+        }
+        template={isManager ? { onDownload: () => downloadText(annex2TemplateCsv(), 'annex2-template.csv') } : undefined}
+        help={<HelpMore article="new-client" section="contract" />}
+      />
+    );
+  if (state === 'awaiting_payment')
+    return (
+      <EmptyState
+        testId="insured-next"
+        title={t('next.insured.payTitle')}
+        why={t('next.insured.payWhy', { contract: p.contractNumber ?? '' })}
+        actions={
+          p.contractId && (
+            <Button variant="secondary" asChild>
+              <Link to={`/staff/contracts/${p.contractId}#invoices`} data-testid="open-invoice">
+                {p.invoiceNumber ? t('next.action.openInvoice', { number: p.invoiceNumber }) : t('next.action.openContract')}
+              </Link>
+            </Button>
+          )
+        }
+        help={<HelpMore article="signing" section="payment" />}
+      />
+    );
+  return (
+    <EmptyState
+      testId="insured-next"
+      title={t('next.insured.noDealTitle')}
+      why={t('next.insured.noDealWhy')}
+      next={t('next.insured.noDealNext', { role: manager })}
+      actions={
+        <Button variant="secondary" asChild>
+          <Link to="/staff/deals">{t('next.action.openDeals')}</Link>
+        </Button>
+      }
+      help={<HelpMore article="new-client" section="lead" />}
+    />
+  );
+}
+
+function InsuredList({ clientId }: { clientId: string }) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());

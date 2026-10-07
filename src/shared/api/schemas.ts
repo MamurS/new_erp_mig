@@ -512,6 +512,13 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'migration_rejected',
     'migration_rolled_back',
     'migration_scan_attached',
+    'family_consent_granted',
+    'family_consent_revoked',
+    'family_request_created',
+    'family_request_decided',
+    'payout_card_changed',
+    'task_created',
+    'task_done',
   ]),
   targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill', 'parameter', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'ai', 'migration']),
   targetId: uuid.optional(),
@@ -614,6 +621,7 @@ export const queueItems = z.array(
     subject: z.enum(['claim', 'registry', 'contract', 'endorsement', 'insured']).optional(),
     legalForm: z.enum(LEGAL_FORMS).optional(),
     policyId: uuid.optional(),
+    link: z.string().optional(),
   }) satisfies z.ZodType<D.QueueItem>,
 );
 export const integrations = z.array(

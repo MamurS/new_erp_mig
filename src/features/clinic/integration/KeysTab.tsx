@@ -18,7 +18,10 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Textarea } from '@/shared/ui/input';
 import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { useCan } from '@/shared/auth/guards';
+import { roleName } from '@/features/next/NextActions';
 import { Panel } from '../components';
+import { EmptyHelp } from '../emptyNext';
 import { SecretReveal } from './SecretReveal';
 import { t, tm } from '@/i18n';
 
@@ -87,6 +90,8 @@ export function KeysTab() {
   const partner = usePartner();
   const q = useIntegrationKeys(partner.base);
   const revoke = useRevokeKey(partner.base);
+  const isClinic = partner.type === 'clinic';
+  const canManage = useCan(isClinic ? 'clinic.integration.manage' : 'assist.integration.manage');
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<{ clientId: string; clientSecret: string } | null>(null);
   const [revoking, setRevoking] = useState<IntegrationClient | null>(null);
@@ -130,7 +135,17 @@ export function KeysTab() {
         actions={<Button onClick={() => setCreating(true)}>{t('clinic.keys.create')}</Button>}
       >
         <p className="px-4 pt-3 text-[12px] text-muted">{t('clinic.keys.rotation')}</p>
-        <DataTable caption={t('clinic.integration.tab.keys')} columns={columns} rows={q.data} rowKey={(k) => k.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty={<EmptyState title={t('clinic.keys.empty')} />} />
+        <DataTable caption={t('clinic.integration.tab.keys')} columns={columns} rows={q.data} rowKey={(k) => k.id} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty={
+            <EmptyState
+              testId="keys-empty"
+              title={t('clinic.keys.empty')}
+              why={t('emptyPartner.keys.why', { system: partner.systemName })}
+              next={t('emptyPartner.keys.next', { role: roleName(isClinic ? 'clinic_admin' : 'asst_admin') })}
+              actions={canManage ? <Button onClick={() => setCreating(true)}>{t('emptyPartner.keys.create')}</Button> : undefined}
+              help={<EmptyHelp article={isClinic ? 'clinics' : 'administration'} section={isClinic ? 'clinic-mis' : 'admin-integrations'} contact={!canManage} />}
+            />
+          }
+        />
       </Panel>
       {creating && (
         <CreateKeyDialog

@@ -16,7 +16,9 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Select } from '@/shared/ui/input';
 import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { roleName } from '@/features/next/NextActions';
 import { PageTitle, Panel } from '../components';
+import { EmptyHelp } from '../emptyNext';
 import { t, tm, defineLabels } from '@/i18n';
 
 const SOURCE_LABEL = defineLabels('clinic.registries.source', ['portal', 'csv', 'api'] as const);
@@ -182,7 +184,21 @@ export default function RegistriesPage() {
           error={q.error}
           onRetry={() => void q.refetch()}
           onRowClick={(r) => navigate(`/clinic/registries/${r.id}`)}
-          empty={<EmptyState title={t('clinic.registries.empty')} description={t('clinic.registries.emptyHint')} />}
+          empty={
+            <EmptyState
+              testId="clinic-registries-empty"
+              title={t('clinic.registries.empty')}
+              why={t('emptyPartner.clinic.registries.why')}
+              next={t('emptyPartner.clinic.registries.next', { role: roleName('clinic_admin') })}
+              actions={
+                <Button loading={build.isPending} onClick={() => void doBuild()}>
+                  <Hammer className="h-4 w-4" aria-hidden /> {t('emptyPartner.clinic.registries.build')}
+                </Button>
+              }
+              template={{ onDownload: () => downloadText(toCsv(REGISTRY_CSV_HEADER, []), `registry-template-${period}.csv`), label: t('emptyPartner.clinic.registries.template') }}
+              help={<EmptyHelp article="clinics" section="monthly-registry" />}
+            />
+          }
         />
       </Panel>
       {importing && <ImportDialog period={period} onClose={() => setImporting(false)} />}

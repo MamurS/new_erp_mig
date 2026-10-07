@@ -17,8 +17,16 @@ const tomorrow = () => iso(new Date(Date.now() + 5 * 3600_000 + 86_400_000));
 test('1. Underwriter issues a policy from a CSV of 3 employees and invites HR, who sees the employees', async ({ page }) => {
   await loginStaff(page, 'underwriter');
   const clients = (await api(page, 'GET', '/clients?status=negotiation&pageSize=50')).data as { items: { id: string; activePolicyId?: string; name: string }[] };
-  const client = clients.items.find((c) => !c.activePolicyId && !/[<>]/.test(c.name))!;
+  // A client without an HR cabinet yet (a client with a sent offer already has one): the policy invites HR.
+  let client: { id: string } | undefined;
+  for (const c of clients.items.filter((x) => !x.activePolicyId && !/[<>]/.test(x.name))) {
+    if (!((await api(page, 'GET', `/clients/${c.id}/pipeline`)).data as { hasHr: boolean }).hasHr) {
+      client = c;
+      break;
+    }
+  }
   expect(client).toBeTruthy();
+  if (!client) return;
 
   await page.goto(`/staff/clients/${client.id}`);
   await page.getByRole('button', { name: 'Оформить полис' }).click();

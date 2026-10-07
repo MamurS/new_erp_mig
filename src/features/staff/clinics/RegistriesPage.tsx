@@ -11,6 +11,7 @@ import { legalFormColumn } from '@/shared/ui/legal-form';
 import { DataTable, type Column } from '@/shared/ui/data-table';
 import { EmptyState } from '@/shared/ui/states';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs';
+import { HelpMore, roleName } from '@/features/next/NextActions';
 import { useTopbar } from '../topbar';
 
 const TAB_KEYS = ['submitted,in_review', 'accepted,partially_accepted', 'paid', 'all'] as const;
@@ -73,7 +74,17 @@ export default function RegistriesPage() {
           loading={list.isLoading}
           error={list.error}
           onRetry={() => void list.refetch()}
-          empty={<EmptyState title={t('staffOps.registries.empty')} />}
+          empty={
+            f.clinicId ? undefined : (
+              <EmptyState
+                testId="registries-next"
+                title={t('emptyStaff.registries.title')}
+                why={t('emptyStaff.registries.why')}
+                next={t('emptyStaff.registries.next', { role: roleName('operator') })}
+                help={<HelpMore article="clinics" section="monthly-registry" />}
+              />
+            )
+          }
         />
       </div>
     </div>

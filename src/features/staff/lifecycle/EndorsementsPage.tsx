@@ -24,7 +24,9 @@ import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
+import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
+import { HelpMore, roleName } from '@/features/next/NextActions';
 import { useTopbar } from '../topbar';
 
 const REQUEST_STATUS = defineLabels('staffLc.changeRequestStatus', ['pending', 'included', 'cancelled'] as const);
@@ -157,6 +159,32 @@ export default function EndorsementsPage() {
     }
   };
 
+  const requestButton = canManage ? (
+    <Button variant="secondary" onClick={() => setNewReq(true)}>
+      <Plus className="h-4 w-4" aria-hidden /> {t('emptyStaff.requests.create')}
+    </Button>
+  ) : null;
+  const endEmpty = forms.length ? undefined : (
+    <EmptyState
+      testId="endorsements-next"
+      title={t('emptyStaff.endorsements.title')}
+      why={t('emptyStaff.endorsements.why')}
+      next={t('emptyStaff.endorsements.next', { role: roleName('sales_manager') })}
+      actions={requestButton}
+      help={<HelpMore article="servicing" section="endorsement" />}
+    />
+  );
+  const reqEmpty = reqForms.length ? undefined : (
+    <EmptyState
+      testId="change-requests-next"
+      title={t('emptyStaff.requests.title')}
+      why={t('emptyStaff.requests.why')}
+      next={t('emptyStaff.requests.next', { role: roleName('sales_manager') })}
+      actions={requestButton}
+      help={<HelpMore article="servicing" section="endorsement" />}
+    />
+  );
+
   const reqColumns: Column<ChangeRequestView>[] = [
     { key: 'date', header: t('staffLc.endorsements.effectiveDate'), cell: (r) => <span className="num">{formatDate(r.effectiveDate)}</span> },
     { key: 'contract', header: t('common.contract'), cell: (r) => <span className="num">{r.contractNumber}</span> },
@@ -211,12 +239,12 @@ export default function EndorsementsPage() {
         </TabsList>
         <TabsContent value="endorsements">
           <div className="rounded-card border border-border bg-surface">
-            <DataTable caption={t('staffLc.contract.endorsements')} columns={endColumns} rows={endorsements.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={endorsements.isLoading} error={endorsements.error} rowKey={(e) => e.id} onRowClick={(e) => navigate(`/staff/endorsements/${e.id}`)} empty={t('staffLc.endorsements.empty')} />
+            <DataTable caption={t('staffLc.contract.endorsements')} columns={endColumns} rows={endorsements.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={endorsements.isLoading} error={endorsements.error} rowKey={(e) => e.id} onRowClick={(e) => navigate(`/staff/endorsements/${e.id}`)} empty={endEmpty} />
           </div>
         </TabsContent>
         <TabsContent value="requests">
           <div className="rounded-card border border-border bg-surface">
-            <DataTable caption={t('staffLc.endorsements.requests')} columns={reqColumns} rows={requestRows.data} loading={requestRows.isLoading} error={requestRows.error} rowKey={(r) => r.id} empty={t('staffLc.endorsements.requestsEmpty')} />
+            <DataTable caption={t('staffLc.endorsements.requests')} columns={reqColumns} rows={requestRows.data} loading={requestRows.isLoading} error={requestRows.error} rowKey={(r) => r.id} empty={reqEmpty} />
           </div>
         </TabsContent>
       </Tabs>

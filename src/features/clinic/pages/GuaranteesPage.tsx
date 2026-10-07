@@ -16,6 +16,7 @@ import { EmptyState } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { buildPdf, downloadPdf, pdfLegalName } from '@/features/hr/pdf';
 import { FilesPicker, GuaranteeChip, PageTitle, Panel } from '../components';
+import { EmptyHelp } from '../emptyNext';
 import { t } from '@/i18n';
 
 /** Client-side PDF stub of an approved letter; no patient data in the file or its name. */
@@ -179,7 +180,20 @@ export default function GuaranteesPage() {
           error={q.error}
           onRetry={() => void q.refetch()}
           onRowClick={setOpen}
-          empty={<EmptyState title={t('clinic.gp.empty')} />}
+          empty={
+            <EmptyState
+              testId="clinic-gp-empty"
+              title={t('clinic.gp.empty')}
+              why={t('emptyPartner.clinic.gp.why')}
+              next={t('emptyPartner.clinic.gp.next')}
+              actions={
+                <Button variant="secondary" asChild>
+                  <Link to="/clinic/check">{t('emptyPartner.clinic.gp.check')}</Link>
+                </Button>
+              }
+              help={<EmptyHelp article="medical" section="guarantee-letter" />}
+            />
+          }
         />
       </Panel>
       {current && <GuaranteeDialog g={current} onClose={() => setOpen(null)} />}

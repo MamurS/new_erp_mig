@@ -10,6 +10,7 @@ import { DocPreview, DocPrintButton, useStubDocument } from '@/features/document
 import { Skeleton } from '@/shared/ui/states';
 import { BIG, Empty, LoadError, ScreenHeader } from '../components';
 import { PersonNote, usePerson } from '../person';
+import { EmptyHelp } from '@/features/clinic/emptyNext';
 
 export default function CertificatePage() {
   const { t } = useI18n();
@@ -30,7 +31,12 @@ export default function CertificatePage() {
       {q.isLoading ? (
         <Skeleton className="h-[420px] w-full rounded-card" />
       ) : missing ? (
-        <Empty title={t('app.certificate.none')} />
+        <Empty
+          testId="certificate-empty"
+          title={t('app.certificate.none')}
+          why={`${t('emptyPartner.app.certificate.why')} ${t('emptyPartner.app.certificate.next')}`}
+          help={<EmptyHelp article="portal-guides" section="guide-insured" contact />}
+        />
       ) : q.isError || !q.data || !doc ? (
         <LoadError error={q.error} onRetry={() => void q.refetch()} />
       ) : (

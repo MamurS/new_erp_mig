@@ -12,7 +12,9 @@ import { useDocumentTitle } from '@/shared/lib/hooks';
 import { certificateDocument } from '@/features/documents/builders';
 import { DocPrintButton } from '@/features/documents/DocPreview';
 import { Chip } from '@/shared/ui/chips';
-import { SkeletonRows } from '@/shared/ui/states';
+import { EmptyState, SkeletonRows } from '@/shared/ui/states';
+import { useUser } from '@/shared/auth/session';
+import { AskButton, HelpMore, roleName } from '@/features/next/NextActions';
 import { HrCard, HrHeader, HrSectionTitle } from '../ui';
 import { t, defineLabels } from '@/i18n';
 
@@ -42,7 +44,7 @@ function Certificates({ policyId }: { policyId: string }) {
           ))}
         </ul>
       ) : (
-        <p className="text-muted">{t('hr.contracts.certsLater')}</p>
+        <EmptyState className="px-2 py-4" testId="hr-certs-next" title={t('hr.contracts.certsLater')} why={t('emptyStaff.hrCerts.why')} help={<HelpMore article="signing" section="policy-issue" />} />
       )}
     </HrCard>
   );
@@ -53,6 +55,7 @@ export default function ContractsPage() {
   const contracts = useContracts();
   const endorsements = useEndorsements();
   const requests = useChangeRequests();
+  const companyId = useUser()?.companyId;
   const toSign = [
     ...(contracts.data ?? []).filter((c) => (c.status === 'sent' || c.status === 'signing') && !c.signing.client).map((c) => ({ id: c.id, to: `/hr/contracts/${c.id}`, label: t('hr.contracts.contractN', { number: c.number }) })),
     ...(endorsements.data ?? []).filter((e) => (e.status === 'sent' || e.status === 'signing') && !e.signing.client).map((e) => ({ id: e.id, to: `/hr/endorsements/${e.id}`, label: e.kind === 'termination' ? t('hr.contracts.terminationN', { number: e.number }) : t('hr.contracts.endorsementN', { number: e.number }) })),
@@ -99,7 +102,15 @@ export default function ContractsPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-muted">{t('hr.contracts.noContracts')}</p>
+            <EmptyState
+              className="px-2 py-4"
+              testId="hr-contracts-next"
+              title={t('hr.contracts.noContracts')}
+              why={t('emptyStaff.hrContracts.why')}
+              next={t('emptyStaff.hrContracts.next', { role: roleName('sales_manager') })}
+              actions={companyId ? <AskButton role="sales_manager" action="contract_draft" subjectType="client" subjectId={companyId} /> : null}
+              help={<HelpMore article="portal-guides" section="guide-hr" />}
+            />
           )}
         </HrCard>
         <HrCard>
@@ -117,7 +128,11 @@ export default function ContractsPage() {
                     <Chip kind={r.status === 'pending' ? 'sun' : r.status === 'included' ? 'success' : 'neutral'}>{r.endorsementNumber ?? REQUEST_STATUS[r.status]}</Chip>
                   </li>
                 ))}
-                {!requests.isLoading && !(requests.data ?? []).length && <li className="py-2 text-muted">{t('hr.contracts.noRequests')}</li>}
+                {!requests.isLoading && !(requests.data ?? []).length && (
+                  <li className="py-2">
+                    <EmptyState className="px-2 py-4" testId="hr-requests-next" title={t('hr.contracts.noRequests')} why={t('emptyStaff.hrRequests.why')} help={<HelpMore article="servicing" section="enrolment" />} />
+                  </li>
+                )}
               </ul>
             </div>
             <div>
@@ -134,7 +149,11 @@ export default function ContractsPage() {
                     </span>
                   </li>
                 ))}
-                {!endorsements.isLoading && !(endorsements.data ?? []).length && <li className="py-2 text-muted">{t('hr.contracts.noEndorsements')}</li>}
+                {!endorsements.isLoading && !(endorsements.data ?? []).length && (
+                  <li className="py-2">
+                    <EmptyState className="px-2 py-4" testId="hr-endorsements-next" title={t('hr.contracts.noEndorsements')} why={t('emptyStaff.hrEndorsements.why')} help={<HelpMore article="servicing" />} />
+                  </li>
+                )}
               </ul>
             </div>
           </div>

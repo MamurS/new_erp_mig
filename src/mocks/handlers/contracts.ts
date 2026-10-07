@@ -36,6 +36,8 @@ import { detectMime } from '@/shared/lib/image';
 import { db, type ChangeRequestRow, type Db } from '../db';
 import { API, audit, body, byLegalForm, byLegalName, conflict, type Ctx, filterLegalForm, forbidden, HttpError, httpErrorOf, notFound, param, q as searchTerm, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
+import { completeTasks } from '../tasks-core';
+import { dealChecklist, missingItems } from '@/shared/domain/nextStep';
 import { tzIso } from '../time';
 import { toClient } from '../views';
 import { parsePolicyList, toListRow } from '../policy-core';
@@ -47,6 +49,7 @@ import {
   clientRow,
   contractOf,
   createEndorsement,
+  checklistInput,
   dealEvent,
   dealOf,
   endorsementLines,
@@ -349,6 +352,12 @@ function signingRoutes(kind: Kind) {
         if (ref.status !== 'draft') throw conflict('srv.doc.reviewDraftOnly');
         if (kind === 'contract' && ref.contract.financeDiffers && !ref.contract.financeApprovedByName) throw conflict('srv.contract.financeNeedsApproval');
         if (kind === 'contract') pricingGuard(ref.contract);
+        if (kind === 'contract') {
+          // «Что нужно для следующего этапа»: the required items of the contract stage (the UI shows the same list).
+          const deal = d.deals.find((x) => x.id === ref.dealId);
+          const missing = deal ? missingItems(dealChecklist({ ...checklistInput(d, deal), stage: 'contract_draft' })) : [];
+          if (missing.length) throw conflict('srv.next.missing', { items: missing.map((m) => tm(m.label)).join(', ') });
+        }
         if (kind === 'endorsement') {
           const e = d.endorsements.find((x) => x.id === ref.id)!;
           if (endorsementView(d, e).needsAmountApproval) throw conflict('srv.endorsement.amountNeedsApproval');
@@ -372,6 +381,7 @@ function signingRoutes(kind: Kind) {
         const { comment } = await body(ctx.request, legalApproveSchema);
         ref.setStatus('approved');
         if (kind === 'contract') {
+          completeTasks(d, 'legal_review', { contractId: ref.id, dealId: ref.dealId, clientId: ref.contract.clientId }, user.displayName);
           ref.contract.legalApprovedByName = user.displayName;
           ref.contract.legalComment = undefined;
           ref.contract.versions.push({ version: ref.contract.version, at: tzIso(Date.now()), byName: user.displayName, changes: `Юрист согласовал${comment ? `: ${comment}` : ''}` });
@@ -625,6 +635,7 @@ export const contractHandlers = [
       d.contracts.unshift(c);
       moveDeal(d, deal.id, 'contract_draft', user.displayName, `Подготовлен договор ${c.number}`);
       audit(user, 'contract_created', { targetType: 'contract', targetId: c.id, targetLabel: c.number });
+      completeTasks(d, 'contract_draft', { dealId: deal.id, clientId: deal.clientId }, user.displayName);
       return HttpResponse.json(contractView(d, c), { status: 201 });
     }),
   ),
@@ -712,7 +723,9 @@ export const contractHandlers = [
       const d = db();
       const c = contractOf(d, param(ctx, 'id'));
       if (user.role === 'hr') {
-        if (!can(user, 'contracts.sign_client', { companyId: c.clientId }) || !HR_VISIBLE.has(c.status)) throw notFound();
+        // HR uploads appendix 2 of a contract it sees, or of a draft MIG asked it for («Запросить у HR»).
+        const asked = d.tasks.some((x) => x.status === 'open' && x.toRole === 'hr' && x.action === 'insured_list' && x.contractId === c.id);
+        if (!can(user, 'contracts.sign_client', { companyId: c.clientId }) || (!HR_VISIBLE.has(c.status) && !asked)) throw notFound();
       } else requirePermission(user, 'contracts.draft');
       if (c.status === 'active' || c.status === 'signed' || c.status === 'terminated' || c.status === 'expired') throw conflict('srv.contract.listViaEndorsement');
       const parsed = parsePolicyList(await ctx.request.text());
@@ -726,6 +739,8 @@ export const contractHandlers = [
       c.insuredListId = c.id;
       c.insuredCount = rows.length;
       c.versions.push({ version: c.version, at: tzIso(Date.now()), byName: user.displayName, changes: `Загружено приложение 2: ${rows.length} застрахованных` });
+      completeTasks(d, 'insured_list', { contractId: c.id, dealId: c.dealId, clientId: c.clientId }, user.displayName);
+      if (c.dealId) dealEvent(d, c.dealId, user.displayName, `Приложение 2 к договору ${c.number}: ${rows.length} застрахованных${user.role === 'hr' ? ' (загрузил HR клиента)' : ''}`);
       return forViewer(user, contractView(d, c));
     }),
   ),

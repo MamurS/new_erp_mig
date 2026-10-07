@@ -134,12 +134,22 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry?: () => 
   );
 }
 
-export function Empty({ title, action, icon }: { title: string; action?: ReactNode; icon?: ReactNode }) {
+/**
+ * An empty list or section. With `why` (why it is empty and what happens next) and `help` («Подробнее в
+ * справке», a contact) it is an empty state with a next step (DECISIONS «Пустые состояния»).
+ */
+export function Empty({ title, action, icon, why, help, testId }: { title: string; action?: ReactNode; icon?: ReactNode; why?: ReactNode; help?: ReactNode; testId?: string }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border bg-surface px-5 py-8 text-center">
+    <div data-testid={testId} data-empty={why !== undefined ? 'next' : 'none'} className="flex flex-col items-center gap-3 rounded-card border border-dashed border-border bg-surface px-5 py-8 text-center">
       <span className="text-muted">{icon ?? <Inbox className="h-8 w-8" aria-hidden />}</span>
       <p className="max-w-xs text-muted">{title}</p>
+      {why && (
+        <p className="max-w-xs text-[14px]" data-testid="empty-why">
+          {why}
+        </p>
+      )}
       {action}
+      {help && <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[14px]">{help}</div>}
     </div>
   );
 }

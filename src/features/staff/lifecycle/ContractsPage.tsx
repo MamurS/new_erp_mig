@@ -1,7 +1,7 @@
 /* «Договоры»: every contract of the lifecycle with its status, version and premium. */
 import { t } from '@/i18n';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { ContractView } from '@/shared/types/dto';
 import { useContracts } from '@/shared/api/queries/lifecycle';
 import { CONTRACT_STATUS_CHIP, CONTRACT_STATUS_LABEL } from '@/shared/domain/contracts';
@@ -15,12 +15,17 @@ import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-
 import { formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Select } from '@/shared/ui/input';
 import { PageHeader } from '@/shared/ui/page';
+import { useCan } from '@/shared/auth/guards';
+import { Button } from '@/shared/ui/button';
+import { EmptyState } from '@/shared/ui/states';
+import { HelpMore, roleName } from '@/features/next/NextActions';
 import { useTopbar } from '../topbar';
 
 export default function ContractsPage() {
   useDocumentTitle(t('staffLc.contracts.title'));
   useTopbar([{ label: t('staffLc.contracts.title') }]);
   const navigate = useNavigate();
+  const canDeals = useCan('deals.manage');
   const [f, setF] = useUrlFilters(['status', 'form', 'sort'] as const);
   const forms = parseLegalForms(f.form);
   const sort = parseSort(f.sort);
@@ -54,6 +59,23 @@ export default function ContractsPage() {
     { key: 'total', header: t('common.premium'), align: 'right', cell: (c) => <span className="num whitespace-nowrap">{formatMoney(c.params.total)}</span> },
     { key: 'changed', header: t('staffLc.contracts.changedClauses'), align: 'right', cell: (c) => <span className="num">{c.clauseOverrides.length || '—'}</span> },
   ];
+  const filtered = !!term || !!f.status || forms.length > 0;
+  const empty = filtered ? undefined : (
+    <EmptyState
+      testId="contracts-next"
+      title={t('emptyStaff.contracts.title')}
+      why={t('emptyStaff.contracts.why')}
+      next={t('emptyStaff.contracts.next', { role: roleName('sales_manager') })}
+      actions={
+        canDeals ? (
+          <Button asChild>
+            <Link to="/staff/deals">{t('emptyStaff.openDeals')}</Link>
+          </Button>
+        ) : null
+      }
+      help={<HelpMore article="new-client" section="contract" />}
+    />
+  );
   return (
     <>
       <PageHeader title={t('staffLc.contracts.title')} subtitle={t('staffLc.contracts.subtitle')} />
@@ -69,7 +91,7 @@ export default function ContractsPage() {
         </Select>
       </div>
       <div className="rounded-card border border-border bg-surface">
-        <DataTable caption={t('staffLc.contracts.title')} columns={columns} rows={q.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(c) => c.id} onRowClick={(c) => navigate(`/staff/contracts/${c.id}`)} empty={t('staffLc.contracts.empty')} />
+        <DataTable caption={t('staffLc.contracts.title')} columns={columns} rows={q.data} sort={sort} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(c) => c.id} onRowClick={(c) => navigate(`/staff/contracts/${c.id}`)} empty={empty} />
       </div>
     </>
   );

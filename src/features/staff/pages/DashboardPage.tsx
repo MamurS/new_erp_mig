@@ -80,6 +80,8 @@ function queueRowPath(row: QueueItem, confirmed: boolean): string {
       return `/staff/clinics/${id}`;
     case 'age_limit':
       return `/staff/insured/${id}`;
+    case 'request':
+      return row.link ?? '/staff';
     case 'appointment':
     case 'clinic_no_response':
       return `/staff/appointments?status=${confirmed ? 'confirmed' : 'requested'}`;
