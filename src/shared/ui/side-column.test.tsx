@@ -65,9 +65,11 @@ describe('SideColumn', () => {
 
 describe('markStuck', () => {
   it('marks a heading that no longer stands at the top of its section', () => {
-    document.body.innerHTML = '<section id="s"><div data-section-head id="h"></div></section>';
-    const s = document.getElementById('s')!;
-    const h = document.getElementById('h')!;
+    const s = document.createElement('section');
+    const h = document.createElement('div');
+    h.setAttribute('data-section-head', '');
+    s.append(h);
+    document.body.append(s);
     const rect = (top: number) => ({ top, bottom: top + 10, left: 0, right: 0, width: 0, height: 10, x: 0, y: top, toJSON: () => ({}) });
     s.getBoundingClientRect = () => rect(0);
     h.getBoundingClientRect = () => rect(0);
@@ -76,6 +78,6 @@ describe('markStuck', () => {
     s.getBoundingClientRect = () => rect(-200);
     markStuck();
     expect(h.hasAttribute('data-stuck')).toBe(true);
-    document.body.innerHTML = '';
+    s.remove();
   });
 });
