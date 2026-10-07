@@ -851,6 +851,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     qaSamples: [],
     dmsParams: { values: {}, changes: [] },
     ai: { settings: defaultAiSettings(), changes: [], logs: [], rebillFlags: {} },
+    help: { questions: [] },
     authorityChanges: [],
     deals: [],
     dealEvents: [],

@@ -4,7 +4,7 @@ import type * as D from '@/shared/types/dto';
 import type * as T from '@/shared/types';
 
 const decision = z.enum(['covered', 'needs_guarantee', 'excluded', 'limit_exhausted', 'policy_inactive', 'unknown']);
-const scenario = z.enum(['insured', 'clinic', 'decision', 'rebill']);
+const scenario = z.enum(['insured', 'clinic', 'decision', 'rebill', 'help']);
 const provider = z.enum(['mock', 'local', 'external']);
 const limitCategory = z.enum(['outpatient', 'dental', 'medicines', 'inpatient']);
 
@@ -33,12 +33,12 @@ const item = z.object({
 
 export const aiCheckResult: z.ZodType<D.AiCheckResult> = z.object({ available: z.boolean(), items: z.array(item), suspicious: z.boolean(), expectedReimbursement: z.number().optional() });
 
-const scenarios = z.object({ insured: z.boolean(), clinic: z.boolean(), decision: z.boolean(), rebill: z.boolean() });
+const scenarios = z.object({ insured: z.boolean(), clinic: z.boolean(), decision: z.boolean(), rebill: z.boolean(), help: z.boolean() });
 export const aiStatus: z.ZodType<D.AiStatus> = z.object({ killSwitch: z.boolean(), scenarios });
 
 const scenarioSettings = z.object({ enabled: z.boolean(), provider });
 const settings: z.ZodType<T.AiSettings> = z.object({
-  scenarios: z.object({ insured: scenarioSettings, clinic: scenarioSettings, decision: scenarioSettings, rebill: scenarioSettings }),
+  scenarios: z.object({ insured: scenarioSettings, clinic: scenarioSettings, decision: scenarioSettings, rebill: scenarioSettings, help: scenarioSettings }),
   confidenceThreshold: z.number(),
   killSwitch: z.boolean(),
 });

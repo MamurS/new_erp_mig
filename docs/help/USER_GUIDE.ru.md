@@ -1,3 +1,5 @@
+<!-- Help markup (not shown): "{#anchor}" after a heading is its stable Latin anchor, never renamed; "audience: ..." comments say who may read a part (src/shared/help/audience.ts). Translations keep both exactly as here. -->
+
 # Руководство пользователя системы ДМС MIG
 
 Версия 1.0 · 07.10.2026

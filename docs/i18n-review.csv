@@ -26,6 +26,7 @@
 "ai.provider.mock","Мок (словарь синонимов)","Mok (sinonimlar lugʻati)","Mock (synonym dictionary)","src/features/ai/settings.ts"
 "ai.scenario.clinic","Клиника: ГП и реестр","Klinika: kafolat xati va reyestr","Clinic: GL and register","src/features/ai/settings.ts"
 "ai.scenario.decision","Подсказки при решениях (МИГ и ассистанс)","Qarorlar uchun maslahatlar (MIG va assistans)","Hints for decisions (MIG and assistance company)","src/features/ai/settings.ts"
+"ai.scenario.help","Справка: ответы на вопросы","Maʼlumotnoma: savollarga javoblar","Help: answers to questions","src/features/ai/settings.ts"
 "ai.scenario.insured","Застрахованный в приложении","Ilovadagi sugʻurtalangan shaxs","Insured person in the app","src/features/ai/settings.ts"
 "ai.scenario.rebill","Предпроверка счёта ассистанса","Assistans hisobini oldindan tekshirish","Pre-check of the assistance invoice","src/features/ai/settings.ts"
 "ai.verdict.covered","Скорее всего покрывается","Ehtimol, qoplanadi","Most likely covered","src/features/ai/labels.ts"

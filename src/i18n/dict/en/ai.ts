@@ -6,6 +6,7 @@ export const ai: Translation<typeof Ru> = {
   'ai.scenario.clinic': 'Clinic: GL and register',
   'ai.scenario.decision': 'Hints for decisions (MIG and assistance company)',
   'ai.scenario.rebill': 'Pre-check of the assistance invoice',
+  'ai.scenario.help': 'Help: answers to questions',
   'ai.provider.mock': 'Mock (synonym dictionary)',
   'ai.provider.local': 'Local model on the MIG server',
   'ai.provider.external': 'External cloud provider',

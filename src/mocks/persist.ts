@@ -29,7 +29,7 @@ export function loadSnapshot(): Db | null {
     }
     const sessions = JSON.parse(sessionStorage.getItem(SESS_KEY) ?? '[]') as Db['sessions'];
     // A snapshot from an older build lacks newer tables: start from a fresh seed instead.
-    if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries) || !Array.isArray(db.policyChanges) || !Array.isArray(db.rebills) || !db.dmsParams || !Array.isArray(db.deals) || !db.ai || !Array.isArray(db.bankPayments) || !Array.isArray(db.statementKeys) || !Array.isArray(db.migrationBatches) || !Array.isArray(db.familyConsents) || !Array.isArray(db.familyRequests)) return null;
+    if (!Array.isArray(db.kp) || !Array.isArray(db.clinicUsers) || !Array.isArray(db.registries) || !Array.isArray(db.policyChanges) || !Array.isArray(db.rebills) || !db.dmsParams || !Array.isArray(db.deals) || !db.ai || !Array.isArray(db.bankPayments) || !Array.isArray(db.statementKeys) || !Array.isArray(db.migrationBatches) || !Array.isArray(db.familyConsents) || !Array.isArray(db.familyRequests) || !db.help || !db.ai.settings?.scenarios?.help) return null;
     return { ...db, sessions };
   } catch {
     return null;

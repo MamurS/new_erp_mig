@@ -6,7 +6,7 @@
 /** Words that carry no meaning for the search (questions are asked «своими словами»). */
 export const STOP_WORDS: readonly string[] = [
   // ru
-  'а', 'без', 'бы', 'был', 'была', 'были', 'было', 'быть', 'в', 'вам', 'вас', 'весь', 'во', 'вот', 'все', 'всё', 'всех', 'вы', 'где', 'да', 'для', 'до', 'его', 'ее', 'её', 'если', 'есть', 'еще', 'ещё', 'же', 'за', 'и', 'из', 'или', 'им', 'их', 'к', 'как', 'какая', 'какие', 'какой', 'каким', 'когда', 'кто', 'ли', 'либо', 'мне', 'много', 'может', 'можно', 'мой', 'моя', 'моё', 'мои', 'мы', 'на', 'над', 'надо', 'нам', 'нас', 'не', 'нет', 'ни', 'но', 'нужно', 'о', 'об', 'он', 'она', 'они', 'оно', 'от', 'по', 'под', 'при', 'про', 'с', 'со', 'так', 'там', 'то', 'тот', 'ту', 'ты', 'у', 'уже', 'чем', 'что', 'чтобы', 'это', 'эта', 'этот', 'эти', 'я', 'делать', 'сделать', 'хочу', 'нужен', 'нужна', 'почему', 'зачем', 'сколько', 'какое', 'каких', 'будет',
+  'а', 'без', 'бы', 'был', 'была', 'были', 'было', 'быть', 'в', 'вам', 'вас', 'весь', 'во', 'вот', 'все', 'всё', 'всех', 'вы', 'где', 'да', 'для', 'до', 'его', 'ее', 'её', 'если', 'есть', 'еще', 'ещё', 'же', 'за', 'и', 'из', 'или', 'им', 'их', 'к', 'как', 'какая', 'какие', 'какой', 'каким', 'когда', 'кто', 'ли', 'либо', 'мне', 'много', 'может', 'можно', 'мой', 'моя', 'моё', 'мои', 'мы', 'на', 'над', 'надо', 'нам', 'нас', 'не', 'нет', 'ни', 'но', 'нужно', 'о', 'об', 'он', 'она', 'они', 'оно', 'от', 'по', 'под', 'при', 'про', 'с', 'со', 'так', 'там', 'то', 'тот', 'ту', 'ты', 'у', 'уже', 'чем', 'что', 'чтобы', 'это', 'эта', 'этот', 'эти', 'я', 'делать', 'сделать', 'хочу', 'нужен', 'нужна', 'почему', 'зачем', 'сколько', 'какое', 'каких', 'будет', 'могу', 'могут', 'мочь', 'наш', 'наша', 'наше', 'нашей', 'наши', 'нашего', 'нашу', 'свой', 'свою', 'своих', 'своей', 'своего', 'пишет', 'пишется', 'новый', 'новая', 'новое', 'новые', 'нового', 'новую', 'новых', 'новому', 'новой',
   // uz-Latn
   'va', 'yoki', 'bilan', 'uchun', 'qanday', 'qayerda', 'qachon', 'nima', 'nimalar', 'kim', 'mi', 'bu', 'u', 'men', 'meni', 'menga', 'biz', 'siz', 'agar', 'ham', 'emas', 'kerak', 'mumkin', 'qilish', 'qilsam', 'boʻladi', 'nega', 'qaysi',
   // en
@@ -40,3 +40,31 @@ export const SECTION_REF = /(?:раздел(?:ы|е|ах|а)?|bo[ʻ'‘]?lim(?:l
 
 /** A sentence fragment that ends with an abbreviation («т. п.», «т. е.», «напр.», «см.», «e.g.») and goes on. */
 export const ABBREVIATION_END = /(?:\s|^|\()(?:т|т\.\s?[пдея]|напр|см|г|e|e\.g|i|i\.e|masalan)\.$/iu;
+
+/**
+ * Synonyms the glossary does not spell out (short forms people type). Each group is matched as a whole:
+ * a query with any member finds the others.
+ */
+export const EXTRA_SYNONYMS: readonly (readonly string[])[] = [
+  ['ДС', 'доп. соглашение', 'допсоглашение', 'дополнительное соглашение', 'qoʻshimcha kelishuv', 'endorsement'],
+  ['ГП', 'гарантийное письмо', 'гарантийка', 'kafolat xati', 'guarantee letter', 'GL'],
+  ['КП', 'коммерческое предложение', 'tijorat taklifi', 'commercial proposal'],
+  ['ИНН', 'STIR', 'TIN'],
+  ['ЭЦП', 'E-IMZO', 'ERI', 'электронная подпись'],
+  ['ПИНФЛ', 'JShShIR', 'PINFL'],
+  ['ЭДО', 'EHA', 'Didox'],
+  ['ДМС', 'ITS', 'VHI'],
+  ['МИС', 'TAT'],
+  ['убыток', 'claim', 'zarar'],
+  ['разноска', 'разнести', 'allocation'],
+];
+
+/** The question asks what a term means: glossary definitions are preferred. */
+export const DEFINITION_CUE = /что\s+(?:такое|значит|означает)|расшифр|nima\s+degani|\bwhat\s+(?:is|does)\b|\bmeaning\b/iu;
+/** The question is about statuses: rows of the statuses article are preferred. */
+export const STATUS_CUE = /статус|holat|\bstatus/iu;
+/** «Кто: менеджер.», «Очередь: …» — role lines of the guide, not answers. */
+export const ROLE_LINE = /^(?:кто|kim|who)\s*:/iu;
+
+/** «ё» is often typed as «е»: both are folded before the search normalisation. */
+export const foldYo = (text: string): string => text.replace(/[ёЁ]/g, 'е');

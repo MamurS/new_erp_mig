@@ -190,7 +190,7 @@ function parseList(lines: string[], start: number): { block: Block; next: number
 
 /** Inline markup of one line or cell. */
 export function parseInline(src: string): Inline[] {
-  return inline(src.replace(INLINE_COMMENT, ''));
+  return inline(src.replace(INLINE_COMMENT, '').trim());
 }
 
 function isWordChar(ch: string | undefined): boolean {
