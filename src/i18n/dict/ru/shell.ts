@@ -43,6 +43,7 @@ export const shell = {
   'shell.breadcrumbs': 'Хлебные крошки',
   'shell.sidePanel.label': 'Детали',
   'shell.sidePanel.close': 'Закрыть панель',
+  'shell.sidePanel.width': 'Ширина карточки',
   'shell.toast.close': 'Закрыть уведомление',
   'shell.table.filterBy': 'Фильтр: {label}',
   'shell.table.clearFilter': 'Сбросить фильтр',

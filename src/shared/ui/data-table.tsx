@@ -55,6 +55,9 @@ export interface DataTableProps<T> {
   /** Called with Enter (open) and Esc (close) from the keyboard. */
   onRowOpen?: (row: T) => void;
   onEscape?: () => void;
+  /** ↑/↓ moved the focus to this row (a split view switches its card to it). */
+  onRowMove?: (row: T) => void;
+  /** The selected row: highlighted and scrolled into view when it changes. */
   activeKey?: string | null;
   empty?: ReactNode;
   page?: number;
@@ -68,6 +71,11 @@ export interface DataTableProps<T> {
   totals?: Partial<Record<string, ReactNode>>;
   caption: string;
   density?: 'staff' | 'client';
+}
+
+/** Brings a row into view inside the content area; rows keep clear of the pinned header and totals/pager (scroll-margin in index.css). */
+function reveal(el: HTMLElement | undefined): void {
+  el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 }
 
 /** Table with server sort, pagination, loading/empty/error states and ↑/↓/Enter/Esc navigation. */
@@ -99,9 +107,20 @@ export function DataTable<T>(p: DataTableProps<T>) {
 
   const focusRow = (idx: number) => {
     const el = bodyRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-row]')[idx];
-    el?.focus();
+    el?.focus({ preventScroll: true });
+    reveal(el);
     setFocusIdx(idx);
+    const row = rows[idx];
+    if (row && el) p.onRowMove?.(row);
   };
+
+  // A newly selected row (a click, a direct ?panel= link, ↑/↓) is brought into view.
+  const hasRows = rows.length > 0;
+  useEffect(() => {
+    if (!p.activeKey || !hasRows) return;
+    const el = [...(bodyRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-row]') ?? [])].find((r) => r.dataset.key === p.activeKey);
+    reveal(el);
+  }, [p.activeKey, hasRows]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTableSectionElement>) => {
     if (!rows.length) return;
@@ -187,6 +206,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
                     <tr
                       key={key}
                       data-row
+                      data-key={p.activeKey !== undefined ? key : undefined}
                       tabIndex={interactive ? (idx === Math.max(0, focusIdx) ? 0 : -1) : undefined}
                       aria-selected={p.activeKey === key || undefined}
                       onFocus={() => setFocusIdx(idx)}

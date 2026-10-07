@@ -14,14 +14,21 @@ export interface NavPrefs {
 /** Interface languages (src/i18n/locales.ts). */
 export type UiLang = 'ru' | 'uz-Latn' | 'en';
 
+/** The details card next to a list (split view): only its width. */
+export interface DetailPrefs {
+  width?: number;
+}
+
 export type UiPrefs = {
   lang: UiLang;
   nav: Partial<Record<NavPortal, NavPrefs>>;
+  detail: DetailPrefs;
 };
 
 const KEYS: { [K in keyof UiPrefs]: string } = {
   lang: 'mig.ui.lang',
   nav: 'mig.ui.nav',
+  detail: 'mig.ui.detail',
 };
 
 const PORTALS: readonly NavPortal[] = ['staff', 'assist', 'clinic', 'hr'];
@@ -30,6 +37,18 @@ const PORTALS: readonly NavPortal[] = ['staff', 'assist', 'clinic', 'hr'];
 export const NAV_WIDTH = { min: 224, max: 400, default: 288 } as const;
 
 export const clampNavWidth = (w: number): number => Math.min(NAV_WIDTH.max, Math.max(NAV_WIDTH.min, Math.round(w)));
+
+/** Width limits of the details card of a split view, px (one width for every list and portal). */
+export const DETAIL_WIDTH = { min: 360, max: 640, default: 420 } as const;
+
+export const clampDetailWidth = (w: number): number =>
+  Number.isFinite(w) ? Math.min(DETAIL_WIDTH.max, Math.max(DETAIL_WIDTH.min, Math.round(w))) : DETAIL_WIDTH.default;
+
+function parseDetail(parsed: unknown): DetailPrefs | null {
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+  const { width } = parsed as Record<string, unknown>;
+  return typeof width === 'number' && Number.isFinite(width) ? { width: clampDetailWidth(width) } : {};
+}
 
 function parseNav(parsed: unknown): UiPrefs['nav'] | null {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
@@ -60,6 +79,7 @@ export function getPref<K extends keyof UiPrefs>(key: K, fallback: UiPrefs[K]): 
     const parsed: unknown = JSON.parse(raw);
     if (key === 'lang') return (parseLang(parsed) ?? fallback) as UiPrefs[K];
     if (key === 'nav') return (parseNav(parsed) ?? fallback) as UiPrefs[K];
+    if (key === 'detail') return (parseDetail(parsed) ?? fallback) as UiPrefs[K];
     return fallback;
   } catch {
     return fallback;
@@ -83,4 +103,13 @@ export function getNavPrefs(portal: NavPortal): Required<NavPrefs> {
 export function setNavPrefs(portal: NavPortal, patch: NavPrefs): void {
   const all = getPref('nav', {});
   setPref('nav', { ...all, [portal]: { ...all[portal], ...patch } });
+}
+
+/** Width of the details card of a split view: the default unless the person changed it. */
+export function getDetailWidth(): number {
+  return getPref('detail', {}).width ?? DETAIL_WIDTH.default;
+}
+
+export function setDetailWidth(width: number): void {
+  setPref('detail', { width: clampDetailWidth(width) });
 }
