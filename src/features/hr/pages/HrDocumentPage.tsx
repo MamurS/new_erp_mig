@@ -1,4 +1,5 @@
 /* Кабинет HR: a contract or an endorsement — preview of all pages and signing on the client's side. */
+import { SideColumn } from '@/shared/ui/side-column';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -35,32 +36,30 @@ function ContractBody({ c }: { c: ContractView }) {
   return (
     <>
       <HrHeader title={t('hr.contracts.contractN', { number: c.number })} subtitle={t('hr.doc.contractSubtitle', { status: CONTRACT_STATUS_LABEL[c.status], total: formatMoney(c.params.total) })} actions={<DocPrintButton input={() => contractDocument(c)} />} />
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        {doc && <DocPreview doc={doc} label={t('common.contract')} />}
-        <div className="flex flex-col gap-5">
-          {['sent', 'signing', 'signed', 'active'].includes(c.status) && <SigningPanel kind="contracts" doc={c} mode="hr" printInput={() => contractDocument(c)} />}
-          {canUpload && (
-            <HrCard>
-              <HrSectionTitle className="mb-1">{t('hr.doc.annex2')}</HrSectionTitle>
-              <p className="mb-3 text-[14px] text-muted">
-                {c.insuredCount ? t('hr.doc.loaded', { n: c.insuredCount }) : t('hr.doc.notLoaded')} {t('hr.doc.format')} <code>{POLICY_CSV_HEADER.join(', ')}</code>.
-              </p>
-              <CsvFileButton
-                label={c.insuredCount ? t('hr.doc.replaceList') : t('hr.doc.uploadList')}
-                ariaLabel={t('hr.doc.listFile')}
-                busy={upload.isPending}
-                maxBytes={5 * 1024 * 1024}
-                onText={(csv) =>
-                  void upload
-                    .mutateAsync({ id: c.id, csv })
-                    .then(() => toast.success(t('hr.doc.listUploaded')))
-                    .catch((e: unknown) => toast.error(errorMessage(e)))
-                }
-              />
-            </HrCard>
-          )}
-        </div>
-      </div>
+      {doc && <DocPreview doc={doc} label={t('common.contract')} />}
+      <SideColumn label={t('hr.doc.actions')} width={420} testId="hr-doc-column" bodyClassName="gap-5">
+        {['sent', 'signing', 'signed', 'active'].includes(c.status) && <SigningPanel kind="contracts" doc={c} mode="hr" printInput={() => contractDocument(c)} />}
+        {canUpload && (
+          <HrCard>
+            <HrSectionTitle className="mb-1">{t('hr.doc.annex2')}</HrSectionTitle>
+            <p className="mb-3 text-[14px] text-muted">
+              {c.insuredCount ? t('hr.doc.loaded', { n: c.insuredCount }) : t('hr.doc.notLoaded')} {t('hr.doc.format')} <code>{POLICY_CSV_HEADER.join(', ')}</code>.
+            </p>
+            <CsvFileButton
+              label={c.insuredCount ? t('hr.doc.replaceList') : t('hr.doc.uploadList')}
+              ariaLabel={t('hr.doc.listFile')}
+              busy={upload.isPending}
+              maxBytes={5 * 1024 * 1024}
+              onText={(csv) =>
+                void upload
+                  .mutateAsync({ id: c.id, csv })
+                  .then(() => toast.success(t('hr.doc.listUploaded')))
+                  .catch((e: unknown) => toast.error(errorMessage(e)))
+              }
+            />
+          </HrCard>
+        )}
+      </SideColumn>
     </>
   );
 }
@@ -75,28 +74,26 @@ function EndorsementBody({ e }: { e: EndorsementView }) {
         subtitle={`${ENDORSEMENT_STATUS_LABEL[e.status]} · ${e.total < 0 ? t('hr.contracts.refund', { amount: formatMoney(-e.total) }) : t('hr.contracts.surcharge', { amount: formatMoney(e.total) })}`}
         actions={<DocPrintButton input={() => endorsementDocument(e)} />}
       />
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        {doc && <DocPreview doc={doc} label={t('hr.doc.endorsement')} />}
-        <div className="flex flex-col gap-5">
-          <HrCard>
-            <HrSectionTitle className="mb-2">{t('hr.doc.calculation')}</HrSectionTitle>
-            <TableScroll>
-            <ul className="divide-y divide-border text-[14px]">
-              {e.lines.map((l) => (
-                <li key={l.changeRequestId} className="flex justify-between gap-3 py-2">
-                  <span>
-                    {l.description}
-                    <span className="block text-[12px] text-muted">{tm(l.formula)}</span>
-                  </span>
-                  <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span>
-                </li>
-              ))}
-            </ul>
-            </TableScroll>
-          </HrCard>
-          <SigningPanel kind="endorsements" doc={e} mode="hr" printInput={() => endorsementDocument(e)} />
-        </div>
-      </div>
+      {doc && <DocPreview doc={doc} label={t('hr.doc.endorsement')} />}
+      <SideColumn label={t('hr.doc.actions')} width={420} testId="hr-doc-column" bodyClassName="gap-5">
+        <HrCard>
+          <HrSectionTitle className="mb-2">{t('hr.doc.calculation')}</HrSectionTitle>
+          <TableScroll>
+          <ul className="divide-y divide-border text-[14px]">
+            {e.lines.map((l) => (
+              <li key={l.changeRequestId} className="flex justify-between gap-3 py-2">
+                <span>
+                  {l.description}
+                  <span className="block text-[12px] text-muted">{tm(l.formula)}</span>
+                </span>
+                <span className="num whitespace-nowrap">{formatMoney(l.amount)}</span>
+              </li>
+            ))}
+          </ul>
+          </TableScroll>
+        </HrCard>
+        <SigningPanel kind="endorsements" doc={e} mode="hr" printInput={() => endorsementDocument(e)} />
+      </SideColumn>
     </>
   );
 }

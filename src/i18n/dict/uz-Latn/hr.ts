@@ -143,6 +143,7 @@ export const hr: Translation<typeof Ru> = {
   'hr.docs.contactManager': 'Menejer bilan bogʻlanish',
   'hr.doc.contractSubtitle': '{status} · umumiy sugʻurta mukofoti {total}',
   'hr.doc.annex2': '2-ilova — sugʻurtalanganlar roʻyxati',
+  'hr.doc.actions': 'Imzolash va amallar',
   'hr.doc.loaded': 'Yuklangan: {n}.',
   'hr.doc.notLoaded': 'Roʻyxat hali yuklanmagan.',
   'hr.doc.format': 'Format xodimlarni import qilishdagidek:',

@@ -1,4 +1,5 @@
 /* One guarantee letter for the assistance doctor: approve up to the authority limit, reject, ask for documents or escalate. */
+import { SideColumn } from '@/shared/ui/side-column';
 import { AiHint } from '@/features/ai/AiHint';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -69,8 +70,8 @@ export default function GuaranteePage() {
           }
         };
         return (
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="flex flex-col gap-4 lg:col-span-2">
+          <>
+            <div className="flex min-w-0 flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-[22px] font-bold">{t('assist.guarantee.heading', { number: g.number })}</h1>
                 <Chip kind={GUARANTEE_STATUS_CHIP[g.status]}>{GUARANTEE_STATUS_LABEL[g.status]}</Chip>
@@ -155,6 +156,7 @@ export default function GuaranteePage() {
                 </Card>
               )}
             </div>
+            <SideColumn label={t('assist.guarantee.history')} width={360} testId="guarantee-history-column">
             <Card title={t('assist.guarantee.history')}>
               {g.approvals.length === 0 ? (
                 <p className="text-muted">{t('assist.guarantee.noDecisions')}</p>
@@ -168,7 +170,8 @@ export default function GuaranteePage() {
                 </ul>
               )}
             </Card>
-          </div>
+            </SideColumn>
+          </>
         );
       }}
     </QueryState>

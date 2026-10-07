@@ -57,6 +57,7 @@ MIG staff, HR, clinics and assistance companies sign in with an email, a passwor
 
 - A click on a column header sorts, the buttons above the table filter. The row with the column names stays visible while scrolling.
 - A click on a row opens a card on the right. The ↑ and ↓ arrows switch between records, Enter opens the full card, Esc closes it. The table stays available meanwhile.
+- Side columns — the card on the right, the dashboard blocks (“Needs attention”, “Integrations”), the data and history of full cards, the document preview of the commercial proposal and contract editors — do not move when the page scrolls. A long column scrolls by itself: its header and buttons stay in place, and the heading of the current section stays under the column header until the whole section has scrolled by. On a screen narrower than 1280 pixels the card opens over the table, and the other columns move below the main content.
 - The “Columns” button hides unneeded columns, “Export to CSV” downloads the table (without PINFL, phone numbers and diagnoses).
 
 ### Session {#session}

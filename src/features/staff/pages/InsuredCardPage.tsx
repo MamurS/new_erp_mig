@@ -1,4 +1,6 @@
 import { t } from '@/i18n';
+import { SideColumn } from '@/shared/ui/side-column';
+import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, CalendarPlus, FilePlus2, FileText, SlidersHorizontal, Plus } from 'lucide-react';
@@ -125,7 +127,7 @@ export default function InsuredCardPage() {
           <TabsTrigger value="access">{t('staff.insuredCard.tab.access')}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
-          <div className="grid gap-4 xl:grid-cols-[minmax(min-content,1fr)_380px]">
+          <StickySectionsCtx.Provider value>
             <div className="flex min-w-0 flex-col gap-4">
               <Card title={t('staff.insuredCard.limitsByCategory')}>
                 <LimitsBlock insuredId={p.id} />
@@ -158,6 +160,8 @@ export default function InsuredCardPage() {
               )}
               <MedicalCard insuredId={p.id} />
             </div>
+          </StickySectionsCtx.Provider>
+          <SideColumn label={t('staff.insuredCard.data')} width={380} testId="insured-data-column">
             <Card title={t('staff.insuredCard.data')}>
               <dl className="divide-y divide-border-soft">
                 <RevealField insuredId={p.id} field="pinfl" masked={p.pinflMasked} canReveal={canReveal} claimNumber={openClaim?.number} />
@@ -198,7 +202,7 @@ export default function InsuredCardPage() {
               </dl>
               <p className="mt-3 text-[12px] text-muted">{t('staff.insuredCard.viewsAudited')}</p>
             </Card>
-          </div>
+          </SideColumn>
         </TabsContent>
         <TabsContent value="requests">
           <RequestsTab insuredId={p.id} showClaims={canClaims} />

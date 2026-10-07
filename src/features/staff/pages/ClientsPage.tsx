@@ -1,4 +1,5 @@
 import { t, tm, tp, type I18nKey } from '@/i18n';
+import { SideSection } from '@/shared/ui/sticky-sections';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDownUp, Columns3, Mail } from 'lucide-react';
@@ -301,8 +302,7 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
             <MiniKpi label={t('staff.clients.col.loss')} value={c.lossRatio === null ? '—' : formatPercent(c.lossRatio)} tone={(c.lossRatio ?? 0) >= lossWarn ? 'warning' : 'default'} />
             <MiniKpi label={t('common.program')} value={c.program ? PROGRAM_LABEL[c.program] : '—'} />
           </div>
-          <section>
-            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.col.renewal')}</h3>
+          <SideSection title={t('staff.clients.col.renewal')} testId="client-panel-renewal">
             <p className="text-muted">
               {c.renewalDate ? (
                 <>
@@ -314,17 +314,15 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
                 t('staff.clients.noActivePolicy')
               )}
             </p>
-          </section>
-          <section>
-            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.hrContact')}</h3>
+          </SideSection>
+          <SideSection title={t('staff.clients.hrContact')} testId="client-panel-hr">
             <dl>
               <Kv label={t('staff.clients.hrName')}>{c.hrContact.name}</Kv>
               <Kv label={t('common.phone')}><span className="num">{c.hrContact.phoneMasked}</span></Kv>
               <Kv label={t('common.email')}>{c.hrContact.emailMasked}</Kv>
             </dl>
-          </section>
-          <section>
-            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.activity')}</h3>
+          </SideSection>
+          <SideSection title={t('staff.clients.activity')} testId="client-panel-activity">
             <ol className="flex flex-col gap-2 border-l border-border pl-3">
               {c.activity.map((a, i) => (
                 <li key={i}>
@@ -333,7 +331,7 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
                 </li>
               ))}
             </ol>
-          </section>
+          </SideSection>
           <HrLetterDialog open={letterOpen} onOpenChange={setLetterOpen} clientId={c.id} clientName={c.name} />
         </div>
       )}

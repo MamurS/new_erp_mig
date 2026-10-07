@@ -1,4 +1,5 @@
 /* «Сделки» (LIFECYCLE_SPEC §3): the sales funnel as a board by stages, or a table; new leads. */
+import { SideSection } from '@/shared/ui/sticky-sections';
 import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -330,8 +331,7 @@ function DealPanel({ id, onClose, onOpen }: { id: string; onClose: () => void; o
             <Kv label={t('common.premium')}>{d.premium ? <span className="num">{formatMoney(d.premium)}</span> : '—'}</Kv>
             <Kv label={t('common.start')}>{d.expectedStart ? <span className="num">{formatDate(d.expectedStart)}</span> : '—'}</Kv>
           </dl>
-          <section>
-            <h3 className="mb-1 text-[14px] font-bold">{t('staffLc.deal.events')}</h3>
+          <SideSection title={t('staffLc.deal.events')} testId="deal-panel-events">
             <ol className="flex flex-col gap-2 border-l border-border pl-3">
               {[...d.events]
                 .reverse()
@@ -345,7 +345,7 @@ function DealPanel({ id, onClose, onOpen }: { id: string; onClose: () => void; o
                   </li>
                 ))}
             </ol>
-          </section>
+          </SideSection>
         </div>
       )}
     </DetailPanel>

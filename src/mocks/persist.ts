@@ -11,10 +11,10 @@ const SESS_KEY = 'mig.mock.sessions';
  * Version of the seed and of the stored shape. Bump it when the seed changes in a way a saved state
  * must not survive (2: Latin names, legal form codes, ASCII document numbers; 3: migration batches and the
  * transfer marks of records; 4: premiums of transferred insured persons and the per-contract premium check; 5: family members as insured persons,
- * family consents and requests): a stored database with
+ * family consents and requests; 7: the work log of the demo client): a stored database with
  * another or no version is discarded and the fresh seed is used.
  */
-export const MOCK_DB_VERSION = 6;
+export const MOCK_DB_VERSION = 7;
 
 type Snapshot = Omit<Db, 'sessions'> & { schemaVersion?: number };
 

@@ -307,6 +307,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.claimCard.fiscalHint':
     'Server tomonidan chek fotosuratidan aniqlandi. Soliq QR kodi boʻyicha haqiqiylik backendda tekshiriladi.',
   'staff.claimCard.attachments': 'Ilovalar',
+  'staff.claimCard.dataColumn': 'Zarar maʼlumotlari',
   'staff.claimCard.noAttachments': 'Ilovalar yoʻq',
   'staff.claimCard.unavailable': '{action} mavjud emas: {reason}',
   'staff.claimCard.limitCheck': 'Limitni tekshirish',

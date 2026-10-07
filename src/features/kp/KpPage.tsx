@@ -2,6 +2,7 @@
  * Commercial offer screen (KP_SPEC §9): parameters on the left, live preview of all pages on the right.
  * Routes: /staff/clients/:clientId/kp/new?policyId=&from=  and  /staff/kp/:kpId
  */
+import { SideColumn } from '@/shared/ui/side-column';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
@@ -237,7 +238,7 @@ function KpEditor({ clientId, policyId, initial, letter, kp }: { clientId: strin
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="min-w-0 max-w-[720px]">
         <form
           className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4"
           aria-label={t('kp.editor.form')}
@@ -335,8 +336,10 @@ function KpEditor({ clientId, policyId, initial, letter, kp }: { clientId: strin
             })}
           </p>
         </form>
-        <KpPreview frameRef={frame} title={doc.title} html={doc.html} />
       </div>
+      <SideColumn label={t('kp.preview.label')} width="55%" testId="kp-preview-column">
+        <KpPreview frameRef={frame} title={doc.title} html={doc.html} />
+      </SideColumn>
       <ConfirmDialog
         open={confirmRevoke}
         onOpenChange={setConfirmRevoke}

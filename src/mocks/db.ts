@@ -151,6 +151,8 @@ export interface ClinicEventRow {
 
 export interface ClientRow extends Omit<Client, 'hrContact' | 'insuredCount'> {
   hrContact: { name: string; phone: string; email: string };
+  /** Manager's log of work with the client (calls, meetings, letters): shown in «Активность». */
+  log?: { at: string; text: string }[];
 }
 export interface InsuredRow extends Omit<Insured, 'birthDateMasked' | 'pinflMasked' | 'phoneMasked' | 'family' | 'principalName'> {
   /** Date of birth (ISO); the API sends it masked (`birthDateMasked`). */

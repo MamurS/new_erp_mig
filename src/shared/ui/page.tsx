@@ -1,8 +1,9 @@
 import { t } from '@/i18n';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
+import { useHeightVar, useStickyDefault } from './sticky-sections';
 
 export function PageHeader({ title, subtitle, actions, className }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; className?: string }) {
   return (
@@ -16,11 +17,36 @@ export function PageHeader({ title, subtitle, actions, className }: { title: Rea
   );
 }
 
-export function Card({ title, actions, children, className, bodyClassName }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) {
+/**
+ * A titled block. Inside a side column or a details card (or with `sticky`) its heading pins under the
+ * column header while the card scrolls by (sticky-sections.tsx).
+ */
+export function Card({
+  title,
+  actions,
+  children,
+  className,
+  bodyClassName,
+  sticky,
+  testId,
+}: {
+  title?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  sticky?: boolean;
+  testId?: string;
+}) {
+  const inColumn = useStickyDefault();
+  const pin = (sticky ?? inColumn) && !!(title || actions);
+  const section = useRef<HTMLElement>(null);
+  const head = useRef<HTMLDivElement>(null);
+  useHeightVar(head, section, '--section-head-h', pin);
   return (
-    <section className={cn('rounded-card border border-border bg-surface', className)}>
+    <section ref={section} data-sticky-section={pin || undefined} data-testid={testId} className={cn('rounded-card border border-border bg-surface', className)}>
       {(title || actions) && (
-        <div className="flex items-center justify-between gap-2 border-b border-border-soft px-4 py-2.5">
+        <div ref={head} data-section-head={pin || undefined} className={cn('flex items-center justify-between gap-2 border-b border-border-soft px-4 py-2.5', pin && 'rounded-t-card bg-surface')}>
           {title && <h2 className="text-[14px] font-bold">{title}</h2>}
           {actions}
         </div>

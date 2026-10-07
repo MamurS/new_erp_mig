@@ -303,6 +303,7 @@ export const staff: Translation<typeof Ru> = {
   'staff.claimCard.fiscalHint':
     'Recognized by the server from the receipt photo. Authenticity via the tax QR code is checked on the backend.',
   'staff.claimCard.attachments': 'Attachments',
+  'staff.claimCard.dataColumn': 'Claim data',
   'staff.claimCard.noAttachments': 'No attachments',
   'staff.claimCard.unavailable': '{action} unavailable: {reason}',
   'staff.claimCard.limitCheck': 'Limit check',

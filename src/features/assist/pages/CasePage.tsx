@@ -1,4 +1,5 @@
 /* One call-centre case: status, resolution, links to the appointment, letter or claim. */
+import { SideColumn } from '@/shared/ui/side-column';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Lock } from 'lucide-react';
@@ -55,8 +56,8 @@ export default function CasePage() {
           }
         };
         return (
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="flex flex-col gap-4 lg:col-span-2">
+          <>
+            <div className="flex min-w-0 flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-[22px] font-bold">{t('assist.case.heading', { number: c.number })}</h1>
                 <CaseStatus status={c.status} />
@@ -107,6 +108,7 @@ export default function CasePage() {
                 </Card>
               )}
             </div>
+            <SideColumn label={t('assist.case.details')} width={360} testId="case-details-column">
             <Card title={t('assist.case.details')}>
               <dl className="divide-y divide-border-soft">
                 <Kv label={t('common.type')}>{CASE_TYPE_LABEL[c.type]}</Kv>
@@ -133,9 +135,10 @@ export default function CasePage() {
                 )}
               </dl>
             </Card>
+            </SideColumn>
             {booking && <BookDialog insuredId={c.insuredId} caseId={c.id} onClose={() => setBooking(false)} />}
             {requesting && <RequestGuaranteeDialog insuredId={c.insuredId} caseId={c.id} onClose={() => setRequesting(false)} />}
-          </div>
+          </>
         );
       }}
     </QueryState>

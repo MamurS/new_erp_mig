@@ -1,4 +1,5 @@
 /* Chats with insured persons (§5.1): messages from the app of the assistance's clients land here. */
+import { SideColumn } from '@/shared/ui/side-column';
 import { useState } from 'react';
 import { useAssistSend, useAssistThread, useAssistThreads } from '@/shared/api/queries/assist';
 import { errorMessage } from '@/shared/api/client';
@@ -36,7 +37,7 @@ export default function ChatPage() {
   return (
     <>
       <PageHeader title={t('assist.chat.title')} />
-      <div className="grid min-h-[480px] gap-4 lg:grid-cols-[320px_1fr]">
+      <SideColumn position="start" label={t('assist.chat.dialogs')} testId="chat-threads-column" inlineClassName="mt-0 mb-4">
         <div className="rounded-card border border-border bg-surface">
           {threads.isLoading ? (
             <SkeletonRows rows={5} />
@@ -58,7 +59,8 @@ export default function ChatPage() {
             </ul>
           )}
         </div>
-        <div className="flex flex-col rounded-card border border-border bg-surface">
+      </SideColumn>
+        <div className="flex min-h-[480px] flex-col rounded-card border border-border bg-surface">
           <div className="flex-1 space-y-2 overflow-y-auto p-4" data-testid="assist-chat">
             {(thread.data ?? []).map((m) => (
               <div key={m.id} className={cn('max-w-[75%] rounded-card px-3 py-2', m.from === 'operator' ? 'ml-auto bg-accent-soft' : 'bg-rail')}>
@@ -82,7 +84,6 @@ export default function ChatPage() {
             </form>
           )}
         </div>
-      </div>
     </>
   );
 }

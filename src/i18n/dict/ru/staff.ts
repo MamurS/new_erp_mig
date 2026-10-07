@@ -299,6 +299,7 @@ export const staff = {
   'staff.claimCard.fiscalHint':
     'Распознано сервером по фото чека. Подлинность по QR налоговой проверяется на бэкенде.',
   'staff.claimCard.attachments': 'Вложения',
+  'staff.claimCard.dataColumn': 'Данные убытка',
   'staff.claimCard.noAttachments': 'Вложений нет',
   'staff.claimCard.unavailable': '{action} недоступно: {reason}',
   'staff.claimCard.limitCheck': 'Проверка лимита',

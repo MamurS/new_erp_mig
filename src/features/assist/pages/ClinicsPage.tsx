@@ -1,4 +1,5 @@
 /* Network clinics and their prices for this assistance (§5.3): the pair «clinic + payer». Read-only. */
+import { SideColumn } from '@/shared/ui/side-column';
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { useState } from 'react';
 import { useAssistClinics } from '@/shared/api/queries/assist';
@@ -25,7 +26,8 @@ export default function ClinicsPage() {
         {(list) => {
           const current = list.find((c) => c.clinicId === active) ?? list[0];
           return (
-            <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+            <>
+              <SideColumn position="start" label={t('assist.clinics.aria')} testId="assist-clinics-column" inlineClassName="mt-0 mb-4">
               <ul className="rounded-card border border-border bg-surface" aria-label={t('assist.clinics.aria')}>
                 {list.map((c) => (
                   <li key={c.clinicId}>
@@ -42,6 +44,7 @@ export default function ClinicsPage() {
                   </li>
                 ))}
               </ul>
+              </SideColumn>
               {current && (
                 <div className="rounded-card border border-border bg-surface">
                   <div className="border-b border-border-soft px-4 py-2.5 font-bold">
@@ -74,7 +77,7 @@ export default function ClinicsPage() {
                   </TableScroll>
                 </div>
               )}
-            </div>
+            </>
           );
         }}
       </QueryState>

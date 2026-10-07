@@ -1,4 +1,6 @@
 /* Доп. соглашение (LIFECYCLE_SPEC §11–12): calculation per line with its formula, preview, approval and signing. */
+import { SideColumn } from '@/shared/ui/side-column';
+import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -202,7 +204,7 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
               : t('staffLc.endorsement.signed')}
         </p>
       )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(min-content,1fr)_minmax(min-content,1fr)]">
+      <StickySectionsCtx.Provider value>
         <div className="flex min-w-0 flex-col gap-4">
           <Card title={t('staffLc.endorsement.calculation')} bodyClassName="p-0">
             <TableScroll>
@@ -240,8 +242,12 @@ function EndorsementCard({ e }: { e: EndorsementView }) {
           </Card>
           <EndorsementClauses e={e} editable={canManage && e.status === 'draft'} />
         </div>
-        <div className="min-w-0">{doc && <DocPreview doc={doc} label={t('staffLc.endorsement.preview')} className="sticky top-16" />}</div>
-      </div>
+      </StickySectionsCtx.Provider>
+      {doc && (
+        <SideColumn label={t('staffLc.endorsement.preview')} width="45%" testId="endorsement-preview-column">
+          <DocPreview doc={doc} label={t('staffLc.endorsement.preview')} />
+        </SideColumn>
+      )}
       {signingStage && (
         <div className="mt-4">
           <SigningPanel kind="endorsements" doc={e} mode="staff" printInput={() => endorsementDocument(e)} />
