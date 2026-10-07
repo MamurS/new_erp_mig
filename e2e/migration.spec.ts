@@ -29,7 +29,7 @@ async function switchTo(page: Page, label: string): Promise<void> {
 }
 
 async function newBatch(page: Page): Promise<string> {
-  await page.getByRole('link', { name: 'Перенос портфеля' }).click();
+  await page.getByTestId('sidebar').getByRole('link', { name: 'Перенос портфеля' }).click();
   await expect(page.getByRole('heading', { name: 'Перенос действующего портфеля', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Новый пакет' }).click();
   const dialog = page.getByRole('dialog', { name: 'Новый пакет' });
@@ -73,7 +73,7 @@ test('migration: the demo batch is transferred, reconciled, found by the old num
   failOnDialog(page);
   await loginStaff(page, 'admin');
   const url = await (async () => {
-    await page.getByRole('link', { name: 'Перенос портфеля' }).click();
+    await page.getByTestId('sidebar').getByRole('link', { name: 'Перенос портфеля' }).click();
     // Demo build: the files of the previous system can be downloaded from the page.
     await expect(page.getByTestId('migration-samples')).toBeVisible();
     return prepareDemoBatch(page);
@@ -135,7 +135,8 @@ test('migration: the demo batch is transferred, reconciled, found by the old num
   await expect(page.getByTestId('migrated-scan')).toContainText('Скан ещё не приложен');
   await page.keyboard.press('Control+k');
   await page.getByPlaceholder(/номер полиса/).fill('MIG-2026/0502');
-  await page.getByRole('option', { name: /MIG-2026\/0502/ }).click();
+  // The contract found, not the «Спросить в справке: «…»» row that repeats the query.
+  await page.getByRole('option', { name: /MIG-2026\/0502/ }).and(page.locator(':not([data-testid="palette-help-ask"])')).click();
   await expect(page.getByTestId('migrated-mark')).toContainText('Старый № MIG-2026/0502');
 
   // The insured person of the batch signs in: remaining limit = plan limit − used before the transfer.
@@ -161,7 +162,7 @@ test('migration: a batch is rolled back while untouched; a new action on its dat
   // A contract entered manually becomes a one-row batch; the same checks as a CSV row.
   const clients = (await api(page, 'GET', '/clients?pageSize=100')).data as { items: { id: string; inn: string; activePolicyId?: string; status: string }[] };
   const free = clients.items.find((c) => !c.activePolicyId)!;
-  await page.getByRole('link', { name: 'Перенос портфеля' }).click();
+  await page.getByTestId('sidebar').getByRole('link', { name: 'Перенос портфеля' }).click();
   await page.getByRole('button', { name: 'Ввести договор вручную' }).click();
   const dialog = page.getByRole('dialog', { name: 'Договор вручную' });
   await dialog.getByLabel('Дата переноса').fill(DATE);

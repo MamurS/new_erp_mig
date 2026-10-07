@@ -75,6 +75,21 @@ Roʻyxat, yorliq yoki boʻlim maʼlumotlar hali kiritilmagani uchun boʻsh boʻl
 
 Agar roʻyxat filtrlar yoki qidiruv sababli boʻsh boʻlsa, avvalgidek «Hech narsa topilmadi» koʻrsatiladi.
 
+### Maʼlumotnoma {#using-help}
+
+<!-- audience: all -->
+
+Maʼlumotnoma yon panel pastidagi «Maʼlumotnoma» bandi, yuqori paneldagi «?» belgisi (joriy ekran haqidagi maqolada) yoki ilovada profildagi «Yordam» bandi orqali ochiladi. Siz faqat rolingiz uchun mavjud maqolalarni koʻrasiz.
+
+- **Yuqorida bitta maydon — «Atamani toping yoki savol bering».** Yozayotganingizda maydon ostida natijalar chiqadi: «Atamalar» va «Maqolalar», moslik ajratib koʻrsatiladi.
+- **Roʻyxatning birinchi qatori — «Soʻrash: «…»».** U yoʻriqnoma-javob beradi: qisqa javob, qadamlar, ogohlantirishlar, kichik boʻlimlarga «Batafsil» havolalari va «Boʻlimni ochish» tugmalari. Javob ostida — «Foydali» yoki «Foydali emas».
+- **Savolga javob oʻzi beriladi.** Matn savolga oʻxshasa — «?» bilan tugasa, «qanday», «qayerda», «nima», «kim», «nega», «qachon» (shuningdek ruscha va inglizcha savol soʻzlari) soʻzlari bilan boshlansa yoki besh soʻzdan uzun boʻlsa — yozishda toʻxtaganingizdan keyin javob natijalar ustida karta boʻlib chiqadi. Qisqa soʻrov («STIR», «JShShIR») faqat qidiradi.
+- **Klaviatura:** ↑ va ↓ — qatorlar boʻylab, qatorda Enter — uni ochish, qator tanlanmagan holda Enter — soʻrash, Esc — roʻyxatni yopish.
+- **Javob boʻlmasa**, maʼlumotnoma buni ochiq aytadi — «Maʼlumotnomada bu savolga javob yoʻq» — va kuratorga (yoki portalingiz qoʻllab-quvvatlash xizmatiga) yozishni taklif qiladi.
+- **Javoblar administrator tomonidan oʻchirilgan boʻlsa**, «Soʻrash» qatori boʻlmaydi, qidiruv ishlaydi.
+- **«PDF yuklab olish»** — butun maʼlumotnoma yoki joriy maqola, faqat rolingiz uchun mavjud boʻlimlar.
+- MIG portalida **Ctrl+K**: «Maʼlumotnoma» guruhining birinchi qatori — «Maʼlumotnomadan soʻrash: «…»»; u maʼlumotnomani tayyor javob bilan ochadi. <!-- audience: staff -->
+
 ### Seans {#session}
 
 <!-- audience: all -->

@@ -66,8 +66,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/staff/admin/parameters': 'admin-params',
   '/staff/admin/migration': 'portfolio-migration',
   '/staff/admin/migration/:batchId': 'migration-apply',
-  '/staff/help': 'getting-started',
-  '/staff/help/:anchor': 'getting-started',
+  '/staff/help': 'using-help',
+  '/staff/help/:anchor': 'using-help',
   // HR cabinet
   '/hr': 'guide-hr',
   '/hr/employees/new': 'enrolment',
@@ -81,8 +81,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/hr/contracts/:contractId': 'signing-methods',
   '/hr/endorsements/:endorsementId': 'signing-methods',
   '/hr/stats': 'guide-hr',
-  '/hr/help': 'guide-hr',
-  '/hr/help/:anchor': 'guide-hr',
+  '/hr/help': 'using-help',
+  '/hr/help/:anchor': 'using-help',
   // clinic cabinet
   '/clinic': 'guide-clinic',
   '/clinic/check': 'patient-check',
@@ -94,8 +94,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/clinic/registries/:registryId': 'monthly-registry',
   '/clinic/users': 'guide-clinic',
   '/clinic/integration': 'admin-integrations',
-  '/clinic/help': 'guide-clinic',
-  '/clinic/help/:anchor': 'guide-clinic',
+  '/clinic/help': 'using-help',
+  '/clinic/help/:anchor': 'using-help',
   // assistance portal
   '/assist': 'guide-assistance',
   '/assist/insured': 'assistance-daily',
@@ -113,8 +113,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/assist/clinics': 'guide-assistance',
   '/assist/users': 'guide-assistance',
   '/assist/integration': 'admin-integrations',
-  '/assist/help': 'guide-assistance',
-  '/assist/help/:anchor': 'guide-assistance',
+  '/assist/help': 'using-help',
+  '/assist/help/:anchor': 'using-help',
   // the insured person's app
   '/app': 'guide-insured',
   '/app/card': 'guide-insured',
@@ -129,8 +129,8 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   '/app/certificate': 'guide-insured',
   '/app/family': 'family',
   '/app/coverage': 'coverage-check',
-  '/app/help': 'guide-insured',
-  '/app/help/:anchor': 'guide-insured',
+  '/app/help': 'using-help',
+  '/app/help/:anchor': 'using-help',
 };
 
 export type Portal = 'staff' | 'hr' | 'clinic' | 'assist' | 'app';

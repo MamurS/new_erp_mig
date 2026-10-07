@@ -42,16 +42,16 @@ test('«?» on the clients list opens the article about clients; the sidebar has
 test('search «гп» finds «Гарантийное письмо» (terms and articles); arrows and Enter open it; Ctrl+K has a «Справка» group', async ({ page }) => {
   await loginStaff(page, 'operator');
   await page.goto('/staff/help');
-  const box = page.getByRole('combobox', { name: 'Поиск по справке' });
+  const box = page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' });
   await box.fill('гп');
   const list = page.getByRole('listbox', { name: 'Результаты поиска по справке' });
   await expect(list.getByRole('group', { name: 'Термины' }).getByRole('option').first()).toContainText(/гарантийное письмо/i);
   const articles = list.getByRole('group', { name: 'Статьи' });
   await expect(articles.getByRole('option', { name: /^Гарантийное письмо/ }).first()).toBeVisible();
   await expect(list.locator('mark').first()).toBeVisible();
-  // ↓ moves to the first article (after the terms); Enter opens it.
+  // ↓ moves to the first article (after «Спросить» and the terms); Enter opens it.
   const terms = await list.getByRole('group', { name: 'Термины' }).getByRole('option').count();
-  for (let i = 0; i < terms; i++) await box.press('ArrowDown');
+  for (let i = 0; i < terms + 2; i++) await box.press('ArrowDown');
   await expect(articles.getByRole('option').first()).toHaveAttribute('aria-selected', 'true');
   await box.press('Enter');
   // «Гарантийное письмо» is both a row of the status reference and a subsection of «Медицинское обслуживание».
@@ -71,8 +71,8 @@ test('«как разнести платёж от другой компании�
   await loginStaff(page, 'accountant');
   await page.getByTestId('sidebar').getByRole('link', { name: 'Справка' }).click();
   await expect(page).toHaveURL(/\/staff\/help$/);
-  await page.getByRole('textbox', { name: 'Задайте вопрос своими словами' }).fill('как разнести платёж от другой компании');
-  await page.getByRole('button', { name: 'Спросить' }).click();
+  // A question is answered by itself after a pause in typing.
+  await page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' }).fill('как разнести платёж от другой компании');
   const answer = page.getByTestId('help-answer');
   await expect(answer.getByTestId('help-answer-steps').locator('li').first()).toBeVisible();
   const source = answer.getByTestId('help-answer-sources').locator('a[href^="/staff/help/finance"]').first();
@@ -106,8 +106,8 @@ test('«Открыть раздел» only with access to the screen', async ({ 
 test('a question without an answer → «Написать куратору»; the admin sees it in /staff/admin/ai → «Справка»', async ({ page }) => {
   await loginStaff(page, 'admin');
   await page.goto('/staff/help');
-  await page.getByRole('textbox', { name: 'Задайте вопрос своими словами' }).fill('как приготовить плов на костре');
-  await page.getByRole('button', { name: 'Спросить' }).click();
+  await page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' }).fill('как приготовить плов на костре');
+  await page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' }).press('Enter');
   const none = page.getByTestId('help-no-answer');
   await expect(none.getByText('В справке нет ответа на этот вопрос')).toBeVisible();
   await expect(none.getByRole('link', { name: 'Написать куратору' })).toHaveAttribute('href', /^mailto:/);
@@ -181,17 +181,18 @@ for (const role of ['hr', 'clinic_admin', 'insured'] as const) {
     await expect(page.getByText('Статья не найдена или недоступна для вашей роли.')).toBeVisible();
 
     // Search.
-    const box = page.getByRole('combobox', { name: 'Поиск по справке' });
+    const box = page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' });
     await box.fill('признаки мошенничества');
     const list = page.getByRole('listbox', { name: 'Результаты поиска по справке' });
     await expect(list).toBeVisible();
-    await expect(list.getByText('В справке ничего не найдено').or(list.getByRole('option').first())).toBeVisible();
-    await expect(list).not.toContainText(FRAUD);
+    await expect(list.getByText('В справке ничего не найдено').or(list.getByRole('group').getByRole('option').first()).first()).toBeVisible();
+    // Only the results: the «Спросить: «…»» row repeats what was typed.
+    expect((await list.locator('[role="group"]').allInnerTexts()).join(' ')).not.toMatch(FRAUD);
     await box.press('Escape');
 
     // «Задать вопрос».
-    await page.getByRole('textbox', { name: 'Задайте вопрос своими словами' }).fill('какие признаки мошенничества по убыткам');
-    await page.getByRole('button', { name: 'Спросить' }).click();
+    await box.fill('какие признаки мошенничества по убыткам');
+    await box.press('Enter');
     const reply = page.getByTestId('help-answer').or(page.getByTestId('help-no-answer'));
     await expect(reply).toBeVisible();
     await expect(reply).not.toContainText(FRAUD);
@@ -211,8 +212,8 @@ for (const role of ['hr', 'clinic_admin', 'insured'] as const) {
 test('the insured person without the answer gets «Написать нам» to the app chat', async ({ page }) => {
   await login(page, 'insured');
   await page.goto('/app/help');
-  await page.getByRole('textbox', { name: 'Задайте вопрос своими словами' }).fill('как приготовить плов на костре');
-  await page.getByRole('button', { name: 'Спросить' }).click();
+  await page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' }).fill('как приготовить плов на костре');
+  await page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' }).press('Enter');
   await page.getByTestId('help-no-answer').getByRole('link', { name: 'Написать нам' }).click();
   await expect(page).toHaveURL(/\/app\/chat$/);
 });
