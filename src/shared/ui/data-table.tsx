@@ -73,9 +73,28 @@ export interface DataTableProps<T> {
   density?: 'staff' | 'client';
 }
 
-/** Brings a row into view inside the content area; rows keep clear of the pinned header and totals/pager (scroll-margin in index.css). */
-function reveal(el: HTMLElement | undefined): void {
-  el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+/**
+ * Brings a row into view inside the portal content area, clear of the pinned header above it and the
+ * pinned totals row and pager below it (Chrome's scrollIntoView ignores scroll-margin for a row that is
+ * already inside the scrollport, so the offsets are applied here). Elsewhere: the browser's 'nearest'.
+ */
+function reveal(row: HTMLElement | undefined): void {
+  if (!row) return;
+  const scroller = row.closest<HTMLElement>('[data-content-scroll]');
+  if (!scroller) {
+    row.scrollIntoView?.({ block: 'nearest' });
+    return;
+  }
+  const table = row.closest('table');
+  const head = table?.tHead?.offsetHeight ?? 0;
+  const foot = table?.tFoot?.offsetHeight ?? 0;
+  const pager = parseFloat(getComputedStyle(row).getPropertyValue('--pager-h')) || 0;
+  const box = scroller.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  const top = box.top + head;
+  const bottom = box.top + scroller.clientHeight - foot - pager;
+  if (r.top < top) scroller.scrollTop -= top - r.top;
+  else if (r.bottom > bottom) scroller.scrollTop += Math.min(r.bottom - bottom, r.top - top);
 }
 
 /** Table with server sort, pagination, loading/empty/error states and ↑/↓/Enter/Esc navigation. */

@@ -265,8 +265,8 @@
     background: var(--color-surface);
   }
   /*
-   * A row brought into view (↑/↓ in a split view, a direct ?panel= link) stops below the pinned header
-   * and above the pinned totals row and pagination instead of sliding under them.
+   * A row the browser scrolls to (Tab focus) stops below the pinned header and above the pinned
+   * totals row and pagination. ↑/↓ in DataTable measure the real offsets themselves (reveal()).
    */
   .table-scroll tbody > tr {
     scroll-margin-top: 2.25rem;
