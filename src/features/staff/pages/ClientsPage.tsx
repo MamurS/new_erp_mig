@@ -1,4 +1,5 @@
 import { t, tm, tp, type I18nKey } from '@/i18n';
+import { groupRulesOf, legalFormProblem } from '@/shared/domain/minGroup';
 import { SideSection } from '@/shared/ui/sticky-sections';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -38,7 +39,7 @@ import { kpNewPath } from '@/features/kp/paths';
 import { useTopbar } from '../topbar';
 import { HrLetterDialog } from '../components/HrLetterDialog';
 import { LossBar, RenewalCell } from '../components/cells';
-import { useDmsParam } from '@/shared/api/queries/params';
+import { useDmsParam, useDmsParamValues } from '@/shared/api/queries/params';
 
 const VIEWS = ['', 'mine', 'q4', 'loss'] as const;
 
@@ -349,7 +350,12 @@ function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     defaultValues: { legalForm: 'llc', name: '', inn: '', status: 'draft' },
     mode: 'onTouched',
   });
+  // DMS only for companies («Клиенты» parameters): the form is checked here and on the server.
+  const rules = groupRulesOf(useDmsParamValues());
+  const legalForm = form.watch('legalForm');
+  const formProblem = legalForm ? legalFormProblem(legalForm, rules) : null;
   const onSubmit = form.handleSubmit(async (v) => {
+    if (formProblem) return;
     try {
       const c = await create.mutateAsync({ ...v, status: v.status ?? 'draft' });
       toast.success(t('staff.clients.added'));
@@ -378,7 +384,7 @@ function CreateClientDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     >
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
         <div className="grid grid-cols-[160px_1fr] gap-3">
-          <Field label={t('staff.clients.legalForm')}>
+          <Field label={t('staff.clients.legalForm')} error={tm(formProblem) || undefined}>
             {(a) => (
               <Select {...a} {...form.register('legalForm')}>
                 <LegalFormOptions />

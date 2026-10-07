@@ -14,6 +14,8 @@ export const next: Translation<typeof Ru> = {
   'next.task.sign_mig': 'Sign the contract for MIG: {what}',
   'next.task.sign_client': 'Sign contract {what}',
   'next.task.invoice_pay': 'Pay the invoice under contract {what}',
+  'next.task.below_min_group': 'Group below the minimum after an exclusion: {what}',
+  'next.action.below_min_group': 'Open the client',
   'next.task.other': 'Have a look: {what}',
   'next.check.census': 'Assessment data',
   'next.check.quoteCalculated': 'Quote calculation',

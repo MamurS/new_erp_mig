@@ -193,6 +193,7 @@ export const hr: Translation<typeof Ru> = {
   'hr.employees.excludeSent': 'Chiqarish arizasi MIGga yuborildi',
   'hr.employees.excludeTitle': 'Xodim chiqarilsinmi?',
   'hr.employees.excludeText': 'Ariza MIGga yuboriladi. Tasdiqlangandan soʻng {name} tanlangan sanadan sugʻurtalangan boʻlmaydi: polis va klinika uchun karta amal qilmay qoladi, shifokor qabuliga yozilish va yangi qoplashlar mavjud boʻlmaydi. Qolgan muddat uchun sugʻurta mukofotini qaytarishni MIG qoʻshimcha kelishuv bilan rasmiylashtiradi.',
+  'hr.employees.belowMinWarning': 'Shartnoma shartlariga koʻra eng kam son — {min}. Chiqarishdan soʻng {n} qoladi. Chiqarish mumkin, lekin MIG anderrayteri va menejeri shartnoma shartlarini qayta koʻrib chiqish vazifasini oladi.',
   'hr.employees.sendRequest': 'Arizani yuborish',
   'hr.employees.excludeDate': 'Chiqarish sanasi',
   'hr.nav.family': 'Oila',

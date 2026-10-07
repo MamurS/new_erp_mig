@@ -105,6 +105,7 @@ Tizimning asosiy atamalari va qisqartmalari; qavs ichida — agar farq qilsa, ul
 | Atama | Nimani anglatadi |
 | --- | --- |
 | **Anderrayter** | Xavfni baholaydigan, narxni (kotirovkani) hisoblaydigan va shartnomaning moliyaviy shartlarini tasdiqlaydigan MIG xodimi. |
+| **Eng kam son** | MIG DMS shartnomasini tuzadigan kompaniya xodimlarining eng kam soni (demo: 10). Undan kam boʻlsa, kotirovka faqat izohli istisno sifatida tasdiqlanadi, istisnosiz shartnoma esa imzolanmaydi. |
 | **Eʼtiroz** (апелляция, appeal) | Sugʻurtalangan shaxs yoki klinika tomonidan zarar boʻyicha qarorga eʼtiroz bildirish. Uni zararlar boʻyicha mutaxassis koʻrib chiqadi. |
 | **Assistans, assistans kompaniyasi** | Kecha-kunduz ishlaydigan qoʻngʻiroqlar markazini yurituvchi, shifokor qabuliga yozadigan, kafolat xatlarini beradigan, klinika reyestrlarini tekshiradigan, klinikalarga toʻlaydigan va MIGga qoplash uchun hisob chiqaradigan MIG hamkori. Har bir assistans oʻziga biriktirilgan mijozlarga xizmat koʻrsatadi. |
 | **Audit, audit jurnali** | Barcha muhim harakatlar yozuvi: kim, qachon va nima qildi yoki koʻrdi. MIG administratori koʻradi. |
@@ -215,6 +216,8 @@ Yangi mijoz bitimning sakkiz bosqichidan oʻtadi: lid → baholash uchun maʼlum
 
 Agar lid bilan uzoq vaqt hech narsa sodir boʻlmasa (demo: 7 kun), menejer navbatida eslatma paydo boʻladi.
 
+**Faqat kompaniyalar.** DMS MIG mijozi boʻlgan kompaniyalar xodimlari va ularning oila aʼzolari uchun rasmiylashtiriladi. YaTT shakli sukut boʻyicha ruxsat etilmaydi: bunday lid saqlanmaydi, «Shakl» maydoni ostida tushuntirish chiqadi. Ruxsat etilgan shakllar roʻyxatini «Sugʻurtalovchining ruxsat etilgan shakllari» parametri belgilaydi (MIG qarorini talab qiladi). Taxminiy son eng kam sondan kam boʻlsa (demo: 10 xodim), maydon ostida ogohlantirish chiqadi — lidni saqlash mumkin, lekin kotirovka keyin faqat istisno sifatida tasdiqlanadi.
+
 ### 2-bosqich. Baholash uchun maʼlumotlar {#census}
 
 <!-- audience: staff -->
@@ -272,6 +275,26 @@ Bu bosqichda **ismlar, JShShIR va telefonlar kerak emas** — agar ular faylda b
 8. Yuborilgan shartnomani oʻzgartirish uchun «Yangi versiya» tugmasini bosing — bunda imzolar bekor qilinadi.
 
 Keyin — imzolash, toʻlov va polisni chiqarish (boʻlim 6).
+
+### Eng kam son va ruxsat etilgan shakllar {#min-group}
+
+<!-- audience: staff -->
+
+«DMS parametrlari»dagi «Mijozlar» guruhi parametrlari (hammasi «demo-qiymat» belgisi bilan):
+
+- **Guruhning eng kam soni** — demo: 10.
+- **Eng kam sonda oila aʼzolari** — sukut boʻyicha yoʻq: faqat xodimlar hisoblanadi.
+- **Sugʻurtalovchining ruxsat etilgan shakllari** — YaTTdan tashqari hammasi; «MIG qarorini talab qiladi» belgisi.
+- **Muddat davomida son eng kam sondan kamaydi** — sukut boʻyicha «xabar berish» (anderrayter va menejerga vazifa); avtomatik bekor qilish yoʻq.
+
+Qayerda tekshiriladi:
+
+1. **Lid:** ruxsat etilmagan shakl saqlanmaydi; eng kam sondan kam son — ogohlantirish.
+2. **Baholash uchun maʼlumotlar:** «Xodimlar N / eng kam M» plashkasi; eng kam sondan kam boʻlsa — qizil.
+3. **Kotirovka:** eng kam sondan kam boʻlsa, uni vakolat doirasida tasdiqlab boʻlmaydi — faqat «Kelishuvga yuborish». Eng kam sondan istisno vakolatiga ega xodim (demo: anderrayting rahbari) kelishadi va faqat «Nima uchun istisno qilinmoqda» majburiy izohi bilan. Istisno kotirovkada koʻrinadi: kim, qachon va nima uchun.
+4. **Shartnoma:** imzolashdan oldin tizim 2-ilovadagi xodimlarni sanaydi. Ular eng kam sondan kam boʻlsa va kotirovkada istisno tasdiqlanmagan boʻlsa, shartnoma tepasida qizil plashka chiqadi va uni imzolab boʻlmaydi.
+
+Chegaralar va shakllarni faqat ekran emas, server ham tekshiradi.
 
 ### Keyingi bosqich uchun nima kerak {#stage-checklist}
 
@@ -372,6 +395,12 @@ Amaldagi shartnomaga har qanday oʻzgarish — yangi xodim, ishdan boʻshash, fa
 2. HR ning har bir harakati sana bilan **oʻzgartirish arizasini** yaratadi.
 3. **Yangi xodim HR arizasi sanasidan himoyalangan** (sukut boʻyicha), qoʻshimcha kelishuv imzolanishini kutmasdan. Chiqarilgan xodim chiqarilgan sanadan qoplamani yoʻqotadi; ilovada u «Polis tugagan» ni koʻradi.
 4. Assistans oʻzgarishlarni darhol oʻz sugʻurtalanganlar roʻyxatida koʻradi.
+
+### Shartnoma amal qilayotganda son eng kam sondan kam {#below-min-term}
+
+<!-- audience: staff hr -->
+
+HR xodimni chiqarsa va shundan soʻng sugʻurtalanganlar eng kam sondan kam boʻlib qolsa, tasdiqlashdan oldin «Shartnoma shartlariga koʻra eng kam son — M» ogohlantirishi chiqadi. Chiqarish mumkin: ariza odatdagidek MIGga yuboriladi, anderrayter va menejer esa «Chiqarishdan soʻng son eng kam sondan kam» vazifasini oladi — ular shartnoma shartlari bilan nima qilishni hal qiladi. Avtomatik bekor qilish yoʻq. Agar MIG parametrlarda «Bunday chiqarishni taqiqlash»ni tanlasa, ariza yuborilmaydi va HR tushuntirishni koʻradi.
 
 ### Oila aʼzolari {#family}
 
@@ -912,6 +941,12 @@ Har bir insonning sugʻurta mukofoti quyidagi tartibda olinadi: sugʻurtalanganl
 4. Barcha koʻchirilgan yozuvlar sana va paket muallifi bilan «Eski tizimdan koʻchirilgan» deb belgilanadi.
 5. Sugʻurtalanganlar ilovada limit qoldigʻini **koʻchirishgacha sarflangan summani hisobga olgan holda** koʻradi.
 
+### Eng kam sondan kam shartnomalar va ruxsat etilmagan shakllar {#migration-group-warnings}
+
+<!-- audience: staff:admin -->
+
+Eng kam sondan kam yoki mijozi ruxsat etilmagan shakldagi koʻchirilgan amaldagi shartnoma odatdagidek yuklanadi — u muddat oxirigacha amal qiladi. Paket hisobotida u boʻyicha ogohlantirish boʻladi, shartnoma va mijoz kartochkalarida esa «Eng kam sondan kam» va «Shakl ruxsat etilmaydi» belgilari. Qoidalar yangi shartnomalarga qoʻllanadi.
+
 ### Bekor qilish {#migration-rollback}
 
 <!-- audience: staff:admin -->
@@ -955,6 +990,11 @@ Odatiy vaziyatlar va harakatlar tartibi; agar vaziyat roʻyxatda boʻlmasa, ITS 
 | **Hamkorning API kaliti sizib chiqqanlik shubhasi** | MIG administratori hamkor kartasida kalitni darhol bekor qiladi; hamkor yangisini yaratadi. Soʻrovlar jurnalini tekshiring. | <!-- audience: staff clinic assist -->
 | **SI gʻalati javoblar beryapti** | Izoh bilan «Rozi emasman» deb belgilang. Ommaviy muammoda administrator «SI ni hamma joyda oʻchirish» tugmasini bosadi — ish maslahatlarsiz davom etadi. | <!-- audience: staff assist -->
 | **Klinika yoki 1C bilan integratsiya xatosi** | Administrator ish stolidagi «Integratsiyalar» bloki holat va navbatni koʻrsatadi. Hamkorning soʻrovlar jurnalini tekshiring, u bilan bogʻlaning. | <!-- audience: staff -->
+| **YaTT shaklidagi lid saqlanmaydi** | DMS faqat kompaniyalar uchun rasmiylashtiriladi. MIG boshqacha qaror qilsa, administrator «Sugʻurtalovchining ruxsat etilgan shakllari» parametrini oʻzgartiradi (ikkinchi administrator tasdiqlaydi). | <!-- audience: staff -->
+| **Kotirovkani tasdiqlab boʻlmaydi: son eng kam sondan kam** | Kelishuvga yuboring. Anderrayting rahbari istisnoni nima uchun asosli ekani haqidagi izoh bilan kelishishi mumkin. | <!-- audience: staff -->
+| **Shartnoma imzolanmaydi: eng kam sondan kam** | 2-ilovada xodimlar eng kam sondan kam, kotirovkada istisno tasdiqlanmagan. Toʻliq roʻyxatni yuklang yoki kotirovkada istisnoni kelishing. | <!-- audience: staff -->
+| **Chiqarishdan soʻng xodimlar eng kam sondan kam** | HR xodimni chiqarishi mumkin; anderrayter va menejer vazifa oladi va mijoz bilan shartnoma shartlarini hal qiladi. | <!-- audience: staff hr -->
+| **Ilovaga kirishda «Kod mos kelmadi yoki bu raqam topilmadi»** | Xabar ataylab nomaʼlum raqam va notoʻgʻri kod uchun bir xil va faqat kod kiritilgandan keyin chiqadi — shunda kim sugʻurtalanganini tanlash yoʻli bilan bilib boʻlmaydi. SMSdagi kodni tekshiring; u toʻgʻri boʻlsa — kompaniyangiz HRiga murojaat qiling, sugʻurtalanganlar roʻyxatidagi raqamni tekshirsin. | <!-- audience: staff hr insured -->
 
 ## 18. Xavfsizlik va maxfiylik {#security}
 

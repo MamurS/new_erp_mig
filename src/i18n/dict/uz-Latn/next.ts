@@ -14,6 +14,8 @@ export const next: Translation<typeof Ru> = {
   'next.task.sign_mig': 'Shartnomani MIG tomonidan imzolash: {what}',
   'next.task.sign_client': '{what} shartnomasini imzolang',
   'next.task.invoice_pay': '{what} shartnomasi boʻyicha hisobni toʻlang',
+  'next.task.below_min_group': 'Chiqarishdan soʻng son eng kam sondan kam: {what}',
+  'next.action.below_min_group': 'Mijozni ochish',
   'next.task.other': 'Koʻrib chiqish: {what}',
   'next.check.census': 'Baholash uchun maʼlumotlar',
   'next.check.quoteCalculated': 'Kotirovka hisobi',

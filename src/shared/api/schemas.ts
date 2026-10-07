@@ -16,6 +16,7 @@ export const staffAuthority: z.ZodType<T.StaffAuthority> = z.object({
   quoteDiscountMaxPct: z.number().optional(),
   quotePremiumMax: z.number().optional(),
   claimDecisionMax: z.number().optional(),
+  allowBelowMinGroup: z.boolean().optional(),
 });
 export const staffRole = z.enum(['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer']);
 export const programCode = z.enum(['basic', 'standard', 'standard_plus', 'premium']);
@@ -39,7 +40,13 @@ export const familyRelation = z.enum(['spouse', 'child', 'parent', 'other']);
 const familyMemberBrief: z.ZodType<T.FamilyMemberBrief> = z.object({ id: uuid, fullName: z.string(), relation: familyRelation, status: z.enum(['active', 'excluded']) });
 const limitsRecord = z.object({ outpatient: money, dental: money, medicines: money, inpatient: money });
 /** «Перенесено из старой системы»: batch, date and author of the transfer. */
-export const migrationMark: z.ZodType<T.MigrationMark> = z.object({ batchId: uuid, at: isoDateTime, byName: z.string() });
+export const migrationMark: z.ZodType<T.MigrationMark> = z.object({
+  batchId: uuid,
+  at: isoDateTime,
+  byName: z.string(),
+  warnings: z.array(z.enum(['below_min_group', 'form_not_allowed'])).optional(),
+  group: z.object({ size: z.number().int().nonnegative(), min: z.number().int().nonnegative(), countsFamily: z.boolean() }).optional(),
+});
 
 export const sessionUser: z.ZodType<T.SessionUser> = z.object({
   id: uuid,
@@ -647,6 +654,7 @@ export const hrOverview: z.ZodType<D.HrOverview> = z.object({
   companyName: z.string(),
   companyLegalForm: z.enum(LEGAL_FORMS).optional(),
   insuredCount: z.number(),
+  group: z.object({ employees: z.number(), family: z.number(), min: z.number(), countsFamily: z.boolean() }),
   notInApp: z.number(),
   nextInvoice: invoice.nullable(),
   policy: z

@@ -78,7 +78,8 @@ const CLIENT_FORMS: LegalFormCode[] = [
   'jsc', 'jsc', 'jsc',
   'jv_llc', 'jv_llc',
   'private_enterprise', 'private_enterprise',
-  'sole_proprietor', 'state_unitary', 'branch',
+  // No sole proprietors: DMS is for companies (allowedLegalForms); the ban is shown by one seeded lead.
+  'llc', 'state_unitary', 'branch',
 ];
 const POSITIONS = [
   'Бухгалтер',

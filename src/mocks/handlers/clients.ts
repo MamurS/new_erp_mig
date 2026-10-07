@@ -1,4 +1,5 @@
 import { matchesSearch } from '@/shared/lib/searchNormalize';
+import { legalFormProblem } from '@/shared/domain/minGroup';
 import { http } from 'msw';
 import { clientCreateSchema, clientPatchSchema } from '@/shared/schemas/forms';
 import type { ClientDetail, ClientListResponse, ClientLossStats, PolicyDetail } from '@/shared/types/dto';
@@ -7,13 +8,13 @@ import { can } from '@/shared/auth/permissions';
 import { CLAIM_CATEGORY_LABEL } from '@/shared/domain/claims';
 import { formatMoney } from '@/shared/lib/format';
 import { db, hasLiveKp, type ClientRow } from '../db';
-import { API, body, byLegalForm, byLegalName, filterLegalForm, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
+import { API, body, byLegalForm, byLegalName, filterLegalForm, HttpError, notFound, paginate, param, q, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
 import { parseIso, tzIso } from '../time';
 import { clientLegalFormOf, toClient, toInsuredListItem } from '../views';
 import { PROGRAMS } from '../programs';
 import { renewalsWithoutOffer } from './dashboard';
-import { dmsParam } from '../params';
+import { dmsParam, groupRules } from '../params';
 
 function findClient(id: string): ClientRow {
   const c = db().clients.find((x) => x.id === id);
@@ -78,6 +79,9 @@ export const clientHandlers = [
       requirePermission(user, 'clients.write');
       const input = await body(request, clientCreateSchema);
       const d = db();
+      // DMS only for companies: a form outside `allowedLegalForms` is not saved.
+      const formProblem = legalFormProblem(input.legalForm, groupRules());
+      if (formProblem) throw new HttpError(422, 'validation', 'errors.validation', { fields: { legalForm: formProblem } });
       const row: ClientRow = {
         id: randomId(),
         legalForm: input.legalForm,

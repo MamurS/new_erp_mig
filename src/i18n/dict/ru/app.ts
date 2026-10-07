@@ -4,6 +4,7 @@ export const app = {
   'app.brand': 'MIG ДМС',
   'app.login.title': 'Вход в MIG ДМС',
   'app.login.subtitle': 'Введите номер телефона, на который оформлена страховка',
+  'app.login.audience': 'Для сотрудников компаний — клиентов МИГ и членов их семей',
   'app.login.phone': 'Номер телефона',
   'app.login.getCode': 'Получить код',
   'app.login.code.group': 'Код подтверждения',
@@ -14,7 +15,7 @@ export const app = {
   'app.login.code.resend': 'Отправить код ещё раз',
   'app.login.code.resendIn': 'Повторная отправка через {sec} с',
   'app.login.code.changePhone': 'Изменить номер',
-  'app.login.code.invalid': 'Неверный или устаревший код',
+  'app.login.code.invalid': 'Код не подошёл или этот номер не найден среди застрахованных. Проверьте код. Если номер верный — обратитесь к HR вашей компании.',
   'app.consent.title': 'Согласие на обработку данных',
   'app.consent.text1':
     'Mosaic Insurance Group обрабатывает ваши персональные данные (ФИО, телефон, ПИНФЛ, данные о полисе и обращениях) только для исполнения договора добровольного медицинского страхования.',

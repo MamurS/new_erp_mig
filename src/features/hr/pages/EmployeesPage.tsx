@@ -6,6 +6,7 @@ import type { HrEmployee, HrOverview } from '@/shared/types/dto';
 import { useExcludeEmployee, useHrEmployees, useHrOverview, useInvite } from '@/shared/api/queries/hr';
 import { useExport } from '@/shared/api/queries/staff';
 import { errorMessage } from '@/shared/api/client';
+import { exclusionDropsBelow, groupSize } from '@/shared/domain/minGroup';
 import { hrExcludeSchema } from '@/shared/schemas/forms';
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { formatDate, formatMoney, formatNumber, formatRelativeDays, todayISO } from '@/shared/lib/format';
@@ -362,6 +363,11 @@ function OverviewCards({ overview }: { overview: ReturnType<typeof useHrOverview
 
 function ExcludeDialog({ employee, onClose }: { employee: HrEmployee; onClose: () => void }) {
   const exclude = useExcludeEmployee();
+  const overview = useHrOverview();
+  const group = overview.data?.group;
+  // The list holds employees; their active family members leave with them.
+  const leaving = { employees: 1, family: employee.family.filter((m) => m.status === 'active').length };
+  const dropsBelow = group ? exclusionDropsBelow(group, leaving, group) : false;
   const [date, setDate] = useState(() => formatDate(todayISO()));
   const [error, setError] = useState<string | undefined>();
 
@@ -397,6 +403,11 @@ function ExcludeDialog({ employee, onClose }: { employee: HrEmployee; onClose: (
       loading={exclude.isPending}
       onConfirm={submit}
     >
+      {group && dropsBelow && (
+        <p role="alert" data-testid="exclude-below-min" className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
+          {t('hr.employees.belowMinWarning', { min: group.min, n: groupSize({ employees: group.employees - leaving.employees, family: group.family - leaving.family }, group) })}
+        </p>
+      )}
       <Field label={t('hr.employees.excludeDate')} error={tm(error) || undefined}>
         {(f) => <MaskedInput mask="date" {...f} value={date} onChange={setDate} className="h-12" />}
       </Field>

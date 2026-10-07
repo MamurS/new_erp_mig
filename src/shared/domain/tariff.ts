@@ -116,7 +116,13 @@ export function ageBandRatesOf(base: Money, params: Readonly<DmsParamValues>, fa
 }
 
 /** Why a quote needs approval by someone with more authority; null when the author may approve it alone. */
-export function quoteAuthorityProblem(q: Pick<Quote, 'discountFromTariffPct' | 'total'>, authority: StaffAuthority | undefined): string | null {
+export function quoteAuthorityProblem(
+  q: Pick<Quote, 'discountFromTariffPct' | 'total'>,
+  authority: StaffAuthority | undefined,
+  /** The census group against the minimal group size: below it only `allowBelowMinGroup` approves. */
+  group?: { size: number; min: number },
+): string | null {
+  if (group && group.size < group.min && !authority?.allowBelowMinGroup) return msg('dom.quote.belowMinGroup', { n: group.size, min: group.min });
   const maxDiscount = authority?.quoteDiscountMaxPct ?? 0;
   if (q.discountFromTariffPct > maxDiscount + 1e-9) return msg('dom.quote.discountAboveAuthority', { pct: pct(q.discountFromTariffPct), max: pct(maxDiscount) });
   if (authority?.quotePremiumMax !== undefined && q.total > authority.quotePremiumMax) return msg('dom.quote.premiumAboveAuthority');
@@ -127,8 +133,9 @@ export function quoteAuthorityProblem(q: Pick<Quote, 'discountFromTariffPct' | '
 export function canApproveQuote(
   approver: { id: string; role: string; authority?: StaffAuthority },
   q: Pick<Quote, 'discountFromTariffPct' | 'total' | 'createdById'>,
+  group?: { size: number; min: number },
 ): boolean {
-  return approver.role === 'underwriter' && approver.id !== q.createdById && quoteAuthorityProblem(q, approver.authority) === null;
+  return approver.role === 'underwriter' && approver.id !== q.createdById && quoteAuthorityProblem(q, approver.authority, group) === null;
 }
 
 function pct(v: number): string {

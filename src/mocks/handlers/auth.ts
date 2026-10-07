@@ -36,9 +36,9 @@ function recordFailure(key: string): void {
   }
 }
 
-function newChallenge(userId: string, kind: ChallengeRow['kind']): { challengeId: string; resendInSec: number } {
+function newChallenge(userId: string, kind: ChallengeRow['kind'], lockKey?: string): { challengeId: string; resendInSec: number } {
   const d = db();
-  const c: ChallengeRow = { id: randomToken(24), userId, kind, expiresAt: Date.now() + CHALLENGE_TTL, attempts: 0 };
+  const c: ChallengeRow = { id: randomToken(24), userId, kind, expiresAt: Date.now() + CHALLENGE_TTL, attempts: 0, lockKey };
   d.challenges = d.challenges.filter((x) => x.expiresAt > Date.now());
   d.challenges.push(c);
   return { challengeId: c.id, resendInSec: 60 };
@@ -48,7 +48,7 @@ function verify(challengeId: string, code: string): SessionResponse {
   const d = db();
   const c = d.challenges.find((x) => x.id === challengeId);
   if (!c || c.expiresAt < Date.now()) throw invalidCode();
-  const lockKey = `challenge:${c.userId}`;
+  const lockKey = c.lockKey ?? `challenge:${c.userId}`;
   checkLock(lockKey);
   if (code !== DEMO_CODE || c.userId === NIL) {
     c.attempts += 1;
@@ -127,7 +127,9 @@ export const authHandlers = [
       checkLock(key);
       const person = db().insured.find((i) => i.phone === phone && i.status === 'active');
       // Unknown numbers get a dead challenge: the response does not reveal whether the number exists.
-      return newChallenge(person?.userId ?? NIL, 'insured');
+      // Failures and lockouts are counted per number for both cases (a shared key for all unknown
+      // numbers would lock them together and so tell them apart from real ones).
+      return newChallenge(person?.userId ?? NIL, 'insured', key);
     }),
   ),
   http.post(

@@ -101,6 +101,7 @@ const quoteBase = z.object({
   createdByName: z.string().optional(),
   rejectReason: z.string().optional(),
   updatedAt: isoDateTime.optional(),
+  belowMinException: z.object({ byName: z.string(), at: isoDateTime, comment: z.string() }).optional(),
 });
 export const quote: z.ZodType<T.Quote> = quoteBase;
 export const quoteView: z.ZodType<D.QuoteView> = quoteBase.extend({
@@ -110,6 +111,7 @@ export const quoteView: z.ZodType<D.QuoteView> = quoteBase.extend({
   census: census.nullable(),
   startDate: isoDate,
   authorityProblem: z.string().nullable(),
+  group: z.object({ size: z.number(), min: z.number(), countsFamily: z.boolean(), below: z.boolean() }),
   canApprove: z.boolean(),
   canEdit: z.boolean(),
 });
@@ -213,6 +215,7 @@ export const contractView: z.ZodType<D.ContractView> = z.object({
   quote: z.object({ id: uuid, premiumEmployee: money, premiumFamily: money, total: money, program: S.programCode }).nullable(),
   originalOverdue: z.boolean(),
   assistanceName: z.string().optional(),
+  group: z.object({ size: z.number(), min: z.number(), below: z.boolean(), exception: z.boolean() }),
 });
 export const contractViews = z.array(contractView);
 

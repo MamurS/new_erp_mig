@@ -193,6 +193,7 @@ export const hr: Translation<typeof Ru> = {
   'hr.employees.excludeSent': 'Exclusion request sent to MIG',
   'hr.employees.excludeTitle': 'Exclude the employee?',
   'hr.employees.excludeText': 'The request goes to MIG. Once confirmed, {name} will no longer be insured from the selected date: the policy and the clinic card will stop working, and doctor appointments and new reimbursements will become unavailable. MIG will issue an endorsement for the premium refund for the remaining period.',
+  'hr.employees.belowMinWarning': 'Under the contract the minimum group size is {min}. After the exclusion {n} will remain. You can exclude, but the MIG underwriter and manager will get a task to review the contract terms.',
   'hr.employees.sendRequest': 'Send request',
   'hr.employees.excludeDate': 'Exclusion date',
   'hr.nav.family': 'Family',

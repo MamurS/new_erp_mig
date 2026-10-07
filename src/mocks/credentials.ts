@@ -38,7 +38,7 @@ export const DEMO_STAFF: DemoStaff[] = [
     email: 'underwriter-head@demo.mig.uz',
     fullName: 'Irgashev Rustam Nodirovich',
     label: 'Руководитель андеррайтинга',
-    authority: { quoteDiscountMaxPct: 0.25 },
+    authority: { quoteDiscountMaxPct: 0.25, allowBelowMinGroup: true },
     signatory: { canSign: true, basis: 'Доверенность № 14 от 05.01.2026' },
   },
 ];

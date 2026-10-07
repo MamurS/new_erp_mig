@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useI18n } from '@/i18n';
 import { usePhoneLogin, usePhoneVerify } from '@/shared/api/queries/auth';
-import { errorMessage } from '@/shared/api/client';
+import { ApiRequestError, errorMessage } from '@/shared/api/client';
 import { setSession } from '@/shared/auth/session';
 import { targetAfterLogin } from '@/shared/lib/redirect';
 import { formatPhone } from '@/shared/lib/masks';
@@ -42,7 +42,8 @@ export default function CodePage() {
       if (!res.user.consentGivenAt) navigate(`/app/consent?next=${encodeURIComponent(target)}`, { replace: true });
       else navigate(target, { replace: true });
     } catch (e) {
-      setError(errorMessage(e) || t('app.login.code.invalid'));
+      // One text for a wrong code and an unknown number: the app must not reveal who is insured.
+      setError(e instanceof ApiRequestError && e.status === 401 ? t('app.login.code.invalid') : errorMessage(e));
       setCode('');
     }
   };

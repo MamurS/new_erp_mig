@@ -91,6 +91,7 @@ export default function PhoneLoginPage() {
         <Button type="submit" loading={login.isPending} className={`${BIG} h-14 text-[16px]`}>
           {t('app.login.getCode')}
         </Button>
+        <p className="text-center text-[14px] text-muted">{t('app.login.audience')}</p>
       </form>
       {demo && (
         <demo.PhoneLoginHint

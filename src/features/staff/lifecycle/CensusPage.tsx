@@ -1,4 +1,7 @@
 /* Данные для оценки (LIFECYCLE_SPEC §4): anonymous census — gender, birth year and relation only. */
+import { useDmsParamValues } from '@/shared/api/queries/params';
+import { belowMin, groupLabel, groupRulesOf } from '@/shared/domain/minGroup';
+import { cn } from '@/shared/lib/cn';
 import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -32,6 +35,7 @@ export default function CensusPage() {
   // «Загрузить данные для оценки» of an empty section leads here with ?upload=1: the picker is focused.
   const [params] = useSearchParams();
   const focusUpload = params.get('upload') === '1';
+  const rules = groupRulesOf(useDmsParamValues());
   const [result, setResult] = useState<{ errors: { row: number; message: string }[]; dropped: string[] } | null>(null);
   useDocumentTitle(t('staffLc.census.title'));
   useTopbar([{ label: t('staffLc.deals.title'), to: '/staff/deals' }, { label: q.data?.number ?? t('staffLc.deal.fallback'), to: `/staff/deals/${dealId}` }, { label: t('staffLc.census.title') }]);
@@ -101,6 +105,23 @@ export default function CensusPage() {
               )}
             </Card>
             {stats && deal.census ? (
+              <>
+              {(() => {
+                // «Сотрудников N из минимума M»: below the minimum the quote needs an exception.
+                const counts = { employees: stats.employees, family: stats.family };
+                const below = belowMin(counts, rules);
+                return (
+                  <p
+                    role={below ? 'alert' : 'status'}
+                    data-testid="census-min-group"
+                    data-below={below || undefined}
+                    className={cn('mt-4 rounded-card px-3 py-2 text-[13px]', below ? 'bg-danger-soft font-semibold text-danger-text' : 'bg-rail text-muted')}
+                  >
+                    {tm(groupLabel(counts, rules))}
+                    {below && ` — ${t('staffLc.census.belowMin')}`}
+                  </p>
+                );
+              })()}
               <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_300px]">
                 <Card title={t('staffLc.census.byAge')}>
                   <div className="h-72" role="img" aria-label={t('staffLc.census.chartAria')}>
@@ -129,6 +150,7 @@ export default function CensusPage() {
                   <p className="mt-3 text-[12px] text-muted">{t('staffLc.census.uploadedAt', { at: formatDateTime(deal.census.uploadedAt) })}</p>
                 </Card>
               </div>
+              </>
             ) : (
               <Card className="mt-4" bodyClassName="p-0">
                 <EmptyState

@@ -13,6 +13,8 @@ export const next = {
   'next.task.sign_mig': 'Подписать договор со стороны МИГ: {what}',
   'next.task.sign_client': 'Подпишите договор {what}',
   'next.task.invoice_pay': 'Оплатите счёт по договору {what}',
+  'next.task.below_min_group': 'Численность ниже минимальной после исключения: {what}',
+  'next.action.below_min_group': 'Открыть клиента',
   'next.task.other': 'Посмотреть: {what}',
   // ---- the deal checklist ----
   'next.check.census': 'Данные для оценки',

@@ -48,7 +48,17 @@ export interface MigrationMark {
   at: ISODateTime;
   /** Administrator who prepared the batch. */
   byName: string;
+  /**
+   * Rules for new contracts the transferred record does not meet (it is still loaded: a contract in force).
+   * `below_min_group` — fewer insured employees than `minGroupSize`; `form_not_allowed` — the client's legal
+   * form is not in `allowedLegalForms`.
+   */
+  warnings?: MigrationWarning[];
+  /** Below the minimum: the group size as counted on transfer and the minimum then. */
+  group?: { size: number; min: number; countsFamily: boolean };
 }
+
+export type MigrationWarning = 'below_min_group' | 'form_not_allowed';
 
 export type ClientStatus = 'lead' | 'draft' | 'negotiation' | 'active' | 'renewal' | 'expired';
 
@@ -1056,6 +1066,8 @@ export interface Quote {
   createdByName?: string;
   rejectReason?: string;
   updatedAt?: ISODateTime;
+  /** Approved below the minimal group size: who allowed the exception and why (mandatory comment). */
+  belowMinException?: { byName: string; at: ISODateTime; comment: string };
 }
 
 export type SignMethod = 'eimzo' | 'edo' | 'paper' | 'scan';

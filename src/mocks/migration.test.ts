@@ -8,7 +8,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ContractView, SessionResponse } from '@/shared/types/dto';
 import type { LimitUsage } from '@/shared/types';
 import type { MigrationBatchSummary, MigrationBatchView, MigrationStep } from '@/shared/types/migration';
-import { MIGRATION_STEPS } from '@/shared/domain/migration';
+import { MIGRATION_COLUMNS, MIGRATION_STEPS } from '@/shared/domain/migration';
+import { toCsv } from '@/shared/lib/csv';
 import { MIGRATION_DEMO_DATE, MIGRATION_DEMO_PHONE, migrationDemoFiles } from '@/demo/migrationSamples';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
@@ -317,5 +318,59 @@ describe('portfolio migration', () => {
     const v = await call<MigrationBatchView>(`${M}/batches/${one.data.id}`, { sid: admin });
     expect(v.data.status).toBe('draft');
     expect(step(v.data, 'clients')).toMatchObject({ status: 'validated', errorRows: 6 });
+  });
+
+  it('contracts below the minimum group and of a form not allowed are loaded with a warning and a mark', async () => {
+    const admin = await login('admin@demo.mig.uz');
+    const admin2 = await login('admin2@demo.mig.uz');
+    const csv = (step: MigrationStep, rows: Record<string, string>[]) => toCsv(MIGRATION_COLUMNS[step], rows.map((r) => MIGRATION_COLUMNS[step].map((c) => r[c] ?? '')));
+    const client = (name: string, legalForm: string, stir: string, k: number) => ({ name, legalForm, stir, bank: 'Demo Bank ATB', account: `202080009001003000${k}0`, mfo: '00014', director: 'Karimov Anvar Rustamovich', hrName: 'Saidova Malika Bahodirovna', hrPhone: `+99871300000${k}`, hrEmail: `hr@small${k}.example.uz` });
+    const contract = (oldNumber: string, clientStir: string, n: number) => ({ oldNumber, clientStir, startDate: '2026-03-01', endDate: '2027-02-28', program: 'standard', premium: String(n * 3_500_000), premium_employee: '3500000', premium_family: '2800000', paymentFrequency: 'single' });
+    const NAMES = ['Jasur', 'Bobur', 'Otabek', 'Sanjar', 'Temur', 'Aziz', 'Farrux', 'Sardor', 'Javohir', 'Nodir'];
+    const people = (oldNumber: string, n: number, base: number) =>
+      Array.from({ length: n }, (_, k) => ({ fullName: `Rahimov ${NAMES[k % NAMES.length]!} ${NAMES[Math.floor(k / NAMES.length) % NAMES.length]!}ovich`, birthDate: '1988-05-14', pinfl: `3140588${String(base + k).padStart(7, '0')}`, oldCertificate: `C-${base + k}`, inclusionDate: '2026-03-01', contractOldNumber: oldNumber, relation: 'employee' }));
+    const b = await call<MigrationBatchView>(`${M}/batches`, { method: 'POST', sid: admin, json: { migrationDate: MIGRATION_DEMO_DATE } });
+    const id = b.data.id;
+    const up = async (s: MigrationStep, rows: Record<string, string>[]) => {
+      const u = await call<MigrationBatchView>(`${M}/batches/${id}/steps/${s}`, { method: 'POST', sid: admin, json: { csv: csv(s, rows) } });
+      expect(u.status, s).toBe(200);
+      expect(step(u.data, s).issues.filter((i) => i.level === 'error'), s).toEqual([]);
+      const conf = await call<MigrationBatchView>(`${M}/batches/${id}/steps/${s}/confirm`, { method: 'POST', sid: admin, json: { excludeErrors: false } });
+      expect(conf.status, s).toBe(200);
+      return conf.data;
+    };
+    await up('clients', [client('Kichik Savdo', 'llc', '409200001', 1), client('Karimov Anvar Rustamovich', 'sole_proprietor', '409200002', 2)]);
+    const afterContracts = await up('contracts', [contract('MIG-2026/0601', '409200001', 6), contract('MIG-2026/0602', '409200002', 12)]);
+    // The form is known from the clients file: a warning already at the contracts step, never an error.
+    expect(step(afterContracts, 'contracts')).toMatchObject({ valid: 2, errorRows: 0, warningRows: 1 });
+    const v = await up('insured', [...people('MIG-2026/0601', 6, 1), ...people('MIG-2026/0602', 12, 101)]);
+    // One warning per contract, with its number and the reason.
+    expect(step(v, 'contracts').issues).toEqual([
+      { row: 2, field: 'oldNumber', level: 'warning', message: 'migration.v.belowMinGroup|{"contract":"MIG-2026/0601","n":6,"min":10}' },
+      { row: 3, field: 'clientStir', level: 'warning', message: 'migration.v.formNotAllowed|{"contract":"MIG-2026/0602","form":"ИП"}' },
+    ]);
+    expect(step(v, 'contracts')).toMatchObject({ valid: 2, errorRows: 0, warningRows: 2, status: 'confirmed' });
+    for (const s of ['limits', 'claims', 'invoices']) await call(`${M}/batches/${id}/steps/${s}/skip`, { method: 'POST', sid: admin });
+    expect((await call(`${M}/batches/${id}/submit`, { method: 'POST', sid: admin })).status).toBe(200);
+    const applied = await call<MigrationBatchView>(`${M}/batches/${id}/approve`, { method: 'POST', sid: admin2 });
+    expect(applied.status).toBe(200);
+    // Both contracts are loaded (they are in force); the applied report keeps the warnings.
+    expect(applied.data.contracts).toHaveLength(2);
+    expect(step(applied.data, 'contracts').issues.map((i) => i.message.split('|')[0])).toEqual(['migration.v.belowMinGroup', 'migration.v.formNotAllowed']);
+    const small = db().contracts.find((c) => c.externalNumber === 'MIG-2026/0601')!;
+    const yatt = db().contracts.find((c) => c.externalNumber === 'MIG-2026/0602')!;
+    expect(small.status).toBe('active');
+    expect(small.migration).toMatchObject({ warnings: ['below_min_group'], group: { size: 6, min: 10, countsFamily: false } });
+    expect(yatt.migration?.warnings).toEqual(['form_not_allowed']);
+    expect(db().clients.find((c) => c.inn === '409200001')!.migration?.warnings).toEqual(['below_min_group']);
+    expect(db().clients.find((c) => c.inn === '409200002')!.migration?.warnings).toEqual(['form_not_allowed']);
+    // Through the API (the response schemas carry the marks).
+    const uw = await login('underwriter@demo.mig.uz');
+    const view = await call<ContractView>(`/contracts/${small.id}`, { sid: uw });
+    expect(view.status).toBe(200);
+    expect(view.data.migration).toMatchObject({ warnings: ['below_min_group'], group: { size: 6, min: 10 } });
+    const card = await call<{ migration?: { warnings?: string[] } }>(`/clients/${yatt.clientId}`, { sid: uw });
+    expect(card.status).toBe(200);
+    expect(card.data.migration?.warnings).toEqual(['form_not_allowed']);
   });
 });

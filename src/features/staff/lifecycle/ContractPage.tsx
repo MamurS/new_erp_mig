@@ -41,6 +41,7 @@ import { useTopbar } from '../topbar';
 import { CsvFileButton, ReasonDialog } from './common';
 import { MigratedBadge } from '../components/MigratedBadge';
 import { MigratedScanCard } from '../admin/migration/MigratedScanCard';
+import { MigrationWarnings } from '../admin/migration/MigrationWarnings';
 import { TableScroll } from '@/shared/ui/table-scroll';
 import { AgeBandTable } from './AgeBandTable';
 
@@ -524,7 +525,7 @@ function ContractEditor({ c }: { c: ContractView }) {
             )}
             {c.migration && (
               <span className="mt-1 block">
-                <MigratedBadge mark={c.migration} oldNumber={c.externalNumber} />
+                <MigratedBadge mark={c.migration} oldNumber={c.externalNumber} /> <MigrationWarnings mark={c.migration} />
               </span>
             )}
           </span>
@@ -582,6 +583,16 @@ function ContractEditor({ c }: { c: ContractView }) {
         <div className="mb-3 rounded-card bg-warning-soft px-3 py-2">
           <MissingNote items={checklist} id="contract-missing" />
         </div>
+      )}
+      {!c.migration && c.group.below && !['signed', 'active', 'terminated', 'expired'].includes(c.status) && (
+        <p
+          role={c.group.exception ? 'status' : 'alert'}
+          data-testid="contract-min-group"
+          data-exception={c.group.exception}
+          className={`mb-3 rounded-card px-3 py-2 text-[13px] ${c.group.exception ? 'bg-warning-soft text-warning-text' : 'bg-danger-soft font-semibold text-danger-text'}`}
+        >
+          {t(c.group.exception ? 'staffLc.contract.exception' : 'staffLc.contract.belowMin', { n: c.group.size, min: c.group.min })}
+        </p>
       )}
       {financePending && (
         <p role="status" className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">

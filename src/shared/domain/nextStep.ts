@@ -25,6 +25,7 @@ export const TASK_ACTIONS = [
   'sign_mig',
   'sign_client',
   'invoice_pay',
+  'below_min_group',
   'other',
 ] as const satisfies readonly TaskAction[];
 
@@ -42,6 +43,7 @@ export const ACTION_ROLE: Record<TaskAction, Role> = {
   sign_mig: 'sales_manager',
   sign_client: 'hr',
   invoice_pay: 'hr',
+  below_min_group: 'underwriter',
   other: 'sales_manager',
 };
 
@@ -59,6 +61,7 @@ export const ACTION_RIGHT: Record<TaskAction, Action | null> = {
   sign_mig: 'contracts.sign_mig',
   sign_client: 'contracts.sign_client',
   invoice_pay: 'payments.record',
+  below_min_group: null,
   other: null,
 };
 
@@ -95,6 +98,8 @@ export function staffActionPath(action: TaskAction, r: TaskRefs): string {
     case 'legal_review':
     case 'sign_mig':
       return r.contractId ? `/staff/contracts/${r.contractId}` : r.dealId ? `/staff/deals/${r.dealId}` : `/staff/clients/${r.clientId}`;
+    case 'below_min_group':
+      return `/staff/clients/${r.clientId}`;
     case 'invoice_pay':
       return r.contractId ? `/staff/contracts/${r.contractId}` : '/staff/invoices?status=unpaid,overdue';
     default:

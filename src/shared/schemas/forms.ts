@@ -481,6 +481,7 @@ export const authorityChangeSchema = z
       quoteDiscountMaxPct: shareInput(1, msg('v.discountRange')).optional(),
       quotePremiumMax: moneyInput.optional(),
       claimDecisionMax: moneyInput.optional(),
+      allowBelowMinGroup: z.boolean().optional(),
     }),
     signatory: z.object({ basis: text(5, 200, msg('v.signatoryBasis')) }).nullable(),
     reason: text(5, 500, msg('v.changeBasisMin5')),
@@ -539,6 +540,8 @@ export const quoteCreateSchema = z.object({
 });
 export const quotePatchSchema = z.object({ program: programInput, adjustments: z.array(quoteAdjustmentSchema).max(10, msg('v.maxLines', { max: 10 })), pricingBasis: pricingBasisInput.optional() });
 export const quoteApproveSchema = z.object({ comment: z.string().trim().max(500).optional() });
+/** Approval below the minimum group size: an exception, the comment is mandatory. */
+export const quoteApproveExceptionSchema = z.object({ comment: text(5, 500, msg('v.reasonMin5')) });
 export const quoteRejectSchema = z.object({ reason: text(5, 500, msg('v.reasonMin5')) });
 export const kpDeclineSchema = z.object({ reason: text(3, 500, msg('v.reasonRequired')) });
 
@@ -657,7 +660,7 @@ export const helpAnswerRequestSchema = z.object({
 export const helpFeedbackSchema = z.object({ helpful: z.boolean() });
 
 // ---------------- next steps: «Попросить …» and «Запросить у HR» (DECISIONS «Пустые состояния») ----------------
-const taskAction = z.enum(['census_upload', 'quote_calculate', 'quote_approve', 'kp_send', 'kp_respond', 'contract_draft', 'contract_requisites', 'insured_list', 'legal_review', 'sign_mig', 'sign_client', 'invoice_pay', 'other']);
+const taskAction = z.enum(['census_upload', 'quote_calculate', 'quote_approve', 'kp_send', 'kp_respond', 'contract_draft', 'contract_requisites', 'insured_list', 'legal_review', 'sign_mig', 'sign_client', 'invoice_pay', 'below_min_group', 'other']);
 const taskSubject = { subjectType: z.enum(['deal', 'contract', 'client']), subjectId: uuid };
 /** «Попросить {роль}»: the role, what is asked, what it is about and a comment (optional). */
 export const taskAskSchema = z.object({

@@ -46,9 +46,14 @@ const plusDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:0
 const ru = (iso: string) => iso.split('-').reverse().join('.');
 const csvFile = (name: string, text: string) => ({ name, mimeType: 'text/csv', buffer: Buffer.from(text, 'utf8') });
 
-/** Uploads a two-person appendix 2 through the in-page mock (CSV body). */
+/** `n` more employees for an appendix 2 (columns fullName…relation,principal_pinfl): the minimal group size is 10. */
+const NAMES = ['Bekzod', 'Jasur', 'Sardor', 'Otabek', 'Rustam', 'Dilshod', 'Anvar', 'Farrux'];
+const extraEmployees = (n: number, tag: string) =>
+  Array.from({ length: n }, (_, k) => `Xodimov${tag === '66' ? '' : 'a'} ${NAMES[k]} Aliyevich,1${k}.04.198${k},31${k}048${k}${tag}0000${k},+99893${tag}${String(k).padStart(5, '0')},Engineer,employee,`);
+
+/** Uploads a ten-employee appendix 2 through the in-page mock (CSV body). */
 async function uploadAnnex2(page: Page, contractId: string): Promise<number> {
-  const csv = ['fullName,birthDate,pinfl,phone,position,relation,principal_pinfl,student', 'Testov Test Testovich,15.03.1990,31503900000201,+998935550201,Engineer,employee,,', 'Testova Testa Testovna,01.07.1988,40107880000202,+998935550202,Accountant,employee,,'].join('\n');
+  const csv = ['fullName,birthDate,pinfl,phone,position,relation,principal_pinfl,student', 'Testov Test Testovich,15.03.1990,31503900000201,+998935550201,Engineer,employee,,', 'Testova Testa Testovna,01.07.1988,40107880000202,+998935550202,Accountant,employee,,', ...extraEmployees(8, '77').map((r) => `${r},`)].join('\n');
   return page.evaluate(
     async ({ id, csv }) => {
       const raw = sessionStorage.getItem('mig.session');
@@ -134,10 +139,10 @@ test('1. New client end to end: lead → census → quote above authority → KP
 
   // Census: anonymous; PII columns are dropped with a warning
   await page.getByRole('button', { name: 'Загрузить данные для оценки' }).click();
-  const census = ['fio,gender,birthYear,relation', ...Array.from({ length: 10 }, (_, i) => `Человек ${i},${i % 2 ? 'f' : 'm'},${1975 + i * 3},${i < 8 ? 'employee' : 'child'}`)].join('\n');
+  const census = ['fio,gender,birthYear,relation', ...Array.from({ length: 14 }, (_, i) => `Человек ${i},${i % 2 ? 'f' : 'm'},${1970 + i * 3},${i < 12 ? 'employee' : 'child'}`)].join('\n');
   await page.getByLabel('Файл с данными для оценки').setInputFiles(csvFile('census.csv', census));
   await expect(page.getByTestId('census-dropped')).toContainText('fio');
-  await expect(page.getByTestId('census-stats')).toContainText('10');
+  await expect(page.getByTestId('census-stats')).toContainText('14');
 
   // Quote: −15% is above the underwriter's 10% → the head of underwriting approves
   await as.underwriter(page);
@@ -194,6 +199,8 @@ test('1. New client end to end: lead → census → quote above authority → KP
     'Путев Первый Петрович,15.03.1990,31503901234567,+998907770011,Инженер,,',
     'Путева Вторая Ивановна,01.07.1988,30107881234568,+998907770012,Бухгалтер,,',
     'Путев Младший Первович,12.12.2015,31212151234569,,,child,31503901234567',
+    // Ten employees: the minimal group size.
+    ...extraEmployees(8, '66'),
   ].join('\n');
   await page.getByLabel('Файл приложения 2').setInputFiles(csvFile('list.csv', list));
   await expect(page.getByText('Приложение 2 загружено')).toBeVisible();
@@ -239,7 +246,7 @@ test('1. New client end to end: lead → census → quote above authority → KP
   expect(contract.status).toBe('active');
   const certs = (await api(page, 'GET', `/policies/${contract.policyId}/certificates`)).data as { certificateNumber: string; fullName: string }[];
   // A certificate for every person of Appendix 2, the child included.
-  expect(certs).toHaveLength(3);
+  expect(certs).toHaveLength(11);
   expect(certs[0]!.certificateNumber).toMatch(/^SERT-\d{4}-\d{6}-0001$/);
 
   // The insured person logs in with the phone from Appendix 2 and sees the certificate

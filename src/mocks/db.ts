@@ -257,6 +257,8 @@ export interface ChallengeRow {
   kind: 'staff' | 'hr' | 'insured' | 'clinic' | 'assist';
   expiresAt: number;
   attempts: number;
+  /** Lockout key of the challenge; defaults to the user. Phone challenges lock by the number, known or not. */
+  lockKey?: string;
 }
 export interface GrantRow {
   id: string;
