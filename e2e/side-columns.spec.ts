@@ -32,6 +32,11 @@ for (const role of ['underwriter', 'accountant'] as const) {
     const integrations = page.getByTestId('dashboard-integrations');
     await expect(attention).toBeVisible();
     await expect(integrations).toBeVisible();
+    // Both blocks have loaded (no skeletons): their size no longer changes.
+    await expect(attention.getByRole('status')).toHaveCount(0);
+    await expect(integrations.getByRole('status')).toHaveCount(0);
+    await expect(attention.locator('a, p').first()).toBeVisible();
+    await expect(integrations.locator('li, p').first()).toBeVisible();
     await expect(area(page).locator('tbody tr').nth(5)).toBeVisible();
     // A sibling of the content area, from the bottom of the top bar to the bottom of the window.
     expect(await side.evaluate((el) => el.closest('[data-content-scroll]') === null)).toBe(true);
