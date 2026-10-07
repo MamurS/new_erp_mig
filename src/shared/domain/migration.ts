@@ -9,12 +9,14 @@
 import Papa from 'papaparse';
 import type { z } from 'zod';
 import { msg } from '@/i18n/core';
-import type { AgeBandRate, InsuredRelation, LimitCategory, Money, PricingBasis, ProgramCode, UUID } from '@/shared/types';
+import type { AgeBandRate, InsuredRelation, LimitCategory, MigrationWarning, Money, PricingBasis, ProgramCode, UUID } from '@/shared/types';
 import type { MigrationContractPremium, MigrationIssue, MigrationMetric, MigrationPremiumSource, MigrationReconRow, MigrationStep, MigrationTotals } from '@/shared/types/migration';
 import { PROGRAMS } from './programs';
 import { ageOn } from './family';
 import { bandRateFor } from './pricing';
 import { toCsv } from '@/shared/lib/csv';
+import { legalFormShort, type LegalFormCode } from '@/shared/config/legalForms';
+import { belowMin, countsOf, groupSize, legalFormAllowed, type GroupRules } from './minGroup';
 import {
   MIGRATION_CSV_MAX_ROWS,
   migrationClaimRowSchema,
@@ -156,7 +158,7 @@ export type MigrationRef = { batch: number } | { db: UUID };
 /** What the system already has, as the validation needs it. */
 export interface MigrationDbRefs {
   /** Clients by STIR (ИНН). */
-  clients: Map<string, { id: UUID; hasActivePolicy: boolean }>;
+  clients: Map<string, { id: UUID; hasActivePolicy: boolean; legalForm?: LegalFormCode }>;
   /** Contracts transferred earlier, by their old number. */
   contracts: Map<string, { id: UUID; program: ProgramCode; startDate: string; endDate: string; active: boolean; premiumEmployee: Money; premiumFamily: Money; pricingBasis: PricingBasis; ageBandRates?: AgeBandRate[] }>;
   /** Active insured persons: by PINFL and by old certificate number (transferred ones). */
@@ -232,6 +234,17 @@ export interface BatchResults {
   invoices?: StepResult<MigrationInvoiceRow, { contract: MigrationRef }>;
   /** Per contract of the batch (valid rows), once the insured file is loaded. */
   contractPremiums?: MigrationContractPremium[];
+  /**
+   * Contracts of the batch (by CSV row) that do not meet the rules for new contracts: the client's form is not
+   * allowed, or (once the insured file is loaded) the group is below the minimum. They are loaded anyway
+   * (contracts in force) with a warning in the report and a mark on the records.
+   */
+  groupWarnings?: Map<number, ContractGroupWarnings>;
+}
+
+export interface ContractGroupWarnings {
+  warnings: MigrationWarning[];
+  group?: { size: number; min: number; countsFamily: boolean };
 }
 
 /** Input of a validation: the parsed rows of each file loaded so far (in order) and the migration date. */
@@ -377,8 +390,19 @@ export function contractPremiumCheck(c: { oldNumber: string; number?: string; to
 }
 
 /** Validates the files loaded so far, in the load order. Nothing is written. */
-export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchResults {
+/**
+ * `rules` — the current «Клиенты» parameters (minimum group, allowed legal forms): contracts that do not meet
+ * them are warnings, never errors (they are in force and are transferred as they are).
+ */
+export function validateBatch(input: BatchInput, refs: MigrationDbRefs, rules?: GroupRules): BatchResults {
   const out: BatchResults = {};
+  const flags = new Map<number, ContractGroupWarnings>();
+  const flag = (row: number, w: MigrationWarning, group?: ContractGroupWarnings['group']) => {
+    const f = flags.get(row) ?? { warnings: [] };
+    if (!f.warnings.includes(w)) f.warnings.push(w);
+    if (group) f.group = group;
+    flags.set(row, f);
+  };
   const date = input.migrationDate;
   const f = input.files;
 
@@ -402,8 +426,12 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
 
   // ---- contracts
   const batchClients = new Map((out.clients?.valid ?? []).map((v) => [v.data.stir, v.row]));
+  const batchForms = new Map((out.clients?.valid ?? []).map((v) => [v.data.stir, v.data.legalForm as LegalFormCode]));
+  let contractsCollector: Collector | null = null;
+  let contractsParsed: ({ data: MigrationContractRow; ref: { client: MigrationRef; assistanceId: UUID | null } } | null)[] = [];
   if (f.contracts) {
     const c = new Collector();
+    contractsCollector = c;
     const parsed = parseRows(migrationContractRowSchema, f.contracts, c);
     const seen = new Map<string, number>();
     const res = parsed.map((p, idx) => {
@@ -430,8 +458,15 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
         if (id) assistanceId = id;
         else c.error(row, 'assistance', msg('migration.v.assistanceNotFound'));
       }
+      // A client of a form no longer allowed for new contracts: transferred all the same (a contract in force).
+      const form = inBatch !== undefined ? batchForms.get(p.clientStir) : inDb?.legalForm;
+      if (rules && form && !legalFormAllowed(form, rules)) {
+        c.warn(row, 'clientStir', msg('migration.v.formNotAllowed', { contract: p.oldNumber, form: legalFormShort(form) }));
+        flag(row, 'form_not_allowed');
+      }
       return client ? { data: p, ref: { client, assistanceId } } : null;
     });
+    contractsParsed = res;
     out.contracts = finish('contracts', f.contracts, res, c);
   }
 
@@ -512,6 +547,19 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
       if (!check.match && persons[0]) c.warn(persons[0].row, 'premium', msg('migration.v.premiumMismatch', { contract: v.data.oldNumber, sum: groupDigits(check.insuredSum), total: groupDigits(check.total) }));
     }
     out.contractPremiums = checks;
+    // Per contract of the batch: the group of the rows to be written against the minimum (a warning on the contract).
+    if (rules && contractsCollector && f.contracts) {
+      for (const v of out.contracts?.valid ?? []) {
+        const members = res.flatMap((x, idx) => (x && !c.hasError(idx + 2) && 'batch' in x.ref.contract && x.ref.contract.batch === v.row ? [{ relation: x.data.relation }] : []));
+        const counts = countsOf(members);
+        if (!belowMin(counts, rules)) continue;
+        const size = groupSize(counts, rules);
+        contractsCollector.warn(v.row, 'oldNumber', msg(rules.countsFamily ? 'migration.v.belowMinGroupFamily' : 'migration.v.belowMinGroup', { contract: v.data.oldNumber, n: size, min: rules.min }));
+        flag(v.row, 'below_min_group', { size, min: rules.min, countsFamily: rules.countsFamily });
+      }
+      // Warnings never change which rows are written: the step result is the same apart from its issues.
+      out.contracts = finish('contracts', f.contracts, contractsParsed, contractsCollector);
+    }
     out.insured = finish('insured', f.insured, res, c);
   }
 
@@ -616,6 +664,7 @@ export function validateBatch(input: BatchInput, refs: MigrationDbRefs): BatchRe
     });
     out.invoices = finish('invoices', f.invoices, res, c);
   }
+  if (flags.size) out.groupWarnings = flags;
   return out;
 }
 

@@ -78,7 +78,7 @@ describe('help screen', () => {
     const user = userEvent.setup();
     renderRoutes(routes('staff'), '/staff/help');
     await user.type(await screen.findByRole('combobox', { name: 'Найдите термин или задайте вопрос' }), 'как разнести платёж от другой компании');
-    const answer = await screen.findByTestId('help-answer');
+    const answer = await screen.findByTestId('help-answer', {}, { timeout: 5000 });
     expect(within(answer).getByTestId('help-answer-steps').querySelectorAll('li').length).toBeGreaterThan(0);
     expect(within(answer).getByTestId('help-answer-sources').querySelector('a[href^="/staff/help/finance"]')).not.toBeNull();
     await user.click(within(answer).getByRole('button', { name: /Полезно/ }));

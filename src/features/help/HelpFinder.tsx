@@ -142,7 +142,8 @@ export function HelpFinder({ role, base, support, onOpen, initialQuestion }: { r
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (shown && active >= 0 && options[active]) choose(options[active]);
-      else if (text && !aiOff) void run(text);
+      // The same question already asked (by the pause in typing) is not asked again: one answer, one log entry.
+      else if (text && !aiOff && text !== lastAsked.current) void run(text);
     } else if (e.key === 'Escape' && shown) {
       e.preventDefault();
       setOpen(false);

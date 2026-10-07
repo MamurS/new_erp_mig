@@ -104,6 +104,7 @@ The main terms and abbreviations of the system; in parentheses — how they appe
 
 | Term | What it means |
 | --- | --- |
+| **Minimum group size** | The smallest number of a company's employees for which MIG concludes a DMS contract (demo: 10). Below it a quote is approved only as an exception with a comment, and a contract without the exception is not signed. |
 | **Underwriter** | A MIG employee who assesses the risk, calculates the price (the quote) and approves the financial terms of the contract. |
 | **Appeal** | A challenge of a claim decision by the insured person or a clinic. It is reviewed by a claims officer. |
 | **Assistance, assistance company** | A MIG partner that runs a 24/7 call centre, books doctor appointments, issues guarantee letters, reviews clinic registers, pays clinics and invoices MIG for reimbursement. Each assistance company serves the clients assigned to it. |
@@ -215,6 +216,8 @@ A new client goes through eight deal stages: lead → census data → quote → 
 
 If nothing happens with a lead for a long time (demo: 7 days), a reminder appears in the manager's queue.
 
+**Companies only.** DMS is for employees of companies that are MIG clients and their family members. The sole proprietor form (YaTT) is not allowed by default: such a lead is not saved and the «Form» field explains why. The list of allowed forms is set by the «Allowed legal forms of the policyholder» parameter (needs a MIG decision). If the approximate headcount is below the minimum (demo: 10 employees), a warning appears under the field — the lead can be saved, but its quote will only be approved as an exception.
+
 ### Stage 2. Census data {#census}
 
 <!-- audience: staff -->
@@ -272,6 +275,26 @@ At this stage **names, PINFL and phone numbers are not needed** — if they are 
 8. To change a sent contract, click “New version” — the signatures are reset.
 
 Next come signing, payment and policy issue (section 6).
+
+### Minimum group size and allowed forms {#min-group}
+
+<!-- audience: staff -->
+
+Parameters of the «Clients» group in «DMS parameters» (all marked «demo value»):
+
+- **Minimum group size** — demo: 10.
+- **Family members in the minimum** — no by default: only employees count.
+- **Allowed legal forms of the policyholder** — all except YaTT (sole proprietor); marked «needs a MIG decision».
+- **Group fell below the minimum during the term** — «notify» by default (a task for the underwriter and the manager); no automatic termination.
+
+Where it is checked:
+
+1. **Lead:** a disallowed form is not saved; a headcount below the minimum gives a warning.
+2. **Data for assessment:** the «Employees N of the minimum M» plaque; below the minimum it is red.
+3. **Quote:** below the minimum it cannot be approved within authority — only «Submit for approval». An employee with the exception authority (demo: the head of underwriting) approves it, and only with a mandatory comment «Why the exception is made». The exception is shown in the quote: who, when and why.
+4. **Contract:** before signing, the system counts the employees in appendix 2. If they are below the minimum and no exception is approved in the quote, a red plaque is shown at the top and the contract cannot be signed.
+
+The server checks the thresholds and forms too, not only the screen.
 
 ### What the next stage needs {#stage-checklist}
 
@@ -372,6 +395,12 @@ Any change to an active contract — a new employee, a dismissal, a child, a pla
 2. Each HR action creates a **change request** with a date.
 3. **A new employee is covered from the date of the HR request** (by default), without waiting for the endorsement to be signed. An excluded person loses cover from the exclusion date; in the app they see “Policy ended”.
 4. The assistance company immediately sees the changes in its list of insured persons.
+
+### Group below the minimum during the term {#below-min-term}
+
+<!-- audience: staff hr -->
+
+If HR excludes an employee and the insured group falls below the minimum, a warning «Under the contract the minimum group size is M» appears before confirmation. The exclusion is allowed: the request goes to MIG as usual, and the underwriter and the manager get the task «Group below the minimum after an exclusion» — they decide what to do with the contract terms. There is no automatic termination. If MIG sets the parameter to «Forbid such an exclusion», the request is not sent and HR sees an explanation.
 
 ### Family members {#family}
 
@@ -912,6 +941,12 @@ The premium of each person is taken in this order: the individual premium from t
 4. All transferred records are marked “Transferred from the previous system” with the date and the author of the batch.
 5. Insured persons see in the app the remaining limit **taking into account what was used before the transfer**.
 
+### Contracts below the minimum and disallowed forms {#migration-group-warnings}
+
+<!-- audience: staff:admin -->
+
+A transferred active contract below the minimum group size, or with a client of a disallowed form, is loaded as usual — it stays in force until the end of its term. The batch report shows a warning for it, and the contract and client cards carry the marks «Below the minimum group size» and «Form not allowed». The rules apply to new contracts.
+
 ### Rollback {#migration-rollback}
 
 <!-- audience: staff:admin -->
@@ -955,6 +990,11 @@ Typical situations and what to do; if a situation is not on the list, contact th
 | **A partner's API key is suspected to have leaked** | The MIG administrator revokes the key in the partner card immediately; the partner creates a new one. Check the request log. | <!-- audience: staff clinic assist -->
 | **AI gives strange answers** | Mark “Disagree” with a comment. If the problem is widespread, the administrator clicks “Turn off AI everywhere” — work continues without hints. | <!-- audience: staff assist -->
 | **An integration error with a clinic or 1C** | The “Integrations” block on the administrator's dashboard shows the status and the queue. Check the partner's request log and contact the partner. | <!-- audience: staff -->
+| **A sole proprietor lead is not saved** | DMS is only for companies. If MIG decides otherwise, an administrator changes the «Allowed legal forms of the policyholder» parameter (a second administrator confirms). | <!-- audience: staff -->
+| **A quote cannot be approved: the group is below the minimum** | Submit it for approval. The head of underwriting can approve the exception with a comment on why it is justified. | <!-- audience: staff -->
+| **A contract cannot be signed: below the minimum** | Appendix 2 has fewer employees than the minimum and no exception is approved in the quote. Upload the full list or approve the exception in the quote. | <!-- audience: staff -->
+| **After an exclusion the group is below the minimum** | HR can exclude the employee; the underwriter and the manager get a task and agree with the client what to do with the contract terms. | <!-- audience: staff hr -->
+| **The app says «The code did not match, or this number is not found»** | The message is deliberately the same for an unknown number and a wrong code and appears only after the code is entered — so nobody can find out by trial who is insured. Check the SMS code; if it is right, ask your company's HR to check the number in the list of insured people. | <!-- audience: staff hr insured -->
 
 ## 18. Security and privacy {#security}
 

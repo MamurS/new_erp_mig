@@ -35,6 +35,7 @@ import { monthShort } from '../components/months';
 import { INSURED_CARD_ROLES } from '../nav';
 import { useTopbar } from '../topbar';
 import { MigratedBadge } from '../components/MigratedBadge';
+import { MigrationWarnings } from '../admin/migration/MigrationWarnings';
 import { ClientDocumentsTable } from '../components/ClientDocumentsTable';
 import { HrLetterDialog } from '../components/HrLetterDialog';
 import { AssistanceBlock } from '../assistance/AssistanceBlock';
@@ -83,6 +84,7 @@ export default function ClientCardPage() {
               {t('staff.clientCard.manager', { name: c.managerName })}
             </p>
             <MigratedBadge mark={c.migration} />
+            <MigrationWarnings mark={c.migration} of="client" />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

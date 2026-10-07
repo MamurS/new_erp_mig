@@ -293,6 +293,8 @@ export interface HrOverview {
   companyName: string;
   companyLegalForm?: LegalFormCode;
   insuredCount: number;
+  /** Active insured people without a pending exclusion, against the minimal group size. */
+  group: { employees: number; family: number; min: number; countsFamily: boolean };
   notInApp: number;
   nextInvoice: Invoice | null;
   policy: { number: string; program: ProgramCode; programName: string; startDate: ISODate; endDate: ISODate } | null;
@@ -708,6 +710,8 @@ export type TaskAction =
   | 'sign_mig'
   | 'sign_client'
   | 'invoice_pay'
+  /** The group fell below the minimum after an HR exclusion: review the terms (underwriter, manager). */
+  | 'below_min_group'
   | 'other';
 
 export type TaskSubjectType = 'deal' | 'contract' | 'client';
@@ -798,6 +802,8 @@ export interface QuoteView extends Quote {
   authorityProblem: string | null;
   canApprove: boolean;
   canEdit: boolean;
+  /** The group of the census against the minimal group size («Клиенты» parameters). */
+  group: { size: number; min: number; countsFamily: boolean; below: boolean };
 }
 
 export interface SignatoryOption {
@@ -821,6 +827,8 @@ export interface ContractView extends Contract {
   /** The client's paper original is overdue (LIFECYCLE_SPEC §8). */
   originalOverdue: boolean;
   assistanceName?: string;
+  /** Appendix 2 (or the terms) against the minimal group size; `exception`: approved in the quote. */
+  group: { size: number; min: number; below: boolean; exception: boolean };
 }
 
 export interface EndorsementSummary {

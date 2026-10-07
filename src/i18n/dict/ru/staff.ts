@@ -532,6 +532,8 @@ export const staff = {
   'staff.params.colValue': 'Значение',
   'staff.params.colAllowed': 'Допустимо',
   'staff.params.demo': 'демо-значение',
+  'staff.params.needsDecision': 'требует решения МИГ',
+  'staff.params.forms': 'Допустимые формы',
   'staff.params.pendingChip': 'на подтверждении',
   'staff.params.editAria': 'Изменить: {label}',
   'staff.params.history': 'История изменений',

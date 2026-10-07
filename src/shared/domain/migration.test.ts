@@ -220,3 +220,27 @@ describe('premiums of insured persons', () => {
     expect(contractPremiumCheck({ oldNumber: 'X-2', total: 100 }, []).match).toBe(false);
   });
 });
+
+describe('rules for new contracts on transferred contracts (minimum group, allowed forms)', () => {
+  const rules = { min: 2, countsFamily: false, allowedForms: 0b1, belowMinDuringTerm: 'notify' as const };
+  const files = { clients: templates.clients, contracts: templates.contracts, insured: templates.insured };
+  it('a warning per contract, never an error; without rules nothing is checked', () => {
+    // Template: one employee and the spouse, client form llc (allowed by the mask with the first form only).
+    const res = validateBatch({ migrationDate: DATE, files }, emptyDbRefs(), rules);
+    expect(res.contracts!.issues).toEqual([{ row: 2, field: 'oldNumber', level: 'warning', message: 'migration.v.belowMinGroup|{"contract":"MIG-2026/0458","n":1,"min":2}' }]);
+    expect(res.contracts!.valid).toHaveLength(1);
+    expect(res.groupWarnings?.get(2)).toEqual({ warnings: ['below_min_group'], group: { size: 1, min: 2, countsFamily: false } });
+    // Family members count only with minGroupCountsFamily.
+    expect(validateBatch({ migrationDate: DATE, files }, emptyDbRefs(), { ...rules, countsFamily: true }).contracts!.issues).toEqual([]);
+    expect(validateBatch({ migrationDate: DATE, files }, emptyDbRefs()).contracts!.issues).toEqual([]);
+  });
+  it('the form of a client in the system or of the clients file', () => {
+    const refs = emptyDbRefs();
+    refs.clients.set('301234567', { id: 'c1', hasActivePolicy: false, legalForm: 'sole_proprietor' });
+    const res = validateBatch({ migrationDate: DATE, files: { contracts: templates.contracts } }, refs, rules);
+    expect(keys(res.contracts!.issues)).toEqual(['warning:clientStir:migration.v.formNotAllowed']);
+    expect(res.groupWarnings?.get(2)?.warnings).toEqual(['form_not_allowed']);
+    const inFile = validateBatch({ migrationDate: DATE, files: { clients: [{ ...templates.clients[0]!, legalForm: 'jsc' }], contracts: templates.contracts } }, emptyDbRefs(), rules);
+    expect(keys(inFile.contracts!.issues)).toEqual(['warning:clientStir:migration.v.formNotAllowed']);
+  });
+});

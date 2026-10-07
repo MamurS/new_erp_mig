@@ -14,7 +14,7 @@ const SESS_KEY = 'mig.mock.sessions';
  * family consents and requests; 7: the work log of the demo client; 8: tasks, notifications, HR cabinets of clients with a sent offer): a stored database with
  * another or no version is discarded and the fresh seed is used.
  */
-export const MOCK_DB_VERSION = 8;
+export const MOCK_DB_VERSION = 9;
 
 type Snapshot = Omit<Db, 'sessions'> & { schemaVersion?: number };
 

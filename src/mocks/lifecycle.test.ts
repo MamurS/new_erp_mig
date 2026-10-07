@@ -56,8 +56,10 @@ const scan = (side: 'mig' | 'client') => {
 const iso = (ms: number) => new Date(ms + 5 * 3600_000).toISOString().slice(0, 10);
 const today = () => iso(Date.now());
 
-const CENSUS = ['gender,birthYear,relation,fullName,pinfl', ...Array.from({ length: 12 }, (_, k) => `${k % 2 ? 'f' : 'm'},${1975 + k * 2},${k % 4 === 3 ? 'child' : k % 4 === 2 ? 'spouse' : 'employee'},Имя ${k},3000000000000${k}`)].join('\n');
-const LIST = ['fullName,birthDate,pinfl,phone,position,familyMembers', 'Новый Сотрудник Первый,15.03.1990,31503900000101,+998935550101,Инженер,1', 'Новая Сотрудница Вторая,01.07.1988,40107880000102,+998935550102,Бухгалтер,0'].join('\n');
+// 24 rows, 12 of them employees: at or above the minimal group size (minGroupSize, demo 10).
+const CENSUS = ['gender,birthYear,relation,fullName,pinfl', ...Array.from({ length: 24 }, (_, k) => `${k % 2 ? 'f' : 'm'},${1975 + (k % 12) * 2},${k % 4 === 3 ? 'child' : k % 4 === 2 ? 'spouse' : 'employee'},Имя ${k},3000000000000${k}`)].join('\n');
+// Appendix 2: ten employees, the minimal group size.
+const LIST = ['fullName,birthDate,pinfl,phone,position,familyMembers', 'Новый Сотрудник Первый,15.03.1990,31503900000101,+998935550101,Инженер,1', 'Новая Сотрудница Вторая,01.07.1988,40107880000102,+998935550102,Бухгалтер,0', ...Array.from({ length: 8 }, (_, k) => `Сотрудник Номер ${['Три', 'Четыре', 'Пять', 'Шесть', 'Семь', 'Восемь', 'Девять', 'Десять'][k]},0${k + 1}.02.198${k},3010${k + 1}8${k}0000${k + 103},+99893555${String(k + 103).padStart(4, '0')},Инженер,0`)].join('\n');
 
 const lead = {
   legalForm: 'llc',
@@ -143,10 +145,12 @@ describe('full path of a new client (§17 e2e 1 on the API)', () => {
     const policy = db().policies.find((p) => p.contractId === contract.id)!;
     expect(policy.status).toBe('active');
     const people = db().insured.filter((i) => i.policyId === policy.id);
-    expect(people.map((p) => p.certificateNumber)).toEqual([expect.stringMatching(/^SERT-\d{4}-\d{6}-0001$/), expect.stringMatching(/-0002$/)]);
-    expect(db().smsOutbox.filter((s) => people.some((p) => p.id === s.insuredId))).toHaveLength(2);
+    expect(people).toHaveLength(10);
+    expect(people[0]!.certificateNumber).toMatch(/^SERT-\d{4}-\d{6}-0001$/);
+    expect(people[1]!.certificateNumber).toMatch(/-0002$/);
+    expect(db().smsOutbox.filter((s) => people.some((p) => p.id === s.insuredId))).toHaveLength(10);
     const certs = await call<{ certificateNumber: string }[]>(`/policies/${policy.id}/certificates`, { sid: hr });
-    expect(certs.data).toHaveLength(2);
+    expect(certs.data).toHaveLength(10);
     expect((await call(`/policies/${policy.id}/certificates`, { sid: await login('hr@demo-client.uz') })).status).toBe(404);
     const insured = await loginPhone('+998935550101');
     const mine = await call<{ certificateNumber: string; fullName: string }>('/me/certificate', { sid: insured });

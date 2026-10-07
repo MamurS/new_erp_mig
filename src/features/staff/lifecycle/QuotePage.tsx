@@ -14,7 +14,7 @@ import { AGE_BAND_LABEL, calculateQuote, quoteAuthorityProblem } from '@/shared/
 import { PROGRAM_LABEL } from '@/shared/domain/labels';
 import { PRICING_BASES, PRICING_BASIS_LABEL } from '@/shared/domain/pricing';
 import { useSession } from '@/shared/auth/session';
-import { quoteApproveSchema, quotePatchSchema, quoteRejectSchema } from '@/shared/schemas/forms';
+import { quoteApproveExceptionSchema, quoteApproveSchema, quotePatchSchema, quoteRejectSchema } from '@/shared/schemas/forms';
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from '@/shared/lib/format';
 import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Button } from '@/shared/ui/button';
@@ -68,7 +68,7 @@ function Calculator({ quote }: { quote: QuoteView }) {
   );
   const shown = editable && calc ? calc : quote;
   const authority = session?.user.authority;
-  const problem = editable && calc ? quoteAuthorityProblem(calc, authority) : quote.authorityProblem;
+  const problem = editable && calc ? quoteAuthorityProblem(calc, authority, quote.group) : quote.authorityProblem;
 
   const parse = () => {
     const parsed = quotePatchSchema.safeParse({ program, adjustments, pricingBasis });
@@ -134,6 +134,22 @@ function Calculator({ quote }: { quote: QuoteView }) {
       {problem && (quote.status === 'draft' || quote.status === 'rejected' || quote.status === 'pending_approval') && (
         <p role="status" className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="quote-authority">
           {t('staffLc.quote.authorityProblem', { problem: tm(problem) })}
+        </p>
+      )}
+      {quote.census && (
+        <p
+          role={quote.group.below && !quote.belowMinException ? 'alert' : undefined}
+          data-testid="quote-min-group"
+          data-below={quote.group.below}
+          className={`mb-3 rounded-card px-3 py-2 text-[13px] ${quote.group.below && !quote.belowMinException ? 'bg-danger-soft text-danger-text' : 'bg-rail text-muted'}`}
+        >
+          {t(quote.group.countsFamily ? 'dom.group.countWithFamily' : 'dom.group.count', { n: quote.group.size, min: quote.group.min })}
+          {quote.group.below && !quote.belowMinException && <> — {t('staffLc.quote.belowMin')}</>}
+        </p>
+      )}
+      {quote.belowMinException && (
+        <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text" data-testid="quote-exception">
+          {t('staffLc.quote.exception', { name: quote.belowMinException.byName, at: formatDateTime(quote.belowMinException.at), comment: quote.belowMinException.comment })}
         </p>
       )}
       {!quote.census && <p className="mb-3 rounded-card bg-warning-soft px-3 py-2 text-[13px] text-warning-text">{t('staffLc.quote.censusFirst')}</p>}
@@ -277,11 +293,11 @@ function Calculator({ quote }: { quote: QuoteView }) {
         open={dialog === 'approve'}
         onClose={() => setDialog(null)}
         title={t('staffLc.quote.approveTitle')}
-        description={t('staffLc.quote.approveDesc')}
-        label={t('staffLc.quote.commentOptional')}
+        description={quote.group.below ? t('staffLc.quote.exceptionDesc', { n: quote.group.size, min: quote.group.min }) : t('staffLc.quote.approveDesc')}
+        label={quote.group.below ? t('staffLc.quote.exceptionComment') : t('staffLc.quote.commentOptional')}
         field="comment"
-        optional
-        schema={quoteApproveSchema}
+        optional={!quote.group.below}
+        schema={quote.group.below ? quoteApproveExceptionSchema : quoteApproveSchema}
         confirmLabel={t('staffLc.quote.agree')}
         onSubmit={(comment) => action.mutateAsync({ id: quote.id, action: 'approve', comment: comment || undefined })}
       />

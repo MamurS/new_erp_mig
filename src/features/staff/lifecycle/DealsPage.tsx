@@ -6,7 +6,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, LayoutGrid, Plus, Table2 } from 'lucide-react';
 import type { DealView } from '@/shared/types/dto';
 import { useCreateLead, useDeal, useDeals, useStaffDirectory } from '@/shared/api/queries/lifecycle';
-import { errorMessage } from '@/shared/api/client';
+import { ApiRequestError, errorMessage } from '@/shared/api/client';
+import { useDmsParamValues } from '@/shared/api/queries/params';
+import { groupRulesOf, legalFormProblem } from '@/shared/domain/minGroup';
+import { isLegalForm } from '@/shared/config/legalForms';
 import { useCan } from '@/shared/auth/guards';
 import { DEAL_STAGE_LABEL, DEAL_STAGES } from '@/shared/domain/contracts';
 import { leadCreateSchema } from '@/shared/schemas/forms';
@@ -52,7 +55,17 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
   const [v, setV] = useState(EMPTY_LEAD);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (k: keyof typeof EMPTY_LEAD) => (e: { target: { value: string } }) => setV((x) => ({ ...x, [k]: e.target.value }));
+  // DMS only for companies with a minimal group («Клиенты» parameters): a form outside the allowed ones
+  // blocks saving (the server refuses it too); a small expected headcount only warns.
+  const rules = groupRulesOf(useDmsParamValues());
+  const formProblem = isLegalForm(v.legalForm) ? legalFormProblem(v.legalForm, rules) : null;
+  const headcount = Number(v.estimatedHeadcount);
+  const smallGroup = Number.isInteger(headcount) && headcount > 0 && headcount < rules.min;
   const submit = async () => {
+    if (formProblem) {
+      setErrors({ legalForm: formProblem });
+      return;
+    }
     const parsed = leadCreateSchema.safeParse({
       legalForm: v.legalForm,
       name: v.name,
@@ -75,6 +88,7 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
       toast.success(t('staffLc.deals.leadCreated', { number: deal.number }));
       navigate(`/staff/deals/${deal.id}`);
     } catch (e) {
+      if (e instanceof ApiRequestError && e.fields) setErrors(e.fields);
       toast.error(errorMessage(e));
     }
   };
@@ -102,7 +116,7 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label={t('staffLc.deals.legalForm')} error={tm(errors.legalForm) || undefined}>
+        <Field label={t('staffLc.deals.legalForm')} error={tm(formProblem ?? errors.legalForm) || undefined}>
           {(a) => (
             <Select {...a} value={v.legalForm} onChange={set('legalForm')}>
               <LegalFormOptions />
@@ -111,7 +125,14 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
         </Field>
         <div className="sm:col-span-2">{f('name', t('common.name'), 'name', { maxLength: 120 })}</div>
         {f('inn', t('staffLc.deals.inn'), 'inn', { maxLength: 11, inputMode: 'numeric' })}
-        {f('estimatedHeadcount', t('staffLc.deals.headcount'), 'estimatedHeadcount', { maxLength: 6, inputMode: 'numeric' })}
+        <div>
+          {f('estimatedHeadcount', t('staffLc.deals.headcount'), 'estimatedHeadcount', { maxLength: 6, inputMode: 'numeric' })}
+          {smallGroup && (
+            <p role="status" className="mt-1 text-[12px] text-warning-text" data-testid="headcount-warning">
+              {t('staffLc.deals.headcountBelowMin', { min: rules.min })}
+            </p>
+          )}
+        </div>
         {f('currentInsurer', t('staffLc.deals.currentInsurer'), 'currentInsurer', { maxLength: 120 })}
         {f('bank', t('staffLc.deals.bank'), 'requisites.bank', { maxLength: 120 })}
         {f('account', t('staffLc.deals.account'), 'requisites.account', { maxLength: 24, inputMode: 'numeric' })}

@@ -4,7 +4,7 @@
  * insured persons, used limits, open claims, unpaid invoices), reconciliation, and the rollback with its
  * rules: a batch is rolled back only while nobody has acted on its records.
  */
-import type { AuditAction, ClaimEvent, Contract, Deal, Invoice, LimitCategory, MigrationMark, Policy, SessionUser, UUID } from '@/shared/types';
+import type { AuditAction, ClaimEvent, Contract, Deal, Invoice, LimitCategory, MigrationMark, MigrationWarning, Policy, SessionUser, UUID } from '@/shared/types';
 import type { MigrationBatchSummary, MigrationBatchView, MigrationContractPremium, MigrationRollbackBlocker, MigrationStep, MigrationStepView } from '@/shared/types/migration';
 import { can } from '@/shared/auth/permissions';
 import { MIGRATION_STEPS, contractPremiumCheck, emptyDbRefs, loadedTotals, reconcile, validateBatch, type BatchResults, type MigrationDbRefs, type MigrationRef } from '@/shared/domain/migration';
@@ -18,7 +18,8 @@ import { syncAssistance } from './assistance-core';
 import { nextClaimNumber } from './clinic-core';
 import { dealEvent, nextInvoiceNumber, refreshInvoice } from './lifecycle-core';
 import { currentReserve } from './settlement-core';
-import { numbering } from './params';
+import { numbering, paramValues } from './params';
+import { groupRulesOf, legalFormAllowed } from '@/shared/domain/minGroup';
 import { randomId } from './rng';
 import { DAY, tzIso } from './time';
 
@@ -35,7 +36,7 @@ export function dbRefs(d: Db): MigrationDbRefs {
   const refs = emptyDbRefs();
   for (const c of d.clients) {
     const p = d.policies.find((x) => x.id === c.activePolicyId);
-    refs.clients.set(c.inn, { id: c.id, hasActivePolicy: !!p && p.status === 'active' });
+    refs.clients.set(c.inn, { id: c.id, hasActivePolicy: !!p && p.status === 'active', legalForm: c.legalForm });
   }
   for (const c of d.contracts) {
     if (!c.externalNumber) continue;
@@ -74,7 +75,8 @@ export function validate(d: Db, b: MigrationBatchRow, upTo?: MigrationStep): Bat
     const f = b.files[s];
     if (k <= last && f && b.steps[s]?.status !== 'skipped') files[s] = f.rows;
   });
-  return validateBatch({ migrationDate: b.migrationDate, files }, dbRefs(d));
+  // The «Клиенты» parameters now: contracts below the minimum or of a form not allowed are warnings.
+  return validateBatch({ migrationDate: b.migrationDate, files }, dbRefs(d), groupRulesOf(paramValues()));
 }
 
 /** Rows of every step that will be written now (valid rows of confirmed steps). */
@@ -211,6 +213,13 @@ export function batchView(d: Db, b: MigrationBatchRow, user: SessionUser): Migra
 
 const MIGRATED_BY = (b: MigrationBatchRow, at: string): MigrationMark => ({ batchId: b.id, at, byName: b.createdByName });
 
+/** The mark with the rules for new contracts the record does not meet (a new object: marks are not shared). */
+function withWarnings(mark: MigrationMark, extra?: { warnings?: MigrationWarning[]; group?: MigrationMark['group'] }): MigrationMark {
+  const warnings = [...new Set([...(mark.warnings ?? []), ...(extra?.warnings ?? [])])];
+  const group = extra?.group ?? mark.group;
+  return { batchId: mark.batchId, at: mark.at, byName: mark.byName, ...(warnings.length ? { warnings } : {}), ...(group ? { group } : {}) };
+}
+
 function managerOf(d: Db, fallback: { id: UUID; name: string }): { id: UUID; name: string } {
   const s = d.staff.find((x) => x.active && x.role === 'sales_manager');
   return s ? { id: s.id, name: s.fullName } : fallback;
@@ -220,6 +229,7 @@ function managerOf(d: Db, fallback: { id: UUID; name: string }): { id: UUID; nam
 export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, approver: SessionUser): void {
   const at = tzIso(Date.now());
   const mark = MIGRATED_BY(b, at);
+  const rules = groupRulesOf(paramValues());
   const author = d.staff.find((s) => s.id === b.createdById);
   const manager = managerOf(d, { id: b.createdById, name: b.createdByName });
   const signatory = d.staff.find((s) => s.active && s.signatory?.canSign) ?? author;
@@ -255,7 +265,7 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
       lossRatio: null,
       createdAt: at,
       requisites: { bank: r.bank, account: r.account, mfo: r.mfo, director: r.director, directorBasis: r.directorBasis ?? 'Устав', ...(r.address ? { address: r.address } : {}) },
-      migration: mark,
+      migration: { ...mark, ...(legalFormAllowed(r.legalForm, rules) ? {} : { warnings: ['form_not_allowed' as const] }) },
     };
     d.clients.unshift(client);
     clientByRow.set(v.row, client);
@@ -323,8 +333,10 @@ export function applyBatch(d: Db, b: MigrationBatchRow, res: BatchResults, appro
       activatedAt: at,
       insuredCount: members.length,
       externalNumber: r.oldNumber,
-      migration: mark,
+      migration: withWarnings(mark, res.groupWarnings?.get(v.row)),
     };
+    // A client of the batch carries the warnings of its transferred contracts too.
+    if (client.migration?.batchId === b.id) client.migration = withWarnings(client.migration, { warnings: c.migration?.warnings ?? [] });
     const policy: Policy = {
       id: randomId(),
       number: nextPolicyNumber(d, Number(r.startDate.slice(0, 4))),

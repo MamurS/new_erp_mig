@@ -29,6 +29,9 @@ import {
 import { DAY, isoDay, parseIso, tzIso } from '../time';
 import { toHrEmployee } from '../views';
 import { DEMO_STAFF } from '../credentials';
+import { groupRules } from '../params';
+import { createTask, subjectRefs } from '../tasks-core';
+import { countsOf, exclusionDropsBelow, groupSize, type GroupCounts } from '@/shared/domain/minGroup';
 
 export const K_ANON = 10;
 const CSV_MAX_BYTES = 2 * 1024 * 1024;
@@ -97,6 +100,24 @@ function employeeView(d: ReturnType<typeof db>, i: InsuredRow): HrEmployee {
   return { ...toHrEmployee(d, i), ...(pending ? { pendingExclusionFrom: pending.effectiveDate } : {}), ...(rejected ? { rejectionReason: rejected.rejectionReason } : {}) };
 }
 
+/** The insured group of a client as the minimum counts it: active people without a pending exclusion. */
+function activeGroup(d: ReturnType<typeof db>, clientId: string): GroupCounts {
+  const leaving = new Set(d.policyChanges.filter((c) => c.clientId === clientId && c.kind === 'exclude' && c.status === 'pending').map((c) => c.insuredId));
+  return countsOf(d.insured.filter((i) => i.clientId === clientId && i.status === 'active' && !leaving.has(i.id)));
+}
+
+/** An exclusion during the term leaves the group below the minimum: a task for the underwriter and the manager. */
+function belowMinTasks(d: ReturnType<typeof db>, user: SessionUser & { companyId: string }, after: GroupCounts): void {
+  const rules = groupRules();
+  const refs = subjectRefs(d, 'client', user.companyId);
+  if (!refs) return;
+  const comment = `После исключения по заявке HR: ${groupSize(after, rules)} из минимума ${rules.min}${rules.countsFamily ? ' (с членами семьи)' : ''}. Решите, что делать с условиями договора.`;
+  for (const toRole of ['underwriter', 'sales_manager'] as const) {
+    if (d.tasks.some((x) => x.status === 'open' && x.action === 'below_min_group' && x.toRole === toRole && x.clientId === user.companyId)) continue;
+    createTask(d, user, { action: 'below_min_group', toRole, subjectType: 'client', subjectId: user.companyId, comment }, refs);
+  }
+}
+
 export const hrHandlers = [
   http.get(
     `${API}/hr/overview`,
@@ -115,6 +136,7 @@ export const hrHandlers = [
         companyName: client.name,
         companyLegalForm: client.legalForm,
         insuredCount: employees.length,
+        group: { ...activeGroup(d, client.id), min: groupRules().min, countsFamily: groupRules().countsFamily },
         // Only people with an own phone can use the app (a child lives in the parent's app).
         notInApp: employees.filter((i) => i.appStatus !== 'active' && !!i.phone).length,
         nextInvoice,
@@ -201,6 +223,12 @@ export const hrHandlers = [
       const { excludeFrom } = await body(ctx.request, hrExcludeSchema);
       if (i.status === 'excluded') throw new HttpError(409, 'conflict', 'srv.hr.alreadyExcluded');
       const d = db();
+      const rules = groupRules();
+      const before = activeGroup(d, user.companyId);
+      const leavingFamily = i.relation === 'employee' ? familyOf(d, i.id).filter((x) => x.status === 'active' && !d.policyChanges.some((c) => c.status === 'pending' && c.insuredId === x.id)).length : 0;
+      const excluded: GroupCounts = i.relation === 'employee' ? { employees: 1, family: leavingFamily } : { employees: 0, family: 1 };
+      const drops = exclusionDropsBelow(before, excluded, rules);
+      if (drops && rules.belowMinDuringTerm === 'forbid') throw new HttpError(409, 'conflict', 'srv.hr.belowMinForbidden', { params: { min: rules.min } });
       const row = requestChange(d, user, clientOfHr(user), 'exclude', { effectiveDate: excludeFrom, fullName: i.fullName, position: i.position, insured: i });
       audit(user, 'policy_change_requested', { targetType: 'policy', targetId: row.policyId, targetLabel: `${row.policyNumber}: исключение ${insuredLabel(i.id)}` });
       // The family of a leaving employee leaves with them: an exclusion request for each active member.
@@ -211,6 +239,7 @@ export const hrHandlers = [
           audit(user, 'policy_change_requested', { targetType: 'policy', targetId: fr.policyId, targetLabel: `${fr.policyNumber}: исключение ${insuredLabel(m.id)}` });
         }
       }
+      if (drops) belowMinTasks(d, user, { employees: before.employees - excluded.employees, family: before.family - excluded.family });
       return employeeView(d, i);
     }),
   ),

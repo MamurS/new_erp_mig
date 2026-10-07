@@ -3,7 +3,8 @@ import { tm } from '@/i18n';
 import { DEFAULT_NUMBERING, DOC_NUMBER_KINDS, DOC_NUMBER_RE } from '@/shared/domain/numbering';
 import { dmsParamChangeSchema } from '@/shared/schemas/forms';
 import { certificateNumber, contractNumber, endorsementNumber } from '@/shared/domain/contracts';
-import { formatParamValue, isNumberingParamKey, numberingExample, numberingTemplateError, paramLabel } from './dmsParameters';
+import { dmsParamValues } from '@/shared/api/schemas';
+import { DMS_DEFAULTS, DMS_PARAM_KEYS, formatParamValue, isNumberingParamKey, numberingExample, numberingTemplateError, paramLabel } from './dmsParameters';
 
 describe('numbering templates as parameters', () => {
   it('every demo template renders an ASCII sample', () => {
@@ -36,5 +37,14 @@ describe('numbering templates as parameters', () => {
     expect(certificateNumber(c, 3, templates)).toBe('S-2026-45-03');
     expect(certificateNumber(contractNumber(2026, 45), 1)).toBe('SERT-2026-000045-0001');
     expect(endorsementNumber(2, c, templates)).toBe('DS-2/C/2026/0045');
+  });
+});
+
+describe('the API contract knows every parameter', () => {
+  it('the response schema of /params/values accepts every key with its demo value', () => {
+    const all = Object.fromEntries(DMS_PARAM_KEYS.map((k) => [k, DMS_DEFAULTS[k]]));
+    const parsed = dmsParamValues.safeParse(all);
+    expect(parsed.success).toBe(true);
+    expect(Object.keys(parsed.data ?? {}).sort()).toEqual([...DMS_PARAM_KEYS].sort());
   });
 });

@@ -25,6 +25,12 @@ const LEADS: Pick<Client, 'legalForm' | 'name' | 'inn'>[] = [
   { legalForm: 'llc', name: 'Samarqand Agro Eksport', inn: '309112233' },
   { legalForm: 'jsc', name: 'Fargʻona Tekstil Kombinati', inn: '305445566' },
 ];
+/** Minimal group (DECISIONS «Только корпоративные клиенты»): a sole proprietor lead, a lead of 6, an approved exception. */
+const SMALL: Pick<Client, 'legalForm' | 'name' | 'inn'>[] = [
+  { legalForm: 'sole_proprietor', name: 'Karimov Anvar Rustamovich', inn: '512340001' },
+  { legalForm: 'llc', name: 'Navoiy Mebel', inn: '309550066' },
+  { legalForm: 'llc', name: 'Termiz Agro Servis', inn: '309660077' },
+];
 const PROSPECTS: Pick<Client, 'legalForm' | 'name' | 'inn'>[] = [
   { legalForm: 'llc', name: 'Fargʻona Qurilish', inn: '307778899' },
   { legalForm: 'jv_llc', name: 'Buxoro Savdo', inn: '308001122' },
@@ -623,6 +629,26 @@ export function seedLifecycle(d: Db, opts: { now: number }): void {
       params: { maxPerMonth: DMS_DEFAULTS.fraudMaxClaimsPerMonth, priceExcessShare: DMS_DEFAULTS.fraudPriceExcessShare, daysBeforeExclusion: DMS_DEFAULTS.fraudDaysBeforeExclusion },
     });
     c.flags = found.map((f) => ({ id: id(), ...f }));
+  }
+
+  // ---- minimal group: an ИП lead (cannot be taken further), a quote of 6 employees, an approved exception ----
+  newDeal(newClient(SMALL[0]!, 'lead', 4, 30), 'lead', 30);
+  {
+    const client = newClient(SMALL[1]!, 'lead', 6, 9);
+    const deal = newDeal(client, 'quote', 9);
+    const c: Census = { id: id(), dealId: deal.id, rows: census(rng, 6, year), uploadedAt: at(7) };
+    d.censuses.push(c);
+    event(deal.id, 7, sales.fullName, `Загружены данные для оценки: ${c.rows.length} человек`);
+    withQuote(deal, c, 'standard', [], 'draft', 5);
+  }
+  {
+    const client = newClient(SMALL[2]!, 'negotiation', 8, 15);
+    const deal = newDeal(client, 'quote', 15);
+    const c: Census = { id: id(), dealId: deal.id, rows: census(rng, 8, year), uploadedAt: at(13) };
+    d.censuses.push(c);
+    const q = withQuote(deal, c, 'standard', [], 'approved', 10);
+    q.approvals = [{ byId: head.id, byName: head.fullName, at: at(10), comment: 'Исключение: компания растёт, через 3 месяца 15 сотрудников' }];
+    q.belowMinException = { byName: head.fullName, at: at(10), comment: 'Компания растёт, через 3 месяца 15 сотрудников' };
   }
 
   // Changes proposed by the second administrator: the first one confirms them (four eyes).

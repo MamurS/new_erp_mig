@@ -36,13 +36,14 @@ import { detectMime } from '@/shared/lib/image';
 import { db, type ChangeRequestRow, type Db } from '../db';
 import { API, audit, body, byLegalForm, byLegalName, conflict, type Ctx, filterLegalForm, forbidden, HttpError, httpErrorOf, notFound, param, q as searchTerm, requirePermission, requireSession, route, sortBy } from '../http';
 import { randomId } from '../rng';
+import { countsOf, groupSize } from '@/shared/domain/minGroup';
 import { completeTasks } from '../tasks-core';
 import { dealChecklist, missingItems } from '@/shared/domain/nextStep';
 import { tzIso } from '../time';
 import { toClient } from '../views';
 import { parsePolicyList, toListRow } from '../policy-core';
 import { personFor, personIdParam } from '../family-core';
-import { dmsParam, numbering } from '../params';
+import { dmsParam, groupRules, numbering } from '../params';
 import { assistanceName } from '../assistance-core';
 import {
   afterSigning,
@@ -143,6 +144,7 @@ function contractView(d: Db, c: Contract): ContractView {
     migSignatory: signatory ? signatoryOption(signatory) : null,
     signatories: signatories(d),
     insuredRows: (d.contractInsured.find((x) => x.contractId === c.id)?.rows ?? []).map((r) => ({ fullName: r.fullName, position: r.position, relation: r.relation })),
+    group: contractGroup(d, c),
     invoices: d.invoices.filter((i) => i.contractId === c.id).map(refreshInvoice),
     payments: d.payments.filter((p) => p.contractId === c.id),
     endorsements: d.endorsements.filter((e) => e.contractId === c.id).map(endorsementSummary),
@@ -228,6 +230,7 @@ function signingRoutes(kind: Kind) {
   };
   const signable = (ref: DocRef, side: Side) => {
     if (kind === 'contract') pricingGuard(ref.contract);
+    if (kind === 'contract') groupGuard(db(), ref.contract);
     const ok = side === 'mig' ? ['approved', 'sent', 'signing'] : ['sent', 'signing'];
     if (!ok.includes(ref.status)) throw conflict(side === 'client' ? 'srv.doc.notSentToClient' : 'srv.doc.notApproved');
     if (ref.signing[side]) throw conflict(side === 'mig' ? 'srv.doc.migSigned' : 'srv.doc.clientSigned');
@@ -266,6 +269,7 @@ function signingRoutes(kind: Kind) {
         const { user, d, ref } = load(ctx);
         if (!can(user, 'contracts.sign_mig')) throw new HttpError(403, 'forbidden', 'srv.signing.edoSignatoryOnly');
         const { provider } = await body(ctx.request, edoSendSchema);
+        if (kind === 'contract') groupGuard(d, ref.contract);
         if (ref.signing.client) throw conflict('srv.doc.clientSigned');
         if (!['approved', 'sent', 'signing'].includes(ref.status)) throw conflict('srv.doc.notApproved');
         const at = tzIso(Date.now());
@@ -1098,3 +1102,23 @@ export const contractHandlers = [
   ...signingRoutes('endorsement'),
 ];
 
+
+/**
+ * Before signing: the group of appendix 2 (or of the contract terms while it is not uploaded) is at least the
+ * minimal group size, or the quote carries an approved exception (DECISIONS «Минимальная численность»).
+ */
+export function contractGroup(d: Db, c: Contract): { size: number; min: number; below: boolean; exception: boolean } {
+  const rules = groupRules();
+  const rows = d.contractInsured.find((x) => x.contractId === c.id)?.rows;
+  const counts = rows?.length ? countsOf(rows) : { employees: c.params.employees, family: c.params.familyMembers };
+  const size = groupSize(counts, rules);
+  const exception = !!d.quotes.find((q) => q.id === c.quoteId)?.belowMinException;
+  return { size, min: rules.min, below: size < rules.min, exception };
+}
+
+function groupGuard(d: Db, c: Contract): void {
+  // A transferred contract in force is not re-signed here; the rule is for new contracts.
+  if (c.migration) return;
+  const g = contractGroup(d, c);
+  if (g.below && !g.exception) throw conflict('srv.contract.belowMinGroup', { n: g.size, min: g.min });
+}

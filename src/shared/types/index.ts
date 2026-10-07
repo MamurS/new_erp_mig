@@ -28,6 +28,8 @@ export interface StaffAuthority {
   quoteDiscountMaxPct?: number;    // максимальная скидка от тарифа без согласования, доля 0..1
   quotePremiumMax?: Money;         // максимальная годовая премия котировки без согласования
   claimDecisionMax?: Money;        // максимальная сумма решения по убытку без согласования
+  /** May approve a quote below the minimal group size (an exception with a mandatory comment). */
+  allowBelowMinGroup?: boolean;
 }
 
 export type ProgramCode = 'basic' | 'standard' | 'standard_plus' | 'premium';
@@ -46,7 +48,17 @@ export interface MigrationMark {
   at: ISODateTime;
   /** Administrator who prepared the batch. */
   byName: string;
+  /**
+   * Rules for new contracts the transferred record does not meet (it is still loaded: a contract in force).
+   * `below_min_group` — fewer insured employees than `minGroupSize`; `form_not_allowed` — the client's legal
+   * form is not in `allowedLegalForms`.
+   */
+  warnings?: MigrationWarning[];
+  /** Below the minimum: the group size as counted on transfer and the minimum then. */
+  group?: { size: number; min: number; countsFamily: boolean };
 }
+
+export type MigrationWarning = 'below_min_group' | 'form_not_allowed';
 
 export type ClientStatus = 'lead' | 'draft' | 'negotiation' | 'active' | 'renewal' | 'expired';
 
@@ -908,7 +920,11 @@ export type DmsParamKey =
   | 'fraudDaysBeforeExclusion'
   | 'limitMode'
   | 'maxChildAge'
-  | 'studentMaxAge';
+  | 'studentMaxAge'
+  | 'minGroupSize'
+  | 'minGroupCountsFamily'
+  | 'allowedLegalForms'
+  | 'belowMinDuringTerm';
 
 export type DmsParamValues = Record<DmsParamKey, number>;
 
@@ -1050,6 +1066,8 @@ export interface Quote {
   createdByName?: string;
   rejectReason?: string;
   updatedAt?: ISODateTime;
+  /** Approved below the minimal group size: who allowed the exception and why (mandatory comment). */
+  belowMinException?: { byName: string; at: ISODateTime; comment: string };
 }
 
 export type SignMethod = 'eimzo' | 'edo' | 'paper' | 'scan';

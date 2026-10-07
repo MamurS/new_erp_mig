@@ -2,7 +2,9 @@
  * Sales part of the lifecycle (LIFECYCLE_SPEC §2–6): staff authority changes (four-eyes), leads, deals,
  * the anonymous census, quotes with authority routing, the offer from an approved quote, the client's answer.
  */
+import { legalFormProblem } from '@/shared/domain/minGroup';
 import { dealChecklist } from '@/shared/domain/nextStep';
+import { countsOf, groupSize } from '@/shared/domain/minGroup';
 import { msg } from '@/i18n/core';
 import { http, HttpResponse } from 'msw';
 import type { AuthorityChange, Deal, KpDocument, KpParams, Quote, SessionUser, StaffAuthority } from '@/shared/types';
@@ -33,7 +35,7 @@ import { DAY, isoDay, tzIso } from '../time';
 import { toClient } from '../views';
 import { PROGRAMS } from '../programs';
 import { DEMO_PASSWORD } from '../credentials';
-import { dmsParam, numbering, paramValues } from '../params';
+import { dmsParam, groupRules, numbering, paramValues } from '../params';
 import { completeTasks } from '../tasks-core';
 import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView, todayIso } from '../lifecycle-core';
 
@@ -68,11 +70,20 @@ function census(d: Db, dealId: string) {
   return d.censuses.filter((c) => c.dealId === dealId).at(-1) ?? null;
 }
 
+/** The census group of a deal against the minimal group size («Клиенты» parameters). */
+function quoteGroup(d: Db, dealId: string): QuoteView['group'] {
+  const rules = groupRules();
+  const counts = countsOf(census(d, dealId)?.rows ?? []);
+  const size = groupSize(counts, rules);
+  return { size, min: rules.min, countsFamily: rules.countsFamily, below: size < rules.min };
+}
+
 function quoteView(d: Db, q: Quote, user: SessionUser): QuoteView {
   const deal = dealOf(d, q.dealId);
   const author = d.staff.find((s) => s.id === q.createdById);
   const approver = d.staff.find((s) => s.id === user.id);
   const dv = toDealView(d, deal);
+  const group = quoteGroup(d, deal.id);
   return {
     ...q,
     dealNumber: deal.number,
@@ -80,8 +91,9 @@ function quoteView(d: Db, q: Quote, user: SessionUser): QuoteView {
     clientLegalForm: dv.clientLegalForm,
     census: census(d, deal.id),
     startDate: deal.expectedStart ?? todayIso(),
-    authorityProblem: quoteAuthorityProblem(q, author?.authority),
-    canApprove: q.status === 'pending_approval' && !!approver && canApproveQuote(approver, q),
+    authorityProblem: quoteAuthorityProblem(q, author?.authority, group),
+    canApprove: q.status === 'pending_approval' && !!approver && canApproveQuote(approver, q, group),
+    group,
     canEdit: can(user, 'quotes.calculate') && (q.status === 'draft' || q.status === 'rejected'),
   };
 }
@@ -271,6 +283,9 @@ export const lifecycleHandlers = [
       requirePermission(user, 'leads.manage');
       const input = await body(request, leadCreateSchema);
       const d = db();
+      // DMS only for companies: a form outside `allowedLegalForms` is not saved.
+      const formProblem = legalFormProblem(input.legalForm, groupRules());
+      if (formProblem) throw new HttpError(422, 'validation', 'errors.validation', { fields: { legalForm: formProblem } });
       if (d.clients.some((c) => c.inn === input.inn)) throw new HttpError(409, 'conflict', 'srv.clients.innTaken', { fields: { inn: msg('srv.clients.innInDb') } });
       const now = tzIso(Date.now());
       const client = {
@@ -481,8 +496,10 @@ export const lifecycleHandlers = [
       if (q.status !== 'draft' && q.status !== 'rejected') throw conflict('srv.quote.alreadySent');
       const deal = dealOf(d, q.dealId);
       const author = d.staff.find((s) => s.id === user.id);
-      const problem = quoteAuthorityProblem(q, author?.authority);
+      const group = quoteGroup(d, deal.id);
+      const problem = quoteAuthorityProblem(q, author?.authority, group) ?? (group.below ? msg('dom.quote.belowMinGroup', { n: group.size, min: group.min }) : null);
       const at = tzIso(Date.now());
+      // Below the minimal group a quote is never approved by its author: an exception needs a second person.
       if (!problem && can(user, 'quotes.approve')) {
         q.status = 'approved';
         q.approvals = [{ byId: user.id, byName: user.displayName, at, comment: 'В пределах полномочий' }];
@@ -506,10 +523,15 @@ export const lifecycleHandlers = [
       if (q.status !== 'pending_approval') throw conflict('srv.quote.notPending');
       const approver = d.staff.find((s) => s.id === user.id)!;
       if (q.createdById === user.id) throw new HttpError(403, 'forbidden', 'srv.quote.fourEyes');
-      if (!canApproveQuote(approver, q)) throw new HttpError(403, 'forbidden', 'srv.quote.overAuthority');
+      const group = quoteGroup(d, q.dealId);
+      if (!canApproveQuote(approver, q, group)) throw new HttpError(403, 'forbidden', group.below && !approver.authority?.allowBelowMinGroup ? 'srv.quote.belowMinGroup' : 'srv.quote.overAuthority');
       const { comment } = await body(ctx.request, quoteApproveSchema);
+      // An exception below the minimal group: the comment is mandatory and stays on the quote.
+      if (group.below && !comment) throw new HttpError(422, 'validation', 'srv.quote.belowMinComment', { fields: { comment: msg('srv.quote.belowMinComment') } });
       q.status = 'approved';
-      q.approvals.push({ byId: user.id, byName: user.displayName, at: tzIso(Date.now()), ...(comment ? { comment } : {}) });
+      const approvedAt = tzIso(Date.now());
+      q.approvals.push({ byId: user.id, byName: user.displayName, at: approvedAt, ...(comment ? { comment } : {}) });
+      if (group.below && comment) q.belowMinException = { byName: user.displayName, at: approvedAt, comment };
       const deal = dealOf(d, q.dealId);
       dealEvent(d, deal.id, user.displayName, 'Котировка утверждена');
       audit(user, 'quote_approved', { targetType: 'quote', targetId: q.id, targetLabel: deal.number, reason: comment });

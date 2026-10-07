@@ -214,6 +214,61 @@ test('migration: a batch is rolled back while untouched; a new action on its dat
   expect(refused.status).toBe(409);
 });
 
+/** A small CSV file of the previous system (plain ASCII cells: no quoting needed). */
+function csvFile(step: string, columns: readonly string[], rows: Record<string, string>[]) {
+  const text = [columns.join(','), ...rows.map((r) => columns.map((c) => r[c] ?? '').join(','))].join('\r\n') + '\r\n';
+  return { name: `migration-${step}.csv`, mimeType: 'text/csv', buffer: Buffer.from(text, 'utf8') };
+}
+
+test('migration: a contract below the minimum group and a client of a form not allowed are transferred with a warning and a mark', async ({ page }) => {
+  test.setTimeout(180_000);
+  failOnDialog(page);
+  await loginStaff(page, 'admin');
+  const url = await newBatch(page);
+  const client = (name: string, legalForm: string, stir: string, k: number) => ({ name, legalForm, stir, bank: 'Demo Bank ATB', account: `202080009001004000${k}0`, mfo: '00014', director: 'Karimov Anvar Rustamovich', hrName: 'Saidova Malika Bahodirovna', hrPhone: `+99871400000${k}`, hrEmail: `hr@group${k}.example.uz` });
+  const contract = (oldNumber: string, clientStir: string, n: number) => ({ oldNumber, clientStir, startDate: '2026-03-01', endDate: '2027-02-28', program: 'standard', premium: String(n * 3_500_000), premium_employee: '3500000', premium_family: '2800000', paymentFrequency: 'single' });
+  const NAMES = ['Jasur', 'Bobur', 'Otabek', 'Sanjar', 'Temur', 'Aziz', 'Farrux', 'Sardor', 'Javohir', 'Nodir'];
+  const people = (oldNumber: string, n: number, base: number) =>
+    Array.from({ length: n }, (_, k) => ({ fullName: `Rahimov ${NAMES[k % 10]!} ${NAMES[Math.floor(k / 10)]!}ovich`, birthDate: '1988-05-14', pinfl: `3140588${String(base + k).padStart(7, '0')}`, oldCertificate: `C-${base + k}`, inclusionDate: '2026-03-01', contractOldNumber: oldNumber, relation: 'employee' }));
+  const files = [
+    { step: 'clients', label: 'Клиенты', file: csvFile('clients', ['name', 'legalForm', 'stir', 'bank', 'account', 'mfo', 'director', 'directorBasis', 'address', 'hrName', 'hrPhone', 'hrEmail'], [client('Kichik Savdo', 'llc', '409300001', 1), client('Karimov Anvar Rustamovich', 'sole_proprietor', '409300002', 2)]) },
+    { step: 'contracts', label: 'Договоры', file: csvFile('contracts', ['oldNumber', 'clientStir', 'startDate', 'endDate', 'program', 'premium', 'premium_employee', 'premium_family', 'paymentFrequency', 'assistance', 'pricing_basis', 'age_bands'], [contract('MIG-2026/0701', '409300001', 6), contract('MIG-2026/0702', '409300002', 12)]) },
+    { step: 'insured', label: 'Застрахованные', file: csvFile('insured', ['fullName', 'birthDate', 'pinfl', 'phone', 'oldCertificate', 'inclusionDate', 'contractOldNumber', 'position', 'relation', 'principal_pinfl', 'premium'], [...people('MIG-2026/0701', 6, 1), ...people('MIG-2026/0702', 12, 101)]) },
+  ];
+  for (const f of files) {
+    await page.getByLabel(`Файл: ${f.label}`).setInputFiles(f.file);
+    await expect(page.getByTestId(`summary-${f.step}`)).toContainText('с ошибками 0');
+    await page.getByRole('button', { name: 'Подтвердить шаг' }).click();
+    await expect(page.getByTestId(`step-${f.step}`)).toContainText('Подтверждён');
+  }
+  for (const step of ['limits', 'claims', 'invoices']) {
+    await page.getByRole('button', { name: 'Пропустить шаг' }).click();
+    await expect(page.getByTestId(`step-${step}`)).toContainText('Пропущен');
+  }
+  // The report: one warning per contract with its number and the reason; the contracts are not excluded.
+  await expect(page.getByTestId('summary-contracts')).toContainText('Строк 2 · без ошибок 2 · с ошибками 0');
+  await expect(page.getByTestId('issues-contracts')).toContainText('Договор MIG-2026/0701: застрахованных сотрудников 6 при минимуме 10');
+  await expect(page.getByTestId('issues-contracts')).toContainText('Договор MIG-2026/0702: форма клиента ИП не допускается для новых договоров');
+  await page.getByRole('button', { name: 'Отправить на подтверждение' }).click();
+  await expect(page.getByTestId('batch-pending')).toContainText('Нужен второй администратор');
+  await approve(page, url);
+  await expect(page.getByTestId('migrated-contracts')).toContainText('MIG-2026/0701');
+  await expect(page.getByTestId('migrated-contracts')).toContainText('MIG-2026/0702');
+  await expect(page.getByTestId('issues-contracts')).toContainText('Договор MIG-2026/0701: застрахованных сотрудников 6 при минимуме 10');
+
+  // The client cards carry the marks with the explanation that the rule is for new contracts.
+  const idOf = async (stir: string) => ((await api(page, 'GET', `/clients?q=${stir}`)).data as { items: { id: string }[] }).items[0]!.id;
+  await page.goto(`/staff/clients/${await idOf('409300001')}`);
+  await expect(page.getByTestId('migrated-mark')).toContainText('Перенесено из старой системы');
+  await expect(page.getByTestId('migration-warnings')).toContainText('Ниже минимальной численности');
+  await expect(page.getByTestId('migration-warnings')).not.toContainText('Форма не допускается');
+  await page.getByTestId('migration-warning-below_min_group').focus();
+  await expect(page.getByRole('tooltip')).toContainText('применяется к новым договорам');
+  await page.goto(`/staff/clients/${await idOf('409300002')}`);
+  await expect(page.getByTestId('migration-warnings')).toContainText('Форма не допускается');
+  await expect(page.getByTestId('migration-warning-form_not_allowed')).toContainText('Перенесённый договор действует до конца срока');
+});
+
 test('migration: only administrators reach the section and its API', async ({ page }) => {
   await loginStaff(page, 'operator');
   await expect(page.getByRole('link', { name: 'Перенос портфеля' })).toHaveCount(0);
