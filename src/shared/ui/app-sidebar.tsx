@@ -451,7 +451,7 @@ function SidebarBody({
         <ul className="flex shrink-0 flex-col gap-px px-2 pb-2" data-testid="sidebar-footer">
           {footer.map((it) => (
             <li key={it.path}>
-              <SidebarLink item={it} active={it.path === activePath || pathname === it.path || pathname.startsWith(`${it.path}/`)} />
+              <SidebarLink item={{ ...it, end: it.end ?? false }} active={it.path === activePath || pathname === it.path || pathname.startsWith(`${it.path}/`)} />
             </li>
           ))}
         </ul>
