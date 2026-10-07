@@ -18,7 +18,6 @@ export const help = {
   'help.fallback': 'Перевод готовится: этот текст пока показан на русском.',
   'help.notFound': 'Статья не найдена или недоступна для вашей роли.',
   'help.toFirst': 'К началу справки',
-  'help.termAria': '{term}: {definition}',
   'help.search.label': 'Поиск по справке',
   'help.search.placeholder': 'Поиск: термин, экран, действие',
   'help.search.terms': 'Термины',

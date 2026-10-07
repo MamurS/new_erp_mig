@@ -7,7 +7,7 @@
  * here and a mention in the guide (see CLAUDE.md, «Справка»).
  */
 import type { Role } from '@/shared/types';
-import type { I18nKey } from '@/i18n';
+import { translate, type I18nKey } from '@/i18n';
 import { ruleFor, type Action } from '@/shared/auth/permissions';
 import { ALL_ROLES } from '@/shared/help/audience';
 import { ASSISTANCE_ROLES, CLINIC_ROLES, STAFF_ROLES } from '@/shared/domain/labels';
@@ -279,6 +279,16 @@ export const SCREENS: readonly ScreenLink[] = [
 /* eslint-enable mig/no-cyrillic-ui */
 
 /**
+ * How a screen appears in the guide: the Russian names in «…», and the screen's label in the
+ * translated guides — uz-Latn in «…», en in “…” (the translations take labels from the dictionaries).
+ */
+function mentionForms(s: ScreenLink): string[] {
+  const forms = s.names.map((n) => `«${n}»`);
+  if (s.labelKey) forms.push(`«${translate('uz-Latn', s.labelKey)}»`, `“${translate('en', s.labelKey)}”`, `«${translate('en', s.labelKey)}»`);
+  return forms;
+}
+
+/**
  * Screens mentioned in a text as «name» that the role may open, in the order of the first mention
  * (only screens of the role's own portal). This is what «Открыть раздел» shows.
  */
@@ -287,7 +297,7 @@ export function screensMentioned(text: string, role: Role): ScreenLink[] {
   const found: { s: ScreenLink; at: number }[] = [];
   for (const s of SCREENS) {
     if (s.portal !== portal || !canOpenRoute(role, s.route)) continue;
-    const at = Math.min(...s.names.map((n) => text.indexOf(`«${n}»`)).filter((i) => i >= 0));
+    const at = Math.min(...mentionForms(s).map((n) => text.indexOf(n)).filter((i) => i >= 0));
     if (Number.isFinite(at) && !found.some((f) => f.s.route === s.route)) found.push({ s, at });
   }
   return found.sort((a, b) => a.at - b.at).map((f) => f.s);

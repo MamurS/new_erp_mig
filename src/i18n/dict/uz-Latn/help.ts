@@ -20,7 +20,6 @@ export const help: Translation<typeof Ru> = {
   'help.fallback': 'Tarjima tayyorlanmoqda: bu matn hozircha rus tilida koʻrsatilgan.',
   'help.notFound': 'Maqola topilmadi yoki rolingiz uchun ochiq emas.',
   'help.toFirst': 'Maʼlumotnoma boshiga',
-  'help.termAria': '{term}: {definition}',
   'help.search.label': 'Maʼlumotnomadan qidirish',
   'help.search.placeholder': 'Qidiruv: atama, ekran, amal',
   'help.search.terms': 'Atamalar',

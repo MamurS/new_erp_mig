@@ -20,7 +20,6 @@ export const help: Translation<typeof Ru> = {
   'help.fallback': 'Translation in progress: this text is shown in Russian for now.',
   'help.notFound': 'The article was not found or is not available to your role.',
   'help.toFirst': 'To the start of the help',
-  'help.termAria': '{term}: {definition}',
   'help.search.label': 'Search help',
   'help.search.placeholder': 'Search: a term, screen or action',
   'help.search.terms': 'Terms',

@@ -67,6 +67,14 @@ describe('screens mentioned in the guide', () => {
     }
   });
 
+  it('«Открыть раздел» also finds screens in the translated guides by their interface labels', () => {
+    expect(screensMentioned('Open “Manual payment matching”, then “VHI parameters”.', 'accountant').map((s) => s.route)).toEqual(['/staff/invoices/queue', '/staff/admin/parameters']);
+    expect(screensMentioned('«Qoʻlda taqsimlash» va «ITS parametrlari» boʻlimlari.', 'accountant').map((s) => s.route)).toEqual(['/staff/invoices/queue', '/staff/admin/parameters']);
+    const en = readFileSync('docs/help/USER_GUIDE.en.md', 'utf8');
+    const uz = readFileSync('docs/help/USER_GUIDE.uz-Latn.md', 'utf8');
+    for (const guide of [en, uz]) expect(screensMentioned(guide, 'admin').length).toBeGreaterThan(5);
+  });
+
   it('«Открыть раздел» only for screens of the role\'s portal that the role may open', () => {
     const text = 'Откройте «Ручная разноска», затем «Параметры ДМС» и «Перенос портфеля»; клиника — «Реестры».';
     expect(screensMentioned(text, 'accountant').map((s) => s.route)).toEqual(['/staff/invoices/queue', '/staff/admin/parameters']);
