@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Flag } from 'lucide-react';
 import type { Claim, ClaimCategory, ClaimStatus } from '@/shared/types';
-import { useClaims } from '@/shared/api/queries/staff';
+import { useClaim, useClaims } from '@/shared/api/queries/staff';
 import { useCan } from '@/shared/auth/guards';
 import { FLAG_LABEL } from '@/shared/domain/settlement';
 import { CLAIM_CATEGORY_LABEL, CLAIM_STATUS_LABEL } from '@/shared/domain/claims';
-import { formatMoney } from '@/shared/lib/format';
+import { formatDate, formatDateTime, formatMoney } from '@/shared/lib/format';
 import { useDebounced, useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui/button';
@@ -16,7 +16,11 @@ import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-
 import { FilterChip } from '@/shared/ui/filter-chip';
 import { Tooltip } from '@/shared/ui/tooltip';
 import { SearchInput } from '@/shared/ui/search-input';
-import { EmptyState } from '@/shared/ui/states';
+import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
+import { DetailPanel, useDetailPanelParam } from '@/shared/ui/detail-panel';
+import { Kv } from '@/shared/ui/page';
+import { useUser } from '@/shared/auth/session';
+import { INSURED_CARD_ROLES } from '../nav';
 import { ExportButton } from '../components/ExportButton';
 import { CLAIM_TONE } from '../components/tones';
 import { useTopbar } from '../topbar';
@@ -56,6 +60,8 @@ export default function ClaimsPage() {
   const settles = useCan('claims.decide');
   const reserves = useCan('claims.reserves') || settles;
   const [search, setSearch] = useState('');
+  // Split view: the selected claim's card next to the list (?panel=id; see useDetailPanelParam).
+  const panel = useDetailPanelParam();
   // «+ Создать → Убыток» of the claims officer: the claim form with the insured person found in the form.
   const [creating, setCreating] = useState(false);
   useCreateIntent('claim', useCan('claims.create'), setCreating, true);
@@ -153,7 +159,10 @@ export default function ClaimsPage() {
           onRetry={() => void list.refetch()}
           sort={sort}
           onSortChange={(s) => setF({ sort: formatSort(s) })}
-          onRowClick={(c) => navigate(`/staff/claims/${c.id}`)}
+          onRowClick={(c) => panel.open(c.id)}
+          onRowMove={(c) => panel.id && panel.open(c.id)}
+          onRowOpen={(c) => navigate(`/staff/claims/${c.id}`)}
+          activeKey={panel.id}
           page={page}
           pageSize={25}
           total={list.data?.total}
@@ -167,7 +176,95 @@ export default function ClaimsPage() {
           }
         />
       </div>
+      {panel.id && <ClaimPanel id={panel.id} showReserve={reserves} onClose={panel.close} onOpen={() => navigate(`/staff/claims/${panel.id}`)} />}
       <NewClaimDialog open={creating} onOpenChange={setCreating} />
     </div>
+  );
+}
+
+/** The claim card of the split view: key facts of the full page and its latest status changes. */
+function ClaimPanel({ id, showReserve, onClose, onOpen }: { id: string; showReserve: boolean; onClose: () => void; onOpen: () => void }) {
+  const q = useClaim(id);
+  const user = useUser();
+  const navigate = useNavigate();
+  const c = q.data;
+  const canOpenInsured = !!user && (INSURED_CARD_ROLES as string[]).includes(user.role);
+  const title = c?.number ?? t('staff.insuredCard.claim');
+  return (
+    <DetailPanel
+      onClose={onClose}
+      label={t('staff.insuredCard.claim')}
+      title={<span className="num">{title}</span>}
+      titleText={title}
+      meta={
+        c && (
+          <>
+            <StatusDot tone={CLAIM_TONE[c.status]}>{CLAIM_STATUS_LABEL[c.status]}</StatusDot>
+            <span className="text-muted">{CLAIM_CATEGORY_LABEL[c.category]}</span>
+            <span className="text-muted">
+              SLA <SlaCell claim={c} />
+            </span>
+          </>
+        )
+      }
+      footer={
+        <>
+          <Button onClick={onOpen}>{t('staff.clients.openCard')}</Button>
+          {c && canOpenInsured && (
+            <Button variant="secondary" onClick={() => navigate(`/staff/insured/${c.insuredId}`)}>
+              {t('staff.insuredCard.title')}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {q.isLoading ? (
+        <SkeletonRows rows={8} />
+      ) : q.isError || !c ? (
+        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <dl className="divide-y divide-border-soft">
+            <Kv label={t('common.insured')}>{c.insuredName}</Kv>
+            <Kv label={t('common.client')}>{c.clientName}</Kv>
+            <Kv label={t('staff.claimCard.where')}>{c.providerName}</Kv>
+            <Kv label={t('staff.insuredCard.serviceDate')}>{formatDate(c.serviceDate)}</Kv>
+            <Kv label={t('staff.claimCard.claimed')}>
+              <span className="num">{formatMoney(c.amountClaimed)}</span>
+            </Kv>
+            {c.amountApproved !== undefined && (
+              <Kv label={t('staff.claimCard.approved')}>
+                <span className="num font-semibold">{formatMoney(c.amountApproved)}</span>
+              </Kv>
+            )}
+            {showReserve && (
+              <Kv label={t('staff.claims.colReserve')}>
+                <span className="num">{c.reserve ? formatMoney(c.reserve) : '—'}</span>
+              </Kv>
+            )}
+            <Kv label={t('staff.claimCard.created')}>{formatDateTime(c.createdAt)}</Kv>
+          </dl>
+          <section>
+            <h3 className="mb-1 text-[14px] font-bold">{t('staff.clientCard.tab.history')}</h3>
+            <ol className="flex flex-col gap-2 border-l border-border pl-3">
+              {[...c.history]
+                .reverse()
+                .slice(0, 5)
+                .map((h, i) => (
+                  <li key={i}>
+                    <div>
+                      {h.from ? `${CLAIM_STATUS_LABEL[h.from]} → ` : ''}
+                      {CLAIM_STATUS_LABEL[h.to]}
+                    </div>
+                    <div className="text-[12px] text-muted">
+                      {formatDateTime(h.at)} · {h.actorName}
+                    </div>
+                  </li>
+                ))}
+            </ol>
+          </section>
+        </div>
+      )}
+    </DetailPanel>
   );
 }

@@ -27,7 +27,7 @@ import { MaskedInput } from '@/shared/ui/masked-input';
 import { Kv } from '@/shared/ui/page';
 import { LegalFormChip, LegalFormOptions, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { SearchInput } from '@/shared/ui/search-input';
-import { SidePanel } from '@/shared/ui/side-panel';
+import { DetailPanel, useDetailPanelParam } from '@/shared/ui/detail-panel';
 import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states';
 import { toast } from '@/shared/ui/toast';
 import { CLIENT_TONE } from '../components/tones';
@@ -74,7 +74,9 @@ export default function ClientsPage() {
   useTopbar([{ label: t('staff.clients.title') }]);
   // «Новый клиент» starts from «+ Создать» in the top bar.
   useCreateIntent('client', canWrite, setCreateOpen, true);
-  const [f, setF] = useUrlFilters(['view', 'status', 'program', 'managerId', 'form', 'sort', 'page', 'panel'] as const);
+  const [f, setF] = useUrlFilters(['view', 'status', 'program', 'managerId', 'form', 'sort', 'page'] as const);
+  // Split view: the selected client's card next to the list (?panel=id; see useDetailPanelParam).
+  const panel = useDetailPanelParam();
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim());
   const [hidden, setHidden] = useState<string[]>([]);
@@ -89,7 +91,7 @@ export default function ClientsPage() {
     for (const c of all.data?.items ?? []) m.set(c.managerId, c.managerName);
     return [...m.entries()].map(([value, label]) => ({ value, label }));
   }, [all.data]);
-  const panelId = f.panel || null;
+  const panelId = panel.id;
   const navigate = useNavigate();
 
   const columns: Column<Client>[] = [
@@ -125,8 +127,8 @@ export default function ClientsPage() {
   ];
 
   return (
-    <div className="flex gap-0">
-      <div className="min-w-0 flex-1">
+    <>
+      <div className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-[22px] font-bold">{t('staff.clients.title')}</h1>
           <div className="flex items-center gap-2">
@@ -211,8 +213,9 @@ export default function ClientsPage() {
             onRetry={() => void list.refetch()}
             sort={sort}
             onSortChange={(s) => setF({ sort: formatSort(s) })}
-            onRowClick={(c) => setF({ panel: c.id }, false)}
-            onEscape={() => setF({ panel: null }, false)}
+            onRowClick={(c) => panel.open(c.id)}
+            onRowMove={(c) => panelId && panel.open(c.id)}
+            onRowOpen={(c) => navigate(`/staff/clients/${c.id}`)}
             activeKey={panelId}
             page={page}
             pageSize={25}
@@ -239,9 +242,9 @@ export default function ClientsPage() {
           />
         </div>
       </div>
-      {panelId && <ClientPanel id={panelId} onClose={() => setF({ panel: null }, false)} onOpen={() => navigate(`/staff/clients/${panelId}`)} />}
+      {panelId && <ClientPanel id={panelId} onClose={panel.close} onOpen={() => navigate(`/staff/clients/${panelId}`)} />}
       <CreateClientDialog open={createOpen} onOpenChange={setCreateOpen} />
-    </div>
+    </>
   );
 }
 
@@ -253,18 +256,45 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
   const [letterOpen, setLetterOpen] = useState(false);
   const c = q.data;
   return (
-    <SidePanel open onClose={onClose} title={c?.name ?? t('common.client')} className="lg:ml-4 lg:rounded-card lg:border">
+    <DetailPanel
+      onClose={onClose}
+      label={t('common.client')}
+      title={c?.name ?? t('common.client')}
+      titleText={c?.name ?? t('common.client')}
+      meta={
+        c && (
+          <>
+            <LegalFormChip code={c.legalForm} />
+            <StatusDot tone={CLIENT_TONE[c.status]}>{CLIENT_STATUS_LABEL[c.status]}</StatusDot>
+            <span className="text-muted">
+              {t('staff.clients.innLabel')}
+              <span className="num">{c.inn}</span>
+            </span>
+          </>
+        )
+      }
+      footer={
+        <>
+          <Button onClick={onOpen}>{t('staff.clients.openCard')}</Button>
+          {c && canOffer && (
+            <Button variant="secondary" onClick={() => navigate(kpNewPath(c.id, c.activePolicyId))}>
+              {t('staff.dashboard.prepareOffer')}
+            </Button>
+          )}
+          {c && (
+            <Button variant="secondary" onClick={() => setLetterOpen(true)}>
+              <Mail className="h-3.5 w-3.5" aria-hidden /> {t('staff.hrLetter.title')}
+            </Button>
+          )}
+        </>
+      }
+    >
       {q.isLoading ? (
         <SkeletonRows rows={8} />
       ) : q.isError || !c ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <LegalFormChip code={c.legalForm} />
-            <StatusDot tone={CLIENT_TONE[c.status]}>{CLIENT_STATUS_LABEL[c.status]}</StatusDot>
-            <span className="text-muted">{t('staff.clients.innLabel')}<span className="num">{c.inn}</span></span>
-          </div>
           <div className="grid grid-cols-2 gap-2">
             <MiniKpi label={t('staff.clients.col.insured')} value={formatNumber(c.insuredCount)} />
             <MiniKpi label={t('common.premium')} value={c.premium ? formatMoneyShort(c.premium) : '—'} />
@@ -273,7 +303,7 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
           </div>
           <section>
             <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.col.renewal')}</h3>
-            <p className="mb-2 text-muted">
+            <p className="text-muted">
               {c.renewalDate ? (
                 <>
                   {t('staff.clients.renewalPrefix')}
@@ -284,12 +314,6 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
                 t('staff.clients.noActivePolicy')
               )}
             </p>
-            <div className="flex flex-wrap gap-2">
-              {canOffer && <Button onClick={() => navigate(kpNewPath(c.id, c.activePolicyId))}>{t('staff.dashboard.prepareOffer')}</Button>}
-              <Button variant="secondary" onClick={() => setLetterOpen(true)}>
-                <Mail className="h-3.5 w-3.5" aria-hidden /> {t('staff.hrLetter.title')}
-              </Button>
-            </div>
           </section>
           <section>
             <h3 className="mb-1 text-[14px] font-bold">{t('staff.clients.hrContact')}</h3>
@@ -310,13 +334,10 @@ function ClientPanel({ id, onClose, onOpen }: { id: string; onClose: () => void;
               ))}
             </ol>
           </section>
-          <Button variant="secondary" onClick={onOpen}>
-            {t('staff.clients.openCard')}
-          </Button>
           <HrLetterDialog open={letterOpen} onOpenChange={setLetterOpen} clientId={c.id} clientName={c.name} />
         </div>
       )}
-    </SidePanel>
+    </DetailPanel>
   );
 }
 

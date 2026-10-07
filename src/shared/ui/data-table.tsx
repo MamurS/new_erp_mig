@@ -55,6 +55,9 @@ export interface DataTableProps<T> {
   /** Called with Enter (open) and Esc (close) from the keyboard. */
   onRowOpen?: (row: T) => void;
   onEscape?: () => void;
+  /** ↑/↓ moved the focus to this row (a split view switches its card to it). */
+  onRowMove?: (row: T) => void;
+  /** The selected row: highlighted and scrolled into view when it changes. */
   activeKey?: string | null;
   empty?: ReactNode;
   page?: number;
@@ -68,6 +71,30 @@ export interface DataTableProps<T> {
   totals?: Partial<Record<string, ReactNode>>;
   caption: string;
   density?: 'staff' | 'client';
+}
+
+/**
+ * Brings a row into view inside the portal content area, clear of the pinned header above it and the
+ * pinned totals row and pager below it (Chrome's scrollIntoView ignores scroll-margin for a row that is
+ * already inside the scrollport, so the offsets are applied here). Elsewhere: the browser's 'nearest'.
+ */
+function reveal(row: HTMLElement | undefined): void {
+  if (!row) return;
+  const scroller = row.closest<HTMLElement>('[data-content-scroll]');
+  if (!scroller) {
+    row.scrollIntoView?.({ block: 'nearest' });
+    return;
+  }
+  const table = row.closest('table');
+  const head = table?.tHead?.offsetHeight ?? 0;
+  const foot = table?.tFoot?.offsetHeight ?? 0;
+  const pager = parseFloat(getComputedStyle(row).getPropertyValue('--pager-h')) || 0;
+  const box = scroller.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  const top = box.top + head;
+  const bottom = box.top + scroller.clientHeight - foot - pager;
+  if (r.top < top) scroller.scrollTop -= top - r.top;
+  else if (r.bottom > bottom) scroller.scrollTop += Math.min(r.bottom - bottom, r.top - top);
 }
 
 /** Table with server sort, pagination, loading/empty/error states and ↑/↓/Enter/Esc navigation. */
@@ -99,9 +126,20 @@ export function DataTable<T>(p: DataTableProps<T>) {
 
   const focusRow = (idx: number) => {
     const el = bodyRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-row]')[idx];
-    el?.focus();
+    el?.focus({ preventScroll: true });
+    reveal(el);
     setFocusIdx(idx);
+    const row = rows[idx];
+    if (row && el) p.onRowMove?.(row);
   };
+
+  // A newly selected row (a click, a direct ?panel= link, ↑/↓) is brought into view.
+  const hasRows = rows.length > 0;
+  useEffect(() => {
+    if (!p.activeKey || !hasRows) return;
+    const el = [...(bodyRef.current?.querySelectorAll<HTMLTableRowElement>('tr[data-row]') ?? [])].find((r) => r.dataset.key === p.activeKey);
+    reveal(el);
+  }, [p.activeKey, hasRows]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTableSectionElement>) => {
     if (!rows.length) return;
@@ -187,6 +225,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
                     <tr
                       key={key}
                       data-row
+                      data-key={p.activeKey !== undefined ? key : undefined}
                       tabIndex={interactive ? (idx === Math.max(0, focusIdx) ? 0 : -1) : undefined}
                       aria-selected={p.activeKey === key || undefined}
                       onFocus={() => setFocusIdx(idx)}

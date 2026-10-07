@@ -218,6 +218,24 @@ test('a pinned header stays below menus; print does not pin it and does not clip
   await page.emulateMedia({ media: 'screen' });
 });
 
+test('with the client card open the header stays pinned under the top bar, beside the card, and the table still scrolls alone', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await loginStaff(page, 'underwriter');
+  await page.goto('/staff/clients');
+  const table = await mainTable(page);
+  await table.locator('tbody tr[data-row]').nth(2).click();
+  const card = page.getByTestId('detail-panel');
+  await expect(card).toBeVisible();
+  const barBottom = await bottom(page.getByTestId('topbar'));
+  await scrollTo(page, 'end');
+  await expectHeaderAtBar(page, table, barBottom);
+  // The card is outside the content area: the only scrollers are the content area and the card's own body.
+  expect(await card.evaluate((el) => !el.closest('[data-content-scroll]'))).toBe(true);
+  const scrollers = (await verticalScrollers(page)).filter((s) => s !== 'content');
+  for (const s of scrollers) expect(s).toMatch(/overscroll-contain/);
+  expect(Math.abs((await top(card)) - barBottom)).toBeLessThanOrEqual(1);
+});
+
 test('a new page opens at the top of the content area', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 640 });
   await loginStaff(page, 'underwriter');

@@ -45,6 +45,7 @@ export const shell: Translation<typeof Ru> = {
   'shell.breadcrumbs': 'Breadcrumbs',
   'shell.sidePanel.label': 'Details',
   'shell.sidePanel.close': 'Close panel',
+  'shell.sidePanel.width': 'Card width',
   'shell.toast.close': 'Close notification',
   'shell.table.filterBy': 'Filter: {label}',
   'shell.table.clearFilter': 'Clear filter',
