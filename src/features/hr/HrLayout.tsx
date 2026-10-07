@@ -1,13 +1,14 @@
 import { ContentScroll } from '@/shared/ui/content-scroll';
 import { LegalFormChip } from '@/shared/ui/legal-form';
 import { Outlet, useLocation } from 'react-router-dom';
-import { BarChart3, CircleHelp, FileSignature, Inbox, ReceiptText, Users, UsersRound } from 'lucide-react';
+import { BarChart3, BookOpen, FileSignature, Inbox, ReceiptText, Users, UsersRound } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useHrFamilyRequests, useHrOverview } from '@/shared/api/queries/hr';
 import { CreateMenu } from '@/features/shell/CreateMenu';
+import { HelpContextButton } from '@/features/help/HelpContextButton';
 import { LanguageButton } from '@/shared/ui/language-switch';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
@@ -21,7 +22,6 @@ const NAV = [
   { path: '/hr/contracts', get label() { return t('hr.nav.contracts'); }, icon: FileSignature },
   { path: '/hr/stats', get label() { return t('hr.nav.stats'); }, icon: BarChart3 },
 ];
-const HELP = [{ path: '/hr/help', get label() { return t('hr.nav.help'); }, icon: CircleHelp }];
 
 /** HR cabinet shell: the common side panel, client theme for the content up to 1440px (SPEC §7.2). */
 export default function HrLayout() {
@@ -32,13 +32,12 @@ export default function HrLayout() {
   const familyRequests = useHrFamilyRequests('pending');
   const pendingRequests = familyRequests.data?.length ?? 0;
   const company = overview.data?.companyName;
-  const all = [...NAV, ...HELP];
   // «Сотрудники» covers the employee pages under /hr/employees too.
   const current =
-    all.filter((n) => n.path !== '/hr' && (loc.pathname === n.path || loc.pathname.startsWith(`${n.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]?.path ??
+    NAV.filter((n) => n.path !== '/hr' && (loc.pathname === n.path || loc.pathname.startsWith(`${n.path}/`))).sort((a, b) => b.path.length - a.path.length)[0]?.path ??
     (loc.pathname === '/hr' || loc.pathname.startsWith('/hr/employees') ? '/hr' : undefined);
   const nav = NAV.map((n) => (n.path === '/hr/family/requests' ? { path: n.path, label: n.label, icon: n.icon, count: pendingRequests } : n));
-  const groups: SidebarGroup[] = [{ items: nav }, { label: t('hr.nav.support'), items: HELP }];
+  const groups: SidebarGroup[] = [{ items: nav }];
 
   return (
     <SidebarProvider portal="hr">
@@ -50,6 +49,7 @@ export default function HrLayout() {
           activePath={current}
           user={{ name: user?.displayName ?? '', role: user ? ROLE_LABEL[user.role] : 'HR', portal: company ? t('hr.layout.portalNamed', { name: company }) : t('shell.portal.hr') }}
           onLogout={() => void logout()}
+          footer={[{ path: '/hr/help', label: t('help.nav'), icon: BookOpen }]}
         />
         <div data-theme="client" className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg text-text">
           <IdleWatcher />
@@ -68,7 +68,8 @@ export default function HrLayout() {
                 <Skeleton className="mt-1 h-4 w-40" />
               )}
             </div>
-            <LanguageButton className="ml-auto" />
+            <HelpContextButton className="ml-auto" />
+            <LanguageButton />
             <CreateMenu />
           </header>
           <ContentScroll className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">

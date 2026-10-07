@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { Command } from 'cmdk';
 import { matchesSearch } from '@/shared/lib/searchNormalize';
 import * as D from '@radix-ui/react-dialog';
-import { Building2, FileSignature, FileText, Receipt, User, CornerDownLeft } from 'lucide-react';
+import { BookOpen, Building2, FileSignature, FileText, Receipt, Tag, User, CornerDownLeft } from 'lucide-react';
 import type { SessionUser } from '@/shared/types';
 import { can } from '@/shared/auth/permissions';
 import { useClaims, useClients, useInsuredList, usePolicies } from '@/shared/api/queries/staff';
 import { useContracts } from '@/shared/api/queries/lifecycle';
 import { useDebounced } from '@/shared/lib/hooks';
-import { t } from '@/i18n';
+import { t, useLocale } from '@/i18n';
+import { useHelpSearch } from '@/shared/api/queries/help';
+import { GLOSSARY_ANCHOR } from '@/shared/help/glossary';
+import { helpHref } from '@/features/help/paths';
 import { INSURED_CARD_ROLES, STAFF_SECTIONS } from './nav';
 
 const itemCls =
@@ -35,6 +38,12 @@ export function CommandPalette({ open, onOpenChange, user, mode = 'search' }: { 
   // Contracts by the new number, the old number of a transferred one or the client.
   const canContracts = !claimMode && can(user, 'contracts.read');
   const contracts = useContracts({ q: term }, enabled && canContracts);
+  // «Справка»: the server search over the help the role may read.
+  const locale = useLocale();
+  const helpOn = enabled && !claimMode;
+  const help = useHelpSearch(helpOn ? term : '', locale);
+  const helpTerms = helpOn ? (help.data?.terms.slice(0, 2) ?? []) : [];
+  const helpArticles = helpOn ? (help.data?.articles.slice(0, 5) ?? []) : [];
 
   useEffect(() => {
     if (!open) setQ('');
@@ -115,6 +124,22 @@ export function CommandPalette({ open, onOpenChange, user, mode = 'search' }: { 
                       <FileSignature className="h-4 w-4 text-muted" aria-hidden /> <span className="num">{c.number}</span>
                       {c.externalNumber && <span className="num text-[12px] text-muted">{c.externalNumber}</span>}
                       <span className="ml-auto truncate text-[12px] text-muted">{c.client.name}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
+              {helpTerms.length + helpArticles.length > 0 && (
+                <Command.Group heading={t('help.nav')} className="text-[12px] text-muted **:[[cmdk-group-items]]:text-[13px] **:[[cmdk-group-items]]:text-text">
+                  {helpTerms.map((h) => (
+                    <Command.Item key={`ht-${h.term.id}`} value={`ht-${h.term.id}`} onSelect={() => go(helpHref('/staff/help', GLOSSARY_ANCHOR))} className={itemCls}>
+                      <Tag className="h-4 w-4 shrink-0 text-muted" aria-hidden /> <span className="truncate">{h.term.term}</span>
+                      <span className="ml-auto truncate text-[12px] text-muted">{h.term.definition}</span>
+                    </Command.Item>
+                  ))}
+                  {helpArticles.map((h) => (
+                    <Command.Item key={`ha-${h.anchor}-${h.title}`} value={`ha-${h.anchor}-${h.title}`} onSelect={() => go(helpHref('/staff/help', h.articleAnchor, h.anchor))} className={itemCls}>
+                      <BookOpen className="h-4 w-4 shrink-0 text-muted" aria-hidden /> <span className="truncate">{h.title}</span>
+                      {h.title !== h.articleTitle && <span className="ml-auto truncate text-[12px] text-muted">{h.articleTitle}</span>}
                     </Command.Item>
                   ))}
                 </Command.Group>

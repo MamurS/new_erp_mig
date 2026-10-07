@@ -110,6 +110,19 @@ const OFF: AiCheckResult = { available: false, items: [], suspicious: false };
 
 function metrics(d: Db): AiAdminView['metrics'] {
   return AI_SCENARIOS.map((scenario) => {
+    if (scenario === 'help') {
+      // «Задать вопрос»: rated = with «Полезно / Не полезно», agreement = «Полезно», «specialist» = no answer.
+      const qs = d.help.questions;
+      const rated = qs.filter((q) => q.feedback);
+      return {
+        scenario,
+        calls: qs.length,
+        rated: rated.length,
+        agreeShare: rated.length ? rated.filter((q) => q.feedback!.helpful).length / rated.length : null,
+        specialistShare: qs.length ? qs.filter((q) => q.status === 'no_answer').length / qs.length : null,
+        avgLatencyMs: null,
+      };
+    }
     const logs = d.ai.logs.filter((l) => l.scenario === scenario);
     const rated = logs.filter((l) => l.feedback);
     return {
@@ -137,7 +150,7 @@ function adminView(d: Db): AiAdminView {
   };
 }
 
-const describe = (s: AiSettings) => `${AI_SCENARIOS.filter((x) => s.scenarios[x].enabled).length}/4 сценариев, порог ${Math.round(s.confidenceThreshold * 100)}%${s.killSwitch ? ', ИИ отключён везде' : ''}`;
+const describe = (s: AiSettings) => `${AI_SCENARIOS.filter((x) => s.scenarios[x].enabled).length}/${AI_SCENARIOS.length} сценариев, порог ${Math.round(s.confidenceThreshold * 100)}%${s.killSwitch ? ', ИИ отключён везде' : ''}`;
 
 export const aiHandlers = [
   http.get(

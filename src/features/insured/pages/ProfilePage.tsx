@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, FileBadge, LogOut, MonitorSmartphone, Users } from 'lucide-react';
+import { ChevronRight, FileBadge, LifeBuoy, LogOut, MonitorSmartphone, Users } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { useMe } from '@/shared/api/queries/me';
 import { FamilyConsentSwitch, PayoutCardActions } from '../FamilySettings';
@@ -72,6 +72,12 @@ export default function ProfilePage() {
       <Link to="/app/certificate" state={{ self: true }} className="mt-3 flex min-h-[54px] items-center gap-3 rounded-card border border-border bg-surface px-4 font-bold hover:bg-rail">
         <FileBadge className="h-5 w-5 text-accent" aria-hidden />
         <span className="flex-1">{t('app.profile.certificate')}</span>
+        <ChevronRight className="h-5 w-5 text-muted" aria-hidden />
+      </Link>
+
+      <Link to="/app/help" className="mt-3 flex min-h-[54px] items-center gap-3 rounded-card border border-border bg-surface px-4 font-bold hover:bg-rail" data-testid="app-help">
+        <LifeBuoy className="h-5 w-5 text-accent" aria-hidden />
+        <span className="flex-1">{t('help.appEntry')}</span>
         <ChevronRight className="h-5 w-5 text-muted" aria-hidden />
       </Link>
 

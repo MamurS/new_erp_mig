@@ -1,10 +1,16 @@
+/*
+ * HR help: the common help screen (the guide for HR, search, «Задать вопрос», PDF) plus the client's MIG
+ * manager — the HR channel for «Написать нам» — and the short FAQ of the cabinet.
+ */
 import { ChevronDown, Mail, Phone } from 'lucide-react';
 import { useHrOverview } from '@/shared/api/queries/hr';
+import { supportMailto } from '@/shared/config/support';
 import { safeUrl } from '@/shared/lib/safeUrl';
-import { useDocumentTitle } from '@/shared/lib/hooks';
 import { Avatar } from '@/shared/ui/chips';
+import { buttonVariants } from '@/shared/ui/button';
 import { QueryState, SkeletonRows } from '@/shared/ui/states';
-import { HrCard, HrHeader, HrSectionTitle } from '../ui';
+import { HelpScreen } from '@/features/help/HelpScreen';
+import { HrCard, HrSectionTitle } from '../ui';
 import { t } from '@/i18n';
 
 const faq = (): { q: string; a: string }[] => [
@@ -17,13 +23,21 @@ const faq = (): { q: string; a: string }[] => [
 ];
 
 export default function HelpPage() {
-  useDocumentTitle(t('hr.nav.help'));
   const overview = useHrOverview();
+  const manager = overview.data?.manager;
+  const support = manager ? (
+    <a href={safeUrl(supportMailto(manager.email, t('help.support.subject')))} className={buttonVariants({ variant: 'secondary', size: 'md' })} data-testid="help-support">
+      <Mail className="h-4 w-4" aria-hidden /> {t('help.support.us')}
+    </a>
+  ) : undefined;
 
+  return <HelpScreen support={support} aside={<HrContacts overview={overview} />} />;
+}
+
+function HrContacts({ overview }: { overview: ReturnType<typeof useHrOverview> }) {
   return (
     <>
-      <HrHeader title={t('hr.nav.help')} subtitle={t('hr.help.subtitle')} />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section aria-labelledby="hr-faq">
           <HrSectionTitle className="mb-3">
             <span id="hr-faq">{t('hr.help.faq')}</span>

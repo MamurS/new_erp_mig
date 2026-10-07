@@ -287,3 +287,74 @@
     box-shadow: none;
   }
 }
+
+/*
+ * «Скачать PDF» of the help (src/features/help/HelpPrint.tsx). While the print view is open the rest of
+ * the app is not printed; the view itself prints as a document: a title page, the table of contents,
+ * each article from a new page, internal links kept, table rows never split, no buttons.
+ */
+@media print {
+  html.help-printing body > :not(.help-print-root) {
+    display: none !important;
+  }
+  html.help-printing,
+  html.help-printing body {
+    height: auto !important;
+    overflow: visible !important;
+    background: var(--color-surface);
+  }
+  .help-print-root {
+    position: static !important;
+    overflow: visible !important;
+    background: var(--color-surface);
+  }
+  .help-print-toolbar {
+    display: none !important;
+  }
+  .help-print {
+    max-width: none;
+    padding: 0;
+    font-size: 11pt;
+    line-height: 1.45;
+  }
+  .help-print-cover {
+    min-height: 0;
+    padding-top: 30vh;
+    border: 0;
+    break-after: page;
+  }
+  .help-print-toc {
+    border: 0;
+    break-after: page;
+  }
+  .help-print-article {
+    break-before: page;
+  }
+  .help-print :is(h2, h3) {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+  .help-print a {
+    color: inherit;
+    text-decoration: underline;
+  }
+  .help-print .help-table {
+    overflow: visible;
+  }
+  .help-print table {
+    break-inside: auto;
+  }
+  .help-print thead {
+    display: table-header-group;
+  }
+  .help-print tr {
+    break-inside: avoid;
+  }
+  .help-print :is(li, p) {
+    orphans: 3;
+    widows: 3;
+  }
+  @page {
+    margin: 16mm 14mm;
+  }
+}

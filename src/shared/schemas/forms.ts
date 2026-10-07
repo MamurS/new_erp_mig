@@ -617,7 +617,7 @@ export const appealResolveSchema = z.object({ resolution: text(5, 1000, msg('v.a
 export const contractCreateSchema = z.object({ dealId: uuid });
 
 // ---------------- AI coverage check (AI_COVERAGE_SPEC) ----------------
-const aiScenario = z.enum(['insured', 'clinic', 'decision', 'rebill']);
+const aiScenario = z.enum(['insured', 'clinic', 'decision', 'rebill', 'help']);
 export const aiCheckRequestSchema = z.object({
   scenario: aiScenario,
   query: z.string().trim().min(2, msg('v.aiQueryRequired')).max(300, msg('v.tooLong', { max: 300 })).optional(),
@@ -633,9 +633,25 @@ export const aiFeedbackSchema = z
   .refine((v) => v.agree || (v.comment ?? '').length >= 5, { message: msg('v.disagreeWhat', { min: 5 }), path: ['comment'] });
 const aiScenarioSettings = z.object({ enabled: z.boolean(), provider: z.enum(['mock', 'local', 'external']) });
 export const aiSettingsSchema = z.object({
-  scenarios: z.object({ insured: aiScenarioSettings, clinic: aiScenarioSettings, decision: aiScenarioSettings, rebill: aiScenarioSettings }),
+  scenarios: z.object({ insured: aiScenarioSettings, clinic: aiScenarioSettings, decision: aiScenarioSettings, rebill: aiScenarioSettings, help: aiScenarioSettings }),
   confidenceThreshold: z.number({ invalid_type_error: msg('v.numberRequired') }).min(0.3, msg('v.confidenceRange')).max(0.95, msg('v.confidenceRange')),
   killSwitch: z.boolean(),
 });
 export const aiSettingsChangeSchema = z.object({ to: aiSettingsSchema, reason: text(5, 500, msg('v.basisMin5')) });
 export const aiRejectSchema = z.object({ reason: text(5, 500, msg('v.reasonMin5')) });
+
+// ---------------- help: search and «Задать вопрос» (the same schemas validate requests on the server) ----------------
+export const helpLocaleSchema = z.enum(['ru', 'uz-Latn', 'en']);
+/** `?locale=` of /api/help*: unknown values fall back to Russian. */
+export const helpLocaleParam = (v: string | null) => helpLocaleSchema.catch('ru').parse(v ?? 'ru');
+export const helpSearchSchema = z.object({ q: z.string().trim().max(200, msg('v.tooLong', { max: 200 })).transform((s) => s.replace(/\s+/g, ' ')) });
+export const helpAnswerRequestSchema = z.object({
+  question: z
+    .string()
+    .trim()
+    .min(3, msg('v.tooShort', { min: 3 }))
+    .max(300, msg('v.tooLong', { max: 300 }))
+    .transform((s) => s.replace(/\s+/g, ' ')),
+  locale: helpLocaleSchema.default('ru'),
+});
+export const helpFeedbackSchema = z.object({ helpful: z.boolean() });

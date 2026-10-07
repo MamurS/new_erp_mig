@@ -6,6 +6,7 @@ export const ai: Translation<typeof Ru> = {
   'ai.scenario.clinic': 'Klinika: kafolat xati va reyestr',
   'ai.scenario.decision': 'Qarorlar uchun maslahatlar (MIG va assistans)',
   'ai.scenario.rebill': 'Assistans hisobini oldindan tekshirish',
+  'ai.scenario.help': 'Maʼlumotnoma: savollarga javoblar',
   'ai.provider.mock': 'Mok (sinonimlar lugʻati)',
   'ai.provider.local': 'MIG serveridagi lokal model',
   'ai.provider.external': 'Tashqi bulut provayderi',

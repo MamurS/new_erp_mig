@@ -126,6 +126,8 @@ export default tseslint.config(
       // Reference data: the medical services catalogue, legal forms with their labels in three languages.
       'src/features/coverage/catalog.ts',
       'src/shared/config/legalForms.ts',
+      // Language data of the help search: stop words, synonyms and cues in the languages of the guide.
+      'src/shared/help/lang.ts',
     ],
     plugins: { mig: migPlugin },
     rules: { 'mig/no-cyrillic-ui': 'error' },

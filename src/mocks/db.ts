@@ -56,6 +56,7 @@ import type {
   StaffUser,
   UUID,
 } from '@/shared/types';
+import type { HelpQuestionRow } from '@/shared/types/help';
 import type { MigrationBatchStatus, MigrationContractPremium, MigrationIssue, MigrationPremiumSource, MigrationStep, MigrationStepStatus, MigrationTotals } from '@/shared/types/migration';
 
 export interface StaffRow extends StaffUser {
@@ -371,6 +372,13 @@ export interface Db {
   // ---- family members (FAMILY_SPEC) ----
   familyConsents: FamilyConsentRow[];
   familyRequests: FamilyRequestRow[];
+  // ---- help (questions asked in «Задать вопрос», stored redacted) ----
+  help: { questions: HelpQuestionStored[] };
+}
+
+/** A question of «Задать вопрос»: the text is redacted; `askerId` only lets the asker rate the answer. */
+export interface HelpQuestionStored extends HelpQuestionRow {
+  askerId: UUID;
 }
 
 /**

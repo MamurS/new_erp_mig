@@ -1,7 +1,7 @@
 import { ContentScroll } from '@/shared/ui/content-scroll';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { BookOpen, Search } from 'lucide-react';
 import { useUser } from '@/shared/auth/session';
 import { logout } from '@/shared/auth/logout';
 import { IdleWatcher } from '@/shared/auth/IdleWatcher';
@@ -15,6 +15,7 @@ import { QUEUE_NAV, STAFF_NAV_GROUP_LABEL, STAFF_NAV_GROUPS, STAFF_SECTIONS } fr
 import { CommandPalette, type PaletteMode } from './CommandPalette';
 import { useTopbarState } from './topbar';
 import { CreateMenu } from '@/features/shell/CreateMenu';
+import { HelpContextButton } from '@/features/help/HelpContextButton';
 
 export default function StaffLayout() {
   const user = useUser();
@@ -68,6 +69,7 @@ export default function StaffLayout() {
           user={{ name: user.displayName, role: ROLE_LABEL[user.role], portal: t('shell.portal.staff') }}
           onLogout={() => void logout()}
           onSearch={openSearch}
+          footer={[{ path: '/staff/help', label: t('help.nav'), icon: BookOpen }]}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header data-testid="topbar" className="relative z-30 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
@@ -88,6 +90,7 @@ export default function StaffLayout() {
             <button type="button" onClick={openSearch} className="rounded-btn p-2 text-muted md:hidden" aria-label={t('staff.layout.openSearch')}>
               <Search className="h-4 w-4" />
             </button>
+            <HelpContextButton />
             <LanguageButton />
             <span className="hidden items-center gap-1.5 rounded-btn bg-success-soft px-2 py-1 text-[12px] font-medium text-success-text lg:inline-flex" title={t('staff.layout.mfaHint')}>
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden /> MFA · VPN

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import Papa from 'papaparse';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyCsv, buildRows, normalizeUz, readDicts, toCsv } from '../scripts/i18n-review-lib.mjs';
+import { applyCsv, buildRows, GUIDE_PREFIX, guideTitles, normalizeUz, readDicts, toCsv } from '../scripts/i18n-review-lib.mjs';
 import { ru as ruMain } from '../src/i18n/dict/ru';
 import { demo } from '../src/i18n/dict/ru/demo';
 
@@ -29,7 +29,7 @@ describe('i18n review CSV', () => {
 
   it('exports key | ru | uz-Latn | en | where used, guarding formula cells', () => {
     const rows = buildRows(dict, join(root, 'src'), root);
-    expect(rows).toHaveLength(Object.keys(ru).length);
+    expect(rows.filter((r) => !r[0]!.startsWith(GUIDE_PREFIX))).toHaveLength(Object.keys(ru).length);
     const logout = rows.find((r) => r[0] === 'shell.user.logout')!;
     expect(logout.slice(1, 4)).toEqual(['Выйти', 'Chiqish', 'Sign out']);
     expect(logout[4]).toContain('src/shared/ui/app-sidebar.tsx');
@@ -52,6 +52,16 @@ describe('i18n review CSV', () => {
     expect(readFileSync(join(dict, 'en/shell.ts'), 'utf8')).toContain("'shell.user.logout': 'Log out',");
     // An unchanged export re-imported changes nothing.
     expect(applyCsv(toCsv(buildRows(dict, join(root, 'src'), root)), dict).updated).toBe(0);
+  });
+
+  it('lists the user guide article titles in three languages and never imports them into the dictionaries', () => {
+    const titles = guideTitles(root);
+    expect(titles.ru.size).toBe(20);
+    const rows = buildRows(dict, join(root, 'src'), root).filter((r) => r[0]!.startsWith(GUIDE_PREFIX));
+    expect(rows).toHaveLength(titles.ru.size);
+    for (const r of rows) expect(r.slice(1, 4).every((v) => v !== '')).toBe(true);
+    const report = applyCsv(toCsv(rows.map((r) => [r[0]!, r[1]!, 'x', 'y', r[4]!])), dict);
+    expect(report).toMatchObject({ updated: 0, unknown: [], guide: rows.length });
   });
 
   it('normalises apostrophes typed by reviewers', () => {

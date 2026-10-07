@@ -1268,7 +1268,8 @@ export interface CoverageVerdict {
   notes: string[];
 }
 
-export type AiScenario = 'insured' | 'clinic' | 'decision' | 'rebill';
+/** `help` — answers of «Задать вопрос» in the help (help.answer), built from the guide only. */
+export type AiScenario = 'insured' | 'clinic' | 'decision' | 'rebill' | 'help';
 export type AiProviderId = 'mock' | 'local' | 'external';
 
 export interface AiSettings {

@@ -4,7 +4,7 @@
  *   scripts/i18n-import-review.mjs  ← the reviewed CSV, written back into src/i18n/dict/<locale>/<ns>.ts
  * Dictionary files are plain `'key': 'value',` entries, so they are read and patched as text.
  */
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import Papa from 'papaparse';
 
@@ -95,11 +95,33 @@ export function toCsv(rows) {
   return `\ufeff${Papa.unparse([HEADER, ...rows.map((r) => r.map(guard))], { quotes: true, newline: '\n' })}\n`;
 }
 
+/** Prefix of the user guide's article titles in the review file (docs/help/USER_GUIDE.<locale>.md). */
+export const GUIDE_PREFIX = 'help.guide.';
+const GUIDE_FILES = { ru: 'USER_GUIDE.ru.md', 'uz-Latn': 'USER_GUIDE.uz-Latn.md', en: 'USER_GUIDE.en.md' };
+
+/** Article titles («## N. Title {#anchor}») of the user guide per locale, keyed by anchor. */
+export function guideTitles(repoRoot) {
+  const out = {};
+  for (const loc of LOCALES) {
+    const map = new Map();
+    const file = join(repoRoot, 'docs/help', GUIDE_FILES[loc]);
+    if (existsSync(file)) {
+      for (const m of readFileSync(file, 'utf8').matchAll(/^## (?:\d+\.\s*)?(.+?)\s*\{#([a-z0-9-]+)\}\s*$/gm)) map.set(m[2], m[1]);
+    }
+    out[loc] = map;
+  }
+  return out;
+}
+
 export function buildRows(dictRoot, srcRoot, repoRoot) {
   const { values } = readDicts(dictRoot);
   const keys = [...values.ru.keys()].sort();
   const usage = findUsages(srcRoot, keys, repoRoot);
-  return keys.map((k) => [k, values.ru.get(k) ?? '', values['uz-Latn'].get(k) ?? '', values.en.get(k) ?? '', usage.get(k) ?? '']);
+  const rows = keys.map((k) => [k, values.ru.get(k) ?? '', values['uz-Latn'].get(k) ?? '', values.en.get(k) ?? '', usage.get(k) ?? '']);
+  // The user guide is reviewed in its markdown files; its article titles are listed for orientation.
+  const titles = guideTitles(repoRoot);
+  for (const [anchor, ru] of titles.ru) rows.push([GUIDE_PREFIX + anchor, ru, titles['uz-Latn'].get(anchor) ?? '', titles.en.get(anchor) ?? '', 'docs/help']);
+  return rows;
 }
 
 /** Reviewers type ASCII apostrophes: oʻ/gʻ take U+02BB, any other apostrophe becomes U+02BC. */
@@ -117,9 +139,14 @@ export function applyCsv(csvText, dictRoot, { dryRun = false } = {}) {
   if (!header || HEADER.some((h, i) => (header[i] ?? '').trim() !== h)) throw new Error(`Unexpected header: ${header?.join(' | ')}`);
   const { values, files } = readDicts(dictRoot);
   const patches = new Map(); // file → [{ key, value, insert }]
-  const report = { updated: 0, unchanged: 0, unknown: [], added: 0 };
+  const report = { updated: 0, unchanged: 0, unknown: [], added: 0, guide: 0 };
   for (const row of rows) {
     const key = (row[0] ?? '').trim();
+    if (key.startsWith(GUIDE_PREFIX)) {
+      // Guide titles live in docs/help/USER_GUIDE.<locale>.md and are edited there, not imported.
+      report.guide++;
+      continue;
+    }
     if (!values.ru.has(key)) {
       if (key) report.unknown.push(key);
       continue;

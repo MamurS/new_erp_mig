@@ -4,6 +4,7 @@
  * switch works at once (the safe direction). Clauses are conditional while the templates are stubs.
  */
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Play, Power } from 'lucide-react';
 import type { AiProviderId, AiScenario, AiSettings } from '@/shared/types';
 import type { AiGoldenResult } from '@/shared/types/dto';
@@ -26,6 +27,8 @@ import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 import { ReasonDialog } from '../lifecycle/common';
 import { TableScroll } from '@/shared/ui/table-scroll';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
+import { HelpQuestionsTab } from './HelpQuestionsTab';
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
 
@@ -195,102 +198,129 @@ export default function AiAdminPage() {
   const q = useAiAdmin();
   const decide = useDecideAiSettings();
   const [reject, setReject] = useState<string | null>(null);
+  // The tab is in the URL (?tab=help) so a link can open the help questions directly.
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'help' ? 'help' : 'settings';
   return (
     <>
       <PageHeader
         title={t('staffOps.ai.title')}
         subtitle={t('staffOps.ai.subtitle')}
       />
-      <QueryState query={q}>
-        {(v) => {
-          const pending = v.changes.find((c) => c.status === 'pending');
-          return (
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="flex flex-col gap-4">
-                <SettingsForm current={v.settings} pending={!!pending} />
-                {pending && (
-                  <Card title={t('staffOps.ai.pendingTitle')}>
-                    <p className="text-[13px]">
-                      {pending.proposedByName}, {formatDateTime(pending.proposedAt)}: {pending.reason}
-                    </p>
-                    <p className="mt-1 text-[12px] text-muted">
-                      {t('staffOps.ai.pendingSummary', {
-                        from: Math.round(pending.from.confidenceThreshold * 100),
-                        to: Math.round(pending.to.confidenceThreshold * 100),
-                        list: AI_SCENARIOS.map((s) => t(pending.to.scenarios[s].enabled ? 'staffOps.ai.scenarioOn' : 'staffOps.ai.scenarioOff', { name: AI_SCENARIO_LABEL[s] })).join('; '),
-                      })}
-                      {pending.from.killSwitch && !pending.to.killSwitch ? t('staffOps.ai.reenabling') : ''}
-                    </p>
-                    {pending.proposedById === me?.id ? (
-                      <p className="mt-2 text-[12px] text-muted">{t('staffOps.ai.otherAdmin')}</p>
-                    ) : (
-                      <div className="mt-2 flex gap-2">
-                        <Button size="sm" loading={decide.isPending} onClick={() => void decide.mutateAsync({ id: pending.id, decision: 'approve' }).then(() => toast.success(t('staffOps.ai.applied'))).catch((e: unknown) => toast.error(errorMessage(e)))}>
-                          {t('common.confirm')}
-                        </Button>
-                        <Button size="sm" variant="secondary" onClick={() => setReject(pending.id)}>
-                          {t('common.reject')}
-                        </Button>
-                      </div>
+      <Tabs
+        value={tab}
+        onValueChange={(v) =>
+          setParams(
+            (p) => {
+              const n = new URLSearchParams(p);
+              if (v === 'help') n.set('tab', 'help');
+              else n.delete('tab');
+              return n;
+            },
+            { replace: true },
+          )
+        }
+      >
+        <TabsList className="mb-1">
+          <TabsTrigger value="settings">{t('help.admin.tabSettings')}</TabsTrigger>
+          <TabsTrigger value="help">{t('help.admin.tab')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="help">
+          <HelpQuestionsTab />
+        </TabsContent>
+        <TabsContent value="settings">
+          <QueryState query={q}>
+            {(v) => {
+              const pending = v.changes.find((c) => c.status === 'pending');
+              return (
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="flex flex-col gap-4">
+                    <SettingsForm current={v.settings} pending={!!pending} />
+                    {pending && (
+                      <Card title={t('staffOps.ai.pendingTitle')}>
+                        <p className="text-[13px]">
+                          {pending.proposedByName}, {formatDateTime(pending.proposedAt)}: {pending.reason}
+                        </p>
+                        <p className="mt-1 text-[12px] text-muted">
+                          {t('staffOps.ai.pendingSummary', {
+                            from: Math.round(pending.from.confidenceThreshold * 100),
+                            to: Math.round(pending.to.confidenceThreshold * 100),
+                            list: AI_SCENARIOS.map((s) => t(pending.to.scenarios[s].enabled ? 'staffOps.ai.scenarioOn' : 'staffOps.ai.scenarioOff', { name: AI_SCENARIO_LABEL[s] })).join('; '),
+                          })}
+                          {pending.from.killSwitch && !pending.to.killSwitch ? t('staffOps.ai.reenabling') : ''}
+                        </p>
+                        {pending.proposedById === me?.id ? (
+                          <p className="mt-2 text-[12px] text-muted">{t('staffOps.ai.otherAdmin')}</p>
+                        ) : (
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" loading={decide.isPending} onClick={() => void decide.mutateAsync({ id: pending.id, decision: 'approve' }).then(() => toast.success(t('staffOps.ai.applied'))).catch((e: unknown) => toast.error(errorMessage(e)))}>
+                              {t('common.confirm')}
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => setReject(pending.id)}>
+                              {t('common.reject')}
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
                     )}
-                  </Card>
-                )}
-                <Golden />
-              </div>
-              <div className="flex flex-col gap-4">
-                <Card title={t('staffOps.ai.metrics')} bodyClassName="p-0">
-                  <TableScroll>
-                  <table className="w-full text-[13px]" data-testid="ai-metrics">
-                    <caption className="sr-only">{t('staffOps.ai.metricsCaption')}</caption>
-                    <thead>
-                      <tr className="text-left text-[12px] text-muted">
-                        <th className="px-4 py-2 font-medium">{t('staffOps.ai.scenario')}</th>
-                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.calls')}</th>
-                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.rated')}</th>
-                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.agree')}</th>
-                        <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.specialist')}</th>
-                        <th className="px-4 py-2 text-right font-medium">{t('staffOps.ai.col.latency')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {v.metrics.map((m) => (
-                        <tr key={m.scenario} className="border-b border-border-soft" data-testid={`ai-metric-${m.scenario}`}>
-                          <td className="px-4 py-1.5">{AI_SCENARIO_LABEL[m.scenario]}</td>
-                          <td className="num px-2 py-1.5 text-right">{m.calls}</td>
-                          <td className="num px-2 py-1.5 text-right">{m.rated}</td>
-                          <td className="num px-2 py-1.5 text-right">{pct(m.agreeShare)}</td>
-                          <td className="num px-2 py-1.5 text-right">{pct(m.specialistShare)}</td>
-                          <td className="num px-4 py-1.5 text-right">{m.avgLatencyMs === null ? '—' : t('staffOps.ai.ms', { n: m.avgLatencyMs })}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  </TableScroll>
-                </Card>
-                <Card title={t('staffOps.ai.disagreements')} bodyClassName="p-0">
-                  {v.disagreements.length ? (
-                    <ul className="divide-y divide-border-soft text-[13px]" data-testid="ai-disagreements">
-                      {v.disagreements.map((x) => (
-                        <li key={x.id} className="px-4 py-2">
-                          <p>
-                            <span className="text-muted">{AI_SCENARIO_LABEL[x.scenario]}:</span> «{x.input}» → {VERDICT_SHORT[x.decision]}
-                          </p>
-                          <p className="text-[12px] text-muted">
-                            {x.byName}, {formatDateTime(x.at)}: {x.comment}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="px-4 py-3 text-[13px] text-muted">{t('staffOps.ai.noDisagreements')}</p>
-                  )}
-                </Card>
-                <p className="text-[12px] text-muted">{t('staffOps.ai.footer', { version: v.promptVersion, providers: v.providersAvailable.map((p) => AI_PROVIDER_LABEL[p]).join(', ') })}</p>
-              </div>
-            </div>
-          );
-        }}
-      </QueryState>
+                    <Golden />
+                  </div>
+                  <div className="flex flex-col gap-4">
+                    <Card title={t('staffOps.ai.metrics')} bodyClassName="p-0">
+                      <TableScroll>
+                      <table className="w-full text-[13px]" data-testid="ai-metrics">
+                        <caption className="sr-only">{t('staffOps.ai.metricsCaption')}</caption>
+                        <thead>
+                          <tr className="text-left text-[12px] text-muted">
+                            <th className="px-4 py-2 font-medium">{t('staffOps.ai.scenario')}</th>
+                            <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.calls')}</th>
+                            <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.rated')}</th>
+                            <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.agree')}</th>
+                            <th className="px-2 py-2 text-right font-medium">{t('staffOps.ai.col.specialist')}</th>
+                            <th className="px-4 py-2 text-right font-medium">{t('staffOps.ai.col.latency')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {v.metrics.map((m) => (
+                            <tr key={m.scenario} className="border-b border-border-soft" data-testid={`ai-metric-${m.scenario}`}>
+                              <td className="px-4 py-1.5">{AI_SCENARIO_LABEL[m.scenario]}</td>
+                              <td className="num px-2 py-1.5 text-right">{m.calls}</td>
+                              <td className="num px-2 py-1.5 text-right">{m.rated}</td>
+                              <td className="num px-2 py-1.5 text-right">{pct(m.agreeShare)}</td>
+                              <td className="num px-2 py-1.5 text-right">{pct(m.specialistShare)}</td>
+                              <td className="num px-4 py-1.5 text-right">{m.avgLatencyMs === null ? '—' : t('staffOps.ai.ms', { n: m.avgLatencyMs })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      </TableScroll>
+                    </Card>
+                    <Card title={t('staffOps.ai.disagreements')} bodyClassName="p-0">
+                      {v.disagreements.length ? (
+                        <ul className="divide-y divide-border-soft text-[13px]" data-testid="ai-disagreements">
+                          {v.disagreements.map((x) => (
+                            <li key={x.id} className="px-4 py-2">
+                              <p>
+                                <span className="text-muted">{AI_SCENARIO_LABEL[x.scenario]}:</span> «{x.input}» → {VERDICT_SHORT[x.decision]}
+                              </p>
+                              <p className="text-[12px] text-muted">
+                                {x.byName}, {formatDateTime(x.at)}: {x.comment}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="px-4 py-3 text-[13px] text-muted">{t('staffOps.ai.noDisagreements')}</p>
+                      )}
+                    </Card>
+                    <p className="text-[12px] text-muted">{t('staffOps.ai.footer', { version: v.promptVersion, providers: v.providersAvailable.map((p) => AI_PROVIDER_LABEL[p]).join(', ') })}</p>
+                  </div>
+                </div>
+              );
+            }}
+          </QueryState>
+        </TabsContent>
+      </Tabs>
       <ReasonDialog
         open={!!reject}
         onClose={() => setReject(null)}

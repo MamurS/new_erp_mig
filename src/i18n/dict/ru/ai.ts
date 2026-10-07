@@ -4,6 +4,7 @@ export const ai = {
   'ai.scenario.clinic': 'Клиника: ГП и реестр',
   'ai.scenario.decision': 'Подсказки при решениях (МИГ и ассистанс)',
   'ai.scenario.rebill': 'Предпроверка счёта ассистанса',
+  'ai.scenario.help': 'Справка: ответы на вопросы',
   'ai.provider.mock': 'Мок (словарь синонимов)',
   'ai.provider.local': 'Локальная модель на сервере МИГ',
   'ai.provider.external': 'Внешний облачный провайдер',

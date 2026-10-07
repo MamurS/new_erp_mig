@@ -20,6 +20,7 @@ import { ai } from './ai';
 import { coverage } from './coverage';
 import { srv } from './srv';
 import { migration } from './migration';
+import { help } from './help';
 
 export const ru = {
   ...common,
@@ -44,4 +45,5 @@ export const ru = {
   ...coverage,
   ...srv,
   ...migration,
+  ...help,
 };

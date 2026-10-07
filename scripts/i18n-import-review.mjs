@@ -17,6 +17,7 @@ const dryRun = args.includes('--dry-run');
 const file = resolve(args.find((a) => !a.startsWith('--')) ?? join(root, 'docs/i18n-review.csv'));
 const report = applyCsv(readFileSync(file, 'utf8'), join(root, 'src/i18n/dict'), { dryRun });
 console.log(`${dryRun ? '[dry run] ' : ''}updated ${report.updated}, added ${report.added}, unchanged ${report.unchanged}`);
+if (report.guide) console.log(`skipped ${report.guide} guide titles (help.guide.*): edit them in docs/help/USER_GUIDE.<locale>.md`);
 if (report.unknown.length) {
   console.log(`unknown keys (${report.unknown.length}): ${report.unknown.join(', ')}`);
   process.exitCode = 1;
