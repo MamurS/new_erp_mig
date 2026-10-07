@@ -2,14 +2,14 @@
 import { t, tm } from '@/i18n';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LayoutGrid, Plus, Table2 } from 'lucide-react';
+import { AlertTriangle, LayoutGrid, Plus, Table2 } from 'lucide-react';
 import type { DealView } from '@/shared/types/dto';
-import { useCreateLead, useDeals, useStaffDirectory } from '@/shared/api/queries/lifecycle';
+import { useCreateLead, useDeal, useDeals, useStaffDirectory } from '@/shared/api/queries/lifecycle';
 import { errorMessage } from '@/shared/api/client';
 import { useCan } from '@/shared/auth/guards';
 import { DEAL_STAGE_LABEL, DEAL_STAGES } from '@/shared/domain/contracts';
 import { leadCreateSchema } from '@/shared/schemas/forms';
-import { formatDate, formatMoney, formatMoneyShort } from '@/shared/lib/format';
+import { formatDate, formatDateTime, formatMoney, formatMoneyShort } from '@/shared/lib/format';
 import { useDocumentTitle, useUrlFilters } from '@/shared/lib/hooks';
 import { useCreateIntent } from '@/shared/lib/createIntent';
 import { cn } from '@/shared/lib/cn';
@@ -19,8 +19,11 @@ import { DataTable, formatSort, parseSort, type Column } from '@/shared/ui/data-
 import { LegalFormChip, LegalFormOptions, formatLegalForms, legalFormColumn, parseLegalForms } from '@/shared/ui/legal-form';
 import { Modal } from '@/shared/ui/dialog';
 import { Field, Input, Select } from '@/shared/ui/input';
-import { PageHeader } from '@/shared/ui/page';
-import { QueryState } from '@/shared/ui/states';
+import { Kv, PageHeader } from '@/shared/ui/page';
+import { ErrorState, QueryState, SkeletonRows } from '@/shared/ui/states';
+import { DetailPanel, useDetailPanelParam } from '@/shared/ui/detail-panel';
+import { useUser } from '@/shared/auth/session';
+import { sectionRoles } from '../nav';
 import { toast } from '@/shared/ui/toast';
 import { useTopbar } from '../topbar';
 
@@ -123,12 +126,26 @@ function LeadDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DealCardTile({ d }: { d: DealView }) {
+const stageChip = (stage: DealView['stage']) => (stage === 'lost' ? 'danger' : stage === 'active' ? 'success' : 'accent');
+
+/**
+ * A deal on the board. A plain click opens the deal's card beside the board (split view); Enter, a
+ * modified or middle click follow the link to the full card, as before.
+ */
+function DealCardTile({ d, selected, onPick }: { d: DealView; selected: boolean; onPick: (id: string) => void }) {
   return (
     <Link
       to={`/staff/deals/${d.id}`}
-      className="block rounded-btn border border-border bg-surface p-2.5 text-[13px] shadow-xs hover:border-accent"
+      onClick={(e) => {
+        // detail === 0: activated from the keyboard (Enter).
+        if (e.detail === 0 || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        onPick(d.id);
+      }}
+      className={cn('block rounded-btn border bg-surface p-2.5 text-[13px] shadow-xs hover:border-accent', selected ? 'border-accent ring-1 ring-accent' : 'border-border')}
       data-testid="deal-card"
+      data-selected={selected ? '' : undefined}
+      aria-current={selected || undefined}
       aria-label={t('staffLc.deals.tileAria', { number: d.number, client: d.clientName })}
     >
       <span className="flex items-center gap-1.5">
@@ -167,13 +184,15 @@ export default function DealsPage() {
   const managers = (directory.data ?? []).filter((s) => s.role === 'sales_manager');
   const [lead, setLead] = useState(false);
   useCreateIntent('lead', canCreate, setLead, true);
+  // Split view: the selected deal's card next to the table or the board (?panel=id).
+  const panel = useDetailPanelParam();
 
   const columns: Column<DealView>[] = [
     { key: 'num', header: t('staffLc.deal.fallback'), cell: (d) => <span className="num font-medium">{d.number}</span> },
     { key: 'client', header: t('common.client'), sortKey: 'clientName', cell: (d) => d.clientName },
     legalFormColumn<DealView>((d) => d.clientLegalForm, { selected: forms, onChange: (v) => setF({ form: formatLegalForms(v) }) }),
     { key: 'type', header: t('common.type'), cell: (d) => (d.type === 'renewal' ? t('staffLc.deals.typeRenewal') : t('staffLc.deals.typeNew')) },
-    { key: 'stage', header: t('staffLc.deals.stage'), cell: (d) => <Chip kind={d.stage === 'lost' ? 'danger' : d.stage === 'active' ? 'success' : 'accent'}>{DEAL_STAGE_LABEL[d.stage]}</Chip> },
+    { key: 'stage', header: t('staffLc.deals.stage'), cell: (d) => <Chip kind={stageChip(d.stage)}>{DEAL_STAGE_LABEL[d.stage]}</Chip> },
     { key: 'owner', header: t('common.manager'), cell: (d) => d.ownerName },
     { key: 'premium', header: t('common.premium'), align: 'right', cell: (d) => <span className="num whitespace-nowrap">{d.premium ? formatMoney(d.premium) : '—'}</span> },
     { key: 'start', header: t('common.start'), cell: (d) => (d.expectedStart ? <span className="num">{formatDate(d.expectedStart)}</span> : '—') },
@@ -219,7 +238,7 @@ export default function DealsPage() {
       </div>
       {view === 'table' ? (
         <div className="rounded-card border border-border bg-surface">
-          <DataTable caption={t('staffLc.deals.title')} columns={columns} rows={q.data} sort={sort ?? undefined} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(d) => d.id} onRowClick={(d) => navigate(`/staff/deals/${d.id}`)} empty={t('staffLc.deals.empty')} />
+          <DataTable caption={t('staffLc.deals.title')} columns={columns} rows={q.data} sort={sort ?? undefined} onSortChange={(s) => setF({ sort: formatSort(s) })} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} rowKey={(d) => d.id} onRowClick={(d) => panel.open(d.id)} onRowMove={(d) => panel.id && panel.open(d.id)} onRowOpen={(d) => navigate(`/staff/deals/${d.id}`)} activeKey={panel.id} empty={t('staffLc.deals.empty')} />
         </div>
       ) : (
         <QueryState query={q}>
@@ -238,7 +257,7 @@ export default function DealsPage() {
                     </header>
                     <div className="flex max-h-[calc(100vh-17rem)] flex-col gap-2 overflow-y-auto p-2">
                       {items.map((d) => (
-                        <DealCardTile key={d.id} d={d} />
+                        <DealCardTile key={d.id} d={d} selected={d.id === panel.id} onPick={panel.open} />
                       ))}
                       {!items.length && <p className="px-1 py-3 text-center text-[12px] text-muted">{t('staffLc.deals.emptyColumn')}</p>}
                     </div>
@@ -249,7 +268,86 @@ export default function DealsPage() {
           )}
         </QueryState>
       )}
+      {panel.id && <DealPanel id={panel.id} onClose={panel.close} onOpen={() => navigate(`/staff/deals/${panel.id}`)} />}
       {lead && <LeadDialog onClose={() => setLead(false)} />}
     </>
+  );
+}
+
+/** The deal card of the split view: key facts of the full page, reminders and the latest events. */
+function DealPanel({ id, onClose, onOpen }: { id: string; onClose: () => void; onOpen: () => void }) {
+  const q = useDeal(id);
+  const user = useUser();
+  const navigate = useNavigate();
+  const d = q.data;
+  const canOpenClient = !!user && (sectionRoles('/staff/clients') as string[]).includes(user.role);
+  const title = d?.clientName ?? t('staffLc.deal.fallback');
+  return (
+    <DetailPanel
+      onClose={onClose}
+      label={t('staffLc.deal.fallback')}
+      title={title}
+      titleText={title}
+      meta={
+        d && (
+          <>
+            <LegalFormChip code={d.clientLegalForm} />
+            <Chip kind={stageChip(d.stage)}>{DEAL_STAGE_LABEL[d.stage]}</Chip>
+            {d.type === 'renewal' && <Chip kind="renewal">{t('staffLc.deals.renewalChip')}</Chip>}
+            <span className="num text-muted">{d.number}</span>
+          </>
+        )
+      }
+      footer={
+        <>
+          <Button onClick={onOpen}>{t('staff.clients.openCard')}</Button>
+          {d && canOpenClient && (
+            <Button variant="secondary" onClick={() => navigate(`/staff/clients/${d.clientId}`)}>
+              {t('staff.clientCard.docTitle')}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {q.isLoading ? (
+        <SkeletonRows rows={8} />
+      ) : q.isError || !d ? (
+        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {d.reminders.map((r) => (
+            <p key={r} role="status" className="flex items-center gap-2 rounded-card border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+              {tm(r)}
+            </p>
+          ))}
+          <dl className="divide-y divide-border-soft">
+            <Kv label={t('common.type')}>{d.type === 'renewal' ? t('staffLc.deals.typeRenewal') : t('staffLc.deals.typeNew')}</Kv>
+            <Kv label={t('common.manager')}>{d.ownerName}</Kv>
+            {d.underwriterName && <Kv label={t('staffLc.deal.underwriter')}>{d.underwriterName}</Kv>}
+            <Kv label={t('staffLc.deals.headcount')}>{d.client.estimatedHeadcount ?? '—'}</Kv>
+            <Kv label={t('staffLc.deals.currentInsurer')}>{d.client.currentInsurer ?? '—'}</Kv>
+            <Kv label={t('common.premium')}>{d.premium ? <span className="num">{formatMoney(d.premium)}</span> : '—'}</Kv>
+            <Kv label={t('common.start')}>{d.expectedStart ? <span className="num">{formatDate(d.expectedStart)}</span> : '—'}</Kv>
+          </dl>
+          <section>
+            <h3 className="mb-1 text-[14px] font-bold">{t('staffLc.deal.events')}</h3>
+            <ol className="flex flex-col gap-2 border-l border-border pl-3">
+              {[...d.events]
+                .reverse()
+                .slice(0, 5)
+                .map((e) => (
+                  <li key={e.id}>
+                    <div>{tm(e.text)}</div>
+                    <div className="text-[12px] text-muted">
+                      <span className="num">{formatDateTime(e.at)}</span> · {e.actorName}
+                    </div>
+                  </li>
+                ))}
+            </ol>
+          </section>
+        </div>
+      )}
+    </DetailPanel>
   );
 }

@@ -368,6 +368,8 @@ test('5. Above authority goes to the head; refusal needs a clause; the insured s
   await as.claimsHead(page);
   await page.goto('/staff/claims?tab=above');
   await page.getByRole('row').filter({ hasText: big.number }).click();
+  await expect(page.getByTestId('detail-panel-title')).toHaveText(big.number);
+  await page.getByTestId('detail-panel').getByRole('button', { name: 'Открыть карточку' }).click();
   await expect(page).toHaveURL(new RegExp(`/staff/claims/${big.id}$`));
   await page.getByTestId('pending-decision').getByRole('button', { name: 'Согласовать' }).click();
   await expect(page.getByTestId('claim-decision')).toContainText('Одобрено полностью');

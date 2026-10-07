@@ -13,7 +13,9 @@ test('9. Operator: confirm an appointment in the queue and take a claim to appro
   await expect(page).toHaveURL(/\/staff$/);
 
   await page.goto('/staff/claims?status=new&category=medicines');
+  // A row opens the claim's card beside the list; «Открыть карточку» leads to the full page.
   await page.locator('tbody tr[data-row]').first().click();
+  await page.getByTestId('detail-panel').getByRole('button', { name: 'Открыть карточку' }).click();
   await expect(page).toHaveURL(/\/staff\/claims\/[0-9a-f-]{36}$/);
   await page.getByRole('button', { name: 'Взять в работу' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Взять в работу' }).click();
