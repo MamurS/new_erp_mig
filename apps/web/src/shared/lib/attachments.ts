@@ -8,7 +8,7 @@ import { GUARANTEE_FILE_MAX_BYTES } from '@mig/domain/clinics';
 import { detectMime, reencodeImage } from './image';
 
 export const ATTACHMENT_ACCEPT = 'application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png';
-export const ATTACHMENT_MAX_FILES = 10;
+export { ATTACHMENT_MAX_FILES } from '@mig/domain/lib/uploads';
 
 const EXT: Record<string, string[]> = { 'application/pdf': ['pdf'], 'image/jpeg': ['jpg', 'jpeg'], 'image/png': ['png'] };
 
