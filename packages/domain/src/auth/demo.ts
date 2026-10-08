@@ -4,3 +4,6 @@
  */
 export const DEMO_PASSWORD = 'Demo-2026!';
 export const DEMO_CODE = '000000';
+
+/** The demo underwriter: the client's contact in the HR cabinet when the client has no manager. */
+export const DEMO_UNDERWRITER_NAME = 'Sokolov Dmitriy Aleksandrovich';
