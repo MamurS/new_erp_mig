@@ -38,8 +38,9 @@ export function formatMoneyShort(value: Money): string {
   return formatMoney(value);
 }
 
-export function formatNumber(value: number): string {
-  return spaces(numberFmt(0).format(value));
+/** `digits`: fraction digits shown (a rate like «1,4 на 1000»); the separator follows the language. */
+export function formatNumber(value: number, digits = 0): string {
+  return spaces(numberFmt(digits).format(value));
 }
 
 export function formatPercent(ratio: number, digits = 0): string {

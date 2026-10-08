@@ -1,4 +1,6 @@
+import { useUser } from '@/shared/auth/session';
 /* Card of an assistance company for MIG (ASSISTANCE_SPEC §7): KPI, contract, clients, users, integration, rebills, QA, audit. */
+import { canOpenRoute } from '@/features/help/routeMap';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { AssistanceCardView } from '@/shared/types/dto';
@@ -294,6 +296,9 @@ export default function AssistanceCardPage() {
   const { assistanceId = '' } = useParams();
   const q = useAssistanceCard(assistanceId);
   const navigate = useNavigate();
+  const role = useUser()?.role;
+  // The assistance card is open to every MIG role, its rows lead to sections that are not: no link without access.
+  const may = (route: string) => !!role && canOpenRoute(role, route);
   useDocumentTitle(t('staffOps.rebills.col.assistance'));
   useTopbar([{ label: t('staffOps.assistances.title'), to: '/staff/assistance' }, { label: q.data?.assistance.name ?? t('staffOps.assistCard.crumb') }]);
   const [f, setF] = useUrlFilters(['tab'] as const);
@@ -359,7 +364,7 @@ export default function AssistanceCardPage() {
                   ]}
                   rows={c.clients}
                   rowKey={(x) => x.id}
-                  onRowClick={(x) => navigate(`/staff/clients/${x.id}`)}
+                  onRowClick={may('/staff/clients/:id') ? (x) => navigate(`/staff/clients/${x.id}`) : undefined}
                   empty={
                     <EmptyState
                       testId="assistance-clients-next"
@@ -417,7 +422,7 @@ export default function AssistanceCardPage() {
                   ]}
                   rows={c.rebills}
                   rowKey={(b) => b.id}
-                  onRowClick={(b) => navigate(`/staff/rebills/${b.id}`)}
+                  onRowClick={may('/staff/rebills/:id') ? (b) => navigate(`/staff/rebills/${b.id}`) : undefined}
                   empty={
                     <EmptyState
                       testId="assistance-rebills-next"
@@ -432,10 +437,15 @@ export default function AssistanceCardPage() {
             </TabsContent>
             <TabsContent value="qa">
               <p className="mb-2 text-[13px] text-muted">
-                {t('staffOps.assistCard.qaNote')}{' '}
-                <Link className="text-accent-text hover:underline" to="/staff/qa">
-                  {t('staffOps.assistCard.qaLink')}
-                </Link>
+                {t('staffOps.assistCard.qaNote')}
+                {may('/staff/qa') && (
+                  <>
+                    {' '}
+                    <Link className="text-accent-text hover:underline" to="/staff/qa">
+                      {t('staffOps.assistCard.qaLink')}
+                    </Link>
+                  </>
+                )}
                 .
               </p>
               <div className="rounded-card border border-border bg-surface">

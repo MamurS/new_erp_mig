@@ -132,7 +132,7 @@ export default function ChatPage() {
           </Button>
         </div>
         <p className="mt-1 px-1 text-right text-[12px] text-muted" aria-live="off">
-          {t('app.chat.limit', { n: text.length })}
+          {t('app.chat.limit', { n: text.length, max: CHAT_MAX })}
         </p>
       </form>
     </div>

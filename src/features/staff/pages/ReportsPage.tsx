@@ -61,7 +61,7 @@ export default function ReportsPage() {
                     <XAxis type="number" unit="%" tickLine={false} axisLine={false} fontSize={12} />
                     <YAxis type="category" dataKey="clientName" width={210} tickLine={false} axisLine={false} fontSize={12} interval={0} />
                     <RTooltip formatter={(v: number) => [`${v}%`, t('staff.clients.col.loss')]} />
-                    <ReferenceLine x={80} stroke={WARN} strokeDasharray="4 3" label={{ value: t('staff.reports.threshold'), position: 'top', fill: WARN, fontSize: 12 }} />
+                    <ReferenceLine x={Math.round(lossWarn * 100)} stroke={WARN} strokeDasharray="4 3" label={{ value: t('staff.reports.threshold'), position: 'top', fill: WARN, fontSize: 12 }} />
                     <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={12}>
                       {rows.map((r) => (
                         <Cell key={r.clientId} fill={r.lossRatio >= lossWarn ? WARN : ACCENT} />

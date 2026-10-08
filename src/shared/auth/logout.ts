@@ -3,9 +3,10 @@ import { queryClient } from '@/shared/api/queryClient';
 import { clearSession } from './session';
 
 /** Logout: server call, cache wipe, session wipe, cross-tab broadcast. Guards then redirect to login. */
-export async function logout(notice?: string): Promise<void> {
+/** `everywhere`: «Выйти на всех устройствах» — the server ends every session of the person. */
+export async function logout(notice?: string, everywhere = false): Promise<void> {
   try {
-    await request('/auth/logout', { method: 'POST' });
+    await request('/auth/logout', { method: 'POST', ...(everywhere ? { query: { all: '1' } } : {}) });
   } catch {
     /* the session is dropped locally regardless */
   }

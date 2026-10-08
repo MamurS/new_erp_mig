@@ -20,8 +20,7 @@ export default function ProfilePage() {
 
   const doLogout = async (kind: 'one' | 'all') => {
     setBusy(kind);
-    // In the prototype «all devices» ends the current session the same way.
-    await logout();
+    await logout(undefined, kind === 'all');
   };
 
   const rows: [string, string | undefined, boolean?][] = me.data

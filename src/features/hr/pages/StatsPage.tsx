@@ -113,7 +113,8 @@ export default function StatsPage() {
       <HrHeader title={t('hr.nav.stats')} subtitle={t('hr.stats.subtitle')} />
       <div className="mb-6 flex items-start gap-3 rounded-card bg-sky p-4 text-sky-text">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-        <p>{t('hr.stats.privacy', { k: stats.data?.k ?? 10 })}</p>
+        {/* The group size comes from the server; nothing is shown until it arrives. */}
+        <p>{stats.data ? t('hr.stats.privacy', { k: stats.data.k }) : t('hr.stats.privacyLoading')}</p>
       </div>
       <QueryState
         query={stats}

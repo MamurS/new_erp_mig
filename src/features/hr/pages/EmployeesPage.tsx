@@ -291,7 +291,8 @@ function OverviewCards({ overview }: { overview: ReturnType<typeof useHrOverview
   const o: HrOverview = overview.data;
   const remind = () =>
     invite.mutate('all_not_in_app', {
-      onSuccess: () => toast.success(t('hr.employees.reminded')),
+      // The count the server reminded: nobody without a phone (a child lives in the parent's app).
+      onSuccess: (r) => (r.invited > 0 ? toast.success(t('hr.employees.remindedN', { n: r.invited })) : toast.info(t('hr.employees.remindedNone'))),
       onError: (err) => toast.error(errorMessage(err)),
     });
 

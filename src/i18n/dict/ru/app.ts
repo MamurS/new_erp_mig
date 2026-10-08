@@ -169,7 +169,7 @@ export const app = {
   'app.chat.placeholder': 'Сообщение',
   'app.chat.send': 'Отправить',
   'app.chat.operator': 'Оператор MIG',
-  'app.chat.limit': '{n} / 1000',
+  'app.chat.limit': '{n} / {max}',
   'app.chat.empty': 'Напишите нам — оператор ответит в течение пары минут',
   'app.profile.title': 'Профиль',
   'app.profile.phone': 'Телефон',

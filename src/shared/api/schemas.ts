@@ -356,6 +356,7 @@ export const myClaim: z.ZodType<T.MyClaim> = z.object({
   id: uuid,
   number: z.string(),
   category: claimCategory,
+  personId: uuid.optional(),
   amountClaimed: money,
   amountApproved: money.optional(),
   providerName: z.string(),

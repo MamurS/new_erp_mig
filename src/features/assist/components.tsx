@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import type { AssistanceKpi, RebillLine } from '@/shared/types';
 import type { RebillView } from '@/shared/types/dto';
 import { CASE_STATUS_LABEL, FEE_MODEL_LABEL, REBILL_CHECK_LABEL, REBILL_STATUS_CHIP, REBILL_STATUS_LABEL, slaState } from '@/shared/domain/assistance';
-import { formatDate, formatDateTime, formatMoney, formatPercent } from '@/shared/lib/format';
+import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
 import { Chip } from '@/shared/ui/chips';
 import { DataTable, type Column } from '@/shared/ui/data-table';
@@ -64,7 +64,7 @@ export function KpiGrid({ kpi, className }: { kpi: AssistanceKpi; className?: st
     [t('assist.kpi.responseAvg'), t('assist.kpi.minutes', { n: kpi.appointmentResponseMinutesAvg }), kpi.appointmentResponseMinutesAvg > responseNorm],
     [t('assist.kpi.guaranteesOnTime'), formatPercent(kpi.guaranteesOnTimeShare), kpi.guaranteesOnTimeShare < 0.9],
     [t('assist.kpi.qaAgreement'), formatPercent(kpi.qaAgreementShare), kpi.qaAgreementShare < 0.9],
-    [t('assist.kpi.complaints'), String(kpi.complaintsPer1000).replace('.', ','), kpi.complaintsPer1000 > 5],
+    [t('assist.kpi.complaints'), formatNumber(kpi.complaintsPer1000, 1), kpi.complaintsPer1000 > 5],
     [t('assist.kpi.lossRatio'), kpi.lossRatio === null ? '—' : formatPercent(kpi.lossRatio), (kpi.lossRatio ?? 0) >= lossWarn],
   ];
   return (
