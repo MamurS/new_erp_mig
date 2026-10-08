@@ -928,7 +928,8 @@ export type DmsParamKey =
   | 'minGroupCountsFamily'
   | 'allowedLegalForms'
   | 'belowMinDuringTerm'
-  | 'requestResponseWorkdays';
+  | 'requestResponseWorkdays'
+  | 'clientResponseWorkdays';
 
 export type DmsParamValues = Record<DmsParamKey, number>;
 

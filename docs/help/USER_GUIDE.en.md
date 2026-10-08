@@ -93,7 +93,7 @@ A request asks a colleague to take a step that you cannot: for example, the unde
 
 - **Who gets it.** The person responsible for the object: the manager of the deal or client, the underwriter of the quote. Without one, everyone with the role sees the request; the first to click “Take” becomes the executor, and the row disappears for the others.
 - **One request at a time.** While a request is open, the object shows the plaque “Request … sent {date} — {to}, {status}” instead of the button, and the same request about the same object cannot be sent.
-- **Response time** — the “Request response time” parameter in “DMS parameters” (demo: 2 working days). A day before the deadline and when it is overdue both the executor and the author are notified. An overdue request is red for both.
+- **Response time** — “DMS parameters” has two, both marked “demo value”: “Internal request response time” — between MIG employees (demo: 2 working days), and “Client response time to a MIG request” — for requests to HR (demo: 5 working days). A day before the deadline and when it is overdue both the executor and the author are notified. An overdue request is red for both.
 - **“Remind”.** Once the deadline has passed, the plaque and “My requests” show “Remind”: the executor gets the notification again and the request’s history gets a mark.
 - **History.** Sending the request and every change of its status are written to the deal’s “Events” and the client’s “Activity”.
 
@@ -344,7 +344,7 @@ While a required item is not done, the deal cannot move to the next stage: the t
 <!-- audience: staff -->
 **Who:** manager or underwriter. “Request from HR” is in an empty appendix 2, in the assessment data, in the “Insured” tab of the client card and in the deal checklist.
 
-1. If the client already has an HR cabinet (it opens when the commercial proposal is sent), write a comment and click “Send the request”. The response time is the “Request response time” parameter (demo: 2 working days); the request is in your “My requests”.
+1. If the client already has an HR cabinet (it opens when the commercial proposal is sent), write a comment and click “Send the request”. The response time is the “Client response time to a MIG request” parameter (demo: 5 working days); the request is in your “My requests”.
 2. If there is no cabinet yet, a letter to the client opens: copy the text, open your mail and attach the CSV template. Upload the received file yourself.
 3. When HR completes the task you are notified (the bell in the top bar) and the checklist item becomes done.
 <!-- /audience -->
@@ -1021,7 +1021,7 @@ Typical situations and what to do; if a situation is not on the list, contact th
 | **A contract cannot be signed: below the minimum** | Appendix 2 has fewer employees than the minimum and no exception is approved in the quote. Upload the full list or approve the exception in the quote. | <!-- audience: staff -->
 | **After an exclusion the group is below the minimum** | HR can exclude the employee; the underwriter and the manager get a task and agree with the client what to do with the contract terms. | <!-- audience: staff hr -->
 | **The app says «The code did not match, or this number is not found»** | The message is deliberately the same for an unknown number and a wrong code and appears only after the code is entered — so nobody can find out by trial who is insured. Check the SMS code; if it is right, ask your company's HR to check the number in the list of insured people. | <!-- audience: staff hr insured -->
-| **Nobody answers the request** | Open “My requests” on the dashboard: it shows who got the request and whether it was taken. Once the deadline has passed, click “Remind” — the executor is notified again. If there is still no answer, contact the executor or their manager directly; the response time is the “Request response time” parameter. | <!-- audience: staff -->
+| **Nobody answers the request** | Open “My requests” on the dashboard: it shows who got the request and whether it was taken. Once the deadline has passed, click “Remind” — the executor is notified again. If there is still no answer, contact the executor or their manager directly; the response time is set by the “Internal request response time” and “Client response time to a MIG request” parameters. | <!-- audience: staff -->
 | **The request came to the wrong person** | Click “Reject” in the queue row and write whom to ask — the author sees the comment and can send the request again. | <!-- audience: staff -->
 
 ## 18. Security and privacy {#security}
