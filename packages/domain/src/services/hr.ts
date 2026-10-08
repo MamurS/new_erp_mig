@@ -9,7 +9,7 @@ import type { ClientDocument, Invoice, PolicyChange, SessionUser } from '@mig/co
 import type { FamilyRequest, HrEmployee, HrFamilyMember, HrImportError, HrImportResult, HrOverview, HrStats } from '@mig/contracts/dto';
 import { familyRequestDecisionSchema, hrEmployeeSchema, hrExcludeSchema, hrFamilyMemberSchema, hrInviteSchema } from '@mig/contracts/forms';
 import { can } from '../auth/permissions';
-import { DEMO_STAFF } from '../config/demoCredentials';
+import { DEMO_UNDERWRITER_NAME } from '../config/demoCredentials';
 import { PROGRAM_LABEL } from '../labels';
 import { countsOf, exclusionDropsBelow, groupSize, type GroupCounts } from '../minGroup';
 import { isActiveRequest } from '../requests';
@@ -140,7 +140,7 @@ export async function overview(ctx: AuthCtx): Promise<HrOverview> {
     nextInvoice,
     policy: policy ? { number: policy.number, program: policy.program, programName: PROGRAM_LABEL[policy.program], startDate: policy.startDate, endDate: policy.endDate } : null,
     manager: {
-      name: manager?.fullName ?? DEMO_STAFF[1]!.fullName,
+      name: manager?.fullName ?? DEMO_UNDERWRITER_NAME,
       phone: '+998 71 200 00 00',
       email: 'dms@mig.example',
     },
