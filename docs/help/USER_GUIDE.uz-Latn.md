@@ -820,11 +820,11 @@ Ushbu boʻlimni hamkorlar va mijozlarga alohida berish mumkin: unda faqat ular o
 
 <!-- audience: staff insured -->
 
-- **Asosiy sahifa:** polis kartasi, «Shifokor qabuliga yozilish», «Chek boʻyicha pulni qaytarish», «Yaqin klinikalar», «Bizga yozing», «Qoplanadimi?» plitkalari; oxirgi qoplash; limitlar boʻyicha «Qancha qoldi»; «Sizning assistansingiz 24/7» kartasi.
-- Yuqoridagi **«Men / {ism}» almashtirgichi**: ekrandagi hamma narsa tanlangan oila aʼzosi uchun koʻrsatiladi.
+- **Asosiy sahifa:** polis kartasi, «Shifokor qabuliga yozilish», «Chek boʻyicha pulni qaytarish», «Yaqin klinikalar», «Bizga yozing», «Qoplanadimi?», «Mening oilam» plitkalari; oxirgi qoplash; limitlar boʻyicha «Qancha qoldi»; «Sizning assistansingiz 24/7» kartasi.
+- Yuqoridagi **«Men / {ism}» almashtirgichi**: ekrandagi hamma narsa tanlangan oila aʼzosi uchun koʻrsatiladi. Xodimda oxirgi element — «+ Qoʻshish»: u darhol oila aʼzosi uchun arizani ochadi.
 - **«Klinika uchun karta»:** registratura uchun QR va qisqa kod. Kod har daqiqada yangilanadi — ekran suratini emas, jonli ekranni koʻrsating.
 - **Qoplashlar:** chekni yuborish, holatlar, rad etilganda «Eʼtiroz bildirish».
-- **«Mening oilam»:** oila aʼzosini qoʻshish (ariza HR ga ketadi).
+- **«Mening oilam»** (bosh sahifadagi plitka yoki «Profil»): siz bilan birga kim sugʻurtalangan va ularning holati (polisda / chiqarilgan), «Oila aʼzosini qoʻshish» tugmasi va «Mening arizalarim» bloki — kimni qoʻshish, sana, holat: HR koʻrib chiqmoqda, tasdiqlandi, sababi bilan rad etildi. Oila aʼzolari faqat kompaniya HRi orqali ariza bilan qoʻshiladi; HR arizani tasdiqlaganda yoki rad etganda bosh sahifadagi qoʻngʻiroqchaga bildirishnoma keladi. Voyaga yetgan oila aʼzosi tugmani koʻrmaydi — uning oʻrnida «Oila aʼzolarini siz u orqali sugʻurtalangan xodim qoʻshishi mumkin» maslahati.
 - **Profil:** sertifikat, til, toʻlovlar uchun karta, maʼlumotlarni qayta ishlashga rozilik, «Chiqish».
 - **Voyaga yetgan oila aʼzosi** oʻz telefoni bilan kiradi va «{ism} mening murojaatlarimni koʻrishiga ruxsat berish» ni yoqishi yoki uni qaytarib olishi mumkin.
 

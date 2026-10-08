@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CalendarDays, CalendarPlus, ChevronRight, FileBadge, Headphones, MapPin, MessageCircle, Phone, QrCode, Receipt, type LucideIcon, ShieldQuestion } from 'lucide-react';
+import { CalendarDays, Users, CalendarPlus, ChevronRight, FileBadge, Headphones, MapPin, MessageCircle, Phone, QrCode, Receipt, type LucideIcon, ShieldQuestion } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import { useMe, useMeLimits, useMePolicy, useMyAppointments, useMyClaims } from '@/shared/api/queries/me';
 import { useMyAssistance } from '@/shared/api/queries/assist';
@@ -17,6 +17,7 @@ import { Skeleton } from '@/shared/ui/states';
 import { LanguageButton } from '@/shared/ui/language-switch';
 import { CardSkeletons, ClaimStepBar, Empty, LoadError, Section, StatusPill } from '../components';
 import { LimitsList } from '../LimitsList';
+import { NotificationsBell } from '@/features/next/NotificationsBell';
 import { MedicalHidden, ProfileSwitcher, usePerson } from '../person';
 
 /** `medical`: about the picked person's care — hidden while an adult family member has not allowed it. */
@@ -26,6 +27,7 @@ const TILES: { to: string; label: I18nKey; icon: LucideIcon; tone: string; medic
   { to: '/app/clinics', label: 'app.tile.clinics', icon: MapPin, tone: 'bg-sun text-sun-text' },
   { to: '/app/chat', label: 'app.tile.chat', icon: MessageCircle, tone: 'bg-accent-soft text-accent-text' },
   { to: '/app/coverage', label: 'app.tile.coverage', icon: ShieldQuestion, tone: 'bg-rail text-text', medical: true },
+  { to: '/app/family', label: 'app.tile.family', icon: Users, tone: 'bg-peach text-peach-text' },
 ];
 
 const CATEGORIES: LimitCategory[] = ['outpatient', 'dental', 'medicines', 'inpatient'];
@@ -163,7 +165,6 @@ export default function HomePage() {
   const me = useMe();
   const { personId, person, isSelf, medical } = usePerson();
   const policy = useMePolicy(personId);
-  const [bellOpen, setBellOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
 
   return (
@@ -181,18 +182,11 @@ export default function HomePage() {
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <LanguageButton />
-          <button
-            type="button"
-            aria-label={t('app.home.notifications')}
-            onClick={() => setBellOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface hover:bg-rail"
-          >
-            <Bell className="h-5 w-5" aria-hidden />
-          </button>
+          <NotificationsBell className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface" />
         </div>
       </header>
 
-      <ProfileSwitcher className="mt-4" />
+      <ProfileSwitcher className="mt-4" addTo={me.data?.relation === 'employee' ? '/app/family?add=1' : undefined} />
 
       {/* Policy card of the picked person */}
       <section className="relative mt-5 overflow-hidden rounded-hero bg-accent-soft p-5" data-testid="home-policy">
@@ -270,13 +264,6 @@ export default function HomePage() {
           <MedicalHidden person={person} />
         </Section>
       )}
-
-      <Modal open={bellOpen} onOpenChange={setBellOpen} title={t('app.home.notifications')}>
-        <p className="py-4 text-center text-muted">{t('app.home.noNotifications')}</p>
-        <Button variant="secondary" onClick={() => setBellOpen(false)} className="h-12 w-full rounded-btn text-[15px]">
-          {t('app.common.close')}
-        </Button>
-      </Modal>
 
       <Modal open={coverOpen} onOpenChange={setCoverOpen} title={t('app.program.title', { name: policy.data?.programName ?? '' })}>
         <p className="leading-relaxed">{t('app.program.desc')}</p>

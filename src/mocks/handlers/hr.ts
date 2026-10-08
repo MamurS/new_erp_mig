@@ -31,7 +31,7 @@ import { DAY, isoDay, parseIso, tzIso } from '../time';
 import { toHrEmployee } from '../views';
 import { DEMO_STAFF } from '../credentials';
 import { groupRules } from '../params';
-import { createTask, subjectRefs } from '../tasks-core';
+import { createTask, notify, subjectRefs } from '../tasks-core';
 import { countsOf, exclusionDropsBelow, groupSize, type GroupCounts } from '@/shared/domain/minGroup';
 
 export const K_ANON = 10;
@@ -382,6 +382,11 @@ export const hrHandlers = [
         Object.assign(r, { status: 'rejected', decidedAt: now, decidedById: user.id, decidedByName: user.displayName, rejectionReason: input.reason });
       }
       audit(user, 'family_request_decided', { targetType: 'insured', targetId: r.employeeId, targetLabel: insuredLabel(r.employeeId), reason: input.decision === 'approve' ? 'approve' : input.reason });
+      // The employee learns the decision in the app's bell; a rejection carries HR's reason.
+      const employeeUser = d.insured.find((i) => i.id === r.employeeId)?.userId;
+      if (employeeUser) {
+        notify(d, employeeUser, msg(input.decision === 'approve' ? 'app.family.notify.approved' : 'app.family.notify.rejected', { name: r.fullName }), '/app/family', input.decision === 'approve' ? undefined : r.rejectionReason);
+      }
       return toFamilyRequest(d, r);
     }),
   ),

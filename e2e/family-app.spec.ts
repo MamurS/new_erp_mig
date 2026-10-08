@@ -189,7 +189,7 @@ test('d. The employee asks to add a family member from the app: pending, then ap
   await expect(page.getByTestId('family-member').filter({ hasText: CHILD })).toBeVisible();
   await expect(page.getByTestId('family-member').filter({ hasText: SPOUSE })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Добавить' }).click();
+  await page.getByRole('button', { name: 'Добавить члена семьи' }).click();
   const form = page.getByRole('form', { name: 'Добавить члена семьи' });
   await form.getByLabel('ФИО латиницей').fill('Karimova Zarina Azizovna');
   await form.getByLabel('Дата рождения').fill('01.03.2022');
