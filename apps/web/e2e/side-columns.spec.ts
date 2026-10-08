@@ -17,6 +17,18 @@ const barBottom = async (page: Page) => {
   return b.y + b.height;
 };
 
+/** The box once it stops moving (a card that opens slides in; measuring mid-animation gives a stale origin). */
+async function stableBox(l: Locator): Promise<Awaited<ReturnType<typeof box>>> {
+  let prev = await box(l);
+  for (let i = 0; i < 30; i++) {
+    await settle(l.page());
+    const next = await box(l);
+    if (JSON.stringify(next) === JSON.stringify(prev)) return next;
+    prev = next;
+  }
+  return prev;
+}
+
 async function scrollTo(l: Locator, y: number | 'end'): Promise<void> {
   await l.evaluate((el, to) => el.scrollTo({ top: to === 'end' ? el.scrollHeight : to }), y);
   await settle(l.page());
@@ -76,7 +88,7 @@ test('client card with a long «Активность»: the header is pinned, «
   const hr = page.getByTestId('client-panel-hr');
   const head = (s: Locator) => s.locator('[data-section-head]');
   const tableTop = await scrollTop(area(page));
-  const h0 = await box(header);
+  const h0 = await stableBox(header);
 
   // Scroll the card until «Активность» reaches the header, then on into the middle of the list.
   const actTop = await activity.evaluate((el) => {
