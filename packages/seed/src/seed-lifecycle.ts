@@ -15,7 +15,7 @@ import { KP_TEMPLATE_VERSION, kpTotalPremium } from '@mig/domain/kp';
 import { detectFlags } from '@mig/domain/settlement';
 import { statementLineKey } from '@mig/domain/payments';
 import { DOC_TEMPLATES } from '@mig/domain/documents/templates/index';
-import type { ChangeRequestRow, ClaimRow, ClientRow, Db } from './db';
+import type { ChangeRequestRow, ClaimRow, ClientRow, Db } from '@mig/domain/store/db';
 import { DEMO_INSURED_PHONE, DEMO_PASSWORD } from './credentials';
 import { int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
 import { DAY, isoDay, parseIso, tzIso } from './time';

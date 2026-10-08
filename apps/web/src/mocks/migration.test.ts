@@ -13,7 +13,7 @@ import { toCsv } from '@/shared/lib/csv';
 import { MIGRATION_DEMO_DATE, MIGRATION_DEMO_PHONE, migrationDemoFiles } from '@/demo/migrationSamples';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
-import { annualOf } from './lifecycle-core';
+import { annualOf } from '@mig/domain/services/lifecycle';
 import { defaultTariff } from '@mig/domain/policies';
 
 const BASE = 'http://localhost/api';

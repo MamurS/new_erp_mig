@@ -1,9 +1,9 @@
 /*
  * In-memory "server" database: the current state built from the seed. The row shapes live in the seed package.
  */
-import type { Db } from '@mig/seed/db';
+import type { Db } from '@mig/domain/store/db';
 
-export * from '@mig/seed/db';
+export * from '@mig/domain/store/db';
 
 let current: Db | null = null;
 let factory: (() => Db) | null = null;

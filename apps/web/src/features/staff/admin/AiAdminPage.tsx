@@ -163,7 +163,7 @@ function Golden() {
       }
     >
       <p className="text-[13px] text-muted">
-        {t('staffOps.ai.goldenFrom')} <code>src/features/ai/eval/golden.json</code>
+        {t('staffOps.ai.goldenFrom')} <code>packages/domain/src/ai/eval/golden.json</code>
         {t('staffOps.ai.goldenText')}
       </p>
       {r && (

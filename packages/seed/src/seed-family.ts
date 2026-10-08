@@ -8,7 +8,7 @@
 import type { Appointment, Clinic, ClaimCategory, ClaimStatus, Policy } from '@mig/contracts';
 import { docNumber } from '@mig/domain/numbering';
 import { DEMO_SPOUSE_PHONE } from './credentials';
-import type { ClaimRow, Db, InsuredRow } from './db';
+import type { ClaimRow, Db, InsuredRow } from '@mig/domain/store/db';
 import { fakeFiscal } from './receipts';
 import { hashString, mulberry32, SEED, uuidFrom } from './rng';
 import { at, DAY, isoDay, startOfDay, tzIso } from './time';

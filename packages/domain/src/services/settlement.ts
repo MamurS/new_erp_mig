@@ -1,14 +1,15 @@
 /*
- * Claims settlement on the mock server (LIFECYCLE_SPEC §13): the reserve timeline, fraud flags,
- * decisions within authority, and who handles reimbursements of the insured.
+ * Claims settlement (LIFECYCLE_SPEC §13): the reserve timeline, fraud flags, decisions within authority,
+ * and who handles reimbursements of the insured.
  */
 import type { ClaimDecision, FraudFlag, ReserveChange, SessionUser, UUID } from '@mig/contracts';
-import { detectFlags } from '@mig/domain/settlement';
-import type { ClaimRow, Db } from './db';
-import { dmsParam } from './params';
-import { currentAssistance } from './assistance-core';
-import { randomId } from '@mig/seed/rng';
-import { parseIso, tzIso } from '@mig/seed/time';
+import { detectFlags } from '../settlement';
+import { randomId } from '../lib/random';
+import { parseIso, tzIso } from '../lib/time';
+import type { ClaimRow } from '../store/db';
+import type { BaseCtx } from './kernel';
+import { loadParams, type ParamsView } from './params';
+import { currentAssistance } from './assistance';
 
 /**
  * Reserve history of a claim: derived from its status history (registered → claimed amount, decision →
@@ -50,35 +51,40 @@ export function reserveOnDate(c: ClaimRow, date: string): number {
   return v;
 }
 
-/** Recomputes fraud flags; dismissed flags keep their comment. */
-export function refreshFlags(d: Db, c: ClaimRow): FraudFlag[] {
-  const i = d.insured.find((x) => x.id === c.insuredId);
-  const policy = i ? d.policies.find((p) => p.id === i.policyId) : undefined;
+/**
+ * Recomputes fraud flags; dismissed flags keep their comment. Sets `c.flags` and saves them when the claim
+ * is stored already.
+ */
+export async function refreshFlags(ctx: BaseCtx, c: ClaimRow, P?: ParamsView): Promise<FraudFlag[]> {
+  const params = P ?? (await loadParams(ctx));
+  const i = await ctx.repos.insured.get(c.insuredId);
+  const policy = i ? await ctx.repos.policies.get(i.policyId) : null;
   const found = detectFlags({
     claim: c,
-    others: d.claims.filter((o) => o.id !== c.id),
+    others: await ctx.repos.claims.list({ where: { id: { ne: c.id } } }),
     coverageFrom: i?.insuredFrom ?? policy?.startDate ?? '0000-01-01',
     coverageTo: policy?.endDate ?? '9999-12-31',
     excludedFrom: i?.excludedFrom,
-    params: { maxPerMonth: dmsParam('fraudMaxClaimsPerMonth'), priceExcessShare: dmsParam('fraudPriceExcessShare'), daysBeforeExclusion: dmsParam('fraudDaysBeforeExclusion') },
+    params: { maxPerMonth: params.dmsParam('fraudMaxClaimsPerMonth'), priceExcessShare: params.dmsParam('fraudPriceExcessShare'), daysBeforeExclusion: params.dmsParam('fraudDaysBeforeExclusion') },
   });
   const old = c.flags ?? [];
   c.flags = found.map((f) => {
     const prev = old.find((o) => o.code === f.code);
     return prev ? { ...prev, message: f.message } : { id: randomId(), ...f };
   });
+  if (await ctx.repos.claims.exists({ id: c.id })) await ctx.repos.claims.update(c.id, { flags: c.flags });
   return c.flags;
 }
 
 /** Reimbursements of the insured: MIG's claims officer, or the assistance when its contract says so. */
-export function handlerOf(d: Db, insuredPolicyId: UUID): 'mig' | 'assistance' {
-  const a = currentAssistance(d, insuredPolicyId);
+export async function handlerOf(ctx: BaseCtx, insuredPolicyId: UUID): Promise<'mig' | 'assistance'> {
+  const a = await currentAssistance(ctx, insuredPolicyId);
   if (!a) return 'mig';
-  const company = d.assistances.find((x) => x.id === a);
+  const company = await ctx.repos.assistances.get(a);
   return company?.contract.handlesReimbursements === false ? 'mig' : 'assistance';
 }
 
-/** Applies a decision to the claim: status, amounts, plain-language reason and history. */
+/** Applies a decision to the claim: status, amounts, plain-language reason and history (the caller saves the claim). */
 export function applyDecision(c: ClaimRow, decision: ClaimDecision, user: Pick<SessionUser, 'id' | 'displayName'>): void {
   const at = decision.at;
   const to = decision.kind === 'reject' ? 'rejected' : 'approved';
@@ -94,7 +100,7 @@ export function applyDecision(c: ClaimRow, decision: ClaimDecision, user: Pick<S
   c.updatedAt = at;
 }
 
-export const nowIso = () => tzIso(Date.now());
+export const nowIso = (ctx: Pick<BaseCtx, 'now'>) => tzIso(ctx.now());
 
 /** SHA-256 of a receipt image: the same photo sent twice is a duplicate. */
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {

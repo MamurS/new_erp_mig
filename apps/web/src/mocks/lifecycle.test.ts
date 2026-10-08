@@ -10,7 +10,8 @@ import type { Claim, KpDocument, MyClaim } from '@mig/contracts';
 import { tm } from '@mig/i18n';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
-import { currentReserve, refreshFlags } from './settlement-core';
+import { currentReserve, refreshFlags } from '@mig/domain/services/settlement';
+import { baseCtx } from './http';
 
 const BASE = 'http://localhost/api';
 const server = createMockServer();
@@ -428,7 +429,7 @@ describe('duplicate receipts by fiscal data', () => {
     other.receiptFiscal = { ...original.receiptFiscal!, fiscalNumber: original.receiptFiscal!.fiscalNumber ?? '412345678901' };
     original.receiptFiscal = { ...other.receiptFiscal };
     original.flags = [];
-    const flags = refreshFlags(db(), original);
+    const flags = await refreshFlags(baseCtx(), original);
     expect(tm(flags.find((x) => x.code === 'duplicate_receipt')?.message)).toBe(`Фискальный номер чека совпадает с чеком обращения ${other.number} другого застрахованного`);
   });
 });

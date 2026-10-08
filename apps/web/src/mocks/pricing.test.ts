@@ -12,7 +12,8 @@ import { daysInclusive } from '@mig/domain/policies';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 import { DEMO_INSURED_PHONE } from '@mig/seed/credentials';
-import { endorsementLines } from './lifecycle-core';
+import { endorsementLines } from '@mig/domain/services/lifecycle';
+import { baseCtx } from './http';
 import { isoDay } from '@mig/seed/time';
 
 const BASE = 'http://localhost/api';
@@ -78,7 +79,7 @@ describe('inclusion during the term', () => {
     // The policy change shows the delta rounded to 1000; the endorsement line is exact.
     expect(Math.abs(change.premiumDelta - expected)).toBeLessThanOrEqual(500);
     expect(cr().payload).toMatchObject({ annual: c.params.premiumFamily, rule: { basis: 'flat_by_type', key: 'premium_family' } });
-    const [line] = endorsementLines(db(), c, [cr()]);
+    const [line] = await endorsementLines(baseCtx(), c, [cr()]);
     expect(line!.amount).toBe(expected);
     expect(tm(line!.formula)).toMatch(/^по типу: premium_family [\d ]+ × \d+ \/ \d+ = [\d ]+$/);
   });
@@ -98,9 +99,9 @@ describe('inclusion during the term', () => {
     const days = daysInclusive(start, c.params.endDate);
     const term = daysInclusive(c.params.startDate, c.params.endDate);
     expect(Math.abs(change.premiumDelta - Math.round((900_000 * days) / term))).toBeLessThanOrEqual(500);
-    expect(endorsementLines(db(), c, [cr()])[0]!.amount).toBe(Math.round((900_000 * days) / term));
+    expect((await endorsementLines(baseCtx(), c, [cr()]))[0]!.amount).toBe(Math.round((900_000 * days) / term));
     expect(cr().payload).toMatchObject({ annual: 900_000, rule: { basis: 'age_banded', minAge: 0, maxAge: 17 } });
-    expect(tm(endorsementLines(db(), c, [cr()])[0]!.formula)).toMatch(/^по возрастной группе 0–17: 900 000 × \d+ \/ \d+ = /);
+    expect(tm((await endorsementLines(baseCtx(), c, [cr()]))[0]!.formula)).toMatch(/^по возрастной группе 0–17: 900 000 × \d+ \/ \d+ = /);
   });
 
   it('age_banded without a table: HR cannot add and the underwriter cannot approve', async () => {

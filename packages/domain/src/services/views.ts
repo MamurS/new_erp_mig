@@ -1,60 +1,61 @@
 /* Projections of DB rows into API DTOs. Masking happens here, on the "server". */
 import type { Client, Insured, LimitCategory, LimitUsage, MyClaim, SessionUser } from '@mig/contracts';
 import type { ClaimDetail, HrEmployee, InsuredDetail, InsuredListItem } from '@mig/contracts/dto';
-import { insuredVisibility } from '@mig/domain/auth/permissions';
-import { CLAIM_TO_LIMIT, claimTransitions, requiresMedicalReview, toMyClaimStatus } from '@mig/domain/claims';
-import type { ClaimRow, ClientRow, Db, InsuredRow } from './db';
-import type { LegalFormCode } from '@mig/domain/config/legalForms';
-import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from './mask';
-import { PROGRAMS } from '@mig/seed/programs';
-import { limitExtras } from './assistance-core';
-import { DAY, isoDay, parseIso } from '@mig/seed/time';
-import { can } from '@mig/domain/auth/permissions';
-import { canApproveDecision } from '@mig/domain/settlement';
-import { clauseLabel } from '@mig/domain/documents/templates/index';
-import { currentReserve, reserveTimeline } from './settlement-core';
-import { ageLimits, familyBrief, payoutCardOf, principalOf, todayIso } from './family-core';
-import { ageLimitDate, childAgeLimit, limitPoolOf, reachedAgeLimit } from '@mig/domain/family';
-import { limitModeOf } from '@mig/domain/config/dmsParameters';
-import { paramValues } from './params';
+import { can, insuredVisibility } from '../auth/permissions';
+import { CLAIM_TO_LIMIT, claimTransitions, requiresMedicalReview, toMyClaimStatus } from '../claims';
+import type { LegalFormCode } from '../config/legalForms';
+import { limitModeOf } from '../config/dmsParameters';
+import { clauseLabel } from '../documents/templates/index';
+import { ageLimitDate, childAgeLimit, limitPoolOf, reachedAgeLimit } from '../family';
+import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from '../lib/mask';
+import { DAY, isoDay, parseIso } from '../lib/time';
+import { PROGRAMS } from '../programs';
+import { canApproveDecision } from '../settlement';
+import type { ClaimRow, ClientRow, InsuredRow } from '../store/db';
+import { todayIso, type BaseCtx } from './kernel';
+import { loadParams, type ParamsView } from './params';
+import { limitExtras } from './assistance';
+import { currentReserve, reserveTimeline } from './settlement';
+import { ageLimits, familyBrief, payoutCardOf, principalOf } from './family';
 
 /** Insured people of a client (employees and family members, each person counts). */
-export function insuredCountFor(d: Db, clientId: string): number {
-  return d.insured.filter((i) => i.clientId === clientId && i.status === 'active').length;
+export async function insuredCountFor(ctx: BaseCtx, clientId: string): Promise<number> {
+  return ctx.repos.insured.count({ clientId, status: 'active' });
 }
 
 /** Legal form of a client (rows that show the client by name carry it next to the name). */
-export function clientLegalFormOf(d: Db, clientId: string | null | undefined): LegalFormCode | undefined {
-  return clientId ? d.clients.find((c) => c.id === clientId)?.legalForm : undefined;
+export async function clientLegalFormOf(ctx: BaseCtx, clientId: string | null | undefined): Promise<LegalFormCode | undefined> {
+  return clientId ? (await ctx.repos.clients.get(clientId))?.legalForm : undefined;
 }
 
 /** Legal form of a clinic. */
-export function clinicLegalFormOf(d: Db, clinicId: string | null | undefined): LegalFormCode | undefined {
-  return clinicId ? d.clinics.find((c) => c.id === clinicId)?.legalForm : undefined;
+export async function clinicLegalFormOf(ctx: BaseCtx, clinicId: string | null | undefined): Promise<LegalFormCode | undefined> {
+  return clinicId ? (await ctx.repos.clinics.get(clinicId))?.legalForm : undefined;
 }
 
 /** Legal form of an assistance company. */
-export function assistanceLegalFormOf(d: Db, assistanceId: string | null | undefined): LegalFormCode | undefined {
-  return assistanceId ? d.assistances.find((a) => a.id === assistanceId)?.legalForm : undefined;
+export async function assistanceLegalFormOf(ctx: BaseCtx, assistanceId: string | null | undefined): Promise<LegalFormCode | undefined> {
+  return assistanceId ? (await ctx.repos.assistances.get(assistanceId))?.legalForm : undefined;
 }
 
-export function toClient(d: Db, c: ClientRow): Client {
+export async function toClient(ctx: BaseCtx, c: ClientRow): Promise<Client> {
   return {
     ...c,
     hrContact: { name: c.hrContact.name, phoneMasked: maskPhone(c.hrContact.phone), emailMasked: maskEmail(c.hrContact.email) },
-    insuredCount: insuredCountFor(d, c.id),
+    insuredCount: await insuredCountFor(ctx, c.id),
   };
 }
 
 /** A child over the age limit: the staff card explains the `age_limit` task of the manager queue. */
-function ageLimitOf(i: InsuredRow): Pick<Insured, 'ageLimit'> {
-  const limits = ageLimits();
-  if (!reachedAgeLimit(i, todayIso(), limits)) return {};
+function ageLimitOf(i: InsuredRow, today: string, P: ParamsView): Pick<Insured, 'ageLimit'> {
+  const limits = ageLimits(P);
+  if (!reachedAgeLimit(i, today, limits)) return {};
   return { ageLimit: { age: childAgeLimit(i, limits), reachedOn: ageLimitDate(i, limits) } };
 }
 
-export function toInsured(d: Db, i: InsuredRow): Insured {
-  const principal = principalOf(d, i);
+export async function toInsured(ctx: BaseCtx, i: InsuredRow, P?: ParamsView): Promise<Insured> {
+  const params = P ?? (await loadParams(ctx));
+  const principal = await principalOf(ctx, i);
   return {
     id: i.id,
     clientId: i.clientId,
@@ -68,8 +69,8 @@ export function toInsured(d: Db, i: InsuredRow): Insured {
     relation: i.relation,
     ...(principal ? { principalId: principal.id, principalName: principal.fullName } : {}),
     ...(i.isStudent ? { isStudent: true } : {}),
-    ...ageLimitOf(i),
-    family: familyBrief(d, i),
+    ...ageLimitOf(i, todayIso(ctx), params),
+    family: await familyBrief(ctx, i),
     appStatus: i.appStatus,
     myIdVerified: i.myIdVerified,
     attachedClinicId: i.attachedClinicId,
@@ -80,8 +81,8 @@ export function toInsured(d: Db, i: InsuredRow): Insured {
   };
 }
 
-export function toInsuredListItem(d: Db, i: InsuredRow, user: SessionUser): InsuredListItem {
-  const principal = principalOf(d, i);
+export async function toInsuredListItem(ctx: BaseCtx, i: InsuredRow, user: SessionUser): Promise<InsuredListItem> {
+  const principal = await principalOf(ctx, i);
   const base: InsuredListItem = {
     id: i.id,
     fullName: i.fullName,
@@ -102,10 +103,10 @@ export function toInsuredListItem(d: Db, i: InsuredRow, user: SessionUser): Insu
   return base;
 }
 
-export function toInsuredDetail(d: Db, i: InsuredRow): InsuredDetail {
-  const policy = d.policies.find((p) => p.id === i.policyId)!;
+export async function toInsuredDetail(ctx: BaseCtx, i: InsuredRow, P?: ParamsView): Promise<InsuredDetail> {
+  const policy = (await ctx.repos.policies.get(i.policyId))!;
   return {
-    ...toInsured(d, i),
+    ...(await toInsured(ctx, i, P)),
     policyNumber: policy.number,
     program: policy.program,
     policyStart: policy.startDate,
@@ -114,15 +115,15 @@ export function toInsuredDetail(d: Db, i: InsuredRow): InsuredDetail {
   };
 }
 
-export function toHrEmployee(d: Db, i: InsuredRow): HrEmployee {
-  const policy = d.policies.find((p) => p.id === i.policyId);
+export async function toHrEmployee(ctx: BaseCtx, i: InsuredRow): Promise<HrEmployee> {
+  const policy = await ctx.repos.policies.get(i.policyId);
   return {
     id: i.id,
     fullName: i.fullName,
     position: i.position,
     program: policy?.program ?? 'standard',
     insuredFrom: i.insuredFrom,
-    family: familyBrief(d, i),
+    family: await familyBrief(ctx, i),
     appStatus: i.appStatus,
     status: i.status,
     excludedFrom: i.excludedFrom,
@@ -131,28 +132,31 @@ export function toHrEmployee(d: Db, i: InsuredRow): HrEmployee {
 }
 
 const PAID_LIKE = new Set(['approved', 'to_pay', 'paid']);
+/** Claim statuses whose amount counts as used limit. */
+export const PAID_LIKE_STATUSES = ['approved', 'to_pay', 'paid'] as const;
 
 /**
  * Limits of a person. Parameter `limitMode`: `individual` — the person's own consumption; `family_shared` — one
  * pool per family and category: the consumption of every person of the family on the policy counts.
  */
-export function limitsFor(d: Db, i: InsuredRow): LimitUsage[] {
-  const policy = d.policies.find((p) => p.id === i.policyId);
+export async function limitsFor(ctx: BaseCtx, i: InsuredRow, P?: ParamsView): Promise<LimitUsage[]> {
+  const params = P ?? (await loadParams(ctx));
+  const policy = await ctx.repos.policies.get(i.policyId);
   const program = PROGRAMS[policy?.program ?? 'standard'];
   const from = policy ? parseIso(policy.startDate) : 0;
   const used: Record<LimitCategory, number> = { outpatient: 0, dental: 0, medicines: 0, inpatient: 0 };
   const reserved: Record<LimitCategory, number> = { outpatient: 0, dental: 0, medicines: 0, inpatient: 0 };
-  const pool = new Set(limitPoolOf(i, d.insured, limitModeOf(paramValues())));
-  for (const c of d.claims) {
-    if (!pool.has(c.insuredId) || !PAID_LIKE.has(c.status)) continue;
+  const mode = limitModeOf(params.paramValues());
+  const pool = new Set(mode === 'individual' ? [i.id] : limitPoolOf(i, await ctx.repos.insured.list({ where: { policyId: i.policyId } }), mode));
+  for (const c of await ctx.repos.claims.list({ where: { insuredId: { in: [...pool] }, status: { in: PAID_LIKE_STATUSES } } })) {
     if (parseIso(c.serviceDate) < from - 7 * DAY) continue;
     used[CLAIM_TO_LIMIT[c.category]] += c.amountApproved ?? c.amountClaimed;
   }
-  for (const person of d.insured.filter((x) => pool.has(x.id))) {
+  for (const person of await ctx.repos.insured.list({ where: { id: { in: [...pool] } } })) {
     // Used before the transfer from the previous system (as of the migration date) counts too.
     for (const [cat, amount] of Object.entries(person.migratedUsed ?? {}) as [LimitCategory, number][]) used[cat] += amount;
     // Lines accepted by an assistance count as used; approved guarantee letters reserve the limit.
-    const extra = limitExtras(d, person, from);
+    const extra = await limitExtras(ctx, person, from);
     for (const cat of LIMIT_CATEGORIES) {
       used[cat] += extra.used[cat];
       reserved[cat] += extra.reserved[cat];
@@ -168,17 +172,17 @@ export function limitsFor(d: Db, i: InsuredRow): LimitUsage[] {
 
 const LIMIT_CATEGORIES = ['outpatient', 'dental', 'medicines', 'inpatient'] as const;
 
-export function toClaimDetail(d: Db, c: ClaimRow, user: SessionUser): ClaimDetail {
-  const i = d.insured.find((x) => x.id === c.insuredId)!;
+export async function toClaimDetail(ctx: BaseCtx, c: ClaimRow, user: SessionUser): Promise<ClaimDetail> {
+  const i = (await ctx.repos.insured.get(c.insuredId))!;
   const cat = CLAIM_TO_LIMIT[c.category];
-  const usage = limitsFor(d, i).find((l) => l.category === cat)!;
+  const usage = (await limitsFor(ctx, i)).find((l) => l.category === cat)!;
   const counted = PAID_LIKE.has(c.status) ? (c.amountApproved ?? c.amountClaimed) : 0;
   const usedExcl = usage.used - counted;
   const remaining = Math.max(0, usage.limit - usedExcl);
   const payout = c.amountApproved ?? c.amountClaimed;
   const t = claimTransitions(user, c);
   const { publicRejectionReason: _p, reserveHistory: _r, receiptHash: _h, expectedPrice: _e, registryLineId: _l, ...claim } = c;
-  const staff = d.staff.find((s) => s.id === user.id);
+  const staff = await ctx.repos.staff.get(user.id);
   const open = ['new', 'review', 'medical_review'].includes(c.status);
   return {
     ...claim,
@@ -205,7 +209,7 @@ export function toClaimListItem(c: ClaimRow) {
   return { ...claim, reserve: currentReserve(c) };
 }
 
-export function toMyClaim(d: Db, c: ClaimRow, i: InsuredRow): MyClaim {
+export async function toMyClaim(ctx: BaseCtx, c: ClaimRow, i: InsuredRow): Promise<MyClaim> {
   const status = toMyClaimStatus(c.status);
   const whenReached = (targets: string[]) => c.history.find((h) => targets.includes(h.to))?.at;
   const receivedAt = c.createdAt;
@@ -228,9 +232,9 @@ export function toMyClaim(d: Db, c: ClaimRow, i: InsuredRow): MyClaim {
     serviceDate: c.serviceDate,
     status,
     steps,
-    payoutCardMasked: maskCard(payoutCardOf(d, i).card),
+    payoutCardMasked: maskCard((await payoutCardOf(ctx, i)).card),
   };
-  if (status === 'approved') out.expectedPayoutBy = isoDay(Date.now() + 2 * DAY);
+  if (status === 'approved') out.expectedPayoutBy = isoDay(ctx.now() + 2 * DAY);
   if (status === 'received' || status === 'checking') out.expectedPayoutBy = isoDay(parseIso(c.slaDueAt) + 2 * DAY);
   if (status === 'rejected') out.rejectionReason = c.publicRejectionReason ?? 'Услуга не входит в программу страхования';
   // Partial approval: the reason for the difference is explained too (LIFECYCLE_SPEC §13).

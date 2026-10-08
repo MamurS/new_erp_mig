@@ -1,8 +1,8 @@
 /* Demo accounts of the mock server (SPEC §2). */
 import type { StaffAuthority, StaffRole } from '@mig/contracts';
+import { DEMO_UNDERWRITER_NAME } from '@mig/domain/auth/demo';
 
-export const DEMO_PASSWORD = 'Demo-2026!';
-export const DEMO_CODE = '000000';
+export { DEMO_CODE, DEMO_PASSWORD } from '@mig/domain/auth/demo';
 
 export interface DemoStaff {
   role: StaffRole;
@@ -16,7 +16,7 @@ export interface DemoStaff {
 
 export const DEMO_STAFF: DemoStaff[] = [
   { role: 'operator', email: 'operator@demo.mig.uz', fullName: 'Yusupova Nigora Alisherovna' },
-  { role: 'underwriter', email: 'underwriter@demo.mig.uz', fullName: 'Sokolov Dmitriy Aleksandrovich', authority: { quoteDiscountMaxPct: 0.1, quotePremiumMax: 5_000_000_000 } },
+  { role: 'underwriter', email: 'underwriter@demo.mig.uz', fullName: DEMO_UNDERWRITER_NAME, authority: { quoteDiscountMaxPct: 0.1, quotePremiumMax: 5_000_000_000 } },
   { role: 'doctor_expert', email: 'doctor@demo.mig.uz', fullName: 'Rahimova Shahnoza Bahromovna' },
   { role: 'accountant', email: 'accountant@demo.mig.uz', fullName: 'Morozova Elena Sergeyevna' },
   { role: 'admin', email: 'admin@demo.mig.uz', fullName: 'Aliyev Temur Farhodovich' },

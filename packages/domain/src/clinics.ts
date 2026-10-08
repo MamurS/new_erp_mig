@@ -2,6 +2,7 @@
 import { defineLabels, msg } from '@mig/i18n';
 import { DEFAULT_NUMBERING, docNumber, type NumberingTemplates } from './numbering';
 import type {
+  ClaimCategory,
   CoverageStatus,
   GuaranteeLetter,
   GuaranteeStatus,
@@ -23,6 +24,15 @@ import type {
 // ---- tunables (demo values) ----
 // Business thresholds (dual approval, response SLA, check limits) are DMS parameters:
 // src/shared/config/dmsParameters.ts. The values here are technical.
+/** Claim category of a clinic service: an accepted registry or rebill line becomes a claim of it. */
+export const CATEGORY_TO_CLAIM_OF_SERVICE: Record<ServiceCategory, ClaimCategory> = {
+  outpatient: 'doctor_visit',
+  diagnostics_advanced: 'diagnostics',
+  dental: 'dental',
+  medicines: 'medicines',
+  inpatient: 'inpatient',
+};
+
 export const VISIT_TTL_MS = 24 * 3600_000;
 export const CARD_TOKEN_TTL_MS = 60_000;
 export const API_RATE_PER_MINUTE = 60;

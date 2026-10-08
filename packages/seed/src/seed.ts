@@ -22,10 +22,9 @@ import type {
   ProgramCode,
   Role,
   Specialty,
-  Rebill,
 } from '@mig/contracts';
 import { chance, digits, hashString, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
-import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from './db';
+import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from '@mig/domain/store/db';
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './credentials';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
@@ -191,23 +190,12 @@ const NIL = '00000000-0000-4000-8000-000000000000';
  */
 const asEmployee = (_formerFamilySize: number): 'employee' => 'employee';
 
-/**
- * What the seed needs from the server it fills: `attach` makes the database being seeded the current one
- * (server helpers called below read the DMS parameters through it); `claimsFromRebill` turns an accepted
- * assistance invoice into claims the way the server does.
- */
-export interface SeedHooks {
-  attach(d: Db): void;
-  claimsFromRebill(d: Db, b: Rebill, actorName: string): void;
-}
-
 export interface SeedOptions {
   xss?: boolean;
   now?: number;
-  hooks: SeedHooks;
 }
 
-export function createSeed(opts: SeedOptions): Db {
+export function createSeed(opts: SeedOptions = {}): Db {
   const rng = mulberry32(SEED);
   const now = opts.now ?? Date.now();
   const today = startOfDay(now);
@@ -889,10 +877,7 @@ export function createSeed(opts: SeedOptions): Db {
     tasks: [],
     notifications: [],
   };
-  // Core helpers used below read the DMS parameters (number templates) through db(): let them see the
-  // database being seeded instead of starting another seed.
-  opts.hooks.attach(out);
-  seedAssistance(out, { now, claimsFromRebill: opts.hooks.claimsFromRebill });
+  seedAssistance(out, { now });
   seedLifecycle(out, { now });
   seedFamilyActivity(out, family, { now });
   return out;
