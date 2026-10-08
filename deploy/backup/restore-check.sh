@@ -27,6 +27,10 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+# On a failed start the container logs are the only clue (the stack is removed right after).
+up() {
+  $COMPOSE up -d --wait --wait-timeout 300 "$@" || { $COMPOSE ps -a; $COMPOSE logs --tail 60 "$@"; exit 1; }
+}
 
 # Throwaway secrets: the check needs no real ones (personal data stays encrypted; the API is not started).
 sh "$DEPLOY/scripts/gen-secrets.sh" >"$ENV_FILE"
@@ -56,7 +60,7 @@ fi
 [ -f "$SRC/SHA256SUMS" ] || { echo "restore-check: $SRC is not a backup of deploy/backup/backup.sh" >&2; exit 1; }
 
 log "starting a clean stack $PROJECT (db, auth, rest, storage)"
-$COMPOSE up -d --wait --wait-timeout 300 db auth rest storage
+up db auth rest storage
 # Auth and Storage have created their schemas; they stay stopped while the data goes in.
 $COMPOSE stop auth storage rest >/dev/null
 
@@ -64,5 +68,5 @@ log "restoring $SRC"
 $COMPOSE --profile tools run --rm -T -v "$SRC:/restore:ro" backup /scripts/restore-db.sh /restore
 
 log "starting Auth and Storage on the restored data"
-$COMPOSE up -d --wait --wait-timeout 300 auth rest storage
+up auth rest storage
 log "OK: $SRC restores and verifies"

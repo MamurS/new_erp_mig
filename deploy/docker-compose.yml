@@ -88,7 +88,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:9999/health']
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:9999/health']
       interval: 10s
       timeout: 5s
       retries: 6
@@ -195,10 +195,11 @@ services:
       rest:
         condition: service_started
     healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:5000/status']
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:5000/status']
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 60s
     environment:
       ANON_KEY: ${ANON_KEY:?}
       SERVICE_KEY: ${SERVICE_ROLE_KEY:?}
