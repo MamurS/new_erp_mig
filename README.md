@@ -372,9 +372,9 @@ docs/                      ТЗ, решения, справка, OpenAPI
 ## Подключение настоящего API
 
 1. Сервер — `apps/api` (Fastify, см. «API (бэкенд)»): он регистрирует все маршруты общей таблицы `packages/domain/src/http/routes.ts` с теми же путями и типами из `packages/contracts/src/`.
-2. Собрать фронт с `VITE_USE_MOCKS=false` и `VITE_API_BASE_URL=https://<api-host>/api` (и добавить этот хост в `connect-src` в `apps/web/public/_headers`).
+2. Собрать фронт с `VITE_USE_MOCKS=false` и раздавать его с того же origin, что и `/api` (Caddy, шаг 6; локально — `API_PROXY`, см. «Приложение с бэкендом»): сессия — cookie `__Host-mig_session` с `SameSite=Strict`, поэтому API на другом хосте (`VITE_API_BASE_URL`) не поддерживается.
 3. Экраны не меняются: они ходят только через `apps/web/src/shared/api/client.ts` и хуки из `apps/web/src/shared/api/queries/`.
-4. **`/api/__demo/*` в production нет**, включая `/api/__demo/mis-card`: это вспомогательные адреса демо-стенда и e2e-тестов (выдают код карты любого пациента без его участия). API регистрирует `mis-card` только вне production (`APP_ENV` = development/ci/staging), в production запрос к ним — 404 (проверяет `apps/api/src/app.test.ts`).
+4. **`/api/__demo/*` в production нет**: `mis-card` (код карты любого пациента без его участия), `login-as`, `reset`, `failures`, `clock` — вспомогательные адреса демо-стенда и e2e-тестов. API регистрирует их только вне production (`APP_ENV` = development/ci/staging), в production запрос к ним — 404 (проверяют `apps/api/src/app.test.ts` и `production.test.ts`).
 
 ## База данных
 
@@ -415,7 +415,7 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
 - **Роли и привязки** — только в `app_metadata` пользователя Supabase Auth; их выставляет API сервисной ролью (`apps/api/src/jobs/identity.ts`): триггеры кладут каждую новую учётную запись и каждое изменение e-mail, телефона, роли, привязки или активности в `app.identity_sync`, воркер создаёт/обновляет пользователя, деактивированных — блокирует. Custom Access Token Hook (`public.custom_access_token_hook`) оставляет в токене только эти ключи и убирает `user_metadata`. Если claims токена разошлись с записью (роль сменили), API синхронизирует пользователя и обновляет токен в том же запросе.
 - **Приглашения**: новая учётная запись (пользователь МИГ, HR-кабинет клиента, пользователи клиники и ассистанса) создаётся неподтверждённой, письмо отправляет Supabase Auth (`inviteUserByEmail`) через SMTP своего развёртывания (`GOTRUE_SMTP_HOST`, `GOTRUE_SMTP_PORT`, `GOTRUE_SMTP_USER`, `GOTRUE_SMTP_PASS`, `GOTRUE_SMTP_ADMIN_EMAIL`, `GOTRUE_SMTP_SENDER_NAME` — переменные контейнера auth, шаг 6), ссылка ведёт на `INVITE_REDIRECT_URL`. В development/ci с `DEMO_PASSWORD` вместо письма ставится демо-пароль и демо-фактор (локально SMTP нет).
 - **Демо-аккаунты в Supabase Auth**: последний блок `supabase/seed.sql` (`packages/domain/src/store/sql/authSeed.ts`) создаёт пользователей всех учётных записей seed (id = id наших таблиц, `app_metadata`, демо-пароль, TOTP-факторы); `supabase db reset` и CI делают это сами, для staging — `APP_ENV=staging DATABASE_URL=… npm run provision:demo -w @mig/api` (production отказывается).
-- **BFF-сессии** (`apps/api/src/auth/bff.ts`): браузер получает только cookie `__Host-mig_session` (`HttpOnly; Secure; SameSite=Strict; Path=/`), токены Supabase хранятся на сервере в `app_sessions` (зашифрованы ключом ПДн), access-токен (10 минут) сервер обновляет сам; тайм-аут неактивности по ролям (15/30 минут + минута) проверяет сервер; `X-Background: 1` активность не продлевает; `POST /api/auth/logout` завершает сессию, `?all=1` — все сессии человека и его сессии Supabase. Ответы `/api/auth/*` прежние (`{ user }`; `challengeId`, `resendInSec`); `sessionId` и `Authorization: Bearer <сессия>` — только при `AUTH_BEARER_COMPAT=1` в development/ci до шага 5 (переход фронтенда на cookie). Локально по http (`APP_ENV=development`) можно `INSECURE_DEV_COOKIE=1`: cookie `mig_session` без `Secure`.
+- **BFF-сессии** (`apps/api/src/auth/bff.ts`): браузер получает только cookie `__Host-mig_session` (`HttpOnly; Secure; SameSite=Strict; Path=/`), токены Supabase хранятся на сервере в `app_sessions` (зашифрованы ключом ПДн), access-токен (10 минут) сервер обновляет сам; тайм-аут неактивности по ролям (15/30 минут + минута) проверяет сервер; `X-Background: 1` активность не продлевает; `POST /api/auth/logout` завершает сессию, `?all=1` — все сессии человека и его сессии Supabase. Ответы `/api/auth/*`: `{ user }` (без идентификатора сессии), `challengeId`, `resendInSec` (+ `totpEnrollment` при первом входе); `Authorization: Bearer` для людей не принимается (только партнёрский API). Локально по http (`APP_ENV=development`) можно `INSECURE_DEV_COOKIE=1`: cookie `mig_session` без `Secure`.
 - **CSRF**: каждый изменяющий запрос порталов обязан нести `X-Requested-With: mig-web`, иначе 403 `errors.csrf`. Не нужен партнёрскому API (свои bearer-токены, без cookie) и подписанному hook Supabase.
 - **Ограничения попыток** — параметры ДМС (`loginMaxAttempts`, `loginWindowMinutes`, `loginLockMinutes`) на серверных счётчиках (`login_failures`, `lockouts`; проверки ПИНФЛ клиниками — `check_attempts`, `check_locks`), очистка — задача `cleanup-expired`.
 
@@ -450,10 +450,10 @@ AES-256-GCM с версиями ключей (`PII_KEYS`, `PII_KEY_CURRENT`), п
 | `INVITE_REDIRECT_URL` | нет | куда ведёт ссылка приглашения |
 | `WORKER` | нет (`inline`) | `off` — воркер запущен отдельно |
 | `DEMO_PASSWORD` | только dev/ci/staging | пароль новых учётных записей вместо приглашения; в production запрещена |
-| `AUTH_BEARER_COMPAT` | только dev/ci | `1` — `sessionId` в ответе входа и `Authorization: Bearer` до шага 5 |
+| `LOG_LEVEL` | нет (`info`) | журнал запросов Fastify и диагностика API; `warn` — только сбои (так запускает e2e-backend) |
 | `INSECURE_DEV_COOKIE` | только development | `1` — cookie `mig_session` без `Secure` для http://localhost |
 
-Production не запускается без обязательных секретов, с опубликованными dev-значениями (ключ ПДн, HMAC-ключ, секрет сессий, секрет hook), с `DEMO_PASSWORD`, `AUTH_BEARER_COMPAT` или `INSECURE_DEV_COOKIE`; в нём нет демо-маршрутов и кода `000000` (проверяют `apps/api/src/crypto.test.ts` и `production.test.ts`). Supabase Auth в рабочем развёртывании: `GOTRUE_JWT_EXP=600`, MFA TOTP включена, hooks как в `supabase/config.toml` (URI hook — адрес API во внутренней сети, свой секрет), `GOTRUE_RATE_LIMIT_HEADER=X-Mig-Client-Ip` (API передаёт IP клиента), без `[auth.sms.test_otp]`, SMTP МИГ; полный `deploy/.env.example` — шаг 6.
+Production не запускается без обязательных секретов, с опубликованными dev-значениями (ключ ПДн, HMAC-ключ, секрет сессий, секрет hook), с `DEMO_PASSWORD` или `INSECURE_DEV_COOKIE` (переменная `AUTH_BEARER_COMPAT` шага 4 удалена: с ней API не запускается нигде); в нём нет демо-маршрутов и кода `000000` (проверяют `apps/api/src/crypto.test.ts` и `production.test.ts`). Supabase Auth в рабочем развёртывании: `GOTRUE_JWT_EXP=600`, MFA TOTP включена, hooks как в `supabase/config.toml` (URI hook — адрес API во внутренней сети, свой секрет), `GOTRUE_RATE_LIMIT_HEADER=X-Mig-Client-Ip` (API передаёт IP клиента), без `[auth.sms.test_otp]`, SMTP МИГ; полный `deploy/.env.example` — шаг 6.
 
 ### Запуск локально
 
@@ -462,7 +462,7 @@ npx supabase start -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,rea
 npx supabase db reset                                 # миграции, seed, пользователи Supabase Auth демо-аккаунтов
 npm run api:build                                     # apps/api/dist/{server,worker,provision-demo}.js (esbuild)
 eval "$(npx supabase status -o env --override-name api.url=SUPABASE_URL --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY | grep -E '^SUPABASE_(URL|SERVICE_ROLE_KEY)=' | sed 's/^/export /')"
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres DEMO_PASSWORD='Demo-2026!' AUTH_BEARER_COMPAT=1 INSECURE_DEV_COOKIE=1 npm run api:dev
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres DEMO_PASSWORD='Demo-2026!' INSECURE_DEV_COOKIE=1 npm run api:dev
 ```
 
 API слушает `http://127.0.0.1:8787/api`; hook «Send SMS» локального Supabase вызывает `http://host.docker.internal:8787/api/hooks/send-sms` (коды недемо-телефонов — в журнале API). Проверка вручную:
@@ -472,6 +472,45 @@ curl -s -XPOST localhost:8787/api/auth/login -H 'content-type: application/json'
 curl -si -XPOST localhost:8787/api/auth/otp -H 'content-type: application/json' -H 'x-requested-with: mig-web' -d '{"challengeId":"<challengeId>","code":"000000"}'   # Set-Cookie: mig_session=…
 curl -s localhost:8787/api/dashboard -H 'cookie: mig_session=<значение>'
 ```
+
+### Приложение с бэкендом (cookie-сессия)
+
+Фронтенд в обоих режимах работает одинаково (BACKEND_SPEC §7, шаг 5): `apps/web/src/shared/api/client.ts` шлёт каждый запрос с `credentials: 'include'` и `X-Requested-With: mig-web`, без `Authorization`; сессия — HttpOnly-cookie API, браузерный код её не видит. `apps/web/src/shared/auth/session.ts` хранит только открытые данные вошедшего (роль, имя, область) — в памяти и `sessionStorage`, чтобы перезагрузка вкладки сохраняла экраны; при 401 они стираются. Мок повторяет ту же схему (`apps/web/src/mocks/http.ts`): идентификатор сессии в «cookie» на стороне мок-сервера этой вкладки (MSW не умеет HttpOnly-cookie: мокнутый `Set-Cookie` попал бы в `document.cookie` и в хранилище MSW в `localStorage`), CSRF-заголовок обязателен (иначе 403), ответы `/auth/*` — как у API.
+
+Запуск фронтенда против локального API (API — как в «Запуск локально», на 8787):
+
+```
+API_PROXY=http://127.0.0.1:8787 VITE_USE_MOCKS=false VITE_DEMO_MODE=true npm run dev     # http://localhost:5173, /api проксируется в API
+```
+
+Один origin для приложения и API (как Caddy в развёртывании): cookie первой стороны, CSP `connect-src 'self'` не меняется. `API_PROXY` читает только `vite.config.ts` (dev-сервер и `vite preview`), в сборку не попадает. С `VITE_DEMO_MODE=true` работают «Войти как…», «Сбросить данные» и «Имитировать сбои сети» — их серверные аналоги есть только вне production (ниже).
+
+**Первый вход без второго фактора.** Ответ `POST /auth/login` содержит `totpEnrollment` — экран кода показывает QR (`qrcode`) и ключ для ручного ввода, первый код из приложения подтверждает фактор (`apps/web/src/features/auth/TotpEnrollment.tsx`; секрет — только в памяти, не в URL и не в истории). В тестовом режиме MFA (development/ci/staging) у демо-аккаунтов фактор уже есть (seed), а новым учётным записям API выдаёт демо-фактор — поэтому шаг подключения там не показывается и вход по `000000` не меняется.
+
+### Демо-ручки сервера (development, ci, staging; в production их нет)
+
+`apps/api/src/demo.ts`, регистрируются вместе с демо-маршрутами; `production.test.ts` проверяет, что в production все они — 404. Изменяющие — с CSRF-заголовком, без сессии (как в моке).
+
+| Маршрут | Что делает |
+|---|---|
+| `POST /api/__demo/reset` `{ xss? }` | seed заново для текущего времени сервера (вариант с XSS-строками — `xss: true`, как `VITE_SEED_XSS` мока); вошедшие остаются в системе. Данные удаляются `delete` с `session_replication_role = replica` (~0,1 с против ~1 с `truncate`), следующий seed готовится заранее, пользователи Supabase Auth переписываются, только если тест их изменил. ~0,6 с |
+| `GET/POST /api/__demo/failures` `{ enabled }` | «Имитировать сбои сети»: 10 % запросов отвечают 500 (не демо-ручки и не партнёрский API) |
+| `GET/POST /api/__demo/clock` `{ offsetMs }` / `{ advanceMs }` | тестовые часы: «сейчас» сервисов (`ctx.now()`, тайм-ауты неактивности, сроки шагов входа) идёт впереди реального на смещение; Supabase Auth и токены — по реальному времени |
+| `POST /api/__demo/login-as` `{ login }` | «Войти как…»: настоящий вход демо-аккаунта (e-mail или телефон из `DEMO_LOGIN_AS`) за один запрос — сессия Supabase за BFF-cookie; текущая сессия завершается |
+
+### e2e против бэкенда
+
+Весь набор Playwright (`apps/web/e2e`) идёт и против настоящего бэкенда — задача CI `e2e-backend` (8 шардов, у каждого свой стек Supabase; итоговая проверка `e2e-backend` — её нужно отметить обязательной в правилах защиты ветки). С `E2E_BACKEND=1` `apps/web/playwright.config.ts` запускает API (`apps/api/dist/server.js`, `APP_ENV=ci`, `LOG_LEVEL=warn`, порт `E2E_API_PORT`, по умолчанию 8787 на всех интерфейсах — туда шлёт hook «Send SMS» локального Supabase: в тестовом режиме `000000` для недемо-телефона заменяет код из его SMS) и приложение, собранное с `VITE_USE_MOCKS=false VITE_DEMO_MODE=true`, за `vite preview`, который проксирует `/api` в API (один origin: cookie `__Host-mig_session` первой стороны; Chromium принимает `Secure`-cookie на `http://localhost`). Каждый тест начинается со свежей базы: фикстура `apps/web/e2e/test.ts` возвращает часы, выключает сбои и делает `/api/__demo/reset` с `xss: true`; поэтому тесты в шарде идут по одному. `fastForward(page, …)` двигает и часы страницы, и тестовые часы сервера. В мок-прогоне (по умолчанию) ничего не меняется.
+
+Локально (стек Supabase запущен, `npx supabase db reset` сделан):
+
+```
+npm run api:build
+cd apps/web && E2E_BACKEND=1 npx playwright test            # SUPABASE_URL и ключ берутся из `npx supabase status`, DATABASE_URL — локальный
+cd apps/web && E2E_BACKEND=1 npx playwright test --shard=1/8 # как один шард CI
+```
+
+Прогон меняет данные локальной базы; после него `npx supabase db reset` (или тесты API) возвращают канонический seed.
 
 ### Тесты
 

@@ -10,6 +10,7 @@ import { unpack } from '@mig/i18n';
 import type { FamilyProfile, FamilyRequest, HrFamilyMember, MeProfile, QueueItem } from '@mig/contracts/dto';
 import type { LimitUsage, MyClaim, PolicyChange } from '@mig/contracts';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb, type InsuredRow } from './db';
 import { DEMO_INSURED_PHONE, DEMO_SPOUSE_PHONE } from '@mig/seed/credentials';
 import { isoDay } from '@mig/seed/time';
@@ -24,9 +25,9 @@ beforeEach(() => {
 
 async function call<T = unknown>(path: string, init: { method?: string; sid?: string; json?: unknown } = {}) {
   const headers = new Headers();
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) }));
   const text = await res.text();
   return { status: res.status, data: (text ? JSON.parse(text) : undefined) as T };
 }
@@ -34,13 +35,13 @@ async function loginPhone(phone: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/phone', { method: 'POST', json: { phone } });
   const b = await call<SessionResponse>('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 async function loginStaff(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 
 const demo = () => db().insured.find((i) => i.phone === DEMO_INSURED_PHONE)!;
@@ -287,9 +288,10 @@ describe('the age limit', () => {
     // A child one day before the 18th birthday: no task yet; on the birthday: a task.
     const child = children()[0]!;
     const d = new Date();
+    // The day in Tashkent (the services' day), not by the machine's time zone.
     const birthday = (daysBack: number) => {
-      const x = new Date(d.getTime() - daysBack * 86_400_000);
-      return `${x.getFullYear() - 18}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+      const day = isoDay(d.getTime() - daysBack * 86_400_000);
+      return `${Number(day.slice(0, 4)) - 18}${day.slice(4)}`;
     };
     child.birthDate = birthday(-1);
     expect((await call<QueueItem[]>('/queue?type=age_limit', { sid: uw })).data.map((i) => i.entityId)).not.toContain(child.id);

@@ -12,6 +12,7 @@ import { Button } from '@/shared/ui/button';
 import { OtpInput } from '@/shared/ui/otp-input';
 import { toast } from '@/shared/ui/toast';
 import { AuthCard, Notice } from './AuthCard';
+import { enrollmentFor, forgetEnrollment, TotpEnrollmentStep } from './TotpEnrollment';
 
 interface OtpState {
   challengeId: string;
@@ -32,6 +33,8 @@ export default function OtpPage() {
   const otp = useOtp();
   const resend = useResend();
   const demo = getDemo();
+  // The first sign-in without a second factor: set one up on this screen (the API sends it with the password step).
+  const enrollment = enrollmentFor(state?.challengeId ?? '');
 
   useEffect(() => {
     if (state?.challengeId) setChallengeId(state.challengeId);
@@ -44,6 +47,7 @@ export default function OtpPage() {
     setError(null);
     try {
       const res = await otp.mutateAsync({ challengeId, code: value });
+      forgetEnrollment();
       setSession(res);
       navigate(targetAfterLogin(state.next, homeFor(res.user.role)), { replace: true });
     } catch (e) {
@@ -54,8 +58,8 @@ export default function OtpPage() {
 
   return (
     <AuthCard
-      title={t('auth.otp.title')}
-      subtitle={t('auth.otp.subtitle')}
+      title={enrollment ? t('auth.totp.title') : t('auth.otp.title')}
+      subtitle={enrollment ? t('auth.totp.subtitle') : t('auth.otp.subtitle')}
       footer={
         <p className="mt-3 text-center text-[12px] text-muted">
           {t('auth.otp.footer')}
@@ -63,6 +67,7 @@ export default function OtpPage() {
       }
     >
       {error && <Notice tone="danger">{error}</Notice>}
+      {enrollment && <TotpEnrollmentStep enrollment={enrollment} />}
       <form
         onSubmit={(e) => {
           e.preventDefault();

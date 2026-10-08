@@ -3,7 +3,7 @@
  * endorsement line → the child is in the parent's app; app requests approved/rejected by HR; HR sees the family
  * without medical data; the age-limit task of the manager queue opens the insured card.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { api, loginStaff } from './helpers';
 
 /** Switches the account in the same tab (the same in-page mock DB) through the demo banner. */

@@ -3,7 +3,7 @@
  * company's flat_by_type contract a child costs premium_family × remaining days / term days, and the endorsement
  * line says «по типу: premium_family …».
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { api, loginStaff } from './helpers';
 
 /** Switches the role in the same tab (the same in-page mock DB) through the demo banner. */

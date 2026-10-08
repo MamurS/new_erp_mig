@@ -15,6 +15,7 @@ import { getDemo } from '@/shared/demo';
 import { Button } from '@/shared/ui/button';
 import { Field, Input } from '@/shared/ui/input';
 import { AuthCard, Notice } from './AuthCard';
+import { holdEnrollment } from './TotpEnrollment';
 
 type Values = z.infer<typeof loginSchema>;
 
@@ -40,6 +41,7 @@ export default function LoginPage() {
     setServerError(null);
     try {
       const res = await login.mutateAsync(values);
+      holdEnrollment(res.challengeId, res.totpEnrollment);
       navigate('/login/otp', { state: { challengeId: res.challengeId, resendInSec: res.resendInSec, next } });
     } catch (e) {
       setServerError(errorMessage(e));

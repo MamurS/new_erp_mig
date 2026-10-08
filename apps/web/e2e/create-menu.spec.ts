@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import type { Role } from '@mig/contracts';
 import { api, loginStaff } from './helpers';
 

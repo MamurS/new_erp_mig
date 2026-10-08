@@ -8,6 +8,7 @@ import type { StaffRole } from '@mig/contracts';
 import type { DashboardSummary, QueueItem, QueueType, SessionResponse } from '@mig/contracts/dto';
 import { canSeeQueueType } from '@mig/domain/queue';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 
 const BASE = 'http://localhost/api';
@@ -17,15 +18,15 @@ afterAll(() => server.close());
 beforeEach(() => resetDb());
 
 async function call<T>(path: string, sid?: string): Promise<{ status: number; data: T }> {
-  const res = await fetch(`${BASE}${path}`, { headers: sid ? { Authorization: `Bearer ${sid}` } : {} });
+  const res = await fetch(`${BASE}${path}`, { headers: withSession(new Headers(), sid) });
   const text = await res.text();
   return { status: res.status, data: (text ? JSON.parse(text) : undefined) as T };
 }
 async function login(email: string): Promise<{ sid: string; user: SessionResponse['user'] }> {
-  const post = (path: string, json: unknown) => fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(json) }).then((r) => r.json());
+  const post = (path: string, json: unknown) => fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'mig-web' }, body: JSON.stringify(json) }).then((r) => track(r).json());
   const a = (await post('/auth/login', { email, password: 'Demo-2026!' })) as { challengeId: string };
   const b = (await post('/auth/otp', { challengeId: a.challengeId, code: '000000' })) as SessionResponse;
-  return { sid: b.sessionId, user: b.user };
+  return { sid: lastSession(), user: b.user };
 }
 
 const ACCOUNTS: Record<StaffRole, string> = {

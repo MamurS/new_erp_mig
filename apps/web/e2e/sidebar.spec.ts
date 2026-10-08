@@ -1,5 +1,5 @@
 /* The side panel of every portal (staff, assistance, clinic, HR): hide, Ctrl+B, hover preview, resize, persistence, mobile. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import type { Role } from '@mig/contracts';
 import { loginStaff } from './helpers';
 

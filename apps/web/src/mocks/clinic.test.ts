@@ -9,6 +9,8 @@ import type { CardToken, SessionResponse } from '@mig/contracts/dto';
 import * as I from '@mig/contracts/integration';
 import { translate, type I18nKey } from '@mig/i18n';
 import { createMockServer } from './node';
+import { isoDay } from '@mig/domain/lib/time';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 
 const BASE = 'http://localhost/api';
@@ -23,10 +25,10 @@ type Res<T = Record<string, unknown>> = { status: number; data: T; headers: Head
 
 async function call<T = Record<string, unknown>>(path: string, init: { method?: string; sid?: string; bearer?: string; json?: unknown; headers?: Record<string, string>; form?: FormData } = {}): Promise<Res<T>> {
   const headers = new Headers(init.headers);
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.bearer) headers.set('Authorization', `Bearer ${init.bearer}`);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) }));
   const text = await res.text();
   let data: unknown = text;
   try {
@@ -41,13 +43,13 @@ async function login(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 
 async function loginInsured(): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/phone', { method: 'POST', json: { phone: '+998900000001' } });
-  const b = await call<SessionResponse>('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
-  return b.data.sessionId;
+  await call<SessionResponse>('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
+  return lastSession();
 }
 
 const demoClinicId = () => db().clinicUsers.find((u) => u.email === 'registrar@demo-clinic.uz')!.clinicId;
@@ -221,7 +223,7 @@ describe('integration API', () => {
     const t = (await token(key.clientId, key.clientSecret)).data.access_token;
     const card = await cardCode();
     const visitId = ((await call('/integration/v1/coverage/check', { method: 'POST', bearer: t, json: { qrToken: card.shortCode } })).data as { visitId: string }).visitId;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = isoDay(Date.now());
     const period = today.slice(0, 7);
     const tooExpensive = await call<{ errors: Record<string, string> }>('/integration/v1/registries', {
       method: 'POST',

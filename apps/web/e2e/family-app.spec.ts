@@ -1,5 +1,5 @@
 /* Family members in the insured app — FAMILY_SPEC: switcher, clinic check of a child, adult's consent, requests, IDOR. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { acceptConsent, api, failOnDialog, loginInsured } from './helpers';
 
 const EMPLOYEE = 'Karimov Aziz Bahromovich';

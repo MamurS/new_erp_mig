@@ -200,21 +200,19 @@ describe.skipIf(!hasDb || !hasSupabase)('sign-in with Supabase Auth and BFF sess
       expect(verify.status).toBe(401);
     });
 
-    it('the bearer path exists only when switched on (development and ci until step 5)', async () => {
-      const compat = await makeApp({ bearerCompat: true });
-      const start = await compat.call('POST', '/auth/login', {
+    it('the session is the cookie only: no id in the answer, a bearer header is not a session', async () => {
+      const start = await api.call('POST', '/auth/login', {
         body: { email: email('doctor_expert'), password: DEMO_PASSWORD },
       });
-      const done = await compat.call('POST', '/auth/otp', {
+      const done = await api.call('POST', '/auth/otp', {
         body: { challengeId: (start.body as { challengeId: string }).challengeId, code: DEMO_CODE },
       });
-      const sessionId = (done.body as { sessionId: string }).sessionId;
-      expect(sessionId).toBe(cookieOf(done, SESSION_COOKIE));
+      expect(Object.keys(done.body as object)).toEqual(['user']);
+      const secret = cookieOf(done, SESSION_COOKIE)!;
+      expect(secret).toBeTruthy();
+      expect((await api.call('GET', '/auth/me', { session: secret })).status).toBe(200);
       expect(
-        (await compat.call('GET', '/auth/me', { headers: { authorization: `Bearer ${sessionId}` } })).status,
-      ).toBe(200);
-      expect(
-        (await api.call('GET', '/auth/me', { headers: { authorization: `Bearer ${sessionId}` } })).status,
+        (await api.call('GET', '/auth/me', { headers: { authorization: `Bearer ${secret}` } })).status,
       ).toBe(401);
     });
   });

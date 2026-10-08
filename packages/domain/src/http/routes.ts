@@ -95,7 +95,19 @@ interface RouteBase {
   result: ResultKind;
   /** A GET that changes data (the mock persists it like a mutation). */
   writes?: true;
+  /**
+   * The session cookie (BACKEND_SPEC §7): `start` — the call returns a `SignedIn`; the adapter sets the cookie to its
+   * session id and answers `{ user }` only; `end` — the adapter clears the cookie (logout).
+   */
+  session?: 'start' | 'end';
 }
+
+/** The body of a `session: 'start'` answer: the session id goes into the cookie, never into the body. */
+export function signedInBody(out: unknown): { sessionId: string; body: { user: unknown } } {
+  const s = out as auth.SignedIn;
+  return { sessionId: s.sessionId, body: { user: s.user } };
+}
+
 export interface SessionRoute extends RouteBase {
   auth: 'session' | 'demo';
   call(ctx: AuthCtx, req: RouteRequest, deps: RouteDeps): Promise<unknown>;
@@ -119,6 +131,7 @@ type SCall = SessionRoute['call'];
 interface Opts {
   result?: ResultKind;
   writes?: true;
+  session?: 'start' | 'end';
 }
 
 const S = (method: Method, path: string, body: BodyKind, call: SCall, o: Opts = {}): SessionRoute => ({ method, path, auth: 'session', body, result: o.result ?? 'json', call, ...(o.writes ? { writes: o.writes } : {}) });
@@ -127,7 +140,7 @@ const get = (path: string, call: SCall, o?: Opts) => S('GET', path, 'none', call
 const act = (method: Method, path: string, call: SCall, o?: Opts) => S(method, path, 'none', call, o);
 /** POST/PATCH/PUT/DELETE with a JSON body. */
 const send = (method: Method, path: string, call: SCall, o?: Opts) => S(method, path, 'json', call, o);
-const open = (method: Method, path: string, body: BodyKind, call: OpenRoute['call'], o: Opts = {}): OpenRoute => ({ method, path, auth: 'none', body, result: o.result ?? 'json', call });
+const open = (method: Method, path: string, body: BodyKind, call: OpenRoute['call'], o: Opts = {}): OpenRoute => ({ method, path, auth: 'none', body, result: o.result ?? 'json', call, ...(o.session ? { session: o.session } : {}) });
 
 const CREATED: Opts = { result: 201 };
 const RAW: Opts = { result: 'raw' };
@@ -230,10 +243,10 @@ export const ROUTES: readonly RouteDef[] = [
   // ---------------- sign-in and sessions (services/auth.ts) ----------------
   open('POST', '/auth/login', 'json', async (ctx, req) => auth.login(ctx, await req.json())),
   open('POST', '/auth/resend', 'json', async (ctx, req) => auth.resend(ctx, await req.json())),
-  open('POST', '/auth/otp', 'json', async (ctx, req) => auth.otp(ctx, await req.json())),
+  open('POST', '/auth/otp', 'json', async (ctx, req) => auth.otp(ctx, await req.json()), { session: 'start' }),
   open('POST', '/auth/phone', 'json', async (ctx, req) => auth.phoneLogin(ctx, await req.json())),
-  open('POST', '/auth/phone/verify', 'json', async (ctx, req) => auth.phoneVerify(ctx, await req.json())),
-  open('POST', '/auth/logout', 'none', async (_ctx, req, _deps, session) => auth.logout(await session().catch(() => null), req.query.get('all') === '1')),
+  open('POST', '/auth/phone/verify', 'json', async (ctx, req) => auth.phoneVerify(ctx, await req.json()), { session: 'start' }),
+  open('POST', '/auth/logout', 'none', async (_ctx, req, _deps, session) => auth.logout(await session().catch(() => null), req.query.get('all') === '1'), { session: 'end' }),
   get('/auth/me', (ctx) => auth.me(ctx)),
 
   // ---------------- the staff dashboard (services/dashboard.ts) ----------------

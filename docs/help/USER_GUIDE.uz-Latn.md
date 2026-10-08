@@ -35,6 +35,7 @@ MIG xodimlari, HR, klinikalar va assistanslar email, parol va bir martalik kod b
 <!-- audience: all -->
 
 1. **Xodimlar va hamkorlar.** Tizim manzilini oching, ish emailingiz va parolni, soʻngra ikkinchi omilning 6 xonali kodini (MFA) kiriting. Kodni buferdan toʻliq qoʻyish mumkin.
+   Birinchi kirishda tizim ikkinchi omilni ulashni taklif qiladi: «Ikkinchi omilni ulang» ekranida QR-kod koʻrsatiladi — uni autentifikator ilovasi (Google Authenticator, Microsoft Authenticator yoki boshqasi) bilan skanerlang yoki «Skanerlab boʻlmayaptimi?» havolasi orqali kalitni qoʻlda kiriting, soʻngra ilovadagi 6 xonali kodni kiriting. Keyin kod doim shu ilovadan olinadi.
 2. **Sugʻurtalangan shaxslar.** Ilovani oching, telefon raqamini +998 XX XXX XX XX formatida kiriting, «Kodni olish» tugmasini bosing va SMS dagi kodni kiriting. Birinchi kirishda shaxsga doir maʼlumotlarni qayta ishlashga rozilik berish kerak.
 3. **Voyaga yetgan oila aʼzolari** (turmush oʻrtogʻi, ota-onasi) oʻz telefon raqami bilan kiradi. Chegaraviy yoshgacha boʻlgan bolalar ota-onasining ilovasida koʻrinadi va alohida kirishga ega emas.
 4. 10 daqiqa ichida 5 marta notoʻgʻri urinishdan soʻng kirish 5 daqiqaga bloklanadi. Xato haqidagi xabar aynan nima notoʻgʻri ekanini aytmaydi — bu taxmin qilib topishdan himoya.

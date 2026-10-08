@@ -3,8 +3,9 @@
  *
  * - `bffAuth` (auth/bff.ts) — the deployment: Supabase Auth (GoTrue) with TOTP and phone codes, BFF sessions
  *   in `app_sessions` behind the `__Host-mig_session` cookie (BACKEND_SPEC §7);
- * - `demoAuth` (test/demoAuth.ts) — TEST FIXTURE ONLY: the mock's own sign-in (demo password and code, bearer
- *   session ids of the `sessions` table), so the conformance test signs in identically on both sides.
+ * - `demoAuth` (test/demoAuth.ts) — TEST FIXTURE ONLY: the mock's own sign-in (demo password and code, the ids
+ *   of the `sessions` table in the cookie `mig_session`, like the mock), so the conformance test signs in
+ *   identically on both sides.
  */
 import type { RouteRequest } from '@mig/domain/http/request';
 import type { AuthCtx, BaseCtx } from '@mig/domain/services/kernel';
@@ -33,8 +34,16 @@ export interface AuthAdapter {
   authenticate(tx: RequestTx, base: BaseCtx, req: RouteRequest, meta: RequestMeta): Promise<{ ctx: AuthCtx; claims: Claims }>;
   /** Routes of the table this adapter answers itself (`METHOD /path` → handler): sign-in, logout. */
   routes: Readonly<Record<string, AuthRoute>>;
-  /** `Set-Cookie` headers for an answer 401 to a request that presented a session cookie. */
-  expiredCookies(req: RouteRequest): string[];
+  /**
+   * `Set-Cookie` headers clearing the session cookie of a 401 answer: only when the server has just ended the session
+   * the request presented (`error` says so), never for an unknown one — it may be the answer to a request sent before
+   * a new sign-in, and would clear the new session's cookie.
+   */
+  expiredCookies(req: RouteRequest, error: unknown): string[];
+  /** `Set-Cookie` of a session started by a sign-in route of the table this adapter does not answer itself. */
+  issueCookie?(sessionId: string): string;
+  /** `Set-Cookie` removing the session cookie (a logout of the table this adapter does not answer itself). */
+  clearedCookie?(): string;
   /** Virtual `password` of accounts as the repositories read it (the demo fixture only). */
   demoPassword?: string;
 }

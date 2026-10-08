@@ -59,3 +59,9 @@ export const DEMO_ASSIST_USERS: { role: 'asst_operator' | 'asst_doctor' | 'asst_
 ];
 /** Operator of the second assistance company: isolation checks (ASSISTANCE_SPEC §14, e2e 6). */
 export const DEMO_ASSIST2_OPERATOR = { role: 'asst_operator' as const, email: 'asst-operator@demo-assist2.uz', fullName: 'Hamidova Aziza Shuhratovna' };
+
+/** The accounts of «Войти как…» (demo banner): the demo route `/__demo/login-as` signs in only as one of these. */
+export const DEMO_LOGIN_AS = {
+  emails: [...DEMO_STAFF.map((s) => s.email), ...DEMO_ASSIST_USERS.map((u) => u.email), ...DEMO_CLINIC_USERS.map((u) => u.email), DEMO_HR.email],
+  phones: [DEMO_INSURED_PHONE, DEMO_SPOUSE_PHONE],
+} as const;

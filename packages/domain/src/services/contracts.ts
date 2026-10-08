@@ -46,6 +46,7 @@ import { afterSigning, checklistInput, clientRow, contractOf, createEndorsement,
 import { parsePolicyList, toListRow } from './policy';
 import { completeTasks } from './tasks';
 import { toClient } from './views';
+import { sameJson } from '../lib/json';
 
 const SCAN_MAX_BYTES = 20 * 1024 * 1024;
 export type DocKind = 'contract' | 'endorsement';
@@ -725,7 +726,7 @@ export async function patchContract(ctx: AuthCtx, id: string, body: unknown): Pr
       const sum = input.params.paymentSchedule.reduce((s, x) => s + x.amount, 0);
       if (sum !== p.total) throw new DomainError(422, 'validation', 'srv.contract.scheduleSum', { fields: { 'params.paymentSchedule': msg('srv.contract.scheduleSumHint', { sum, total: p.total }) } });
     } else p.paymentSchedule = buildPaymentSchedule(p.total, p.startDate, p.paymentFrequency);
-    for (const k of Object.keys(input.params) as (keyof typeof input.params)[]) if (JSON.stringify(c.params[k]) !== JSON.stringify(p[k])) changes.push(k);
+    for (const k of Object.keys(input.params) as (keyof typeof input.params)[]) if (!sameJson(c.params[k], p[k])) changes.push(k);
     c.params = p;
     const q = c.quoteId ? await ctx.repos.quotes.get(c.quoteId) : null;
     const differs = !!q && (q.premiumEmployee !== p.premiumEmployee || q.premiumFamily !== p.premiumFamily);
@@ -778,12 +779,15 @@ export async function newVersion(ctx: AuthCtx, id: string): Promise<ContractView
 /** Appendix 2 (`text`: the CSV file, a row per person). */
 export async function uploadInsuredList(ctx: AuthCtx, id: string, text: string): Promise<ContractView> {
   const { user } = ctx;
-  const c = await contractOf(ctx, id);
+  // HR uploads appendix 2 of a contract of its company it sees, or of a draft MIG asked it for («Запросить у HR»):
+  // the draft is hidden from HR (RLS), so after these checks the system reads and writes it for HR.
+  const hrCtx = user.role === 'hr' ? asSystem(ctx, 'appendix 2 by HR: the contract of its company MIG asked it to fill') : null;
+  const c = await contractOf(hrCtx ?? ctx, id);
   if (user.role === 'hr') {
-    // HR uploads appendix 2 of a contract it sees, or of a draft MIG asked it for («Запросить у HR»).
     const asked = await ctx.repos.tasks.exists({ status: 'open', toRole: 'hr', action: 'insured_list', contractId: c.id });
     if (!can(user, 'contracts.sign_client', { companyId: c.clientId }) || (!HR_VISIBLE.has(c.status) && !asked)) throw notFound();
   } else requirePermission(user, 'contracts.draft');
+  ctx = hrCtx ?? ctx;
   if (c.status === 'active' || c.status === 'signed' || c.status === 'terminated' || c.status === 'expired') throw conflict('srv.contract.listViaEndorsement');
   const parsed = parsePolicyList(text);
   if (parsed.errors.length)

@@ -15,8 +15,9 @@ import { at, DAY, isoDay, startOfDay, tzIso } from './time';
 
 /** ISO date `years` years before `ms` (same day and month), minus `daysBack` days. */
 function yearsAgo(ms: number, years: number, daysBack = 0): string {
-  const d = new Date(ms - daysBack * DAY);
-  return `${d.getFullYear() - years}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // The day in Tashkent, not by the machine's time zone.
+  const [y, rest] = [Number(isoDay(ms - daysBack * DAY).slice(0, 4)), isoDay(ms - daysBack * DAY).slice(4)];
+  return `${y - years}${rest}`;
 }
 
 /** PINFL with the birth date in digits 2–7 (DDMMYY), like a real one. */

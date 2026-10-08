@@ -12,7 +12,10 @@ import { Toaster } from '@/shared/ui/toast';
 import { I18nProvider } from '@/i18n';
 import { DEMO_CODE, DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from '@mig/seed/credentials';
 
-export { createMockServer } from '@/mocks/node';
+import { createMockServer as mockServer } from '@/mocks/node';
+
+/** The mock server of component tests: the session cookie kept on the mock's side, as a browser keeps it. */
+export const createMockServer = () => mockServer({ cookieJar: true });
 
 /** Logs in through the mock API exactly like the UI does and stores the session. */
 export async function loginAs(role: Role): Promise<void> {

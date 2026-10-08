@@ -14,7 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { DEV_HMAC_KEY } from '@mig/domain/store/devKeys';
 import { aesPiiCrypto, devAesPiiCrypto, DEV_PII_KEY } from '@mig/domain/store/piiAes';
 import type { Db } from '@mig/domain/store/db';
-import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_HR, DEMO_INSURED_PHONE, DEMO_STAFF } from '@mig/seed/credentials';
+import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_HR, DEMO_INSURED_PHONE, DEMO_LOGIN_AS, DEMO_STAFF } from '@mig/seed/credentials';
 import { createSeed } from '@mig/seed/seed';
 import { buildApp } from './app';
 import { SESSION_COOKIE } from './auth/cookies';
@@ -47,7 +47,7 @@ describe.skipIf(!hasDb || !hasSupabase)('API (Fastify) over Postgres with RLS', 
       deps: testDeps(),
       auth: testBff(pool, crypto, stack),
       storage: stack.storage,
-      demoRoutes: { insuredPhone: DEMO_INSURED_PHONE },
+      demoRoutes: { insuredPhone: DEMO_INSURED_PHONE, accounts: DEMO_LOGIN_AS },
       onError: (e, route) => errors.push(`${route}: ${e instanceof Error ? e.message : String(e)}`),
     });
     api = fastifyClient(app, { cookie: SESSION_COOKIE });

@@ -91,6 +91,53 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
           APP_ENV: ci
 
+  # The whole e2e suite against the real backend (BACKEND_SPEC §12.3; required to merge): the local Supabase stack
+  # with the seed, the API (APP_ENV=ci: demo reset, failure simulation, test clock, «Войти как…», test MFA codes) and
+  # the app built with VITE_USE_MOCKS=false behind `vite preview`, which proxies /api to the API (one origin, the
+  # session cookie is first-party). Tests share the database and reset it before each, so a shard runs them one at a
+  # time; eight shards, each with its own Supabase stack, keep the job within its time limit (README «e2e против бэкенда»).
+  e2e-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx supabase start -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,realtime,mailpit,postgres-meta
+      - run: npx supabase db reset
+      - run: npm run api:build
+      - name: Supabase URL and service role key for the API
+        run: npx supabase status -o env --override-name api.url=SUPABASE_URL --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY)=' | tr -d '"' >> "$GITHUB_ENV"
+      - run: npm run test:e2e -w @mig/web -- --shard=${{ matrix.shard }}/8
+        env:
+          E2E_BACKEND: '1'
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report-backend-${{ matrix.shard }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
+  # One check for the branch protection rule (required to merge): green only when every shard of e2e-backend is.
+  e2e-backend-result:
+    name: e2e-backend
+    if: always()
+    needs: e2e-backend
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.e2e-backend.result }}" = success
+
   gitleaks:
     runs-on: ubuntu-latest
     steps:

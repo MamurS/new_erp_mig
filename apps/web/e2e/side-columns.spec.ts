@@ -5,7 +5,7 @@
  * its shared header in turn (the next one pushes the previous one up). Below 1280 px the information
  * columns go under the main content and scroll with the page.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './test';
 import { api, loginStaff } from './helpers';
 
 const area = (page: Page) => page.locator('[data-content-scroll]');

@@ -74,13 +74,23 @@ import type {
 } from './index';
 
 // ---- auth ----
+/** A TOTP factor to set up at the first sign-in (the otpauth URI for the authenticator app and its secret). */
+export interface TotpEnrollment {
+  uri: string;
+  secret: string;
+}
 export interface ChallengeResponse {
   challengeId: string;
   /** Seconds until a new code may be requested. */
   resendInSec: number;
+  /** The person has no second factor yet: set one up, then confirm it with its first code (API only). */
+  totpEnrollment?: TotpEnrollment;
 }
+/**
+ * The answer of a completed sign-in. The session itself is the HttpOnly cookie the answer sets (BACKEND_SPEC §7):
+ * no token or session id ever reaches the browser's code.
+ */
 export interface SessionResponse {
-  sessionId: string;
   user: SessionUser;
 }
 

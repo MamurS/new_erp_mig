@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { login, ROLES, HOME, logoutFromSidebar } from './helpers';
 
 test.describe('1. Login with every role, MFA, logout', () => {

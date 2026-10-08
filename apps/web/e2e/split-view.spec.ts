@@ -6,7 +6,7 @@
  * Lists with a card (all in the MIG portal): clients, claims, deals (table and board). The other portals
  * have no split view: their rows open a page or a dialog.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './test';
 import type { Role } from '@mig/contracts';
 import { loginStaff } from './helpers';
 
@@ -54,6 +54,17 @@ async function openRow(page: Page, c: Case, n: number): Promise<string> {
   await row.click();
   await expect(panel(page)).toBeVisible();
   await expect(title(page)).toHaveText(name);
+  // The card slides in (and may re-render when its data arrives): measure it only when it stands still — a slower
+  // API leaves more of the animation behind the title text.
+  let last = '';
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await box(panel(page)));
+      const still = now === last;
+      last = now;
+      return still;
+    }, { intervals: [150] })
+    .toBe(true);
   return name;
 }
 

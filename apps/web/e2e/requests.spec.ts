@@ -8,7 +8,7 @@
  * - «Отклонить» with a comment is seen by the author;
  * - past the deadline it is red for both, «Напомнить» notifies the manager again.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, fastForward, test, type Page } from './test';
 import { api, loginStaff } from './helpers';
 
 interface Deal {
@@ -155,7 +155,7 @@ test('past the deadline the request is red for both; «Напомнить» send
   await expect(plaque.getByTestId('request-remind')).toHaveCount(0);
 
   // Four days later («Срок ответа на запрос» — 2 working days): the session has expired, sign in again.
-  await page.clock.fastForward(96 * 3_600_000);
+  await fastForward(page, 96 * 3_600_000);
   await page.evaluate(() => sessionStorage.removeItem('mig.session'));
   await loginStaff(page, 'underwriter');
   const row = (await openMyRequests(page)).locator('tbody tr').filter({ hasText: deal.clientName });

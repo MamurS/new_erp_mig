@@ -4,7 +4,7 @@
  * «Заявки из приложения»; the employee gets a notification in the bell and sees «Одобрено»; the spouse has no
  * button, only the hint. One tab: the mock database lives in the page.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { CODE, INSURED_PHONE, loginStaff, SPOUSE_PHONE } from './helpers';
 
 /** Signs in to the app; the consent screen appears only on the person's first login. */

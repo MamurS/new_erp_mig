@@ -45,7 +45,7 @@ import type { ClaimRow, GuaranteeRow, InsuredRow, WebhookDeliveryRow, WebhookEnd
 import { asSystem, audit, conflict, DomainError, insuredLabel, notFound, systemRepos, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { limitsFor } from './views';
-import { assignmentsOf, payerName, payerOfLine } from './assistance';
+import { assignmentsOf, insuredOfVisit, payerName, payerOfLine } from './assistance';
 
 /** Who performs a clinic action: a cabinet user or an API key of the clinic. */
 export interface ClinicActor {
@@ -335,7 +335,8 @@ export interface LineInput {
 
 export async function buildLine(ctx: BaseCtx, clinicId: UUID, input: LineInput): Promise<RegistryLine> {
   const v = await visitOfClinic(ctx, clinicId, input.visitId);
-  const who = (await ctx.repos.insured.get(v.insuredId))!;
+  // The patient of the clinic's own visit, also after the visit closed (a clinic sees patients only while a visit is open).
+  const who = (await insuredOfVisit(ctx, v.id))!;
   const payer = await payerOfLine(ctx, { visitId: v.id, serviceDate: input.serviceDate });
   const svc = (await priceListOf(ctx, clinicId, payer)).find((p) => p.code === input.serviceCode);
   const price = input.price ?? svc?.price ?? 0;
@@ -359,8 +360,11 @@ export async function buildLine(ctx: BaseCtx, clinicId: UUID, input: LineInput):
 export async function lineProblems(ctx: BaseCtx, clinicId: UUID, line: RegistryLine): Promise<string[]> {
   const r = ctx.repos;
   const v = line.visitId ? await r.visits.first({ where: { id: line.visitId, clinicId } }) : null;
-  const who = v ? await r.insured.get(v.insuredId) : null;
-  const policy = who ? await r.policies.get(who.policyId) : null;
+  // The patient and the policy period of the clinic's own visit are checked by the system (a clinic sees neither
+  // the policy nor, after the visit closed, the patient).
+  const sys = systemRepos(ctx, 'registry line checks: the patient and the policy period of the clinic\'s own visit');
+  const who = v ? await sys.insured.get(v.insuredId) : null;
+  const policy = who ? await sys.policies.get(who.policyId) : null;
   const g = line.guaranteeNumber ? await r.guarantees.first({ where: { number: line.guaranteeNumber, clinicId } }) : null;
   const problems = registryLineProblems(line, {
     priceItem: (await priceListOf(ctx, clinicId, line.payer ?? (await payerOfLine(ctx, line)))).find((p) => p.code === line.serviceCode),

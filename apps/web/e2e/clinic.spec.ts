@@ -1,5 +1,5 @@
 /* Clinic portal and integration API — CLINIC_SPEC §11, e2e scenarios 1–10. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { acceptConsent, api, failOnDialog, loginInsured, loginStaff } from './helpers';
 
 /** Switch the role in the same tab (and the same in-page mock DB) through the demo banner. */

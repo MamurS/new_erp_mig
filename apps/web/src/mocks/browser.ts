@@ -1,10 +1,13 @@
 import { setupWorker } from 'msw/browser';
 import { handlers } from './handlers';
 import { initMockDb } from './setup';
+import { enableCookieJar } from './http';
 import { logger } from '@/shared/lib/logger';
 
 export async function startMocks(): Promise<void> {
   initMockDb({ restore: true });
+  // The session cookie lives on the mock's side of this tab (http.ts), never in document.cookie.
+  enableCookieJar(true);
   // A background update check of the mock worker can be interrupted by navigation (NotFoundError).
   // It is harmless: the active worker keeps serving; do not surface it as an uncaught error.
   window.addEventListener('unhandledrejection', (e) => {

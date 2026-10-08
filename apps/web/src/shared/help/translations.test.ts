@@ -14,6 +14,7 @@ import type { SessionResponse } from '@mig/contracts/dto';
 import type { HelpGuide, HelpLocale } from '@mig/contracts/help';
 import { contentFor, guideFor } from '@/mocks/help-content';
 import { createMockServer } from '@/mocks/node';
+import { lastSession, track, withSession } from '@/mocks/test-session';
 import { resetDb } from '@/mocks/db';
 import { ALL_ROLES } from './audience';
 import { articlesFor, parseGuide, type GuidePart, type ParsedGuide } from './guide';
@@ -153,13 +154,13 @@ describe('GET /api/help in translations', () => {
     init: { method?: string; sid?: string; json?: unknown } = {},
   ): Promise<{ status: number; data: T }> {
     const headers = new Headers();
-    if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+    withSession(headers, init.sid);
     if (init.json !== undefined) headers.set('Content-Type', 'application/json');
-    const res = await fetch(`${BASE}${path}`, {
+    const res = track(await fetch(`${BASE}${path}`, {
       method: init.method ?? 'GET',
       headers,
       body: init.json === undefined ? undefined : JSON.stringify(init.json),
-    });
+    }));
     const text = await res.text();
     return { status: res.status, data: (text ? JSON.parse(text) : undefined) as T };
   }
@@ -168,19 +169,19 @@ describe('GET /api/help in translations', () => {
       method: 'POST',
       json: { email, password: 'Demo-2026!' },
     });
-    const b = await call<SessionResponse>('/auth/otp', {
+    await call<SessionResponse>('/auth/otp', {
       method: 'POST',
       json: { challengeId: a.data.challengeId, code: '000000' },
     });
-    return b.data.sessionId;
+    return lastSession();
   }
   async function loginPhone(phone: string): Promise<string> {
     const a = await call<{ challengeId: string }>('/auth/phone', { method: 'POST', json: { phone } });
-    const b = await call<SessionResponse>('/auth/phone/verify', {
+    await call<SessionResponse>('/auth/phone/verify', {
       method: 'POST',
       json: { challengeId: a.data.challengeId, code: '000000' },
     });
-    return b.data.sessionId;
+    return lastSession();
   }
 
   it('returns no `fallback: true` part for staff, HR, insured, clinic and assistance users', async () => {

@@ -23,13 +23,14 @@ import { createMockProvider } from '../lib/aiProvider';
 import { randomId } from '../lib/random';
 import { isoDay, tzIso } from '../lib/time';
 import type { InsuredRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { asSystem, audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { personFor } from './family';
 import { findRegistryLine, insuredOfVisit } from './assistance';
 import { registryOfClinic, requireVisit } from './clinic';
 import { sha256Hex } from './settlement';
 import { limitsFor } from './views';
+import { sameJson } from '../lib/json';
 
 /** Calls kept in the log (the oldest are dropped). */
 const MAX_LOGS = 2000;
@@ -75,7 +76,9 @@ async function addLog(ctx: BaseCtx, log: AiCallLog): Promise<void> {
 async function check(run: Run, scenario: AiScenario, job: Job, opts: { clinic?: boolean; lang?: 'ru' | 'uz'; receipt?: boolean }): Promise<AiCheckItem> {
   const { ctx, settings, provider } = run;
   const { user } = ctx;
-  const cov = await contextOf(ctx, job.insured, run.P);
+  // The caller is already allowed to check this person (the scope checks of the scenario); the coverage context —
+  // policy, program, used limits — is the system's: a clinic or an assistance company sees only the verdict.
+  const cov = await contextOf(asSystem(ctx, 'ai: coverage context (policy, program, limits) of a person the caller may check'), job.insured, run.P);
   const started = ctx.now();
   const out = await runCoverageCheck(
     { scenario, text: job.text, serviceCode: job.serviceCode, icd10: job.icd10, amount: job.amount, serviceDate: job.serviceDate, lang: opts.lang },
@@ -330,7 +333,7 @@ export async function proposeChange(ctx: AuthCtx, body: unknown): Promise<AiSett
   const from = await ctx.repos.one.aiSettings();
   const at = tzIso(ctx.now());
   // The kill switch turns AI off at once (the safe direction); everything else waits for a second admin.
-  const onlyKill = !from.killSwitch && to.killSwitch && JSON.stringify({ ...to, killSwitch: false }) === JSON.stringify({ ...from, killSwitch: false });
+  const onlyKill = !from.killSwitch && to.killSwitch && sameJson({ ...to, killSwitch: false }, { ...from, killSwitch: false });
   if (onlyKill) {
     await ctx.repos.one.setAiSettings({ ...from, killSwitch: true });
     const c: AiSettingsChange = { id: randomId(), to, from, reason, status: 'applied', proposedById: user.id, proposedByName: user.displayName, proposedAt: at, decidedByName: user.displayName, decidedAt: at };
@@ -338,7 +341,7 @@ export async function proposeChange(ctx: AuthCtx, body: unknown): Promise<AiSett
     await audit(ctx, user, 'ai_kill_switch', { targetType: 'ai', targetId: c.id, targetLabel: 'ИИ отключён везде', reason });
     return c;
   }
-  if (JSON.stringify(to) === JSON.stringify(from)) throw conflict('srv.ai.unchanged');
+  if (sameJson(to, from)) throw conflict('srv.ai.unchanged');
   if (await ctx.repos.aiChanges.exists({ status: 'pending' })) throw conflict('srv.ai.alreadyPending');
   const c: AiSettingsChange = { id: randomId(), to, from, reason, status: 'pending', proposedById: user.id, proposedByName: user.displayName, proposedAt: at };
   await ctx.repos.aiChanges.insert(c, { at: 'start' });
@@ -355,7 +358,7 @@ export async function decideChange(ctx: AuthCtx, id: string, decision: string, b
   if (c.status !== 'pending') throw conflict('srv.change.alreadyReviewed');
   const at = tzIso(ctx.now());
   if (decision === 'approve') {
-    if (JSON.stringify(await ctx.repos.one.aiSettings()) !== JSON.stringify(c.from)) throw conflict('srv.ai.stale');
+    if (!sameJson(await ctx.repos.one.aiSettings(), c.from)) throw conflict('srv.ai.stale');
     await ctx.repos.one.setAiSettings(c.to);
     const out = await ctx.repos.aiChanges.update(c.id, { status: 'applied', decidedByName: user.displayName, decidedAt: at });
     await audit(ctx, user, 'ai_settings_changed', { targetType: 'ai', targetId: c.id, targetLabel: `${describe(c.from)} → ${describe(c.to)}`, reason: `Предложил ${c.proposedByName}: ${c.reason}` });

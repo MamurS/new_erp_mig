@@ -209,6 +209,9 @@ export async function batchView(ctx: BaseCtx, b: MigrationBatchRow, user: Sessio
   });
   const forRecon = Object.fromEntries(steps.filter((s) => s.status !== 'empty' && s.status !== 'skipped').map((s) => [s.step, s]));
   const applied = b.status === 'applied' || b.status === 'rolled_back';
+  // What the batch loaded and what was done with it since lie in tables the admin's role does not read (contracts,
+  // claims, invoices of every client): the reconciliation, the list and the rollback blockers are the system's.
+  const sys = asSystem(ctx, 'portfolio transfer: reconciliation, contracts and rollback blockers of the batch');
   const view: MigrationBatchView = {
     ...(await batchSummary(ctx, b)),
     steps,
@@ -219,14 +222,14 @@ export async function batchView(ctx: BaseCtx, b: MigrationBatchRow, user: Sessio
     rollbackReason: b.rollbackReason,
     canApprove: b.status === 'pending_approval' && can(user, 'migration.approve', { createdById: b.createdById }),
     isAuthor: b.createdById === user.id,
-    reconciliation: reconcile(forRecon, applied ? await loadedOf(ctx, b) : null),
-    contractPremiums: await contractPremiumsOf(ctx, b, res && b.steps.insured?.status !== 'skipped' && b.files.insured ? res : null),
-    contracts: (await ctx.repos.contracts.list())
+    reconciliation: reconcile(forRecon, applied ? await loadedOf(sys, b) : null),
+    contractPremiums: await contractPremiumsOf(sys, b, res && b.steps.insured?.status !== 'skipped' && b.files.insured ? res : null),
+    contracts: (await sys.repos.contracts.list())
       .filter((c) => c.migration?.batchId === b.id)
       .map((c) => ({ id: c.id, number: c.number, externalNumber: c.externalNumber ?? '', clientName: c.clientName })),
   };
   if (b.status === 'applied') {
-    const blockers = await rollbackBlockers(ctx, b);
+    const blockers = await rollbackBlockers(sys, b);
     view.rollback = { allowed: blockers.length === 0, blockers: blockers.slice(0, 50) };
   }
   return view;
@@ -706,6 +709,9 @@ export async function rollbackBlockers(person: BaseCtx, b: MigrationBatchRow): P
  * saves the batch. Every check (status, blockers) is done by the caller before: nothing here fails on the
  * data, so the rollback is all-or-nothing (on Postgres: one transaction, see the top of the file).
  */
+/** The client fields a transfer may change and its rollback restores (`clientsBefore`). */
+const RESTORED_CLIENT_FIELDS = ['activePolicyId', 'status', 'program', 'premium', 'renewalDate', 'assistanceId'] as const;
+
 export async function rollbackBatch(person: BaseCtx, b: MigrationBatchRow, user: SessionUser, reason: string): Promise<void> {
   const a = b.applied;
   if (!a) throw conflict('srv.migration.notApplied');
@@ -719,6 +725,18 @@ export async function rollbackBatch(person: BaseCtx, b: MigrationBatchRow, user:
   await r.smsOutbox.removeWhere({ insuredId: { in: insuredIds } });
   await r.cardTokens.removeWhere({ insuredId: { in: insuredIds } });
   await r.sessions.removeWhere({ userId: { in: userIds } });
+  // Clients point at their active policy and policies at their client: the clients changed by the batch get their
+  // fields back and the clients it created let go of its policies before those go (foreign keys in Postgres).
+  for (const before of a.clientsBefore) {
+    // The whole row is written back: a field that had no value before is restored as such (stored as JSON, such a
+    // field is absent from `fields`, not `undefined`, so every restored field is named here).
+    const c = await r.clients.get(before.id);
+    if (c) await r.clients.put({ ...c, ...Object.fromEntries(RESTORED_CLIENT_FIELDS.map((k) => [k, before.fields[k]])) });
+  }
+  for (const c of await r.clients.list({ where: { id: { in: a.clientIds } } })) {
+    const { activePolicyId: _active, ...rest } = c;
+    if (_active) await r.clients.put(rest);
+  }
   await r.policies.removeWhere({ id: { in: a.policyIds } });
   await r.assignments.removeWhere({ policyId: { in: a.policyIds } });
   await r.contracts.removeWhere({ id: { in: a.contractIds } });
@@ -726,11 +744,6 @@ export async function rollbackBatch(person: BaseCtx, b: MigrationBatchRow, user:
   await r.dealEvents.removeWhere({ dealId: { in: a.dealIds } });
   await r.documents.removeWhere({ id: { in: a.documentIds } });
   await r.clients.removeWhere({ id: { in: a.clientIds } });
-  for (const before of a.clientsBefore) {
-    // The whole row is written back: a field that had no value before is restored as such.
-    const c = await r.clients.get(before.id);
-    if (c) await r.clients.put({ ...c, ...before.fields });
-  }
   for (const l of a.limitsOnExisting) {
     const person = await r.insured.get(l.insuredId);
     if (!person?.migratedUsed) continue;

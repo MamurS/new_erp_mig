@@ -26,13 +26,4 @@ export function clearedCookie(p: CookiePolicy): string {
   return `${p.name}=; Path=/; HttpOnly;${p.secure ? ' Secure;' : ''} SameSite=Strict; Max-Age=0`;
 }
 
-/** The value of a cookie in a `Cookie` header. */
-export function readCookie(header: string | null, name: string): string | null {
-  if (!header) return null;
-  for (const part of header.split(';')) {
-    const i = part.indexOf('=');
-    if (i < 0) continue;
-    if (part.slice(0, i).trim() === name) return part.slice(i + 1).trim() || null;
-  }
-  return null;
-}
+export { readCookie } from '@mig/domain/http/csrf';

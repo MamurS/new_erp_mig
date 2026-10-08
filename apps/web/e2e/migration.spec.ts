@@ -3,7 +3,7 @@
  * validation report, rows with errors excluded and never written, four-eyes, reconciliation, the
  * insured person's remaining limit in the app, search by the old number, rollback and its rules.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { join } from 'node:path';
 import { acceptConsent, api, CODE, failOnDialog, loginStaff } from './helpers';
 

@@ -35,6 +35,7 @@ MIG staff, HR, clinics and assistance companies sign in with an email, a passwor
 <!-- audience: all -->
 
 1. **Staff and partners.** Open the system address, enter your work email and password, then the 6-digit second-factor code (MFA). The code can be pasted in full from the clipboard.
+   On the first sign-in the system asks you to set up the second factor: the “Set up the second factor” screen shows a QR code — scan it with an authenticator app (Google Authenticator, Microsoft Authenticator or another) or enter the key manually via “Cannot scan it?”, then enter the 6-digit code from the app. From then on the code always comes from that app.
 2. **Insured persons.** Open the app, enter your phone number in the format +998 XX XXX XX XX, tap “Get code” and enter the code from the SMS. On the first sign-in you need to give consent to the processing of personal data.
 3. **Adult family members** (spouse, parents) sign in with their own phone number. Children under the age limit are visible in a parent's app and do not have a separate sign-in.
 4. After 5 wrong attempts within 10 minutes, sign-in is blocked for 5 minutes. The error message does not say what exactly is wrong — this protects against guessing.

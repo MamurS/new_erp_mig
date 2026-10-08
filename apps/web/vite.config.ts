@@ -67,8 +67,15 @@ export default defineConfig(({ mode }) => {
   if (mode === 'development') {
     process.env.VITE_DEMO_MODE ??= 'true';
   }
-  // There is no real backend yet: mocks are on unless explicitly disabled.
+  // Mocks are on unless explicitly disabled (VITE_USE_MOCKS=false: the app talks to the API at /api).
   process.env.VITE_USE_MOCKS ??= 'true';
+  /*
+   * The app against a local API (README «Запуск с бэкендом», e2e-backend): `/api` of the dev server and of `vite
+   * preview` goes to the API, so the app and the API share one origin and the session cookie is first-party (like
+   * Caddy in the deployment). DEV/E2E only: API_PROXY, e.g. http://127.0.0.1:8787.
+   */
+  const apiProxy = process.env.API_PROXY;
+  const proxy = apiProxy ? { '/api': { target: apiProxy, xfwd: true } } : undefined;
   return {
     plugins: [react(), previewHeaders(), helpGuide()],
     resolve: {
@@ -79,8 +86,8 @@ export default defineConfig(({ mode }) => {
       modulePreload: { polyfill: false },
       chunkSizeWarningLimit: 1200,
     },
-    server: { port: 5173 },
-    preview: { port: 4173 },
+    server: { port: 5173, ...(proxy ? { proxy } : {}) },
+    preview: { port: 4173, ...(proxy ? { proxy } : {}) },
     test: {
       name: 'web',
       root: fileURLToPath(new URL('.', import.meta.url)),

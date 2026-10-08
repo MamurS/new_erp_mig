@@ -2,7 +2,7 @@
  * Sign-in to the insured app: the screen says who the app is for, and a wrong code and a number that is
  * not among the insured look exactly the same — the app never tells who is insured.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { uzLatn } from '@mig/i18n/dict/uz-Latn/index';
 import { en } from '@mig/i18n/dict/en/index';
 import { INSURED_PHONE } from './helpers';

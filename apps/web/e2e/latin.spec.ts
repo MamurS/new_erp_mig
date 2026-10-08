@@ -3,7 +3,7 @@
  * language, the form is a separate chip in a «Форма» column (header filter, server sort), document
  * numbers are ASCII, and search finds a Latin name by its Russian spelling.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './test';
 import { api, loginStaff } from './helpers';
 
 type Lang = 'ru' | 'uz-Latn' | 'en';

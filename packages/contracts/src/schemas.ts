@@ -61,11 +61,16 @@ export const sessionUser: z.ZodType<T.SessionUser> = z.object({
   canSign: z.boolean().optional(),
 });
 
+export const totpEnrollment: z.ZodType<D.TotpEnrollment> = z.object({
+  uri: z.string().max(2048).regex(/^otpauth:\/\/totp\//),
+  secret: z.string().max(256),
+});
 export const challenge: z.ZodType<D.ChallengeResponse> = z.object({
   challengeId: z.string(),
   resendInSec: z.number(),
+  totpEnrollment: totpEnrollment.optional(),
 });
-export const sessionResponse: z.ZodType<D.SessionResponse> = z.object({ sessionId: z.string(), user: sessionUser });
+export const sessionResponse: z.ZodType<D.SessionResponse> = z.object({ user: sessionUser });
 
 export const program: z.ZodType<T.Program> = z.object({ code: programCode, name: z.string(), limits: limitsRecord });
 

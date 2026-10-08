@@ -30,3 +30,10 @@ export function parseIso(s: string): number {
 export function at(dayMs: number, hh: number, mm: number): number {
   return startOfDay(dayMs) + hh * 3600_000 + mm * 60_000;
 }
+
+/** Midnight (Tashkent) of the first day of the month `offset` months before the month of `ms` (not by the machine's time zone). */
+export function monthStartTz(ms: number, offset = 0): number {
+  const [y, m] = isoDay(ms).split('-').map(Number) as [number, number];
+  const k = y * 12 + (m - 1) - offset;
+  return parseIso(`${Math.floor(k / 12)}-${String((k % 12) + 1).padStart(2, '0')}-01`);
+}

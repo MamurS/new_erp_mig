@@ -10,6 +10,7 @@ import type { ClientPipeline, ContractView, DashboardSummary, DealCard, DealView
 import { unpack } from '@mig/i18n';
 import { addWorkdays } from '@mig/domain/requests';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 
 const BASE = 'http://localhost/api';
@@ -21,10 +22,10 @@ beforeEach(() => resetDb());
 type Res<T> = { status: number; data: T };
 async function call<T = Record<string, unknown>>(path: string, init: { method?: string; sid?: string; json?: unknown; text?: string; form?: FormData } = {}): Promise<Res<T>> {
   const headers = new Headers();
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
   if (init.text !== undefined) headers.set('Content-Type', 'text/csv');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? init.text ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? init.text ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) }));
   const text = await res.text();
   let data: unknown;
   try {
@@ -38,7 +39,7 @@ async function login(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status, email).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 const CENSUS = ['gender,birthYear,relation', ...Array.from({ length: 12 }, (_, k) => `${k % 2 ? 'f' : 'm'},${1975 + k * 2},employee`)].join('\n');
 const LIST = ['fullName,birthDate,pinfl,phone,position,relation,principal_pinfl,student', 'Novyy Sotrudnik Pervyy,15.03.1990,31503900000101,+998935550101,Engineer,employee,,', 'Novaya Sotrudnitsa Vtoraya,01.07.1988,40107880000102,+998935550102,Accountant,employee,,'].join('\n');

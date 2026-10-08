@@ -12,7 +12,7 @@ import { DAY, isoDay, parseIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import { canApproveDecision } from '../settlement';
 import type { ClaimRow, ClientRow, InsuredRow } from '../store/db';
-import { systemRepos, todayIso, type BaseCtx } from './kernel';
+import { asSystem, systemRepos, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { limitExtras } from './assistance';
 import { currentReserve, reserveTimeline } from './settlement';
@@ -139,7 +139,11 @@ export const PAID_LIKE_STATUSES = ['approved', 'to_pay', 'paid'] as const;
  * Limits of a person. Parameter `limitMode`: `individual` — the person's own consumption; `family_shared` — one
  * pool per family and category: the consumption of every person of the family on the policy counts.
  */
-export async function limitsFor(ctx: BaseCtx, i: InsuredRow, P?: ParamsView): Promise<LimitUsage[]> {
+export async function limitsFor(caller: BaseCtx, i: InsuredRow, P?: ParamsView): Promise<LimitUsage[]> {
+  // The person is one the caller may see (the callers fetched `i` in their scope); what the limit consists of —
+  // claims, guarantee letters, registry lines of the family pool — is counted by the system (RLS hides most of it
+  // from the insured person, an HR or an assistance company, who see only the sums).
+  const ctx = asSystem(caller, 'limits: used and reserved sums of a person the caller may see');
   const params = P ?? (await loadParams(ctx));
   const policy = await ctx.repos.policies.get(i.policyId);
   const program = PROGRAMS[policy?.program ?? 'standard'];

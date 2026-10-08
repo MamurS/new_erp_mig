@@ -9,6 +9,7 @@ import type { ClaimDetail, QueueItem, SessionResponse } from '@mig/contracts/dto
 import type { Claim } from '@mig/contracts';
 import { tm } from '@mig/i18n';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 import { currentReserve } from '@mig/domain/services/settlement';
 import { staffClaimSchema } from '@mig/contracts/forms';
@@ -22,9 +23,9 @@ beforeEach(() => resetDb());
 type Res<T> = { status: number; data: T };
 async function call<T = Record<string, unknown>>(path: string, init: { method?: string; sid?: string; json?: unknown; form?: FormData } = {}): Promise<Res<T>> {
   const headers = new Headers();
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) }));
   const text = await res.text();
   return { status: res.status, data: (text ? JSON.parse(text) : undefined) as T };
 }
@@ -32,13 +33,13 @@ async function login(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status, email).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 async function loginPhone(phone: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/phone', { method: 'POST', json: { phone } });
   const b = await call<SessionResponse>('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -92,7 +93,7 @@ describe('POST /api/claims (staff registration)', () => {
     expect(res.status).toBe(200);
     const row = db().claims.find((c) => c.id === res.data.id)!;
     expect(row.intakeChannel).toBe('hr_letter');
-    const file = await fetch(`${BASE}${row.attachments[0]!.url.replace('/api', '')}`, { headers: { Authorization: `Bearer ${sid}` } });
+    const file = await fetch(`${BASE}${row.attachments[0]!.url.replace('/api', '')}`, { headers: withSession(new Headers(), sid) });
     expect(file.headers.get('Content-Disposition')).toBe('attachment; filename="document-1.pdf"');
   });
 

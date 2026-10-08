@@ -106,7 +106,7 @@ describe('environment (production refuses development secrets)', () => {
   it('starts with real secrets: no demo, no test MFA, no bearer path; plaintext version 0 refused', async () => {
     const env = readEnv(prod);
     expect(env.demo).toBe(false);
-    expect(env.bearerCompat).toBe(false);
+    expect('bearerCompat' in env).toBe(false);
     expect(env.demoPassword).toBeUndefined();
     expect((await env.crypto.seal('x')).keyVer).toBe(4);
     await expect(env.crypto.open(new TextEncoder().encode('x'), 0)).rejects.toThrow();
@@ -135,20 +135,20 @@ describe('environment (production refuses development secrets)', () => {
       DATABASE_URL: 'postgresql://x@db/postgres',
       SUPABASE_URL: 'http://kong:8000',
       SUPABASE_SERVICE_ROLE_KEY: 'k',
-      AUTH_BEARER_COMPAT: '1',
       DEMO_PASSWORD: 'Demo-2026!',
     });
     expect(env.demo).toBe(true);
-    expect(env.bearerCompat).toBe(true);
     expect(env.demoPassword).toBe('Demo-2026!');
-    expect(() =>
-      readEnv({
-        APP_ENV: 'staging',
-        DATABASE_URL: 'x',
-        SUPABASE_URL: 'x',
-        SUPABASE_SERVICE_ROLE_KEY: 'k',
-        AUTH_BEARER_COMPAT: '1',
-      }),
-    ).toThrow(/development and ci/);
+    // The bearer path of step 4 is gone (the web app uses the cookie): a leftover switch stops the start everywhere.
+    for (const APP_ENV of ['development', 'ci', 'staging'])
+      expect(() =>
+        readEnv({
+          APP_ENV,
+          DATABASE_URL: 'x',
+          SUPABASE_URL: 'x',
+          SUPABASE_SERVICE_ROLE_KEY: 'k',
+          AUTH_BEARER_COMPAT: '1',
+        }),
+      ).toThrow(/AUTH_BEARER_COMPAT/);
   });
 });
