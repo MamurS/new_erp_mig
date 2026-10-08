@@ -2,14 +2,14 @@
 import { http } from 'msw';
 import { z } from 'zod';
 import { db, resetDb } from '../db';
-import { API, body, route } from '../http';
+import { API, authCtx, forbidden, notFound, readJson, repos, route, validate } from '../http';
 import { mockConfig } from '../config';
 import { clearSnapshot } from '../persist';
 import { DEMO_INSURED_PHONE } from '@mig/seed/credentials';
-import { forbidden, notFound, requireSession } from '../http';
-import { randomToken } from '@mig/seed/rng';
+import { randomToken } from '@mig/domain/lib/random';
 import { CARD_TOKEN_TTL_MS, formatShortCode, shortCodeFrom } from '@mig/domain/clinics';
-import { currentAssistance } from '../assistance-core';
+import { currentAssistance } from '@mig/domain/services/assistance';
+import type { InsuredRow } from '@mig/domain/store/db';
 
 const DEMO = { noFailures: true };
 
@@ -27,7 +27,7 @@ export const demoHandlers = [
   http.post(
     `${API}/__demo/failures`,
     route(async ({ request }) => {
-      const { enabled } = await body(request, z.object({ enabled: z.boolean() }));
+      const { enabled } = validate(z.object({ enabled: z.boolean() }), await readJson(request));
       mockConfig.failures = enabled;
       return { ok: true as const, enabled };
     }, DEMO),
@@ -35,20 +35,23 @@ export const demoHandlers = [
   // MIS simulator: a card code of the demo insured person, as if the patient showed the app at the desk.
   http.post(
     `${API}/__demo/mis-card`,
-    route(({ request, url }) => {
-      const { user } = requireSession(request);
-      if (user.role !== 'clinic_admin') throw forbidden();
-      const d = db();
+    route(async ({ request, url }) => {
+      const ctx = await authCtx(request);
+      if (ctx.user.role !== 'clinic_admin') throw forbidden();
       // `?who=mig`: a patient of a client without an assistance, to show sub-registries of two payers.
-      const me =
-        url.searchParams.get('who') === 'mig'
-          ? d.insured.find((i) => i.status === 'active' && !currentAssistance(d, i.policyId) && d.policies.some((p) => p.id === i.policyId && p.status === 'active'))
-          : d.insured.find((i) => i.phone === DEMO_INSURED_PHONE);
+      let me: InsuredRow | null = null;
+      if (url.searchParams.get('who') === 'mig') {
+        for (const i of await repos.insured.list({ where: { status: 'active' } })) {
+          if ((await currentAssistance(ctx, i.policyId)) || !(await repos.policies.exists({ id: i.policyId, status: 'active' }))) continue;
+          me = i;
+          break;
+        }
+      } else me = await repos.insured.first({ where: { phone: DEMO_INSURED_PHONE } });
       if (!me) throw notFound();
       const bytes = new Uint8Array(8);
       crypto.getRandomValues(bytes);
-      const row = { token: randomToken(18), shortCode: shortCodeFrom(bytes), insuredId: me.id, expiresAt: Date.now() + CARD_TOKEN_TTL_MS };
-      d.cardTokens.push(row);
+      const row = { token: randomToken(18), shortCode: shortCodeFrom(bytes), insuredId: me.id, expiresAt: ctx.now() + CARD_TOKEN_TTL_MS };
+      await repos.cardTokens.insert(row);
       return { shortCode: formatShortCode(row.shortCode) };
     }, DEMO),
   ),
