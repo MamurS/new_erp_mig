@@ -13,7 +13,7 @@
  * - Every step goes to the object's activity: the deal's «События» and the client's «Активность».
  */
 import { msg } from '@mig/i18n';
-import type { Contract, Role, SessionUser } from '@mig/contracts';
+import type { Role, SessionUser } from '@mig/contracts';
 import type { ClientPipeline, TaskAction, TaskEvent, TaskSubjectType, UserNotification, WorkTask } from '@mig/contracts/dto';
 import { taskAskSchema, taskDoneHrSchema, taskDoneSchema, taskRejectSchema, taskRequestHrSchema } from '@mig/contracts/forms';
 import { can } from '../auth/permissions';
@@ -25,6 +25,7 @@ import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
 import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
+import { dealContract } from './lifecycle';
 
 export interface SubjectRefs {
   clientId: string;
@@ -33,13 +34,6 @@ export interface SubjectRefs {
   dealNumber?: string;
   contractId?: string;
   contractNumber?: string;
-}
-
-
-/** The deal's current contract: the latest version. */
-export async function dealContract(ctx: BaseCtx, dealId: string): Promise<Contract | undefined> {
-  const list = await ctx.repos.contracts.list({ where: { dealId }, orderBy: [['version', 'desc']], limit: 1 });
-  return list[0];
 }
 
 /** Client, deal and contract behind a subject (null: no such record). */
