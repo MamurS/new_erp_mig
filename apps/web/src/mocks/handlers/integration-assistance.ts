@@ -1,10 +1,10 @@
 /*
  * Integration API for assistance companies (/api/integration/v1/assistance/...), ASSISTANCE_SPEC §8. The
  * framework (OAuth, scopes, idempotency, problem+json, log) and the endpoints are shared services
- * (packages/domain/src/services/integrationKit.ts, integrationAssistance.ts); this is the MSW adapter.
+ * (packages/domain/src/services/integrationKit.ts, integrationAssistance.ts); the MSW plumbing is the
+ * clinic API's (../integration-http.ts).
  */
-import { http, HttpResponse } from 'msw';
-import type { IntegrationScope } from '@mig/contracts';
+import { http } from 'msw';
 import {
   appointmentList,
   assistanceCase,
@@ -17,36 +17,15 @@ import {
   registryList,
   rosterPage,
 } from '@mig/contracts/integration';
+import type { IntegrationScope } from '@mig/contracts';
 import type { ZodTypeAny } from 'zod';
-import { runApiCall, TEST_IP_HEADER, type ApiHandler, type ApiSpec } from '@mig/domain/services/integrationKit';
 import * as svc from '@mig/domain/services/integrationAssistance';
-import { API, baseCtx, route } from '../http';
+import { apiRoute as partnerRoute, BASE, type Handler } from '../integration-http';
 
-const AB = `${API}/integration/v1/assistance`;
+const AB = `${BASE}/assistance`;
 
-/** One partner API endpoint: the request parts go to the service, its answer becomes the response. */
-function apiRoute(method: ApiSpec['method'], template: string, scope: IntegrationScope, response: ZodTypeAny | null, fn: ApiHandler) {
-  return route(
-    async ({ request, params, url }) => {
-      const answer = await runApiCall(
-        baseCtx(),
-        { method, template, scope, response, partner: 'assistance' },
-        {
-          path: url.pathname,
-          params,
-          query: url.searchParams,
-          authorization: request.headers.get('authorization'),
-          ip: request.headers.get(TEST_IP_HEADER),
-          idempotencyKey: request.headers.get('Idempotency-Key'),
-          bodyText: await request.text(),
-        },
-        fn,
-      );
-      return new HttpResponse(answer.body, { status: answer.status, headers: answer.headers });
-    },
-    { noFailures: true },
-  );
-}
+/** One endpoint of the assistance keys. */
+const apiRoute = (method: 'GET' | 'POST' | 'PATCH', template: string, scope: IntegrationScope, response: ZodTypeAny | null, fn: Handler) => partnerRoute(method, template, scope, response, fn, 'assistance');
 
 export const integrationAssistanceHandlers = [
   // ---- roster ----

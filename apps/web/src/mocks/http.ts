@@ -1,18 +1,15 @@
-/* Mock server plumbing: sessions, permissions, validation, errors, latency, pagination. */
+/*
+ * The MSW adapter of the services (packages/domain/src/services): the service context over the in-memory
+ * database, the session of a request, latency, failure injection, error mapping and persistence.
+ */
 import { delay, HttpResponse, type DefaultBodyType, type HttpResponseResolver, type PathParams } from 'msw';
-import type { ZodTypeAny, z } from 'zod';
-import type { ApiError, AuditAction, AuditEntry, Role, SessionUser } from '@mig/contracts';
-import { can, type Action, type PermissionContext } from '@mig/domain/auth/permissions';
-import { idleLimitsFor } from '@mig/domain/auth/home';
+import type { ApiError } from '@mig/contracts';
 import { db } from './db';
-import type { Db, SessionRow } from './db';
 import { mockConfig } from './config';
 import { saveSessions, scheduleSaveDb } from './persist';
-import { DomainError as HttpError, forbidden, notFound, unauthorized, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
+import { DomainError as HttpError, notFound, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import { resolveSession } from '@mig/domain/services/session';
 import { memoryRepos } from '@mig/domain/store/memory';
-import { randomId } from '@mig/seed/rng';
-import { tzIso } from '@mig/seed/time';
 
 // The mock answers only at the API address. A pattern with any prefix before /api would also catch
 // the dev server's own modules (/src/shared/api/queries/params.ts) and answer them with a 404.
@@ -24,7 +21,7 @@ function apiBase(): string {
 export const API = apiBase();
 
 // Errors, validation and list helpers are shared with the API server (packages/domain/src/services).
-export { DomainError as HttpError, unauthorized, forbidden, notFound, conflict, messageKey, errorOf as httpErrorOf } from '@mig/domain/services/kernel';
+export { DomainError as HttpError, unauthorized, forbidden, notFound, conflict, messageKey, errorOf as httpErrorOf, validate } from '@mig/domain/services/kernel';
 
 export function errorResponse(e: HttpError): Response {
   return HttpResponse.json(e.body(), { status: e.status });
@@ -96,77 +93,7 @@ export function route(
   };
 }
 
-// ---------- sessions ----------
-export interface Auth {
-  user: SessionUser;
-  session: SessionRow;
-}
-
-export function sessionUserFor(d: Db, userId: string, role: Role): SessionUser | null {
-  if (role === 'hr') {
-    const h = d.hrUsers.find((u) => u.id === userId);
-    return h ? { id: h.id, role, displayName: h.fullName, companyId: h.companyId } : null;
-  }
-  if (role === 'clinic_registrar' || role === 'clinic_admin') {
-    const u = d.clinicUsers.find((x) => x.id === userId);
-    if (!u || !u.active) return null;
-    // Role and clinic always come from the server-side record.
-    return { id: u.id, role: u.role, displayName: u.fullName, clinicId: u.clinicId };
-  }
-  if (role === 'asst_operator' || role === 'asst_doctor' || role === 'asst_billing' || role === 'asst_admin') {
-    const u = d.assistUsers.find((x) => x.id === userId);
-    if (!u || !u.active) return null;
-    // Role and assistance company always come from the server-side record.
-    return { id: u.id, role: u.role, displayName: u.fullName, assistanceId: u.assistanceId };
-  }
-  if (role === 'insured') {
-    const i = d.insured.find((x) => x.userId === userId);
-    if (!i || i.status !== 'active') return null;
-    const first = i.fullName.split(' ')[1] ?? i.fullName;
-    return { id: i.userId, role, displayName: first, insuredId: i.id, consentGivenAt: i.consentGivenAt };
-  }
-  const s = d.staff.find((u) => u.id === userId);
-  if (!s || !s.active) return null;
-  // Role, authority and the signatory flag are always taken from the server-side record, never from the request.
-  return { id: s.id, role: s.role, displayName: s.fullName, authority: s.authority, ...(s.signatory?.canSign ? { canSign: true } : {}) };
-}
-
-/** Resolves the session from the bearer token. Client-supplied role headers are ignored. */
-export function requireSession(request: Request): Auth {
-  const header = request.headers.get('authorization') ?? '';
-  const m = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(header);
-  if (!m) throw unauthorized();
-  const d = db();
-  const session = d.sessions.find((s) => s.id === m[1]);
-  if (!session) throw unauthorized();
-  const now = Date.now();
-  const { timeoutMs } = idleLimitsFor(session.role);
-  if (now - session.lastActivity > timeoutMs + 60_000) {
-    d.sessions = d.sessions.filter((s) => s !== session);
-    throw unauthorized();
-  }
-  const user = sessionUserFor(d, session.userId, session.role);
-  if (!user) {
-    d.sessions = d.sessions.filter((s) => s !== session);
-    throw unauthorized();
-  }
-  session.role = user.role;
-  // A background poll (X-Background: 1, e.g. the notifications bell) is not the person's activity.
-  if (request.headers.get('X-Background') !== '1') session.lastActivity = now;
-  return { user, session };
-}
-
-export function requirePermission(user: SessionUser, action: Action, ctx?: PermissionContext): void {
-  if (!can(user, action, ctx)) throw forbidden();
-}
-
-/** For scoped resources: an out-of-scope id is reported as missing (anti-enumeration). */
-export function requireOwn(user: SessionUser, action: Action, ctx: PermissionContext): void {
-  if (!can(user, action)) throw forbidden();
-  if (!can(user, action, ctx)) throw notFound();
-}
-
-// ---------- validation ----------
+// ---------- request body ----------
 export async function readJson(request: Request): Promise<unknown> {
   try {
     const text = await request.text();
@@ -178,48 +105,7 @@ export async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-export function validate<S extends ZodTypeAny>(schema: S, data: unknown): z.output<S> {
-  const r = schema.safeParse(data);
-  if (r.success) return r.data as z.output<S>;
-  const fields: Record<string, string> = {};
-  for (const issue of r.error.issues) {
-    const key = issue.path.join('.') || '_';
-    if (!fields[key]) fields[key] = issue.message;
-  }
-  throw new HttpError(422, 'validation', 'errors.validation', { fields });
-}
-
-export async function body<S extends ZodTypeAny>(request: Request, schema: S): Promise<z.output<S>> {
-  return validate(schema, await readJson(request));
-}
-
-// ---------- audit ----------
-export function audit(
-  actor: Pick<SessionUser, 'id' | 'displayName' | 'role'> & { assistanceId?: string },
-  action: AuditAction,
-  target: Pick<AuditEntry, 'targetType'> & Partial<Pick<AuditEntry, 'targetId' | 'targetLabel' | 'reason' | 'assistanceId'>>,
-): void {
-  // Actions of assistance users are tagged with their company (ASSISTANCE_SPEC §3).
-  const assistanceId = actor.assistanceId ?? target.assistanceId;
-  db().audit.unshift({
-    id: randomId(),
-    at: tzIso(Date.now()),
-    actorId: actor.id,
-    actorName: actor.displayName,
-    actorRole: actor.role,
-    action,
-    ...target,
-    ...(assistanceId ? { assistanceId } : {}),
-  });
-}
-
-export function insuredLabel(id: string): string {
-  return `Застрахованный #${id.slice(0, 4)}`;
-}
-
-// ---------- lists ----------
-export { pageParams, paginate, sortBy, byLegalName, byLegalForm, legalFormsParam, filterLegalForm, q } from '@mig/domain/services/list';
-
+// ---------- path parameters ----------
 export function param(ctx: Ctx, key: string): string {
   const v = ctx.params[key];
   if (typeof v !== 'string' || !/^[0-9a-f-]{36}$/i.test(v)) throw notFound();

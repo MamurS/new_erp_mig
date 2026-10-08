@@ -5,17 +5,18 @@
  * (packages/domain/src/services/partnerIntegration.ts); this is the MSW adapter.
  */
 import { http } from 'msw';
-import type { BaseCtx } from '@mig/domain/services/kernel';
+import type { AuthCtx } from '@mig/domain/services/kernel';
 import * as svc from '@mig/domain/services/partnerIntegration';
-import { baseCtx, param, readJson, route } from '../http';
+import { authCtx, param, readJson, route } from '../http';
 
-/** The partner of the request, resolved from the session (401/403 otherwise); `ctx`: its service context. */
-export type PartnerCtx = svc.PartnerScope & { ctx?: BaseCtx };
-
-export function partnerIntegrationHandlers(base: string, resolve: (request: Request) => PartnerCtx | Promise<PartnerCtx>) {
-  const scope = async (request: Request): Promise<[BaseCtx, svc.PartnerScope]> => {
-    const p = await resolve(request);
-    return [p.ctx ?? baseCtx(), p];
+/**
+ * `scopeOf`: the partner of the signed-in person (the clinic or assistance service's `integrationScope`,
+ * 401/403 otherwise).
+ */
+export function partnerIntegrationHandlers(base: string, scopeOf: (ctx: AuthCtx) => Promise<svc.PartnerScope>) {
+  const scope = async (request: Request): Promise<[AuthCtx, svc.PartnerScope]> => {
+    const ctx = await authCtx(request);
+    return [ctx, await scopeOf(ctx)];
   };
   return [
     http.get(`${base}/overview`, route(async ({ request }) => svc.overview(...(await scope(request))))),

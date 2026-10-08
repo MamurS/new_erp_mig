@@ -10,7 +10,7 @@ import { can } from '../auth/permissions';
 import { canSeeQueueType, QUEUE_TYPES } from '../queue';
 import { formatParamValue, paramLabel } from '../config/dmsParameters';
 import { canApproveDecision, FLAG_LABEL } from '../settlement';
-import { isStaffRole, LIMIT_CATEGORY_LABEL, SPECIALTY_LABEL } from '../labels';
+import { LIMIT_CATEGORY_LABEL, SPECIALTY_LABEL } from '../labels';
 import { CLAIM_CATEGORY_LABEL } from '../claims';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { LegalFormCode } from '../config/legalForms';
@@ -20,7 +20,7 @@ import { originalReminderDue } from '../contracts';
 import { ageLimitDate, childAgeLimit, reachedAgeLimit } from '../family';
 import { isActiveRequest, isOverdue as requestOverdue } from '../requests';
 import type { ClientRow } from '../store/db';
-import { forbidden, type AuthCtx, type BaseCtx } from './kernel';
+import { forbidden, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
 import { isOverdueRequest } from './clinic';
@@ -29,9 +29,6 @@ import { assistanceLegalFormOf, clientLegalFormOf, clinicLegalFormOf } from './v
 import { dealContract, latestQuote, toDealView } from './lifecycle';
 import { ageLimits } from './family';
 
-export function requireStaff(user: SessionUser): void {
-  if (!isStaffRole(user.role)) throw forbidden();
-}
 
 const ACTIVE_CLAIM = new Set(['new', 'review', 'medical_review']);
 
@@ -648,7 +645,7 @@ export function queueTypesOf(items: readonly QueueItem[]): { type: QueueType; co
 
 export async function dashboard(ctx: AuthCtx): Promise<DashboardSummary> {
   const { user } = ctx;
-  requireStaff(user);
+  requireStaff(ctx);
   const P = await loadParams(ctx);
   const now = ctx.now();
   const queue = await queueFor(ctx, user, 'all', now, P);
@@ -664,7 +661,7 @@ export async function dashboard(ctx: AuthCtx): Promise<DashboardSummary> {
 /** `?type=` one kind of items (or a group), `?form=` legal forms, `?sort=`; at most 50. */
 export async function queue(ctx: AuthCtx, qs: URLSearchParams): Promise<QueueItem[]> {
   const { user } = ctx;
-  requireStaff(user);
+  requireStaff(ctx);
   const raw = qs.get('type');
   const type = ([...QUEUE_TYPES, 'assistance'] as const).find((x) => x === raw) ?? 'all';
   const items = filterLegalForm(await queueFor(ctx, user, type, ctx.now()), qs, (i) => i.legalForm);
@@ -679,7 +676,7 @@ export async function medicalAccess(ctx: AuthCtx): Promise<AuditEntry[]> {
 }
 
 export async function integrationsStatus(ctx: AuthCtx): Promise<IntegrationStatus[]> {
-  requireStaff(ctx.user);
+  requireStaff(ctx);
   const now = ctx.now();
   const s = await ctx.repos.one.integrationsSeed();
   return [

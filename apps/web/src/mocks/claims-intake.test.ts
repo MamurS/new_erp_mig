@@ -10,7 +10,7 @@ import type { Claim } from '@mig/contracts';
 import { tm } from '@mig/i18n';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
-import { currentReserve } from './settlement-core';
+import { currentReserve } from '@mig/domain/services/settlement';
 import { staffClaimSchema } from '@mig/contracts/forms';
 
 const BASE = 'http://localhost/api';

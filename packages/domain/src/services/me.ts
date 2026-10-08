@@ -17,12 +17,12 @@ import { recognizeReceipt } from '../lib/receipts';
 import { DAY, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, FamilyRequestRow, InsuredRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, validate, type AuthCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, todayIso, validate, type AuthCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { accessOf, ageLimits, familyOf, hasConsent, isDependent, myAppointment, myClaimOf, payoutCardOf, personFor, principalOf, todayIso } from './family';
+import { accessOf, ageLimits, familyOf, hasConsent, isDependent, myAppointment, myClaimOf, payoutCardOf, personFor, principalOf } from './family';
 import { toFamilyRequest } from './familyRequests';
 import { limitsFor, toMyClaim } from './views';
-import { createAppointment, emitWebhook, nextClaimNumber, pushEvent } from './clinic';
+import { createAppointment, emitWebhook, FILED_CLAIM_SEQ_FLOOR, nextClaimNumber, pushEvent } from './clinic';
 import { currentAssistance } from './assistance';
 import { handlerOf, refreshFlags, sha256Hex } from './settlement';
 
@@ -313,7 +313,7 @@ export async function submitClaim(ctx: AuthCtx, personId: string | null, readFor
   const now = ctx.now();
   const claim: ClaimRow = {
     id: claimId,
-    number: await nextClaimNumber(ctx, P),
+    number: await nextClaimNumber(ctx, P, { floor: FILED_CLAIM_SEQ_FLOOR }),
     insuredId: me.id,
     insuredName: me.fullName,
     clientId: me.clientId,

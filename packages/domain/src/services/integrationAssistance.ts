@@ -27,9 +27,9 @@ import {
 import { assistanceScope } from '../assistance';
 import { isoDay, parseIso, tzIso } from '../lib/time';
 import type { AssistanceCaseRow, InsuredRow } from '../store/db';
-import { validate, type AuditActor, type BaseCtx } from './kernel';
+import { todayIso, validate, type AuditActor, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { assistanceOf, authorityLimitOf, linesOf, requireAssistanceScope, requireInsuredOf, rosterOf, subStatus, subTotals, todayIso, upsertDraftRebill } from './assistance';
+import { assistanceOf, authorityLimitOf, linesOf, requireAssistanceScope, requireInsuredOf, rosterOf, subStatus, subTotals, upsertDraftRebill } from './assistance';
 import { respondToAppointment, toGuaranteeLetter } from './clinic';
 import { appointmentsOf, changeCase, decideAsAssistance, decideLine, disputeRebillLine, lettersOf, openCase, overdueAppointmentOf, recordPayment, registriesOf, submitRebill, type AppointmentAnswerKind } from './assistPortal';
 import { ApiProblem, apiNotFound, page, toIntegrationAppointment, type ApiCallCtx } from './integrationKit';

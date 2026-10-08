@@ -7,24 +7,15 @@ import { http } from 'msw';
 import * as svc from '@mig/domain/services/clinicPortal';
 import { DEMO_PASSWORD } from '@mig/seed/credentials';
 import { API, authCtx, param, readJson, route, type Ctx } from '../http';
-import { readForm } from '../uploads';
+import { formFiles, formText, readForm } from '../uploads';
 import { partnerIntegrationHandlers } from './partner-integration';
-
-// Synchronous versions for the handlers not yet ported to the services (assist.ts, staff-assistance.ts).
-export { createGuarantee, revokeKey } from '../clinic-legacy';
 
 const C = `${API}/clinic`;
 
-/** The files of a multipart form as plain values for the services. */
-export async function uploadedFiles(form: FormData, field = 'files'): Promise<svc.UploadedFile[]> {
-  const files = form.getAll(field).filter((f): f is File => f instanceof File);
-  return Promise.all(files.map(async (f) => ({ size: f.size, bytes: new Uint8Array(await f.arrayBuffer()) })));
-}
-
+/** The form of «documents for a letter» (400 when the body is not multipart). */
 async function documentsForm(request: Request): Promise<{ comment: string | null; files: svc.UploadedFile[] }> {
   const form = await readForm(request);
-  const comment = form.get('comment');
-  return { comment: typeof comment === 'string' ? comment : null, files: await uploadedFiles(form) };
+  return { comment: formText(form, 'comment'), files: await formFiles(form, 'files') };
 }
 
 async function registryCsv({ request }: Ctx): Promise<svc.RegistryCsvInput> {
@@ -75,8 +66,5 @@ export const clinicHandlers = [
   http.post(`${C}/users`, route(async ({ request }) => svc.inviteUser(await authCtx(request), await readJson(request), DEMO_PASSWORD))),
   http.patch(`${C}/users/:id`, route(async (c) => svc.patchUser(await authCtx(c.request), param(c, 'id'), await readJson(c.request)))),
   // ---- integration (clinic_admin): the partner framework shared with assistance companies ----
-  ...partnerIntegrationHandlers(`${C}/integration`, async (request) => {
-    const ctx = await authCtx(request);
-    return { ...(await svc.integrationScope(ctx)), ctx };
-  }),
+  ...partnerIntegrationHandlers(`${C}/integration`, svc.integrationScope),
 ];

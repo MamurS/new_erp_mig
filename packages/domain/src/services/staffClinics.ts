@@ -8,13 +8,13 @@ import type { ClinicCard, ClinicUserView, GuaranteeView, RegistrySummary, Regist
 import { clinicAdminInviteSchema, clinicCreateSchema, clinicModeSchema, guaranteeDecisionSchema, registryLineDecisionSchema } from '@mig/contracts/forms';
 import { can } from '../auth/permissions';
 import { approvalOutcome, registryStatusAfterReview } from '../clinics';
-import { isStaffRole } from '../labels';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClinicUserRow } from '../store/db';
 import { linesOf, settleRegistry, subStatus, subTotals } from './assistance';
 import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, refreshStoredGuarantee, toGuaranteeView, toRegistrySummary, toRegistryView } from './clinic';
-import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
+import { toUserView } from './clinicPortal';
 import { loadParams } from './params';
 import { revokeKey, toClientView } from './partnerIntegration';
 
@@ -23,13 +23,6 @@ function migSubRegistry(r: Registry): Registry {
   const lines = linesOf(r, 'mig');
   return { ...r, lines, status: subStatus(r, lines), totals: subTotals(lines) };
 }
-
-function requireStaff(ctx: AuthCtx): SessionUser {
-  if (!isStaffRole(ctx.user.role)) throw forbidden();
-  return ctx.user;
-}
-
-const userView = (u: ClinicUserRow): ClinicUserView => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt });
 
 async function clinicCard(ctx: BaseCtx, clinic: Clinic): Promise<ClinicCard> {
   const r = ctx.repos;
@@ -49,7 +42,7 @@ async function clinicCard(ctx: BaseCtx, clinic: Clinic): Promise<ClinicCard> {
       rejectedLineShare: reviewed.length ? rejected / reviewed.length : null,
       amountToPay: registries.filter((x) => x.status === 'accepted' || x.status === 'partially_accepted').reduce((s, x) => s + x.totals.accepted, 0),
     },
-    users: (await r.clinicUsers.list({ where: { clinicId: clinic.id } })).map(userView),
+    users: (await r.clinicUsers.list({ where: { clinicId: clinic.id } })).map(toUserView),
     keys: (await r.integrationClients.list({ where: { clinicId: clinic.id } })).map(toClientView),
     webhooks: {
       endpoints: await r.webhooks.count({ clinicId: clinic.id }),
@@ -109,7 +102,7 @@ export async function inviteAdmin(ctx: AuthCtx, id: UUID, body: unknown, initial
   const row: ClinicUserRow = { id: randomId(), ...input, role: 'clinic_admin', password: initialPassword, clinicId: clinic.id, active: true, createdAt: tzIso(ctx.now()) };
   await ctx.repos.clinicUsers.insert(row);
   await audit(ctx, user, 'role_change', { targetType: 'user', targetId: row.id, targetLabel: row.fullName });
-  return userView(row);
+  return toUserView(row);
 }
 
 export async function revokeClinicKey(ctx: AuthCtx, id: UUID, keyId: UUID): Promise<IntegrationClient> {

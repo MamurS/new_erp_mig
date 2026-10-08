@@ -10,21 +10,15 @@ import { assignmentSchema, assistanceContractSchema, assistanceCreateSchema, com
 import { can } from '../auth/permissions';
 import { assistanceOn } from '../assistance';
 import { legalNameCollator } from '../config/legalForms';
-import { isStaffRole } from '../labels';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { AssistanceCaseRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
 import { byLegalForm, byLegalName, filterLegalForm, sortBy, type Qs } from './list';
-import { assistanceName, assistanceOf, claimsFromRebill, ensureQaSample, feeOf, kpiOf, notifyAssistance, rebillStatusAfterReview, rosterOf, syncAssistance, todayIso } from './assistance';
+import { assistanceName, assistanceOf, claimsFromRebill, ensureQaSample, feeOf, kpiOf, notifyAssistance, rebillStatusAfterReview, rosterOf, syncAssistance } from './assistance';
 import { toRebillSummary, toRebillView } from './assistPortal';
-import { revokeKey } from './integrationKit';
+import { revokeKey, toClientView } from './partnerIntegration';
 import { assistanceLegalFormOf, clientLegalFormOf } from './views';
-
-function requireStaff(ctx: AuthCtx): SessionUser {
-  if (!isStaffRole(ctx.user.role)) throw forbidden();
-  return ctx.user;
-}
 
 const caseOut = ({ policyId: _p, createdById: _c, resolvedAt: _r, ...c }: AssistanceCaseRow): AssistanceCase => c;
 
@@ -232,8 +226,7 @@ export async function revokeAssistanceKey(ctx: AuthCtx, id: UUID, keyId: UUID): 
   const a = await assistanceOf(ctx, id);
   const k = await ctx.repos.integrationClients.first({ where: { id: keyId, clinicId: a.id } });
   if (!k) throw notFound();
-  const { secretHash: _h, ...view } = await revokeKey(ctx, k, user);
-  return view;
+  return toClientView(await revokeKey(ctx, k, user));
 }
 
 // ---------------------------------------------------------------- assignment of a policy (underwriter)

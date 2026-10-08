@@ -7,7 +7,6 @@ import * as misc from '@mig/domain/services/staffMisc';
 import { exportFileName } from '@mig/domain/lib/csv';
 import { API, authCtx, param, readJson, route } from '../http';
 
-export { clinicSlots } from '@mig/domain/services/staffMisc';
 
 function csvResponse({ csv, kind }: { csv: string; kind: string }): Response {
   return new HttpResponse(`\ufeff${csv}`, {

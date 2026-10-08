@@ -32,9 +32,9 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, tzIso } from '../lib/time';
 import type { StaffRow } from '../store/db';
 import { byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
-import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView, todayIso } from './lifecycle';
+import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView } from './lifecycle';
 import { completeTasks } from './tasks';
 import { toClient } from './views';
 

@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 import { msg } from '@mig/i18n';
-import type { Appointment, AssistanceAssignment, MedicalRecordEntry, Rebill, Registry, SessionUser, Specialty, UUID, Visit } from '@mig/contracts';
+import type { Appointment, AssistanceAssignment, MedicalRecordEntry, Rebill, Registry, SessionUser, UUID, Visit } from '@mig/contracts';
 import type {
   AssistAppointment,
   AssistCaseView,
@@ -44,38 +44,20 @@ import {
   revealSchema,
 } from '@mig/contracts/forms';
 import { can, type Action } from '../auth/permissions';
-import { assistanceOn, assistanceScope, CASE_SLA_MINUTES, CASE_TYPE_LABEL } from '../assistance';
-import { guaranteeNumber, registryStatusAfterReview, VISIT_TTL_MS } from '../clinics';
+import { assistanceScope, CASE_SLA_MINUTES, CASE_TYPE_LABEL } from '../assistance';
+import { registryStatusAfterReview, VISIT_TTL_MS } from '../clinics';
 import { isAssistRole, SPECIALTY_LABEL } from '../labels';
 import { formatMoney } from '../lib/format';
 import { formatPhoneFull, maskBirthDate, maskPhone, maskPinfl } from '../lib/mask';
 import { randomId, randomToken } from '../lib/random';
-import { hashString, int, mulberry32, pick, uuidFrom } from '../lib/rng';
 import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { AssistUserRow, AssistanceCaseRow, GuaranteeRow, InsuredRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
 import { q, type Qs } from './list';
 import { loadParams, type ParamsView } from './params';
-import {
-  assistanceName,
-  assistanceOf,
-  authorityLimitOf,
-  kpiOf,
-  linesOf,
-  notifyAssistance,
-  recomputeRebill,
-  rebillStatusAfterReview,
-  requireAssistanceScope,
-  requireInsuredOf,
-  rosterOf,
-  settleRegistry,
-  subStatus,
-  subTotals,
-  todayIso,
-  upsertDraftRebill,
-} from './assistance';
+import { assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
 import {
   clinicOf,
   clinicResponseMinutes,
@@ -86,15 +68,14 @@ import {
   pushEvent,
   recomputeRegistry,
   refreshStoredGuarantee,
-  requireVisit,
   respondToAppointment,
   toGuaranteeView,
-  type ClinicActor,
 } from './clinic';
+import { createGuarantee } from './clinicPortal';
+import type { PartnerScope } from './partnerIntegration';
 import { principalOf } from './family';
+import { fieldLabel, MEDICAL_TTL, medicalRecords } from './insured';
 import { limitsFor } from './views';
-
-const MEDICAL_TTL = 15 * 60_000;
 
 export interface AssistCtx {
   user: SessionUser;
@@ -249,84 +230,6 @@ export async function appointmentsOf(ctx: BaseCtx, assistanceId: UUID): Promise<
     const who = people.get(a.insuredId);
     return !!who && scopeOn(who.policyId, a.createdAt) !== 'none';
   });
-}
-
-function fieldLabel(f: string): string {
-  return f === 'pinfl' ? 'ПИНФЛ' : f === 'phone' ? 'Телефон' : f === 'birthDate' ? 'Дата рождения' : 'Email';
-}
-
-const SPECS: Specialty[] = ['therapist', 'dentist', 'cardiologist', 'ent', 'neurologist', 'ophthalmologist'];
-const SUMMARIES = [
-  'Жалобы на недомогание, назначено амбулаторное лечение.',
-  'Плановый осмотр, отклонений не выявлено.',
-  'Контрольный приём, рекомендовано наблюдение.',
-  'Назначены анализы и повторный приём через 2 недели.',
-];
-const ICD = ['J06.9', 'K29.7', 'M54.5', 'I10', 'H52.1', 'K02.1', 'J20.9', 'R51', 'L30.9', 'Z00.0'];
-
-/** Fictional medical history, derived deterministically from the insured id (not stored); as in the staff portal. */
-async function medicalRecords(ctx: BaseCtx, i: InsuredRow): Promise<MedicalRecordEntry[]> {
-  const rng = mulberry32(hashString(i.id));
-  const clinics = await ctx.repos.clinics.list();
-  const n = int(rng, 2, 6);
-  const out: MedicalRecordEntry[] = [];
-  for (let k = 0; k < n; k++) {
-    out.push({
-      id: uuidFrom(rng),
-      insuredId: i.id,
-      date: isoDay(ctx.now() - int(rng, 5, 700) * DAY),
-      clinicName: pick(rng, clinics).name,
-      specialty: pick(rng, SPECS),
-      diagnosisCode: pick(rng, ICD),
-      summary: pick(rng, SUMMARIES),
-    });
-  }
-  return out.sort((a, b) => (a.date < b.date ? 1 : -1));
-}
-
-/**
- * A guarantee letter requested for a visit (the same rules as the clinic cabinet's request): the letter goes
- * to the assistance of the insured person on the date of the request (ASSISTANCE_SPEC §5.2).
- */
-async function requestGuarantee(
-  ctx: BaseCtx,
-  actor: ClinicActor & { assistanceId?: UUID },
-  input: { visitId: UUID; serviceCode: string; icd10: string; estimatedCost: number; comment?: string },
-  byName: string,
-): Promise<GuaranteeRow> {
-  const r = ctx.repos;
-  const v = await requireVisit(ctx, actor.clinicId, input.visitId);
-  const svc = (await priceListOf(ctx, actor.clinicId)).find((p) => p.code === input.serviceCode);
-  if (!svc) throw new DomainError(422, 'validation', 'srv.registry.serviceNotInPrice', { fields: { serviceCode: msg('srv.registry.chooseService') } });
-  const who = (await r.insured.get(v.insuredId))!;
-  const assistanceId = assistanceOn(await r.assignments.list({ where: { policyId: who.policyId } }), who.policyId, isoDay(ctx.now()));
-  const seq = await r.seq.next('guarantee');
-  const P = await loadParams(ctx);
-  const g: GuaranteeRow = {
-    id: randomId(),
-    number: guaranteeNumber(new Date(ctx.now()).getFullYear(), seq, P.numbering()),
-    clinicId: actor.clinicId,
-    visitId: v.id,
-    insuredId: who.id,
-    insuredName: who.fullName,
-    serviceCode: svc.code,
-    serviceName: svc.name,
-    icd10: input.icd10,
-    estimatedCost: input.estimatedCost,
-    status: 'requested',
-    approvals: [],
-    comment: input.comment || undefined,
-    attachments: [],
-    createdAt: tzIso(ctx.now()),
-    policyId: who.policyId,
-    assistanceId,
-    ...(assistanceId ? { assistanceName: (await assistanceName(ctx, assistanceId)) ?? undefined } : {}),
-  };
-  await r.guarantees.insert(g, { at: 'start' });
-  await audit(ctx, actor, 'guarantee_requested', { targetType: 'guarantee', targetId: g.id, targetLabel: g.number });
-  await notifyAssistance(ctx, assistanceId, 'guarantee.requested', g.id);
-  await pushEvent(ctx, actor.clinicId, `Запрошено гарантийное письмо ${g.number} (${byName})`);
-  return g;
 }
 
 /** A case of the assistance linked to the person (404 when the id is given but is not one). */
@@ -813,7 +716,7 @@ export async function requestGuaranteeOnCall(ctx: AuthCtx, body: unknown): Promi
   const visit: Visit = { id: randomId(), clinicId: clinic.id, insuredId: i.id, openedById: user.id, method: 'policy', openedAt: tzIso(now), expiresAt: tzIso(now + VISIT_TTL_MS) };
   await r.visits.insert(visit);
   const actor = { id: user.id, clinicId: clinic.id, displayName: user.displayName, role: user.role, assistanceId };
-  const g = await requestGuarantee(ctx, actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
+  const g = await createGuarantee(ctx, actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
   if (c) await r.cases.update(c.id, { links: { ...c.links, guaranteeId: g.id }, ...(c.status === 'open' ? { status: 'in_progress' as const } : {}) });
   return toGuaranteeView(ctx, g);
 }
@@ -971,4 +874,16 @@ export async function integrationPartner(ctx: AuthCtx): Promise<{ actor: Session
   const { user, assistanceId } = requireAssist(ctx, 'assist.integration.manage');
   const a = await assistanceOf(ctx, assistanceId);
   return { actor: user, partnerId: assistanceId, partnerType: 'assistance', mode: a.integrationMode };
+}
+
+// ---------------------------------------------------------------- integration settings (asst_admin)
+
+/** Whose integration settings an assistance admin manages (the shared partner service, partnerIntegration.ts). */
+export async function integrationScope(ctx: AuthCtx): Promise<PartnerScope> {
+  const { user } = ctx;
+  if (!isAssistRole(user.role) || !user.assistanceId) throw forbidden();
+  requirePermission(user, 'assist.integration.manage', { assistanceId: user.assistanceId });
+  const a = await ctx.repos.assistances.get(user.assistanceId);
+  if (!a) throw notFound();
+  return { actor: user, partnerId: user.assistanceId, partnerType: 'assistance', mode: a.integrationMode };
 }

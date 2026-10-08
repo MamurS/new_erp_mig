@@ -5,9 +5,7 @@
 import { http } from 'msw';
 import * as svc from '@mig/domain/services/assistPortal';
 import { DEMO_PASSWORD } from '@mig/seed/credentials';
-import { db } from '../db';
-import { API, authCtx, forbidden, notFound, param, readJson, requirePermission, requireSession, route } from '../http';
-import { isAssistRole } from '@mig/domain/labels';
+import { API, authCtx, param, readJson, route } from '../http';
 import { partnerIntegrationHandlers } from './partner-integration';
 
 const A = `${API}/assist`;
@@ -79,15 +77,5 @@ export const assistHandlers = [
   http.patch(`${A}/users/:id`, route(async (c) => svc.patchUser(await authCtx(c.request), param(c, 'id'), await readJson(c.request)))),
 
   // ---- integration (asst_admin): the same partner framework as clinics ----
-  // partner-integration.ts is not ported yet: its resolver is synchronous and takes the in-memory database.
-  // When it moves to the services, this becomes `svc.integrationPartner(await authCtx(request))`.
-  ...partnerIntegrationHandlers(`${A}/integration`, (request) => {
-    const { user } = requireSession(request);
-    if (!isAssistRole(user.role) || !user.assistanceId) throw forbidden();
-    requirePermission(user, 'assist.integration.manage', { assistanceId: user.assistanceId });
-    const d = db();
-    const a = d.assistances.find((x) => x.id === user.assistanceId);
-    if (!a) throw notFound();
-    return { actor: user, partnerId: user.assistanceId, partnerType: 'assistance' as const, mode: a.integrationMode, d };
-  }),
+  ...partnerIntegrationHandlers(`${A}/integration`, svc.integrationScope),
 ];

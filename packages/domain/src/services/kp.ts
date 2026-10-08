@@ -13,6 +13,7 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import type { ClientRow } from '../store/db';
 import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { findClient } from './clients';
 import { isUuid } from './list';
 import { loadParams } from './params';
 import { currentAssistance } from './assistance';
@@ -21,12 +22,6 @@ import { ensureRenewalDeal } from './deals';
 
 const DEFAULT_SUM = 200_000_000;
 const DEFAULT_PREMIUM = 5_000_000;
-
-async function findClient(ctx: BaseCtx, id: string): Promise<ClientRow> {
-  const c = await ctx.repos.clients.get(id);
-  if (!c) throw notFound();
-  return c;
-}
 
 /** Staff with `kp.read`, or HR of the client's company for sent offers. Anything else is 404. */
 async function readableKp(ctx: AuthCtx, id: string): Promise<KpDocument> {

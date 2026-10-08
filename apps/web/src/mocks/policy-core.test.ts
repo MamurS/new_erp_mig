@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { POLICY_CSV_MAX_ROWS } from '@mig/domain/policies';
 import { tm, translate } from '@mig/i18n';
 import { HttpError } from './http';
-import { parsePolicyList } from './policy-core';
+import { parsePolicyList } from '@mig/domain/services/policy';
 
 const HEADER = 'fullName,birthDate,pinfl,phone,position,relation,principal_pinfl';
 function failure(fn: () => unknown): HttpError {

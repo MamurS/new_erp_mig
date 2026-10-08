@@ -2,7 +2,7 @@
  * Business parameters of the DMS in one place: value, unit, description and allowed range.
  * The values below are demo values; MIG confirms or changes them on /staff/admin/parameters
  * (an admin proposes, a second admin or underwriter confirms). The server keeps the current
- * values; code never hardcodes them: the mock reads `param()` (src/mocks/params.ts), screens
+ * values; code never hardcodes them: the services read `loadParams()` (services/params.ts), screens
  * read `useDmsParam()` or get computed values from the API.
  */
 import type { DmsParamKey, DmsParamValues, NumberingParamKey, ParamKey, ProgramCode } from '@mig/contracts';

@@ -1,11 +1,6 @@
 /* Multipart intake on the mock server: form parsing; the attachment whitelist is the services' (services/uploads.ts). */
-import { GUARANTEE_FILE_MAX_BYTES } from '@mig/domain/clinics';
 import type { UploadedFile } from '@mig/domain/lib/uploads';
-import { checkAttachment, type AttachmentMime } from '@mig/domain/services/uploads';
-import { msg } from '@mig/i18n';
 import { HttpError } from './http';
-
-export type { AttachmentMime };
 
 export async function readForm(request: Request): Promise<FormData> {
   try {
@@ -13,13 +8,6 @@ export async function readForm(request: Request): Promise<FormData> {
   } catch {
     throw new HttpError(400, 'validation', 'srv.form.invalid');
   }
-}
-
-/** PDF, JPEG, PNG up to 10 MB, checked by magic bytes (images arrive already re-encoded by the browser). */
-export async function readAttachment(file: File): Promise<{ bytes: Uint8Array; mime: AttachmentMime }> {
-  // The size is checked before the bytes are read.
-  if (file.size === 0 || file.size > GUARANTEE_FILE_MAX_BYTES) throw new HttpError(422, 'validation', 'srv.file.tooLarge10mb', { fields: { files: msg('srv.file.tooLarge10mb') } });
-  return checkAttachment({ bytes: new Uint8Array(await file.arrayBuffer()) });
 }
 
 /** The files of a form field as plain data for the services. */

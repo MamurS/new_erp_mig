@@ -5,7 +5,8 @@
 import { LEGAL_FORMS, isLegalForm, legalNameCollator, type LegalFormCode } from '../config/legalForms';
 
 export type Qs = URLSearchParams | { searchParams: URLSearchParams };
-const sp = (qs: Qs): URLSearchParams => (qs instanceof URLSearchParams ? qs : qs.searchParams);
+/** The search parameters of a query string or a URL. */
+export const sp = (qs: Qs): URLSearchParams => (qs instanceof URLSearchParams ? qs : qs.searchParams);
 
 export function pageParams(qs: Qs): { page: number; pageSize: number } {
   const s = sp(qs);

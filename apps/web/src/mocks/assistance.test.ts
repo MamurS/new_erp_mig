@@ -11,7 +11,8 @@ import { assistanceOn } from '@mig/domain/assistance';
 import { tm, translate } from '@mig/i18n';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
-import { requireAssistanceScope } from './assistance-core';
+import { requireAssistanceScope } from '@mig/domain/services/assistance';
+import { baseCtx } from './http';
 
 const BASE = 'http://localhost/api';
 const server = createMockServer();
@@ -52,18 +53,18 @@ const moved = () => {
 };
 
 describe('scope on the date of the event (§3, §13.1–13.2)', () => {
-  it('requireAssistanceScope: full for the current assistance, read for the former one, 404 for others', () => {
-    const d = db();
+  it('requireAssistanceScope: full for the current assistance, read for the former one, 404 for others', async () => {
+    const ctx = baseCtx();
     const m = moved();
     const before = m.to;
     const after = today();
-    expect(requireAssistanceScope(d, A1().id, m.policyId, after, 'write')).toBe('full');
-    expect(requireAssistanceScope(d, A2().id, m.policyId, before)).toBe('read');
-    expect(() => requireAssistanceScope(d, A2().id, m.policyId, before, 'write')).toThrow(expect.objectContaining({ key: 'srv.assist.readOnly' }));
+    await expect(requireAssistanceScope(ctx, A1().id, m.policyId, after, 'write')).resolves.toBe('full');
+    await expect(requireAssistanceScope(ctx, A2().id, m.policyId, before)).resolves.toBe('read');
+    await expect(requireAssistanceScope(ctx, A2().id, m.policyId, before, 'write')).rejects.toMatchObject({ key: 'srv.assist.readOnly' });
     expect(translate('ru', 'srv.assist.readOnly')).toMatch(/только на чтение/);
-    expect(() => requireAssistanceScope(d, A2().id, m.policyId, after)).toThrow();
-    expect(() => requireAssistanceScope(d, A1().id, m.policyId, before)).toThrow();
-    expect(() => requireAssistanceScope(d, db().assistances[2]!.id, m.policyId, after)).toThrow();
+    await expect(requireAssistanceScope(ctx, A2().id, m.policyId, after)).rejects.toThrow();
+    await expect(requireAssistanceScope(ctx, A1().id, m.policyId, before)).rejects.toThrow();
+    await expect(requireAssistanceScope(ctx, db().assistances[2]!.id, m.policyId, after)).rejects.toThrow();
   });
 
   it('an operator of another assistance finds nobody and gets 404 by id', async () => {

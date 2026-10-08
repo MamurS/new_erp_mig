@@ -12,11 +12,11 @@ import { DAY, isoDay, parseIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import { canApproveDecision } from '../settlement';
 import type { ClaimRow, ClientRow, InsuredRow } from '../store/db';
-import type { BaseCtx } from './kernel';
+import { todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { limitExtras } from './assistance';
 import { currentReserve, reserveTimeline } from './settlement';
-import { ageLimits, familyBrief, payoutCardOf, principalOf, todayIso } from './family';
+import { ageLimits, familyBrief, payoutCardOf, principalOf } from './family';
 
 /** Insured people of a client (employees and family members, each person counts). */
 export async function insuredCountFor(ctx: BaseCtx, clientId: string): Promise<number> {
@@ -132,7 +132,8 @@ export async function toHrEmployee(ctx: BaseCtx, i: InsuredRow): Promise<HrEmplo
 }
 
 const PAID_LIKE = new Set(['approved', 'to_pay', 'paid']);
-const PAID_LIKE_STATUSES = ['approved', 'to_pay', 'paid'] as const;
+/** Claim statuses whose amount counts as used limit. */
+export const PAID_LIKE_STATUSES = ['approved', 'to_pay', 'paid'] as const;
 
 /**
  * Limits of a person. Parameter `limitMode`: `individual` — the person's own consumption; `family_shared` — one

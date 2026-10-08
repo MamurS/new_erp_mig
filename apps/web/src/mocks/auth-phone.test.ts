@@ -7,7 +7,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { translate, type I18nKey } from '@mig/i18n';
 import { createMockServer } from './node';
 import { resetDb } from './db';
-import { dmsParam } from './params';
+import { loadParams } from '@mig/domain/services/params';
+import { baseCtx } from './http';
 
 const BASE = 'http://localhost/api';
 const server = createMockServer();
@@ -51,7 +52,7 @@ describe('phone sign-in does not reveal who is insured', () => {
   });
 
   it('locks a known and an unknown number after the same number of attempts, each on its own', async () => {
-    const max = dmsParam('loginMaxAttempts');
+    const max = (await loadParams(baseCtx())).dmsParam('loginMaxAttempts');
     const statuses = async (phone: string) => {
       const out: number[] = [];
       for (let i = 0; i <= max; i++) {

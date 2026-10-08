@@ -7,7 +7,7 @@ import { LEGAL_FORMS } from '@mig/domain/config/legalForms';
 import { DOC_NUMBER_RE } from '@mig/domain/numbering';
 import { db, resetDb, type Db } from './db';
 import { initMockDb } from './setup';
-import { createMockSeed as createSeed } from './seed-db';
+import { createSeed } from '@mig/seed/seed';
 import { clearSnapshot, loadSnapshot, MOCK_DB_VERSION } from './persist';
 
 const CYRILLIC = /[Ѐ-ӿ]/;

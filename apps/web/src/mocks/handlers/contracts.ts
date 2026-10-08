@@ -7,11 +7,11 @@
  */
 import { http, HttpResponse } from 'msw';
 import * as contracts from '@mig/domain/services/contracts';
-import type { DocKind, Scan, ScanForm } from '@mig/domain/services/contracts';
+import type { DocKind, ScanForm } from '@mig/domain/services/contracts';
 import { API, authCtx, param, readJson, route } from '../http';
 
-/** The fields of a multipart scan upload; `null` when the body is not a readable form. */
-async function readScanForm(request: Request): Promise<ScanForm | null> {
+/** The fields of a multipart scan upload; `null` when the body is not a readable form (also the portfolio transfer). */
+export async function readScanForm(request: Request): Promise<ScanForm | null> {
   let form: FormData;
   try {
     form = await request.formData();
@@ -24,11 +24,6 @@ async function readScanForm(request: Request): Promise<ScanForm | null> {
     side: typeof side === 'string' ? side : null,
     file: file instanceof File ? { size: file.size, bytes: new Uint8Array(await file.arrayBuffer()) } : null,
   };
-}
-
-/** A checked signature scan from a multipart upload (also used by the portfolio transfer). */
-export async function readScan(request: Request): Promise<Scan> {
-  return contracts.checkScan(await readScanForm(request));
 }
 
 /** Signing routes shared by contracts and endorsements (LIFECYCLE_SPEC §8: the same rules and methods). */

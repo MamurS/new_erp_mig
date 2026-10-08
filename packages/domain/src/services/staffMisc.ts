@@ -16,33 +16,16 @@ import { toCsv } from '../lib/csv';
 import { randomId } from '../lib/random';
 import { hashString, mulberry32 } from '../lib/rng';
 import { matchesSearch } from '../lib/searchNormalize';
-import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
+import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { StaffRow } from '../store/db';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { byLegalForm, byLegalName, filterLegalForm, paginate, q, sortBy, type Qs } from './list';
+import { byLegalForm, byLegalName, filterLegalForm, paginate, q, sortBy, sp, type Qs } from './list';
+import { clinicSlots } from './clinic';
 import { toClient, toHrEmployee } from './views';
 
 const SPECIALTIES = new Set<Specialty>(['therapist', 'pediatrician', 'dentist', 'cardiologist', 'gynecologist', 'ent', 'neurologist', 'ophthalmologist']);
 
-const sp = (qs: Qs): URLSearchParams => (qs instanceof URLSearchParams ? qs : qs.searchParams);
-
-/** Free slots of a clinic on a day, derived deterministically (a clinic without a MIS connection). */
-export function clinicSlots(clinic: Pick<Clinic, 'id'>, date: string, now = Date.now()): Slot[] {
-  const day = parseIso(date);
-  if (Number.isNaN(day) || day < startOfDay(now) || day > now + 60 * DAY) return [];
-  const rng = mulberry32(hashString(`${clinic.id}:${date}`));
-  const out: Slot[] = [];
-  for (let h = 9; h < 18; h++) {
-    for (const m of [0, 30]) {
-      const ms = at(day, h, m);
-      if (ms <= now + 30 * 60_000) continue;
-      if (rng() < 0.45) continue;
-      out.push({ clinicId: clinic.id, startsAt: tzIso(ms) });
-    }
-  }
-  return out;
-}
 
 async function reportLossRatio(ctx: BaseCtx): Promise<LossRatioRow[]> {
   return (await ctx.repos.clients.list({ where: { lossRatio: { isNull: false }, status: { ne: 'expired' } } }))

@@ -18,7 +18,8 @@ import { audit, DomainError, forbidden, insuredLabel, notFound, requirePermissio
 import { paginate, q, sortBy, type Qs } from './list';
 import { limitsFor, toInsuredDetail, toInsuredListItem } from './views';
 
-const MEDICAL_TTL = 15 * 60_000;
+/** How long a grant to read the medical history lasts. */
+export const MEDICAL_TTL = 15 * 60_000;
 
 export async function findInsured(ctx: BaseCtx, id: string): Promise<InsuredRow> {
   const i = await ctx.repos.insured.get(id);

@@ -21,7 +21,7 @@ import { loadParams } from './params';
 import { clientLegalFormOf, toClient, toInsuredListItem } from './views';
 import { hasLiveKp, renewalsWithoutOffer } from './dashboard';
 
-async function findClient(ctx: BaseCtx, id: string): Promise<ClientRow> {
+export async function findClient(ctx: BaseCtx, id: string): Promise<ClientRow> {
   const c = await ctx.repos.clients.get(id);
   if (!c) throw notFound();
   return c;

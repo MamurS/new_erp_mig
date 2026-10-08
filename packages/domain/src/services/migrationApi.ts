@@ -13,6 +13,7 @@ import { migrationBatchCreateSchema, migrationConfirmSchema, migrationManualSche
 import { randomId } from '../lib/random';
 import type { MigrationBatchRow } from '../store/db';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx } from './kernel';
+import { checkScan, type ScanForm } from './contracts';
 import { applyBatch, batchOf, batchSummary, batchView, rollbackBatch, rollbackBlockers, rowsToWrite, staleSteps, validateFiles } from './migration';
 
 function admin(ctx: AuthCtx): SessionUser {
@@ -252,33 +253,8 @@ export async function manualContract(ctx: AuthCtx, body: unknown): Promise<Migra
 
 // ---------------------------------------------------------------- the signed scan of a transferred contract
 
-/** The multipart form of a scan as the adapter read it (null: not a readable form). */
-export interface ScanForm {
-  side: string | null;
-  file: { bytes: Uint8Array } | null;
-}
-
-const SCAN_MAX_BYTES = 20 * 1024 * 1024;
-
-function scanMime(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 'application/pdf' | null {
-  const b = (i: number) => bytes[i] ?? -1;
-  if (b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return 'image/jpeg';
-  if (b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47) return 'image/png';
-  if (b(0) === 0x25 && b(1) === 0x50 && b(2) === 0x44 && b(3) === 0x46) return 'application/pdf';
-  return null;
-}
-
-/** The upload rules of contract scans: a side, one file up to 20 MB, PDF/JPEG/PNG by its bytes. */
-function checkScan(form: ScanForm | null): { bytes: Uint8Array; mime: 'image/jpeg' | 'image/png' | 'application/pdf' } {
-  if (!form) throw new DomainError(400, 'validation', 'srv.form.invalid');
-  if (form.side !== 'mig' && form.side !== 'client') throw new DomainError(422, 'validation', 'srv.signing.sideRequired', { fields: { side: msg('srv.signing.sideHint') } });
-  const file = form.file;
-  if (!file) throw new DomainError(422, 'validation', 'srv.signing.addScan', { fields: { file: msg('srv.signing.addFile') } });
-  if (file.bytes.length === 0 || file.bytes.length > SCAN_MAX_BYTES) throw new DomainError(422, 'validation', 'srv.file.tooLarge20mb', { fields: { file: msg('srv.file.tooLarge20mb') } });
-  const mime = scanMime(file.bytes);
-  if (!mime) throw new DomainError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { file: msg('srv.file.unsupported') } });
-  return { bytes: file.bytes, mime };
-}
+/** The multipart form of a scan: the same as for signing (contracts.ts). */
+export type { ScanForm };
 
 export async function attachMigratedScan(ctx: AuthCtx, contractId: UUID, form: ScanForm | null) {
   const user = ctx.user;

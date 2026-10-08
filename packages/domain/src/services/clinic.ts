@@ -6,7 +6,6 @@
 import { msg, tm } from '@mig/i18n';
 import type {
   Appointment,
-  ClaimCategory,
   Clinic,
   CoverageCheckResult,
   GuaranteeLetter,
@@ -17,6 +16,7 @@ import type {
   Role,
   ServiceCategory,
   SessionUser,
+  Slot,
   Specialty,
   UUID,
   Visit,
@@ -25,6 +25,7 @@ import type {
 import type { GuaranteeView, RegistrySummary, RegistryView } from '@mig/contracts/dto';
 import { assistanceOn } from '../assistance';
 import {
+  CATEGORY_TO_CLAIM_OF_SERVICE,
   coverageStatus,
   limitState,
   needsSecondApproval,
@@ -36,7 +37,8 @@ import {
   WEBHOOK_RETRY_MINUTES,
 } from '../clinics';
 import { randomId } from '../lib/random';
-import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
+import { hashString, mulberry32 } from '../lib/rng';
+import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { signWebhook } from '../lib/webhook';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, GuaranteeRow, InsuredRow, WebhookDeliveryRow, WebhookEndpointRow } from '../store/db';
@@ -430,18 +432,19 @@ export async function submitRegistry(ctx: BaseCtx, r: Registry, actor: { id: UUI
   }
 }
 
-export const CATEGORY_TO_CLAIM_OF_SERVICE: Record<ServiceCategory, ClaimCategory> = {
-  outpatient: 'doctor_visit',
-  diagnostics_advanced: 'diagnostics',
-  dental: 'dental',
-  medicines: 'medicines',
-  inpatient: 'inpatient',
-};
+export { CATEGORY_TO_CLAIM_OF_SERVICE };
 
-export async function nextClaimNumber(ctx: BaseCtx, P?: ParamsView): Promise<string> {
+/** Numbers of claims filed by MIG staff and insured persons start above the seeded ones (9001…). */
+export const FILED_CLAIM_SEQ_FLOOR = 9000;
+
+/**
+ * The next claim number (template in force): the largest existing sequence + 1. `floor`: the sequence
+ * starts above it (FILED_CLAIM_SEQ_FLOOR for claims filed by staff and insured persons).
+ */
+export async function nextClaimNumber(ctx: BaseCtx, P?: ParamsView, opts: { floor?: number } = {}): Promise<string> {
   const params = P ?? (await loadParams(ctx));
   const year = new Date(ctx.now()).getFullYear();
-  const max = params.maxDocSeq('claim', (await ctx.repos.claims.list()).map((c) => c.number));
+  const max = params.maxDocSeq('claim', (await ctx.repos.claims.list()).map((c) => c.number), opts);
   return params.nextDocNumber('claim', { year, n: max + 1 });
 }
 
@@ -533,5 +536,22 @@ export async function emitWebhook(ctx: BaseCtx, clinicId: UUID, event: WebhookEv
     out.push(delivery);
   }
   await trimNewest(ctx.repos.webhookDeliveries, 1000);
+  return out;
+}
+
+/** Free 30-minute slots of a clinic on a day (fictional, deterministic per clinic and date), up to 60 days ahead. */
+export function clinicSlots(clinic: Pick<Clinic, 'id'>, date: string, now: number): Slot[] {
+  const day = parseIso(date);
+  if (Number.isNaN(day) || day < startOfDay(now) || day > now + 60 * DAY) return [];
+  const rng = mulberry32(hashString(`${clinic.id}:${date}`));
+  const out: Slot[] = [];
+  for (let h = 9; h < 18; h++) {
+    for (const m of [0, 30]) {
+      const ms = at(day, h, m);
+      if (ms <= now + 30 * 60_000) continue;
+      if (rng() < 0.45) continue;
+      out.push({ clinicId: clinic.id, startsAt: tzIso(ms) });
+    }
+  }
   return out;
 }

@@ -7,13 +7,11 @@ import type { Appointment, FamilyMemberBrief, Policy, UUID } from '@mig/contract
 import { allows, familyAccess, isDependentChild, isFamilyRelation, type AgeLimits, type FamilyAccessLevel, type FamilyDataKind } from '../family';
 import { tariffOf } from '../policies';
 import { contractPricing, personPremium, PricingError } from '../pricing';
-import { isoDay } from '../lib/time';
 import type { ClaimRow, InsuredRow } from '../store/db';
-import { errorOf, notFound, type BaseCtx } from './kernel';
+import { errorOf, notFound, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 
 export const ageLimits = (P: ParamsView): AgeLimits => ({ maxChildAge: P.dmsParam('maxChildAge'), studentMaxAge: P.dmsParam('studentMaxAge') });
-export const todayIso = (ctx: Pick<BaseCtx, 'now'>): string => isoDay(ctx.now());
 
 /** Family members of an employee (every status). */
 export async function familyOf(ctx: BaseCtx, employeeId: UUID): Promise<InsuredRow[]> {

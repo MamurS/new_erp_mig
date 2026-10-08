@@ -15,13 +15,15 @@ import { matchesSearch } from '../lib/searchNormalize';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { ATTACHMENT_MAX_FILES, type UploadedFile } from '../lib/uploads';
-import type { ClaimRow, FileRow, InsuredRow } from '../store/db';
+import type { ClaimRow, FileRow } from '../store/db';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { paginate, q, sortBy } from './list';
-import { loadParams, type ParamsView } from './params';
+import { loadParams } from './params';
+import { findInsured } from './insured';
 import { toClaimDetail, toClaimListItem } from './views';
 import { currentReserve, refreshFlags } from './settlement';
 import { currentAssistance } from './assistance';
+import { FILED_CLAIM_SEQ_FLOOR, nextClaimNumber } from './clinic';
 import { isOverdue } from './dashboard';
 import { checkAttachment } from './uploads';
 
@@ -29,23 +31,6 @@ async function findClaim(ctx: BaseCtx, id: string): Promise<ClaimRow> {
   const c = await ctx.repos.claims.get(id);
   if (!c) throw notFound();
   return c;
-}
-
-async function findInsured(ctx: BaseCtx, id: string): Promise<InsuredRow> {
-  const i = await ctx.repos.insured.get(id);
-  if (!i) throw notFound();
-  return i;
-}
-
-/** Numbers of claims registered by MIG staff and insured persons start above the seeded ones (9001…). */
-const CLAIM_SEQ_FLOOR = 9000;
-
-/** The next number of a claim filed by staff or by the insured person (template in force). */
-export async function nextClaimNumber(ctx: BaseCtx, P?: ParamsView): Promise<string> {
-  const params = P ?? (await loadParams(ctx));
-  const year = new Date(ctx.now()).getFullYear();
-  const max = params.maxDocSeq('claim', (await ctx.repos.claims.list()).map((c) => c.number), { floor: CLAIM_SEQ_FLOOR });
-  return params.nextDocNumber('claim', { year, n: max + 1 });
 }
 
 function requireStaffClaims(user: SessionUser): void {
@@ -170,7 +155,7 @@ export async function createClaim(ctx: AuthCtx, form: StaffClaimForm, files: rea
   const now = ctx.now();
   const claim: ClaimRow = {
     id: claimId,
-    number: await nextClaimNumber(ctx, P),
+    number: await nextClaimNumber(ctx, P, { floor: FILED_CLAIM_SEQ_FLOOR }),
     insuredId: i.id,
     insuredName: i.fullName,
     clientId: i.clientId,

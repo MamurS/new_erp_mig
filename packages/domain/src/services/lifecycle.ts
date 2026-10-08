@@ -28,12 +28,11 @@ import { asPricingRule, contractPricing, personPremium, PricingError, type Prici
 import { randomId } from '../lib/random';
 import { isoDay, parseIso, tzIso } from '../lib/time';
 import type { ChangeRequestRow, ClientRow, InsuredRow } from '../store/db';
-import { conflict, errorOf, notFound, type BaseCtx } from './kernel';
+import { conflict, errorOf, notFound, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { createInsured, createListedInsured, nextPolicyNumber, refreshPolicyTotals } from './policy';
 import { notifyAssistance, syncAssistance } from './assistance';
 
-export const todayIso = (ctx: Pick<BaseCtx, 'now'>) => isoDay(ctx.now());
 
 export async function staffName(ctx: BaseCtx, id: UUID | undefined): Promise<string | undefined> {
   return id ? (await ctx.repos.staff.get(id))?.fullName : undefined;

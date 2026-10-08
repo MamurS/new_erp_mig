@@ -3,9 +3,6 @@ import { http } from 'msw';
 import * as insured from '@mig/domain/services/insured';
 import { API, authCtx, param, readJson, route } from '../http';
 
-// Old synchronous helpers still used by handlers that are not ported yet.
-export { fieldLabel, findInsured, medicalRecords } from '../insured-compat';
-
 export const insuredHandlers = [
   http.get(`${API}/insured`, route(async ({ request, url }) => insured.list(await authCtx(request), url))),
   http.get(`${API}/insured/:id`, route(async (c) => insured.detail(await authCtx(c.request), param(c, 'id')))),

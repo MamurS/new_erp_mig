@@ -10,10 +10,10 @@ import { msg } from '@mig/i18n';
 import { ageOn, isFamilyRelation, reachedAgeLimit } from '../family';
 import { maskBirthDate, maskPinfl } from '../lib/mask';
 import type { ClientRow, FamilyRequestRow, InsuredRow, PolicyChangeRow } from '../store/db';
-import { DomainError, type BaseCtx } from './kernel';
+import { DomainError, todayIso, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { requestChange } from './policy';
-import { ageLimits, todayIso } from './family';
+import { ageLimits } from './family';
 
 export async function toFamilyRequest(ctx: BaseCtx, r: FamilyRequestRow): Promise<FamilyRequest> {
   const employee = await ctx.repos.insured.get(r.employeeId);

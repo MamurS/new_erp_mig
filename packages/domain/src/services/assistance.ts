@@ -32,12 +32,11 @@ import { registryStatusAfterReview } from '../clinics';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClaimRow, InsuredRow } from '../store/db';
-import { conflict, DomainError, notFound, type BaseCtx } from './kernel';
+import { conflict, DomainError, notFound, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, priceListOf, refreshStoredGuarantee } from './clinic';
-import { limitsFor } from './views';
+import { limitsFor, PAID_LIKE_STATUSES } from './views';
 
-export const todayIso = (ctx: Pick<BaseCtx, 'now'>) => isoDay(ctx.now());
 
 /** Assignments of one policy (every rule of ../assistance.ts looks at one policy at a time). */
 const assignmentsOf = (ctx: BaseCtx, policyId: UUID): Promise<AssistanceAssignment[]> => ctx.repos.assignments.list({ where: { policyId } });
@@ -164,8 +163,6 @@ export function settleRegistry(r: Registry, now = Date.now()): void {
 // ---------------------------------------------------------------- limits
 
 const PAID_LIKE_REBILL = new Set(['approved', 'to_pay', 'paid']);
-const PAID_LIKE_STATUSES = ['approved', 'to_pay', 'paid'] as const;
-
 /**
  * Parts of the limit that are not claims yet: approved guarantee letters (reserve) and registry lines
  * accepted by an assistance that are not in an accepted rebill yet (used). One pass, so a line accepted

@@ -5,21 +5,9 @@
 import { http, HttpResponse } from 'msw';
 import * as migration from '@mig/domain/services/migrationApi';
 import { API, authCtx, param, readJson, route } from '../http';
+import { readScanForm as scanForm } from './contracts';
 
 const BASE = `${API}/admin/migration`;
-
-/** The multipart form of a scan as plain values (null: the body is not a readable form). */
-async function scanForm(request: Request): Promise<migration.ScanForm | null> {
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return null;
-  }
-  const side = form.get('side');
-  const file = form.get('file');
-  return { side: typeof side === 'string' ? side : null, file: file instanceof File ? { bytes: new Uint8Array(await file.arrayBuffer()) } : null };
-}
 
 export const migrationHandlers = [
   http.get(`${BASE}/batches`, route(async ({ request }) => migration.listBatches(await authCtx(request)))),

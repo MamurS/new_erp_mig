@@ -11,8 +11,12 @@ import { DMS_DEFAULTS, DMS_PARAM_KEYS } from '@mig/domain/config/dmsParameters';
 import { tm, translate, type I18nKey, type Params } from '@mig/i18n';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
-import { dmsParam, maxDocSeq, nextDocNumber, numbering, numberingTemplate } from './params';
-import { dealKp } from './lifecycle-core';
+import { loadParams } from '@mig/domain/services/params';
+import { dealKp } from '@mig/domain/services/lifecycle';
+import { baseCtx, repos } from './http';
+
+/** The DMS parameters in force, as the services read them. */
+const params = () => loadParams(baseCtx());
 
 const BASE = 'http://localhost/api';
 const server = createMockServer();
@@ -78,7 +82,7 @@ describe('DMS parameters', () => {
     expect(p.status).toBe(201);
     expect(p.data).toMatchObject({ status: 'pending', from: 20_000_000, to: 25_000_000 });
     // Not applied yet.
-    expect(dmsParam('guaranteeDualApprovalThreshold')).toBe(20_000_000);
+    expect((await params()).dmsParam('guaranteeDualApprovalThreshold')).toBe(20_000_000);
     expect((await propose(admin, 'guaranteeDualApprovalThreshold', 30_000_000)).status).toBe(409);
 
     expect((await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: admin })).status).toBe(403);
@@ -90,7 +94,7 @@ describe('DMS parameters', () => {
     expect(ok.data).toMatchObject({ status: 'applied', decidedByName: 'Sokolov Dmitriy Aleksandrovich' });
     expect((await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: uw })).status).toBe(409);
 
-    expect(dmsParam('guaranteeDualApprovalThreshold')).toBe(25_000_000);
+    expect((await params()).dmsParam('guaranteeDualApprovalThreshold')).toBe(25_000_000);
     const view = await call<DmsParamsView>('/params', { sid: uw });
     const row = view.data.parameters.find((x) => x.key === 'guaranteeDualApprovalThreshold')!;
     expect(row).toMatchObject({ value: 25_000_000, isDemo: false });
@@ -113,7 +117,7 @@ describe('DMS parameters', () => {
     expect((await call(`/params/changes/${p.data.id}/reject`, { method: 'POST', sid: uw, json: { reason: '' } })).status).toBe(422);
     const r = await call<DmsParamChange>(`/params/changes/${p.data.id}/reject`, { method: 'POST', sid: uw, json: { reason: 'Нет решения правления' } });
     expect(r.data).toMatchObject({ status: 'rejected', rejectReason: 'Нет решения правления' });
-    expect(dmsParam('kpValidityDays')).toBe(DMS_DEFAULTS.kpValidityDays);
+    expect((await params()).dmsParam('kpValidityDays')).toBe(DMS_DEFAULTS.kpValidityDays);
     expect(db().audit.some((e) => e.action === 'dms_param_rejected' && e.reason === 'Нет решения правления')).toBe(true);
   });
 
@@ -181,11 +185,11 @@ describe('numbering templates («Нумерация документов»)', ()
     const p = await proposeTemplate(admin, 'contract', '  MIG-{YYYY}/{N:5}  ');
     expect(p.status).toBe(201);
     expect(p.data).toMatchObject({ key: 'numbering.contract', from: DEFAULT_NUMBERING.contract, to: 'MIG-{YYYY}/{N:5}', status: 'pending' });
-    expect(numberingTemplate('contract')).toBe(DEFAULT_NUMBERING.contract);
+    expect((await params()).numberingTemplate('contract')).toBe(DEFAULT_NUMBERING.contract);
     expect((await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: admin })).status).toBe(403);
     const uw = await login('underwriter@demo.mig.uz');
     expect((await call(`/params/changes/${p.data.id}/approve`, { method: 'POST', sid: uw })).status).toBe(200);
-    expect(numbering().contract).toBe('MIG-{YYYY}/{N:5}');
+    expect((await params()).numbering().contract).toBe('MIG-{YYYY}/{N:5}');
 
     const view = await call<DmsParamsView>('/params', { sid: uw });
     expect(view.data.numbering.find((n) => n.kind === 'contract')).toMatchObject({ value: 'MIG-{YYYY}/{N:5}', isDemo: false });
@@ -194,19 +198,28 @@ describe('numbering templates («Нумерация документов»)', ()
 
     // A deal with an accepted KP and no contract yet: the new contract takes the template in force.
     const d = db();
-    const deal = d.deals.find((x) => !d.contracts.some((c) => c.dealId === x.id) && dealKp(d, x.id))!;
+    const ctx = baseCtx();
+    let deal: (typeof d.deals)[number] | undefined;
+    for (const x of d.deals) {
+      if (!d.contracts.some((c) => c.dealId === x.id) && (await dealKp(ctx, x.id))) {
+        deal = x;
+        break;
+      }
+    }
     expect(deal).toBeDefined();
-    dealKp(d, deal.id)!.status = 'accepted';
-    const c = await call<ContractView>('/contracts', { method: 'POST', sid: await login('sales@demo.mig.uz'), json: { dealId: deal.id } });
+    const kp = (await dealKp(ctx, deal!.id))!;
+    await repos.kp.update(kp.id, { status: 'accepted' });
+    const c = await call<ContractView>('/contracts', { method: 'POST', sid: await login('sales@demo.mig.uz'), json: { dealId: deal!.id } });
     expect(c.status).toBe(201);
     expect(c.data.number).toMatch(new RegExp(`^MIG-${new Date().getFullYear()}/\\d{5}$`));
     // Numbers of the other kinds keep their own templates.
-    expect(nextDocNumber('claim', { year: 2026, n: 7 })).toBe('U-2026-000007');
+    expect((await params()).nextDocNumber('claim', { year: 2026, n: 7 })).toBe('U-2026-000007');
   });
 
-  it('the largest sequence is read with the template in force and the demo one', () => {
-    expect(maxDocSeq('claim', ['U-2026-000041', 'U-2025-000099', 'junk'])).toBe(99);
-    expect(maxDocSeq('policy', ['DMS-2026-000140', 'DMS-2025-000500'], { year: 2026, floor: 100 })).toBe(140);
-    expect(maxDocSeq('policy', [], { year: 2026, floor: 100 })).toBe(100);
+  it('the largest sequence is read with the template in force and the demo one', async () => {
+    const P = await params();
+    expect(P.maxDocSeq('claim', ['U-2026-000041', 'U-2025-000099', 'junk'])).toBe(99);
+    expect(P.maxDocSeq('policy', ['DMS-2026-000140', 'DMS-2025-000500'], { year: 2026, floor: 100 })).toBe(140);
+    expect(P.maxDocSeq('policy', [], { year: 2026, floor: 100 })).toBe(100);
   });
 });

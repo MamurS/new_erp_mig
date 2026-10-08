@@ -4,7 +4,8 @@ import { existsSync } from 'node:fs';
 // In the managed container a Chromium build is preinstalled; CI installs its own via `playwright install`.
 const localChromium = process.env.PW_CHROMIUM_PATH ?? '/opt/pw-browsers/chromium';
 const executablePath = !process.env.CI && existsSync(localChromium) ? localChromium : undefined;
-const PORT = 4174;
+// PW_PORT: another port, so that several checkouts can run e2e side by side.
+const PORT = Number(process.env.PW_PORT) || 4174;
 
 export default defineConfig({
   testDir: './e2e',

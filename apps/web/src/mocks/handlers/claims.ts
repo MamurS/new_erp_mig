@@ -9,9 +9,6 @@ import { API, authCtx, param, readJson, route } from '../http';
 import { formFiles, formText, readForm } from '../uploads';
 import { renderReceiptPng } from '../receipt';
 
-// Transitional, for handlers not yet ported (me.ts): the lead removes it with the old cores.
-export { nextClaimNumber } from '../legacy-claim-number';
-
 async function fileResponse(f: claims.FileContent): Promise<Response> {
   const bytes = f.bytes ?? (await renderReceiptPng(f.seedText ?? []));
   return new HttpResponse(bytes, {

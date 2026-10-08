@@ -7,8 +7,9 @@ import type { ZodTypeAny, z } from 'zod';
 import type { ApiError, AuditAction, AuditEntry, SessionUser } from '@mig/contracts';
 import { hasKey, unpack, type I18nKey, type Params } from '@mig/i18n';
 import { can, type Action, type PermissionContext } from '../auth/permissions';
+import { isStaffRole } from '../labels';
 import { randomId } from '../lib/random';
-import { tzIso } from '../lib/time';
+import { isoDay, tzIso } from '../lib/time';
 import type { SessionRow } from '../store/db';
 import type { Repos } from '../store/repo';
 
@@ -93,6 +94,12 @@ export function requirePermission(user: SessionUser, action: Action, pctx?: Perm
   if (!can(user, action, pctx)) throw forbidden();
 }
 
+/** Only MIG staff (403 otherwise); returns the person. */
+export function requireStaff(ctx: Pick<AuthCtx, 'user'>): SessionUser {
+  if (!isStaffRole(ctx.user.role)) throw forbidden();
+  return ctx.user;
+}
+
 /** For scoped resources: an out-of-scope id is reported as missing (anti-enumeration). */
 export function requireOwn(user: SessionUser, action: Action, pctx: PermissionContext): void {
   if (!can(user, action)) throw forbidden();
@@ -100,6 +107,9 @@ export function requireOwn(user: SessionUser, action: Action, pctx: PermissionCo
 }
 
 export { tzIso } from '../lib/time';
+
+/** Today's date (`YYYY-MM-DD`, Tashkent) of the context's clock. */
+export const todayIso = (ctx: Pick<BaseCtx, 'now'>): string => isoDay(ctx.now());
 
 export type AuditActor = Pick<SessionUser, 'id' | 'displayName' | 'role'> & { assistanceId?: string };
 export type AuditTarget = Pick<AuditEntry, 'targetType'> & Partial<Pick<AuditEntry, 'targetId' | 'targetLabel' | 'reason' | 'assistanceId'>>;

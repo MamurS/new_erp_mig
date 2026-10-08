@@ -1,20 +1,21 @@
 /*
  * The partner integration API's framework as a service (CLINIC_SPEC §6, ASSISTANCE_SPEC §8): OAuth bearer
  * tokens, partner type and scopes of the key, IP allowlist, 60 requests/min per key, Idempotency-Key for
- * POST, RFC 9457 problem+json errors, the call log (path templates only). An adapter passes the raw request
- * parts (`ApiInput`) and turns the `ApiAnswer` into an HTTP response; nothing here knows about HTTP objects.
+ * POST, RFC 9457 problem+json errors, the call log (path templates only), the token endpoint. One framework
+ * for the clinic API (integration.ts) and the assistance API (integrationAssistance.ts). An adapter passes
+ * the raw request parts (`ApiInput`) and turns the `ApiAnswer` into an HTTP response; nothing here knows
+ * about HTTP objects.
  */
 import type { ZodTypeAny } from 'zod';
-import type { Appointment, IntegrationScope, PartnerType, Role, UUID } from '@mig/contracts';
-import { integrationAppointment, type Problem } from '@mig/contracts/integration';
+import type { Appointment, IntegrationScope, PartnerType } from '@mig/contracts';
+import { integrationAppointment, tokenRequest, tokenResponse, type Problem } from '@mig/contracts/integration';
 import { hasKey, translate, unpack, type I18nKey } from '@mig/i18n';
-import { API_RATE_PER_MINUTE, IDEMPOTENCY_TTL_MS } from '../clinics';
-import { randomId } from '../lib/random';
+import { ACCESS_TOKEN_TTL_SEC, API_RATE_PER_MINUTE, IDEMPOTENCY_TTL_MS } from '../clinics';
+import { randomId, randomToken } from '../lib/random';
 import { tzIso } from '../lib/time';
 import { sha256Hex } from '../lib/webhook';
 import type { IntegrationClientRow } from '../store/db';
-import { audit, conflict, DomainError, type BaseCtx } from './kernel';
-import { pushEvent } from './clinic';
+import { DomainError, validate, type BaseCtx } from './kernel';
 
 const TITLES: Record<number, string> = {
   400: 'Bad Request',
@@ -43,7 +44,7 @@ export class ApiProblem extends Error {
 }
 
 /** A packed message (msg()) as Russian text; anything else is returned as is. */
-function ruText(packed: string): string {
+export function ruText(packed: string): string {
   const { key, params } = unpack(packed);
   return hasKey(key) ? translate('ru', key as I18nKey, params) : packed;
 }
@@ -107,6 +108,8 @@ export interface ApiInput {
   idempotencyKey: string | null;
   /** The request body as text ('' when there is none). */
   bodyText: string;
+  /** When the request arrived (before the adapter's simulated latency), for the call log; default: now. */
+  startedAt?: number;
 }
 
 /** What an endpoint of the partner API gets: the storage, the key that called and the request. */
@@ -147,17 +150,23 @@ export function parseJsonBody(text: string): unknown {
   }
 }
 
-/** Keeps the newest `max` rows of the call log. */
-async function trimLogs(ctx: BaseCtx, max: number): Promise<void> {
-  const extra = await ctx.repos.apiLogs.list({ offset: max });
-  if (extra.length) await ctx.repos.apiLogs.removeWhere({ id: { in: extra.map((r) => r.id) } });
+/** One row of the call log; `max`: keep only the newest rows. */
+async function logCall(ctx: BaseCtx, client: IntegrationClientRow, method: string, pathTemplate: string, status: number, startedAt: number, max?: number): Promise<void> {
+  await ctx.repos.apiLogs.insert(
+    { id: randomId(), clinicId: client.clinicId, clientId: client.clientId, at: tzIso(startedAt), method, pathTemplate, status, latencyMs: ctx.now() - startedAt },
+    { at: 'start' },
+  );
+  if (max !== undefined) {
+    const extra = await ctx.repos.apiLogs.list({ offset: max });
+    if (extra.length) await ctx.repos.apiLogs.removeWhere({ id: { in: extra.map((r) => r.id) } });
+  }
 }
 
 /** Runs one partner API call: authentication, checks, idempotency, the endpoint and the log. Never throws. */
 export async function runApiCall(ctx: BaseCtx, spec: ApiSpec, input: ApiInput, fn: ApiHandler): Promise<ApiAnswer> {
   const r = ctx.repos;
   const requestId = randomId();
-  const started = ctx.now();
+  const started = input.startedAt ?? ctx.now();
   let client: IntegrationClientRow | null = null;
   let status = 500;
   try {
@@ -216,22 +225,37 @@ export async function runApiCall(ctx: BaseCtx, spec: ApiSpec, input: ApiInput, f
     status = p.status;
     return problemAnswer(p, requestId);
   } finally {
-    if (client) {
-      await r.apiLogs.insert(
-        {
-          id: randomId(),
-          clinicId: client.clinicId,
-          clientId: client.clientId,
-          at: tzIso(started),
-          method: spec.method,
-          pathTemplate: spec.template,
-          status,
-          latencyMs: ctx.now() - started,
-        },
-        { at: 'start' },
-      );
-      await trimLogs(ctx, 2000);
-    }
+    if (client) await logCall(ctx, client, spec.method, spec.template, status, started, 2000);
+  }
+}
+
+/** POST /oauth/token: client credentials → a short-lived bearer token. `body`: the form or JSON body. */
+export async function issueToken(ctx: BaseCtx, readBody: () => unknown, startedAt = ctx.now()): Promise<ApiAnswer> {
+  const r = ctx.repos;
+  const requestId = randomId();
+  let client: IntegrationClientRow | null = null;
+  let status = 200;
+  try {
+    const input = validate(tokenRequest, readBody());
+    client = await r.integrationClients.first({ where: { clientId: input.client_id } });
+    const ok = client && !client.revokedAt && (await sha256Hex(input.client_secret)) === client.secretHash;
+    if (!ok || !client) throw new ApiProblem(401, 'invalid_client', 'Неверный client_id или client_secret, либо ключ отозван');
+    const granted: string[] = client.scopes;
+    const requested = input.scope ? input.scope.split(/\s+/).filter(Boolean) : client.scopes;
+    const scopes = requested.filter((s) => granted.includes(s));
+    if (!scopes.length) throw new ApiProblem(400, 'invalid_scope', 'Запрошенные области доступа не выданы этому ключу');
+    const token = randomToken(32);
+    await r.accessTokens.removeWhere({ expiresAt: { lte: ctx.now() } });
+    await r.accessTokens.insert({ tokenHash: await sha256Hex(token), clientRowId: client.id, scopes, expiresAt: ctx.now() + ACCESS_TOKEN_TTL_SEC * 1000 });
+    await r.integrationClients.update(client.id, { lastUsedAt: tzIso(ctx.now()) });
+    const body = tokenResponse.parse({ access_token: token, token_type: 'Bearer', expires_in: ACCESS_TOKEN_TTL_SEC, scope: scopes.join(' ') });
+    return { status: 200, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId, 'Cache-Control': 'no-store' }, body: JSON.stringify(body) };
+  } catch (e) {
+    const p = problemOf(e);
+    status = p.status;
+    return problemAnswer(p, requestId);
+  } finally {
+    if (client) await logCall(ctx, client, 'POST', '/oauth/token', status, startedAt);
   }
 }
 
@@ -253,15 +277,4 @@ export function page<T>(items: T[], cursor: string | undefined, limit: number): 
   const offset = cursor && /^\d+$/.test(atob(cursor)) ? Number(atob(cursor)) : 0;
   const slice = items.slice(offset, offset + limit);
   return { items: slice, nextCursor: offset + limit < items.length ? btoa(String(offset + limit)) : null };
-}
-
-/** Revokes an API key of a partner: issued tokens stop working at once. Returns the saved key. */
-export async function revokeKey(ctx: BaseCtx, k: IntegrationClientRow, actor: { id: UUID; displayName: string; role: Role; assistanceId?: UUID }): Promise<IntegrationClientRow> {
-  if (k.revokedAt) throw conflict('srv.apiKeys.alreadyRevoked');
-  const saved = await ctx.repos.integrationClients.update(k.id, { revokedAt: tzIso(ctx.now()) });
-  // Already issued tokens stop working immediately.
-  await ctx.repos.accessTokens.removeWhere({ clientRowId: k.id });
-  await audit(ctx, actor, 'integration_key_revoked', { targetType: 'integration', targetId: k.id, targetLabel: k.name });
-  await pushEvent(ctx, k.clinicId, `Ключ API «${k.name}» отозван`);
-  return saved;
 }

@@ -6,7 +6,7 @@
 import Papa from 'papaparse';
 import type { z } from 'zod';
 import { msg, tm } from '@mig/i18n';
-import type { Appointment, Clinic, CoverageCheckResult, PriceListItem, Registry, RegistryLine, Slot, UUID } from '@mig/contracts';
+import type { Appointment, CoverageCheckResult, PriceListItem, Registry, RegistryLine, Slot, UUID } from '@mig/contracts';
 import type {
   ClinicDocuments,
   ClinicOverview,
@@ -28,11 +28,9 @@ import {
 } from '@mig/contracts/integration';
 import { assistanceOn } from '../assistance';
 import type { Action } from '../auth/permissions';
-import { GUARANTEE_FILE_MAX_BYTES, guaranteeNumber, REGISTRY_CSV_MAX_BYTES, REGISTRY_CSV_MAX_ROWS } from '../clinics';
-import { detectMime } from '../lib/mime';
+import { guaranteeNumber, REGISTRY_CSV_MAX_BYTES, REGISTRY_CSV_MAX_ROWS } from '../clinics';
 import { randomId } from '../lib/random';
-import { hashString, mulberry32 } from '../lib/rng';
-import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
+import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClinicUserRow, GuaranteeRow } from '../store/db';
 import { assistanceName, notifyAssistance, payerOfLine } from './assistance';
 import {
@@ -41,6 +39,7 @@ import {
   buildLine,
   checkPatient,
   clinicOf,
+  clinicSlots,
   coverageFor,
   isOverdueRequest,
   lineProblems,
@@ -59,6 +58,8 @@ import {
 } from './clinic';
 import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { isUuid } from './list';
+import { checkAttachment } from './uploads';
+import type { UploadedFile as LibUploadedFile } from '../lib/uploads';
 import { loadParams } from './params';
 import type { PartnerScope } from './partnerIntegration';
 
@@ -70,44 +71,12 @@ export function requireClinic(ctx: AuthCtx, action: Action): ClinicActor {
   return actorOf(user);
 }
 
-const toUserView = (u: ClinicUserRow): ClinicUserView => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt });
-
-/** Free half-hour slots of a clinic on a day (deterministic per clinic and date; MIS slots aside). */
-export function clinicSlots(clinic: Clinic, date: string, now: number): Slot[] {
-  const day = parseIso(date);
-  if (Number.isNaN(day) || day < startOfDay(now) || day > now + 60 * DAY) return [];
-  const rng = mulberry32(hashString(`${clinic.id}:${date}`));
-  const out: Slot[] = [];
-  for (let h = 9; h < 18; h++) {
-    for (const m of [0, 30]) {
-      const ms = at(day, h, m);
-      if (ms <= now + 30 * 60_000) continue;
-      if (rng() < 0.45) continue;
-      out.push({ clinicId: clinic.id, startsAt: tzIso(ms) });
-    }
-  }
-  return out;
-}
+export const toUserView = (u: ClinicUserRow): ClinicUserView => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt });
 
 // ---------------------------------------------------------------- shared with the integration API and assistance
 
-/** A file of a multipart request, read by the adapter. */
-export interface UploadedFile {
-  size: number;
-  bytes: Uint8Array;
-}
-
-type AttachmentMime = 'image/jpeg' | 'image/png' | 'application/pdf';
-
-/** PDF, JPEG, PNG up to 10 MB, checked by magic bytes (images arrive already re-encoded by the browser). */
-function checkAttachment(file: UploadedFile): AttachmentMime {
-  if (file.size === 0 || file.size > GUARANTEE_FILE_MAX_BYTES) throw new DomainError(422, 'validation', 'srv.file.tooLarge10mb', { fields: { files: msg('srv.file.tooLarge10mb') } });
-  const mime = detectMime(file.bytes);
-  if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') {
-    throw new DomainError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { files: msg('srv.file.unsupported') } });
-  }
-  return mime;
-}
+/** A file of a multipart request, read by the adapter (only its bytes count here). */
+export type UploadedFile = Pick<LibUploadedFile, 'bytes'>;
 
 /** Attaches documents to a letter: `g.attachments` is changed and saved (also the files accepted before a bad one). */
 export async function attachGuaranteeFiles(ctx: BaseCtx, g: GuaranteeRow, files: readonly UploadedFile[]): Promise<void> {
@@ -115,7 +84,7 @@ export async function attachGuaranteeFiles(ctx: BaseCtx, g: GuaranteeRow, files:
   const before = g.attachments.length;
   try {
     for (const file of files) {
-      const mime = checkAttachment(file);
+      const { mime } = checkAttachment(file);
       const id = randomId();
       const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
       const fileName = `document-${g.attachments.length + 1}.${ext}`;
@@ -127,8 +96,16 @@ export async function attachGuaranteeFiles(ctx: BaseCtx, g: GuaranteeRow, files:
   }
 }
 
-/** A guarantee letter request of a clinic (cabinet, MIS or the assistance call centre on its behalf). */
-export async function createGuarantee(ctx: BaseCtx, actor: ClinicActor, input: z.infer<typeof guaranteeCreateRequest>, byName: string): Promise<GuaranteeRow> {
+/**
+ * A guarantee letter requested for a visit: by the clinic (cabinet, MIS) or by an assistance operator on a
+ * call. The letter goes to the assistance of the insured person on the date of the request (ASSISTANCE_SPEC §5.2).
+ */
+export async function createGuarantee(
+  ctx: BaseCtx,
+  actor: ClinicActor & { assistanceId?: UUID },
+  input: Pick<z.infer<typeof guaranteeCreateRequest>, 'visitId' | 'serviceCode' | 'icd10' | 'estimatedCost'> & { comment?: string },
+  byName: string,
+): Promise<GuaranteeRow> {
   const r = ctx.repos;
   const v = await requireVisit(ctx, actor.clinicId, input.visitId);
   const svc = (await priceListOf(ctx, actor.clinicId)).find((p) => p.code === input.serviceCode);

@@ -21,6 +21,7 @@ import { registryTotals } from '@mig/domain/clinics';
 import { docNumber } from '@mig/domain/numbering';
 import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_INSURED_PHONE, DEMO_PASSWORD } from './credentials';
 import type { AssistanceCaseRow, AssistUserRow, Db, GuaranteeRow, IntegrationClientRow, WebhookEndpointRow } from '@mig/domain/store/db';
+import { seedClaimsFromRebill } from './seed-rebill-claims';
 import { int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
 import { DAY, isoDay, parseIso, tzIso } from './time';
 
@@ -36,7 +37,7 @@ const COMPANIES: Omit<AssistanceCompany, 'id' | 'contract'>[] = [
   { name: 'Turon Care Assistans', legalForm: 'private_enterprise', phone24x7: '+998 71 209 33 33', integrationMode: 'portal' },
 ];
 
-export function seedAssistance(d: Db, opts: { now: number; claimsFromRebill: (d: Db, b: Rebill, actorName: string) => void }): void {
+export function seedAssistance(d: Db, opts: { now: number }): void {
   const rng = mulberry32(SEED ^ 0xa55157);
   const id = () => uuidFrom(rng);
   const { now } = opts;
@@ -343,7 +344,7 @@ export function seedAssistance(d: Db, opts: { now: number; claimsFromRebill: (d:
   d.rebills = rebills;
   for (const b of rebills) {
     if (b.status === 'draft') continue;
-    opts.claimsFromRebill(d, b, operator.fullName);
+    seedClaimsFromRebill(d, b, operator.fullName, opts);
     if (b.status === 'paid') {
       const ids = new Set(b.lines.map((l) => l.registryLineId));
       for (const c of d.claims) if (c.registryLineId && ids.has(c.registryLineId)) c.status = 'paid';
