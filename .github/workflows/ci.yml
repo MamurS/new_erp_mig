@@ -24,17 +24,33 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+      - run: npm audit --audit-level=high
+
+  # The e2e suite is split in two shards that run side by side (one job was close to its time limit).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/2
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             apps/web/playwright-report
             apps/web/test-results
           retention-days: 7
-      - run: npm audit --audit-level=high
 
   gitleaks:
     runs-on: ubuntu-latest
