@@ -37,7 +37,7 @@ import { randomId } from '../lib/random';
 import { tzIso } from '../lib/time';
 import type { ChangeRequestRow } from '../store/db';
 import { byLegalForm, byLegalName, filterLegalForm, q as searchTerm, sortBy } from './list';
-import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { asSystem, audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, systemRepos, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { assistanceName } from './assistance';
 import { personFor } from './family';
@@ -99,6 +99,11 @@ async function addVersion(ctx: BaseCtx, contractId: string, v: Contract['version
 }
 
 /** Staff with contracts.read, or HR of the client's company once the document was sent; anyone else 404/403. */
+/** Roles that never read contracts get 403 before the lookup (RLS would hide the row and answer 404). */
+function readerRole(user: SessionUser): void {
+  if (user.role !== 'hr' && (!isStaffRole(user.role) || !can(user, 'contracts.read'))) throw forbidden();
+}
+
 function readable(user: SessionUser, ref: DocRef): void {
   if (user.role === 'hr') {
     if (!can(user, 'contracts.read', { companyId: ref.clientId }) || !HR_VISIBLE.has(ref.status)) throw notFound();
@@ -113,11 +118,14 @@ const signerForClient = (c: Contract) => c.params.clientSignatory.name;
 async function freshInvoice(ctx: BaseCtx, inv: Invoice): Promise<Invoice> {
   const before = inv.status;
   refreshInvoice(inv, todayIso(ctx));
-  if (inv.status !== before) await ctx.repos.invoices.update(inv.id, { status: inv.status });
+  if (inv.status !== before) await systemRepos(ctx, 'invoice status by date (the lazy server clock, a job run on read)').invoices.update(inv.id, { status: inv.status });
   return inv;
 }
 
-async function contractView(ctx: BaseCtx, c: Contract): Promise<ContractView> {
+async function contractView(person: BaseCtx, c: Contract): Promise<ContractView> {
+  // The card of a contract the person may read (checked by the caller): the deal, the quote, signatories,
+  // invoices, payments and endorsements around it come from tables the reader's RLS may not cover.
+  const ctx = asSystem(person, 'contract card for its reader: deal, quote, signatories, invoices, payments, endorsements');
   const r = ctx.repos;
   const P = await loadParams(ctx);
   const client = await clientRow(ctx, c.clientId);
@@ -146,7 +154,8 @@ async function needsAmountApproval(ctx: BaseCtx, e: Endorsement): Promise<boolea
   return (await ctx.repos.changeRequests.exists({ id: { in: e.changeRequestIds }, type: 'other' })) && !e.amountsApprovedByName;
 }
 
-async function endorsementView(ctx: BaseCtx, e: Endorsement): Promise<EndorsementView> {
+async function endorsementView(person: BaseCtx, e: Endorsement): Promise<EndorsementView> {
+  const ctx = asSystem(person, 'endorsement card for its reader: the contract, the MIG signatory, change requests');
   const c = await contractOf(ctx, e.contractId);
   const client = await clientRow(ctx, c.clientId);
   const signatory = await ctx.repos.staff.get(c.params.migSignatoryId);
@@ -554,7 +563,8 @@ async function bankPaymentView(ctx: BaseCtx, b: BankPayment): Promise<BankPaymen
 }
 
 async function certificates(ctx: BaseCtx, policyId: string): Promise<CertificateView[]> {
-  const r = ctx.repos;
+  // Document data of the certificates (the caller decided who may read which).
+  const r = systemRepos(ctx, 'certificates of a policy: client, contract number, assistance and persons (document data)');
   const p = await r.policies.get(policyId);
   if (!p) throw notFound();
   const c = p.contractId ? await r.contracts.get(p.contractId) : null;
@@ -627,6 +637,7 @@ export async function listContracts(ctx: AuthCtx, qs: URLSearchParams): Promise<
 }
 
 export async function getContract(ctx: AuthCtx, id: string): Promise<ContractView> {
+  readerRole(ctx.user);
   const ref = await refOf(ctx, 'contract', id);
   readable(ctx.user, ref);
   await refreshContract(ctx, ref.contract);
@@ -954,6 +965,7 @@ export async function allocatePayment(ctx: AuthCtx, id: string, body: unknown): 
 
 export async function policyCertificates(ctx: AuthCtx, policyId: string): Promise<CertificateView[]> {
   const { user } = ctx;
+  readerRole(user);
   const p = await ctx.repos.policies.get(policyId);
   if (!p) throw notFound();
   if (user.role === 'hr') {
@@ -1042,6 +1054,7 @@ export async function listEndorsements(ctx: AuthCtx, qs: URLSearchParams): Promi
 }
 
 export async function getEndorsement(ctx: AuthCtx, id: string): Promise<EndorsementView> {
+  readerRole(ctx.user);
   const ref = await refOf(ctx, 'endorsement', id);
   readable(ctx.user, ref);
   await refreshContract(ctx, ref.contract);

@@ -42,10 +42,10 @@ import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { signWebhook } from '../lib/webhook';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, GuaranteeRow, InsuredRow, WebhookDeliveryRow, WebhookEndpointRow } from '../store/db';
-import { audit, conflict, DomainError, insuredLabel, notFound, type BaseCtx } from './kernel';
+import { asSystem, audit, conflict, DomainError, insuredLabel, notFound, systemRepos, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { limitsFor } from './views';
-import { payerName, payerOfLine } from './assistance';
+import { assignmentsOf, payerName, payerOfLine } from './assistance';
 
 /** Who performs a clinic action: a cabinet user or an API key of the clinic. */
 export interface ClinicActor {
@@ -72,18 +72,22 @@ async function trimNewest(table: { list(q: { offset: number }): Promise<{ id: UU
   if (extra.length) await table.removeWhere({ id: { in: extra.map((r) => r.id) } });
 }
 
-export async function pushEvent(ctx: BaseCtx, clinicId: UUID, text: string): Promise<void> {
+export async function pushEvent(person: BaseCtx, clinicId: UUID, text: string): Promise<void> {
+  // The event feed of a clinic cabinet is written by the system, whoever caused the event.
+  const ctx = asSystem(person, 'event feed of a clinic cabinet (written as a side effect)');
   await ctx.repos.clinicEvents.insert({ id: randomId(), clinicId, at: tzIso(ctx.now()), text }, { at: 'start' });
   await trimNewest(ctx.repos.clinicEvents, 500);
 }
 
 /** Price list of the pair «clinic + payer» (ASSISTANCE_SPEC §5.3). Without a separate contract the MIG list applies. */
 export async function priceListOf(ctx: BaseCtx, clinicId: UUID, payer: Payer = 'mig'): Promise<PriceListItem[]> {
+  // Prices are reference data of checks, registries and views for every party of the service.
+  const r = systemRepos(ctx, 'price list of a clinic for a payer (reference data)');
   if (payer !== 'mig') {
-    const contract = await ctx.repos.clinicContracts.first({ where: { clinicId, payer } });
+    const contract = await r.clinicContracts.first({ where: { clinicId, payer } });
     if (contract) return contract.priceList;
   }
-  return (await ctx.repos.priceLists.get(clinicId))?.items ?? [];
+  return (await r.priceLists.get(clinicId))?.items ?? [];
 }
 
 // ---------------------------------------------------------------- visits & coverage
@@ -99,7 +103,9 @@ function birthYearOf(birthDate: string): number {
   return Number(birthDate.slice(0, 4));
 }
 
-export async function coverageFor(ctx: BaseCtx, visit: Visit, P?: ParamsView): Promise<CoverageCheckResult> {
+export async function coverageFor(person: BaseCtx, visit: Visit, P?: ParamsView): Promise<CoverageCheckResult> {
+  // An open visit entitles the clinic to the coverage answer: the policy's term and program, the limit states.
+  const ctx = asSystem(person, 'coverage answer of an open visit: the policy, the program and the limit states');
   const params = P ?? (await loadParams(ctx));
   const i = (await ctx.repos.insured.get(visit.insuredId))!;
   const p = await ctx.repos.policies.get(i.policyId);
@@ -147,19 +153,22 @@ export async function checkPatient(ctx: BaseCtx, input: CheckInput, actor: Clini
     throw error;
   };
 
+  // Before the visit the clinic sees no patient: the card code and the policy/PINFL pair are matched by the
+  // system (RLS: access only through a visit).
+  const sys = systemRepos(ctx, 'patient check: the card code or policy number + PINFL matched before a visit exists');
   let insuredId: UUID;
   let method: Visit['method'];
   if ('qrToken' in input) {
     const parsed = parseCardInput(input.qrToken);
-    const row = parsed ? (parsed.kind === 'short' ? await r.cardTokens.first({ where: { shortCode: parsed.code } }) : await r.cardTokens.get(parsed.token)) : null;
+    const row = parsed ? (parsed.kind === 'short' ? await sys.cardTokens.first({ where: { shortCode: parsed.code } }) : await sys.cardTokens.get(parsed.token)) : null;
     if (!row || row.usedAt || row.expiresAt < now) return fail(row?.usedAt ? 'Повторное использование кода карты' : 'Код карты устарел или не найден', staleCode(), false);
-    await r.cardTokens.update(row.token, { usedAt: now }); // one-time
+    await sys.cardTokens.update(row.token, { usedAt: now }); // one-time
     insuredId = row.insuredId;
     method = channel === 'api' ? 'api' : 'qr';
   } else {
     if (mine.length >= P.dmsParam('pinflChecksPerHour')) throw tooManyChecks();
-    const policy = (await r.policies.list()).find((p) => p.number.toUpperCase() === input.policyNumber.toUpperCase());
-    const person = policy ? await r.insured.first({ where: { policyId: policy.id, pinfl: input.pinfl, status: 'active' } }) : null;
+    const policy = (await sys.policies.list()).find((p) => p.number.toUpperCase() === input.policyNumber.toUpperCase());
+    const person = policy ? await sys.insured.first({ where: { policyId: policy.id, pinfl: input.pinfl, status: 'active' } }) : null;
     if (!person) return fail('Полис и ПИНФЛ не совпали', noPolicy(), true);
     await r.checkAttempts.insert({ userId: actor.id, at: now, ok: true });
     insuredId = person.id;
@@ -252,7 +261,7 @@ export async function createAppointment(ctx: BaseCtx, who: InsuredRow, input: { 
   };
   await r.appointments.insert(a);
   await emitWebhook(ctx, clinic.id, 'appointment.requested', a.id);
-  const assistanceId = assistanceOn(await r.assignments.list({ where: { policyId: who.policyId } }), who.policyId, isoDay(ctx.now()));
+  const assistanceId = assistanceOn(await assignmentsOf(ctx, who.policyId), who.policyId, isoDay(ctx.now()));
   if (assistanceId) await emitWebhook(ctx, assistanceId, 'appointment.requested', a.id);
   await pushEvent(ctx, clinic.id, 'Новая заявка на запись');
   return a;
@@ -282,7 +291,7 @@ export function refreshGuarantee(g: GuaranteeRow, now = Date.now()): GuaranteeRo
 export async function refreshStoredGuarantee(ctx: BaseCtx, g: GuaranteeRow): Promise<GuaranteeRow> {
   const before = g.status;
   refreshGuarantee(g, ctx.now());
-  if (g.status !== before) await ctx.repos.guarantees.update(g.id, { status: g.status });
+  if (g.status !== before) await systemRepos(ctx, 'guarantee status by time (the lazy server clock, a job run on read)').guarantees.update(g.id, { status: g.status });
   return g;
 }
 
@@ -513,7 +522,9 @@ export async function attemptDelivery(delivery: WebhookDeliveryRow, endpoint: We
 }
 
 /** Thin events only: id, type, time and the object id — no personal or medical data. */
-export async function emitWebhook(ctx: BaseCtx, clinicId: UUID, event: WebhookEvent, objectId: UUID, only?: WebhookEndpointRow): Promise<WebhookDeliveryRow[]> {
+export async function emitWebhook(person: BaseCtx, clinicId: UUID, event: WebhookEvent, objectId: UUID, only?: WebhookEndpointRow): Promise<WebhookDeliveryRow[]> {
+  // The outbox: the partner's endpoints and the delivery log are the system's, whoever caused the event.
+  const ctx = asSystem(person, 'webhook outbox: endpoints of the partner an event concerns, the delivery log');
   const endpoints = only ? [only] : (await ctx.repos.webhooks.list({ where: { clinicId, active: true } })).filter((w) => w.events.includes(event));
   const out: WebhookDeliveryRow[] = [];
   for (const ep of endpoints) {

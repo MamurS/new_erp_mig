@@ -19,7 +19,7 @@ import { groupRulesOf, legalFormAllowed } from '../minGroup';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, tzIso } from '../lib/time';
 import type { ClaimRow, ClientRow, InsuredRow, MigrationBatchRow } from '../store/db';
-import { audit, conflict, notFound, type BaseCtx } from './kernel';
+import { asSystem, audit, conflict, notFound, systemRepos, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { createInsured, nextPolicyNumber, refreshPolicyTotals } from './policy';
 import { syncAssistance } from './assistance';
@@ -37,7 +37,8 @@ export async function batchOf(ctx: BaseCtx, id: UUID): Promise<MigrationBatchRow
 
 /** What the system already has, for the dry run. */
 export async function dbRefs(ctx: BaseCtx): Promise<MigrationDbRefs> {
-  const r = ctx.repos;
+  // A transfer is checked against every existing record (duplicates of PINFL, numbers, clients).
+  const r = systemRepos(ctx, 'portfolio transfer: checks against every existing client, policy, contract, person and claim');
   const [clients, policies, contracts, insured, claims, invoices, assistances] = await Promise.all([
     r.clients.list(),
     r.policies.list(),
@@ -285,7 +286,9 @@ async function planCheck(ctx: BaseCtx, res: BatchResults): Promise<void> {
  * Writes the batch to the system and saves the batch. The batch must have been validated just before
  * (`res`). All-or-nothing: see the note at the top of the file.
  */
-export async function applyBatch(ctx: BaseCtx, b: MigrationBatchRow, res: BatchResults, approver: SessionUser): Promise<void> {
+export async function applyBatch(person: BaseCtx, b: MigrationBatchRow, res: BatchResults, approver: SessionUser): Promise<void> {
+  // The second admin approved (checked by the caller): the mass write of the transfer is the system's.
+  const ctx = asSystem(person, 'portfolio transfer: the approved batch is written into every table');
   await planCheck(ctx, res);
   const r = ctx.repos;
   const P = await loadParams(ctx);
@@ -654,9 +657,10 @@ const READ_ONLY: ReadonlySet<AuditAction> = new Set<AuditAction>(['login', 'logo
  *   insured persons, limit requests, assistance cases, chat messages, uploaded files;
  * - the consent of a transferred insured person given in the app.
  */
-export async function rollbackBlockers(ctx: BaseCtx, b: MigrationBatchRow): Promise<MigrationRollbackBlocker[]> {
+export async function rollbackBlockers(person: BaseCtx, b: MigrationBatchRow): Promise<MigrationRollbackBlocker[]> {
   const a = b.applied;
   if (!a) return [];
+  const ctx = asSystem(person, 'portfolio transfer: what happened to the transferred records since (rollback blockers)');
   const r = ctx.repos;
   const clients = new Set(a.clientIds);
   const contracts = new Set(a.contractIds);
@@ -702,9 +706,10 @@ export async function rollbackBlockers(ctx: BaseCtx, b: MigrationBatchRow): Prom
  * saves the batch. Every check (status, blockers) is done by the caller before: nothing here fails on the
  * data, so the rollback is all-or-nothing (on Postgres: one transaction, see the top of the file).
  */
-export async function rollbackBatch(ctx: BaseCtx, b: MigrationBatchRow, user: SessionUser, reason: string): Promise<void> {
+export async function rollbackBatch(person: BaseCtx, b: MigrationBatchRow, user: SessionUser, reason: string): Promise<void> {
   const a = b.applied;
   if (!a) throw conflict('srv.migration.notApplied');
+  const ctx = asSystem(person, 'portfolio transfer: the rollback removes the batch from every table');
   const r = ctx.repos;
   const insuredIds = a.insuredIds;
   const userIds = (await r.insured.list({ where: { id: { in: insuredIds } } })).map((i) => i.userId);

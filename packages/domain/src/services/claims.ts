@@ -16,7 +16,7 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { ATTACHMENT_MAX_FILES, type UploadedFile } from '../lib/uploads';
 import type { ClaimRow, FileRow } from '../store/db';
-import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, systemRepos, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { paginate, q, sortBy } from './list';
 import { loadParams } from './params';
 import { findInsured } from './insured';
@@ -198,11 +198,18 @@ export interface FileContent {
 
 export async function getFile(ctx: AuthCtx, id: string): Promise<FileContent> {
   const { user } = ctx;
-  const f = await ctx.repos.files.get(id);
+  const own = await ctx.repos.files.get(id);
+  // A file the person's RLS hides still answers like the mock (403 for a role that may not read files of its
+  // kind, 404 otherwise): the system's copy decides only that, and a hidden file is never returned.
+  const f = own ?? (await systemRepos(ctx, 'files: 403 or 404 for a file hidden by RLS, as the mock answers').files.get(id));
   if (!f) throw notFound();
+  const visible = () => {
+    if (!own) throw notFound();
+  };
   if (f.guaranteeId) {
     // Guarantee-letter attachments: the clinic that uploaded them and MIG staff with guarantees.read.
     if (!can(user, 'guarantees.read', { clinicId: f.clinicId })) throw notFound();
+    visible();
     if (!f.bytes) throw notFound();
     // PDFs are never rendered inline in the app: download only (CLINIC_SPEC §9.7).
     return { bytes: f.bytes, mime: f.mime, ...(f.mime === 'application/pdf' ? { download: f.fileName ?? 'document.pdf' } : {}) };
@@ -212,6 +219,7 @@ export async function getFile(ctx: AuthCtx, id: string): Promise<FileContent> {
   } else if (!can(user, 'claims.read') || !isStaffRole(user.role)) {
     throw forbidden();
   }
+  visible();
   if (!f.bytes) return { bytes: null, mime: 'image/png', seedText: f.seedText ?? ['Файл недоступен после перезагрузки'] };
   // PDFs are never rendered inline: download only, under a neutral name.
   return { bytes: f.bytes, mime: f.mime, ...(f.mime === 'application/pdf' ? { download: f.fileName ?? 'document.pdf' } : {}) };

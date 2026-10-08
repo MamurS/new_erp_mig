@@ -13,7 +13,7 @@ import { legalNameCollator } from '../config/legalForms';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { AssistanceCaseRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
+import { asSystem, audit, conflict, DomainError, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
 import { byLegalForm, byLegalName, filterLegalForm, sortBy, type Qs } from './list';
 import { assistanceName, assistanceOf, claimsFromRebill, ensureQaSample, feeOf, kpiOf, notifyAssistance, rebillStatusAfterReview, rosterOf, syncAssistance } from './assistance';
 import { toRebillSummary, toRebillView } from './assistPortal';
@@ -102,7 +102,8 @@ export async function listAssistances(ctx: AuthCtx, qs: Qs): Promise<AssistanceL
   requireStaff(ctx);
   const now = ctx.now();
   const items: AssistanceListItem[] = [];
-  for (const a of await ctx.repos.assistances.list()) items.push(await listItem(ctx, a, now));
+  const sys = asSystem(ctx, 'assistance list for MIG staff: portfolio, KPI and counters of every company');
+  for (const a of await ctx.repos.assistances.list()) items.push(await listItem(sys, a, now));
   const rows = filterLegalForm(items, qs, (a) => a.legalForm);
   return sortBy(rows, qs, {
     name: byLegalName((a) => a.name),
@@ -135,8 +136,9 @@ export async function createAssistance(ctx: AuthCtx, body: unknown, opts: { init
   return listItem(ctx, a, ctx.now());
 }
 
-export async function card(ctx: AuthCtx, id: UUID): Promise<AssistanceCardView> {
-  const user = requireStaff(ctx);
+export async function card(person: AuthCtx, id: UUID): Promise<AssistanceCardView> {
+  const user = requireStaff(person);
+  const ctx = asSystem(person, 'assistance card for MIG staff: portfolio, users, keys, rebills, quality control, audit (with audit.read)');
   const r = ctx.repos;
   const a = await assistanceOf(ctx, id);
   const now = ctx.now();
@@ -234,9 +236,11 @@ export async function revokeAssistanceKey(ctx: AuthCtx, id: UUID, keyId: UUID): 
 export async function policyAssignments(ctx: AuthCtx, policyId: UUID): Promise<AssignmentView[]> {
   const user = requireStaff(ctx);
   if (!can(user, 'policies.read') && !can(user, 'clients.read')) throw forbidden();
-  const p = await ctx.repos.policies.get(policyId);
+  // Staff reading clients see the assistance history of a policy without reading the policy itself.
+  const sys = asSystem(ctx, 'assistance assignments of a policy for staff with clients.read');
+  const p = await sys.repos.policies.get(policyId);
   if (!p) throw notFound();
-  return assignmentViews(ctx, p.id);
+  return assignmentViews(sys, p.id);
 }
 
 export async function assignPolicy(ctx: AuthCtx, policyId: UUID, body: unknown): Promise<AssignmentView[]> {
@@ -383,5 +387,5 @@ export async function reviewQa(ctx: AuthCtx, id: UUID, body: unknown): Promise<Q
 export async function reportByAssistanceFor(ctx: AuthCtx): Promise<AssistanceReportRow[]> {
   const user = requireStaff(ctx);
   requirePermission(user, 'reports.read');
-  return reportByAssistance(ctx);
+  return reportByAssistance(asSystem(ctx, 'report by assistance company (aggregates over the whole portfolio)'));
 }

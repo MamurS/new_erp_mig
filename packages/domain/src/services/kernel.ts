@@ -77,6 +77,27 @@ export interface BaseCtx {
   repos: Repos;
   now(): number;
   env: ServiceEnv;
+  /**
+   * The narrow privileged capability (BACKEND_SPEC §2.3): repositories that bypass row-level security, for
+   * the few cross-scope side effects a role's RLS does not allow by design (docs/backend/RLS.md, «systemDb»).
+   * Absent in the mock (one database without RLS). Use only through `systemRepos()`; every use is listed in
+   * docs/DECISIONS.md.
+   */
+  system?: { repos: Repos };
+}
+
+/**
+ * Repositories for a cross-scope side effect the person's own access does not cover (RLS in the API): the
+ * privileged ones when the adapter provides them, the ordinary ones in the mock. `why` documents the use.
+ */
+export function systemRepos(ctx: BaseCtx, why: string): Repos {
+  void why;
+  return ctx.system?.repos ?? ctx.repos;
+}
+
+/** The context with `systemRepos` (for helpers that take a context). */
+export function asSystem<C extends BaseCtx>(ctx: C, why: string): C {
+  return { ...ctx, repos: systemRepos(ctx, why) };
 }
 
 export interface ServiceEnv {

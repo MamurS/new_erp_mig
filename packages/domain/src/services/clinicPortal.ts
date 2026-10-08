@@ -32,7 +32,7 @@ import { guaranteeNumber, REGISTRY_CSV_MAX_BYTES, REGISTRY_CSV_MAX_ROWS } from '
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClinicUserRow, GuaranteeRow } from '../store/db';
-import { assistanceName, notifyAssistance, payerOfLine } from './assistance';
+import { assignmentsOf, assistanceName, notifyAssistance, payerOfLine } from './assistance';
 import {
   actorOf,
   appointmentOfClinic,
@@ -112,7 +112,7 @@ export async function createGuarantee(
   if (!svc) throw new DomainError(422, 'validation', 'srv.registry.serviceNotInPrice', { fields: { serviceCode: msg('srv.registry.chooseService') } });
   const who = (await r.insured.get(v.insuredId))!;
   // The letter goes to the assistance of the insured person on the date of the request (ASSISTANCE_SPEC §5.2).
-  const assistanceId = assistanceOn(await r.assignments.list({ where: { policyId: who.policyId } }), who.policyId, isoDay(ctx.now()));
+  const assistanceId = assistanceOn(await assignmentsOf(ctx, who.policyId), who.policyId, isoDay(ctx.now()));
   const seq = await r.seq.next('guarantee');
   const P = await loadParams(ctx);
   const g: GuaranteeRow = {

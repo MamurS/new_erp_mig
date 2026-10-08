@@ -20,6 +20,9 @@
 
 ## Строки ↔ колонки (репозитории postgres, шаг 4)
 
+Реализация — `packages/domain/src/store/postgres.ts` (SQL) поверх `SqlSession` API (`apps/api/src/db.ts`); правила
+ниже она соблюдает, а тест соответствия `apps/api/src/conformance.test.ts` сверяет её с репозиториями в памяти.
+
 - `packages/domain/src/store/sql/physical.ts`: `fieldMappings(collection)` — для каждого поля типа строки
   его колонки, вид (`uuid`, `text`, `int`, `bigint`, `float`, `bool`, `date`, `ts`, `epoch`, `json`, `textArray`,
   `enum`, `virtual`), обнуляемость; `jsonFields`, `keyColumn`, `readableColumns`, `qi` (кавычки для `from`, `to`).
@@ -51,7 +54,8 @@
   company_id | clinic_id | assistance_id | insured_id } }`.
 - Побочные эффекты чужих для роли таблиц и аутентификация — через `systemDb` (сервисная роль), см. RLS.md.
 - Аудит пишет только `app.audit(action, target_type, target_id, target_label, reason, assistance_id,
-  actor_name, …)`; у пользователя автор берётся из claims. Работать в READ COMMITTED (цепочка хэшей).
+  actor_name, actor_id, actor_role, at, id, pos)`; у пользователя автор берётся из claims; `pos` — порядок хранения
+  (`-nextval('app.pos_seq')` для записи «в начало»). Работать в READ COMMITTED (цепочка хэшей).
 
 ## Фоновые задачи
 

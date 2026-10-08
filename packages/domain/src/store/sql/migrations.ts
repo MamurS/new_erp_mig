@@ -391,7 +391,8 @@ create or replace function app.audit(
   p_actor_id uuid default null,
   p_actor_role text default null,
   p_at timestamptz default now(),
-  p_id uuid default gen_random_uuid()
+  p_id uuid default gen_random_uuid(),
+  p_pos bigint default null
 ) returns uuid
   language plpgsql volatile security definer set search_path = ''
 as $$
@@ -411,8 +412,9 @@ begin
   if v_actor is null or v_role is null then
     raise exception 'audit actor is required' using errcode = '22023';
   end if;
-  insert into public.audit_log (id, "at", actor_id, actor_name, actor_role, action, target_type, target_id, target_label, reason, assistance_id)
-  values (p_id, p_at, v_actor, coalesce(p_actor_name, ''), v_role, p_action, p_target_type, p_target_id, p_target_label, p_reason, p_assistance_id);
+  insert into public.audit_log (id, "at", actor_id, actor_name, actor_role, action, target_type, target_id, target_label, reason, assistance_id, _pos)
+  values (p_id, p_at, v_actor, coalesce(p_actor_name, ''), v_role, p_action, p_target_type, p_target_id, p_target_label, p_reason, p_assistance_id,
+    coalesce(p_pos, nextval('app.pos_seq')));
   return p_id;
 end $$;
 comment on function app.audit is 'Writes an audit entry (BACKEND_SPEC §9): the only INSERT path for authenticated.';

@@ -117,7 +117,7 @@ docs/                      ТЗ, решения, справка, OpenAPI
 
 Пункты сгруппированы, в группе только разрешённые роли разделы, пустые группы не показываются. Группы МИГ: «Работа», «Продажи и андеррайтинг», «Урегулирование», «Партнёры», «Финансы», «Отчёты», «Администрирование» (`apps/web/src/features/staff/nav.ts`).
 
-**Рабочий стол по ролям.** Очередь и KPI собираются отдельно для каждой роли (`apps/web/src/mocks/handlers/dashboard.ts`), а каждый элемент очереди проходит матрицу прав: тип элемента → права, нужные, чтобы его видеть (`packages/domain/src/queue.ts`). Сервер отбрасывает всё, на что у роли нет прав, вкладки очереди строятся из типов, которые реально пришли.
+**Рабочий стол по ролям.** Очередь и KPI собираются отдельно для каждой роли (`packages/domain/src/services/dashboard.ts`), а каждый элемент очереди проходит матрицу прав: тип элемента → права, нужные, чтобы его видеть (`packages/domain/src/queue.ts`). Сервер отбрасывает всё, на что у роли нет прав, вкладки очереди строятся из типов, которые реально пришли.
 
 | Роль | Что в очереди |
 |---|---|
@@ -134,11 +134,11 @@ docs/                      ТЗ, решения, справка, OpenAPI
 
 - `packages/seed/src/seed.ts` — детерминированный seed (mulberry32, зерно `20260929`), самостоятельный (`createSeed()`, без мока): 40 компаний, ~1 500 застрахованных, 30 клиник, 600+ убытков, 300+ записей, 12 сотрудников, 500 записей аудита, 8 запросов на лимиты. Даты считаются от сегодняшнего дня.
 - Логика всех эндпоинтов — асинхронные сервисы `packages/domain/src/services/*` (`(ctx, input) → результат`, ошибка — `DomainError`). Сервис работает только через репозитории `ctx.repos` (`packages/domain/src/store`: интерфейс `Repos` и реализация в памяти `memoryRepos`), поэтому тот же код потом пойдёт на Postgres. Сервис сам проверяет сессию и права (без сессии — 401, без права — 403, чужой ресурс — 404) и тело запроса той же zod-схемой, что и форма (422 с `fields`).
-- `apps/web/src/mocks` — MSW-адаптер и БД в памяти: `handlers/*` только разбирают запрос и вызывают сервис (`http.ts`: `route`, `authCtx`, `param`, `readJson`), партнёрский API — через `integration-http.ts`; `db.ts` держит текущее состояние, `persist.ts` сохраняет его в `sessionStorage`.
+- `apps/web/src/mocks` — MSW-адаптер и БД в памяти: `handlers/index.ts` строит обработчики MSW из общей таблицы маршрутов `packages/domain/src/http/routes.ts` (та же таблица — у сервера, см. «API (бэкенд)»), `http.ts` — задержка, имитация сбоев, сессия запроса, ошибки, сохранение; `db.ts` держит текущее состояние, `persist.ts` сохраняет его в `sessionStorage`.
 - Роль берётся только из серверной сессии; заголовки вроде `X-Role` игнорируются.
 - Ответы с ПДн всегда маскированы; полное значение — только через `POST /api/insured/:id/reveal` с причиной (пишется в аудит).
 - Задержка ответа 150–450 мс; состояние мока переживает перезагрузку вкладки.
-- Демо-эндпоинты `/api/__demo/*` (сброс данных, имитация сбоев, `/api/__demo/mis-card` — код карты пациента для симулятора МИС и e2e-сценария с двумя плательщиками) живут в `apps/web/src/mocks/handlers/demo.ts` и подключаются динамически только при `VITE_DEMO_MODE=true`. Симуляторы МИС и системы ассистанса лежат в `apps/web/src/demo/`. В сборке без флага их кода нет даже с включёнными моками (проверяет `apps/web/tests/no-demo-build.test.ts`).
+- Демо-эндпоинты `/api/__demo/*` (сброс данных, имитация сбоев, `/api/__demo/mis-card` — код карты пациента для симулятора МИС и e2e-сценария с двумя плательщиками) живут в `apps/web/src/mocks/handlers/demo.ts` (`mis-card` — маршрут общей таблицы из `packages/domain/src/http/demoRoutes.ts`) и подключаются динамически только при `VITE_DEMO_MODE=true`. Симуляторы МИС и системы ассистанса лежат в `apps/web/src/demo/`. В сборке без флага их кода нет даже с включёнными моками (проверяет `apps/web/tests/no-demo-build.test.ts`).
 
 ## Коммерческое предложение (КП)
 
@@ -208,7 +208,7 @@ docs/                      ТЗ, решения, справка, OpenAPI
 - **Секреты.** `client_secret` — только хэш (Argon2id или SHA-256 от длинного случайного секрета), показывается один раз. Секрет подписи вебхука хранится зашифрованным (KMS). Токены доступа живут 15 минут, отзыв ключа сразу инвалидирует выданные токены.
 - **Ограничения и идемпотентность** — в общем хранилище (Redis/Postgres), а не в памяти процесса: 60 запросов в минуту на ключ, 30 проверок в час на пользователя или ключ, блокировка после 10 неудач, ключи идемпотентности на 24 часа.
 - **Исходящая интеграция МИГ → МИС** — через интерфейс `ClinicAdapter` (`apps/web/src/shared/integration/adapter.ts`: `fetchSlots`, `createAppointment`, `cancelAppointment`). Реализации: HTTP-адаптер к API конкретной МИС, адаптер для клиник без API (ручной режим — заявки в кабинете) и при необходимости FHIR-адаптер. Адаптер выбирается по режиму интеграции клиники.
-- **Эндпоинты кабинета и портала** — те же пути, что в моке: `apps/web/src/mocks/handlers/clinic.ts` (`/api/clinic/*`), `staff-clinics.ts` (`/api/clinics/:id/card`, `/api/guarantees*`, `/api/registries*`), `integration.ts` (`/api/integration/v1/*`), изменения в `me.ts` (`/api/me/card-token` с `shortCode`, `/api/me/appointments/:id/accept-proposal`).
+- **Эндпоинты кабинета и портала** — те же пути, что в моке (общая таблица маршрутов `packages/domain/src/http/routes.ts`, разделы): `clinic` (`/api/clinic/*`), `staff-clinics` (`/api/clinics/:id/card`, `/api/guarantees*`, `/api/registries*`), `integration` (`/api/integration/v1/*`), изменения в `me` (`/api/me/card-token` с `shortCode`, `/api/me/appointments/:id/accept-proposal`).
 
 ## Ассистанс-компании
 
@@ -232,7 +232,7 @@ docs/                      ТЗ, решения, справка, OpenAPI
 - **Проверка по дате события** (`requireAssistanceScope`) — в каждом запросе ассистанса на уровне сервиса и в политиках RLS, а не только в UI.
 - **Резерв и списание лимита — одна транзакция** в базе вместе с изменением статуса ГП и строки реестра (`SELECT … FOR UPDATE` по лимиту застрахованного).
 - **Счета ассистансов:** проверка дублей строк между всеми счетами всех ассистансов (уникальный индекс по `registry_line_id` среди непринятых отказов), правило «принял ≠ оплатил» — в базе, контроль выборки качества — детерминированный (хеш от месяца и id решения), чтобы выборку нельзя было подобрать.
-- **Эндпоинты** — те же пути, что в моке: `apps/web/src/mocks/handlers/assist.ts` (`/api/assist/*`), `staff-assistance.ts` (`/api/assistance*`, `/api/rebills*`, `/api/qa*`, `/api/policies/:id/assistance`, `/api/reports/by-assistance`), `integration-assistance.ts` (`/api/integration/v1/assistance/*`), `partner-integration.ts` (ключи, вебхуки и журнал партнёра — общие для клиник и ассистансов), `/api/me/assistance`.
+- **Эндпоинты** — те же пути, что в моке (общая таблица маршрутов `packages/domain/src/http/routes.ts`, разделы): `assist` (`/api/assist/*`), `staff-assistance` (`/api/assistance*`, `/api/rebills*`, `/api/qa*`, `/api/policies/:id/assistance`, `/api/reports/by-assistance`), `integration-assistance` (`/api/integration/v1/assistance/*`), `partner-integration` (ключи, вебхуки и журнал партнёра — общие для клиник и ассистансов), `/api/me/assistance`.
 
 ## Жизненный цикл договора и урегулирование убытков
 
@@ -257,7 +257,7 @@ docs/                      ТЗ, решения, справка, OpenAPI
 - **Резервы:** история изменений резерва — отдельная таблица (кто, когда, было, стало, причина), резерв на дату — запрос по этой истории. **Резерв произошедших, но незаявленных убытков (IBNR) — актуарная задача, она вне прототипа.**
 - **Рабочий стол:** `GET /api/dashboard` (KPI, счётчики по типам очереди) и `GET /api/queue?type=…` собираются по роли из сессии, и каждый элемент проверяется по правам роли (`canSeeQueueType`) — тот же тест должен проходить на бэкенде (`apps/web/src/mocks/dashboard.test.ts`).
 - **Полномочия** (`StaffAuthority`) проверяются сервером при каждом утверждении котировки и решении по убытку; изменение полномочий — правило четырёх глаз в базе.
-- **Эндпоинты** — те же пути, что в моке: `apps/web/src/mocks/handlers/lifecycle.ts` (`/api/leads`, `/api/deals*`, `/api/quotes*`, `/api/kp/:id/accept|decline`, `/api/staff/directory`, `/api/admin/authority-changes*`), `contracts.ts` (`/api/contracts*`, `/api/endorsements*`, `/api/change-requests`, `/api/invoices`, `/api/payments`, `/api/payments/import-1c`, `/api/payments/queue`, `/api/payments/queue/:id/allocate`, `/api/policies/:id/certificates`, `/api/me/certificate`), `settlement.ts` (`/api/claims/:id/{request-opinion,opinion,decide,decision/*,reserve,flags/*,appeal/resolve,letter}`, `/api/me/claims/:id/{appeal,letter}`, `/api/reports/reserves`, `/api/reports/claims-register`).
+- **Эндпоинты** — те же пути, что в моке (общая таблица маршрутов `packages/domain/src/http/routes.ts`, разделы): `lifecycle` (`/api/leads`, `/api/deals*`, `/api/quotes*`, `/api/kp/:id/accept|decline`, `/api/staff/directory`, `/api/admin/authority-changes*`), `contracts` (`/api/contracts*`, `/api/endorsements*`, `/api/change-requests`, `/api/invoices`, `/api/payments`, `/api/payments/import-1c`, `/api/payments/queue`, `/api/payments/queue/:id/allocate`, `/api/policies/:id/certificates`, `/api/me/certificate`), `settlement` (`/api/claims/:id/{request-opinion,opinion,decide,decision/*,reserve,flags/*,appeal/resolve,letter}`, `/api/me/claims/:id/{appeal,letter}`, `/api/reports/reserves`, `/api/reports/claims-register`).
 
 ## ИИ-проверка покрытия
 
@@ -272,7 +272,7 @@ docs/                      ТЗ, решения, справка, OpenAPI
 ### Что нужно от бэкенда
 
 - **Медицинские данные и локализация.** Предпочтительный провайдер — `local`: модель с открытыми весами на сервере МИГ в Узбекистане, данные не покидают страну. Внешний облачный провайдер допустим только для обезличенных запросов и только после решения комплаенса МИГ. Отдельно нужно оценить, считаются ли код услуги и МКБ-10 без идентификаторов персональными данными.
-- **Ключи моделей — только на сервере.** Эндпоинт `POST /api/ai/coverage-check` с тем же контрактом, что у мока (`apps/web/src/mocks/handlers/ai.ts`, схемы `packages/contracts/src/forms.ts` → `aiCheckRequestSchema`, ответ `AiCheckResult`). Таймаут 8 секунд, при превышении — «Нужна проверка специалиста». Область видимости определяется сервером: застрахованный — только по сессии, клиника — через открытый визит или свой реестр, ассистанс — по закреплению полиса, МИГ — по записи.
+- **Ключи моделей — только на сервере.** Эндпоинт `POST /api/ai/coverage-check` с тем же контрактом, что у мока (таблица маршрутов `packages/domain/src/http/routes.ts`, сервис `packages/domain/src/services/ai.ts`, схемы `packages/contracts/src/forms.ts` → `aiCheckRequestSchema`, ответ `AiCheckResult`). Таймаут 8 секунд, при превышении — «Нужна проверка специалиста». Область видимости определяется сервером: застрахованный — только по сессии, клиника — через открытый визит или свой реестр, ассистанс — по закреплению полиса, МИГ — по записи.
 - **Промпты версионируются в репозитории** (`apps/web/src/features/ai/prompts.ts`, `PROMPT_VERSION`). Смена модели или шаблона проходит прогон эталонных случаев; порог точности задаёт МИГ.
 - **Журнал вызовов** хранится без открытых ПДн (хэш входа и обезличенный текст), срок хранения задаёт комплаенс.
 - **Пользователь понимает, что ответ предварительный и автоматический:** подпись «Это предварительная оценка…» есть везде; решение об отказе принимает человек со ссылкой на пункт.
@@ -341,7 +341,7 @@ docs/                      ТЗ, решения, справка, OpenAPI
 - Использованные до переноса лимиты учитываются в остатке, который застрахованный видит в приложении.
 - В демо-режиме на экране есть **тестовые файлы**: 6 клиентов, 5 договоров, 204 сотрудника и 204 члена их семей (строка на человека), лимиты, 11 убытков и 3 счёта, с намеренными ошибками для отчёта проверки (в том числе застрахованный без премии); у MIG-2026/0503 премии только индивидуальные, у MIG-2026/0504 сумма премий застрахованных намеренно не сходится с премией договора. Демо-застрахованный из пакета: телефон +998 77 000 00 01.
 
-**Что нужно от бэкенда:** таблица пакетов переноса и эндпоинты `/api/admin/migration/…` (см. `apps/web/src/mocks/handlers/migration.ts`), те же zod-схемы строк (`packages/domain/src/schemas/migration.ts`), права `migration.manage` / `migration.approve`, повторная проверка пакета при отправке и применении, транзакционное применение и откат.
+**Что нужно от бэкенда:** таблица пакетов переноса и эндпоинты `/api/admin/migration/…` (см. таблицу маршрутов `packages/domain/src/http/routes.ts` и сервис `packages/domain/src/services/migrationApi.ts`), те же zod-схемы строк (`packages/domain/src/schemas/migration.ts`), права `migration.manage` / `migration.approve`, повторная проверка пакета при отправке и применении, транзакционное применение и откат.
 
 ## Члены семьи
 
@@ -371,10 +371,10 @@ docs/                      ТЗ, решения, справка, OpenAPI
 
 ## Подключение настоящего API
 
-1. Реализовать эндпоинты из `apps/web/src/mocks/handlers/*` на FastAPI с теми же путями и типами из `packages/contracts/src/` (список — в разделе «Что нужно от бэкенда» отчёта и в `docs/DECISIONS.md`).
+1. Сервер — `apps/api` (Fastify, см. «API (бэкенд)»): он регистрирует все маршруты общей таблицы `packages/domain/src/http/routes.ts` с теми же путями и типами из `packages/contracts/src/`.
 2. Собрать фронт с `VITE_USE_MOCKS=false` и `VITE_API_BASE_URL=https://<api-host>/api` (и добавить этот хост в `connect-src` в `apps/web/public/_headers`).
 3. Экраны не меняются: они ходят только через `apps/web/src/shared/api/client.ts` и хуки из `apps/web/src/shared/api/queries/`.
-4. **Не реализовывать `/api/__demo/*`**, включая `/api/__demo/mis-card`: это вспомогательные адреса демо-стенда и e2e-тестов (выдают код карты любого пациента без его участия). На настоящем сервере таких путей быть не должно, запрос к ним — 404.
+4. **`/api/__demo/*` в production нет**, включая `/api/__demo/mis-card`: это вспомогательные адреса демо-стенда и e2e-тестов (выдают код карты любого пациента без его участия). API регистрирует `mis-card` только вне production (`APP_ENV` = development/ci/staging), в production запрос к ним — 404 (проверяет `apps/api/src/app.test.ts`).
 
 ## База данных
 
@@ -396,6 +396,37 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
 
 Соглашения для репозиториев postgres (шаг 4) — `docs/backend/DATABASE.md`. В CI это задача `db`.
+
+## API (бэкенд)
+
+Сервер `apps/api` (`@mig/api`, Node 20, Fastify; BACKEND_SPEC §2, §4, шаг 4 — часть 1). Эндпоинты не пишутся заново: и мок, и сервер строятся из одной таблицы маршрутов.
+
+- **Таблица маршрутов** — `packages/domain/src/http/routes.ts`: для каждого эндпоинта метод, путь, вид входа (`session` — сессия, `none` — без сессии, `partner` — партнёрский API со своими токенами, `demo` — только в демо/ci/staging), вид тела (`json`, `form`, `text`, `none`), вызов сервиса и вид ответа (`json`, `201`, `raw` — CSV, файлы, problem+json). Порядок — порядок сопоставления. Тело читает один и тот же `packages/domain/src/http/request.ts` (лимит 1 МБ для JSON, 400 на битый JSON, multipart). Демо-маршруты — отдельно (`http/demoRoutes.ts`).
+- **MSW-адаптер** — `apps/web/src/mocks/handlers/index.ts` строит обработчики MSW из таблицы; в вебе остались только ручки мока: задержка, имитация сбоев, сохранение состояния, задержка «распознавания» чека, `/api/__demo/reset` и `/api/__demo/failures`.
+- **Fastify-адаптер** — `apps/api/src/app.ts`: регистрирует каждый маршрут таблицы, собирает из полученных байтов `Request` и разбирает его тем же кодом, переводит `DomainError` и результат в те же ответы.
+- **Репозитории Postgres** — `packages/domain/src/store/postgres.ts` (SQL строится в пакете, драйвер `pg` — в API за интерфейсом `SqlSession`): DSL Where/Query → параметризованный SQL, порядок хранения `_pos`, строки возвращаются в том же виде, что и в памяти. ПДн — через интерфейс `PiiCrypto` (`store/pii.ts`); сейчас dev-реализация как в `seed.sql` (открытый текст, `key_ver = 0`, HMAC на dev-ключе).
+- **Транзакция на запрос и RLS** — `apps/api/src/db.ts`: запрос начинается под сервисной ролью (сессия, вход), затем `set local role authenticated` и `set_config('request.jwt.claims', …, true)` с claims человека (`sub`, `aal`, `app_metadata.role/company_id/clinic_id/assistance_id/insured_id`). Сервисы видят данные через RLS. Узкая привилегированная возможность — `ctx.system` / `systemRepos(ctx, причина)` в сервисах (каждое место — в `docs/DECISIONS.md`); `apps/api/src/systemDb.ts` — только для задач и обслуживания, импорт в обработчики запрещён ESLint.
+- **Сессии (временно, до части 2)** — таблица `sessions`, заголовок `Authorization: Bearer <sessionId>`, как в моке; демо-пароль проверяется только при заданном `DEMO_PASSWORD` (dev/ci), код — `000000`. Часть 2 заменит это на BFF-cookie и Supabase Auth.
+
+Локально против запущенного Supabase:
+
+```
+npx supabase db start && npx supabase db reset     # Postgres с миграциями и seed
+npm run api:build                                    # apps/api/dist/server.js (esbuild)
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres DEMO_PASSWORD='Demo-2026!' npm run api:dev
+# по умолчанию http://127.0.0.1:8787/api; PORT, HOST, APP_ENV (development|ci|staging), HELP_DIR, DB_POOL_SIZE
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run api:test
+```
+
+Проверка вручную:
+
+```
+curl -s -XPOST localhost:8787/api/auth/login -H 'content-type: application/json' -d '{"email":"underwriter@demo.mig.uz","password":"Demo-2026!"}'
+curl -s -XPOST localhost:8787/api/auth/otp -H 'content-type: application/json' -d '{"challengeId":"<challengeId>","code":"000000"}'
+curl -s localhost:8787/api/dashboard -H 'authorization: Bearer <sessionId>'
+```
+
+Тесты API (`apps/api/src/*.test.ts`, нужен `DATABASE_URL`, без него пропускаются; в CI — задача `api`): тест соответствия мок ↔ postgres (`conformance.test.ts`: все GET-маршруты таблицы для каждого демо-аккаунта и сценарии записи всех порталов, одинаковые часы и случайные числа, ответы должны совпасть) и интеграционные тесты приложения (`app.test.ts`: вход, области, изоляция компаний/клиник/ассистансов в API и в самой БД, аудит и цепочка хэшей, партнёрский API, демо-маршруты). Тесты загружают seed под своё «сегодня», а в конце возвращают канонический seed.
 
 ## Безопасность
 

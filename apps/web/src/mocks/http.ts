@@ -1,15 +1,17 @@
 /*
- * The MSW adapter of the services (packages/domain/src/services): the service context over the in-memory
- * database, the session of a request, latency, failure injection, error mapping and persistence.
+ * The MSW adapter's plumbing (the routes themselves are the shared table, packages/domain/src/http/routes.ts,
+ * turned into MSW handlers by ./handlers/index.ts): the service context over the in-memory database, the
+ * session of a request, latency, failure injection, error mapping and persistence.
  */
 import { delay, HttpResponse, type DefaultBodyType, type HttpResponseResolver, type PathParams } from 'msw';
 import type { ApiError } from '@mig/contracts';
 import { db } from './db';
 import { mockConfig } from './config';
 import { saveSessions, scheduleSaveDb } from './persist';
-import { DomainError as HttpError, notFound, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
+import { DomainError as HttpError, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import { resolveSession } from '@mig/domain/services/session';
 import { memoryRepos } from '@mig/domain/store/memory';
+import { routeRequest } from '@mig/domain/http/request';
 
 // The mock answers only at the API address. A pattern with any prefix before /api would also catch
 // the dev server's own modules (/src/shared/api/queries/params.ts) and answer them with a 404.
@@ -49,6 +51,8 @@ export interface Ctx {
   request: Request;
   params: PathParams;
   url: URL;
+  /** When the request arrived (before the simulated latency). */
+  startedAt: number;
 }
 
 function isMutation(method: string): boolean {
@@ -65,6 +69,7 @@ export function route(
   opts: { noFailures?: boolean; writes?: boolean } = {},
 ): HttpResponseResolver<PathParams, DefaultBodyType, DefaultBodyType> {
   return async ({ request, params }) => {
+    const startedAt = Date.now();
     const [lo, hi] = mockConfig.latency;
     if (hi > 0) await delay(lo + Math.floor(Math.random() * (hi - lo)));
     const url = new URL(request.url);
@@ -75,7 +80,7 @@ export function route(
       );
     }
     try {
-      const out = await fn({ request, params, url });
+      const out = await fn({ request, params, url, startedAt });
       if (out instanceof Response) return out;
       if (out === undefined) return new HttpResponse(null, { status: 204 });
       return HttpResponse.json(out as DefaultBodyType);
@@ -94,20 +99,7 @@ export function route(
 }
 
 // ---------- request body ----------
-export async function readJson(request: Request): Promise<unknown> {
-  try {
-    const text = await request.text();
-    if (text.length > 1_000_000) throw new HttpError(413 as number, 'validation', 'errors.tooLarge');
-    return text ? (JSON.parse(text) as unknown) : {};
-  } catch (e) {
-    if (e instanceof HttpError) throw e;
-    throw new HttpError(400, 'validation', 'errors.badJson');
-  }
-}
-
-// ---------- path parameters ----------
-export function param(ctx: Ctx, key: string): string {
-  const v = ctx.params[key];
-  if (typeof v !== 'string' || !/^[0-9a-f-]{36}$/i.test(v)) throw notFound();
-  return v;
+/** The JSON body with the route table's rules (mock-only demo endpoints). */
+export function readJson(request: Request): Promise<unknown> {
+  return routeRequest(request, {}).json();
 }

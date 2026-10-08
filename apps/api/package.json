@@ -1,0 +1,27 @@
+{
+  "name": "@mig/api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The API server (Fastify): the shared route table over Postgres repositories with row-level security.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@mig/contracts": "*",
+    "@mig/domain": "*",
+    "@mig/i18n": "*",
+    "@mig/seed": "*",
+    "fastify": "^5.6.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5",
+    "esbuild": "^0.28.2"
+  }
+}

@@ -67,6 +67,25 @@ jobs:
       - run: npx supabase db reset
       - run: npx supabase test db
 
+  # The API (step 4): Fastify over Postgres with RLS. Conformance memory ↔ postgres and integration tests of
+  # the app against the local Supabase Postgres with migrations and seed applied.
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx supabase db start
+      - run: npx supabase db reset
+      - run: npm run api:build
+      - run: npm run api:test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
   gitleaks:
     runs-on: ubuntu-latest
     steps:
