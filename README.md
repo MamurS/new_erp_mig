@@ -376,6 +376,27 @@ docs/                      ТЗ, решения, справка, OpenAPI
 3. Экраны не меняются: они ходят только через `apps/web/src/shared/api/client.ts` и хуки из `apps/web/src/shared/api/queries/`.
 4. **Не реализовывать `/api/__demo/*`**, включая `/api/__demo/mis-card`: это вспомогательные адреса демо-стенда и e2e-тестов (выдают код карты любого пациента без его участия). На настоящем сервере таких путей быть не должно, запрос к ним — 404.
 
+## База данных
+
+Схема Postgres (self-hosted Supabase, BACKEND_SPEC §5–§6, §9–§10) строится из одного декларативного описания `packages/domain/src/store/schema.ts`: у каждой коллекции репозитория описано каждое поле её типа строки (компилятор не пропустит новое поле без колонки), права — строками-предикатами по матрице `permissions.ts`. Из него генерируются и коммитятся:
+
+- `supabase/migrations/*.sql` — `node scripts/gen-schema.mjs` (функции `app.*`, таблицы, RLS, журнал аудита с цепочкой хэшей, задания pg_cron); заодно `docs/backend/RLS.md` — кто что может в каждой таблице;
+- `supabase/seed.sql` — `node scripts/gen-seed-sql.mjs` (из `createSeed`, «сегодня» = 09.10.2026; ПДн записаны открытым текстом с версией ключа 0 — только для разработки);
+- `supabase/tests/*_test.sql` — `node scripts/gen-rls-tests.mjs` (pgTAP: каждая роль × каждая таблица × select/insert/update/delete на своих и чужих строках, сценарии §6, аудит, задания).
+
+Всё сразу: `npm run db:gen`. Тест `packages/domain/src/store/sql/generated.test.ts` падает, если закоммиченные файлы отличаются от генератора. Руками миграции не правятся.
+
+Локально (нужен Docker):
+
+```
+npx supabase db start     # только Postgres из стека Supabase (порт 54322, пароль postgres)
+npx supabase db reset     # применить миграции и seed.sql
+npx supabase test db      # pgTAP-тесты
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+```
+
+Соглашения для репозиториев postgres (шаг 4) — `docs/backend/DATABASE.md`. В CI это задача `db`.
+
 ## Безопасность
 
 Коротко (подробно — SPEC §9 и CLAUDE.md): строгая CSP и заголовки в `apps/web/public/_headers`, нет inline-скриптов; ESLint запрещает `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `localStorage` вне `storage.ts`, `sessionStorage` вне `session.ts`, `console` вне `logger.ts`; все URL из данных проходят через `safeUrl()`; сессия только в памяти и `sessionStorage`; выход синхронизируется между вкладками; тайм-аут неактивности 15/30 минут; CSV экранируется от формул; фото чеков перекодируются через canvas (EXIF и GPS удаляются); демо-кода нет в сборке без `VITE_DEMO_MODE` (проверяется тестом).

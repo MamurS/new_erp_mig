@@ -6,3 +6,6 @@ useDefault = true
 description = "Fictional demo accounts and test fixtures of the prototype"
 # abcdefghijklmnop_123: a made-up card token in src/shared/integration/integration.test.ts
 regexes = ['''Demo-2026!''', '''abcdefghijklmnop_123''']
+# supabase/seed.sql is generated from the fictional demo seed (packages/seed): key hashes and webhook signing
+# secrets of the demo integrations, a dev-only HMAC key. No real environment loads it.
+paths = ['''supabase/seed\.sql''']

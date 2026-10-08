@@ -21,6 +21,10 @@
     "test:e2e": "npm run test:e2e -w @mig/web",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run test:e2e && npm audit --audit-level=high",
     "build:openapi": "node scripts/build-openapi.mjs",
+    "db:gen": "node scripts/gen-schema.mjs && node scripts/gen-seed-sql.mjs && node scripts/gen-rls-tests.mjs",
+    "db:start": "supabase db start",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
     "i18n:export": "node scripts/i18n-export-review.mjs",
     "i18n:import": "node scripts/i18n-import-review.mjs"
   },
@@ -34,6 +38,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
     "prettier": "^3.9.9",
+    "supabase": "^2.120.0",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^4.1.11"
