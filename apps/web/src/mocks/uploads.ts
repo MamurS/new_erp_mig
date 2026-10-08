@@ -1,8 +1,11 @@
-/* Multipart intake on the mock server: form parsing and the attachment whitelist (PDF, JPEG, PNG up to 10 MB). */
-import { msg } from '@mig/i18n';
+/* Multipart intake on the mock server: form parsing; the attachment whitelist is the services' (services/uploads.ts). */
 import { GUARANTEE_FILE_MAX_BYTES } from '@mig/domain/clinics';
-import { detectMime } from '@/shared/lib/image';
+import type { UploadedFile } from '@mig/domain/lib/uploads';
+import { checkAttachment, type AttachmentMime } from '@mig/domain/services/uploads';
+import { msg } from '@mig/i18n';
 import { HttpError } from './http';
+
+export type { AttachmentMime };
 
 export async function readForm(request: Request): Promise<FormData> {
   try {
@@ -12,15 +15,21 @@ export async function readForm(request: Request): Promise<FormData> {
   }
 }
 
-export type AttachmentMime = 'image/jpeg' | 'image/png' | 'application/pdf';
-
 /** PDF, JPEG, PNG up to 10 MB, checked by magic bytes (images arrive already re-encoded by the browser). */
 export async function readAttachment(file: File): Promise<{ bytes: Uint8Array; mime: AttachmentMime }> {
+  // The size is checked before the bytes are read.
   if (file.size === 0 || file.size > GUARANTEE_FILE_MAX_BYTES) throw new HttpError(422, 'validation', 'srv.file.tooLarge10mb', { fields: { files: msg('srv.file.tooLarge10mb') } });
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const mime = detectMime(bytes);
-  if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') {
-    throw new HttpError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { files: msg('srv.file.unsupported') } });
-  }
-  return { bytes, mime };
+  return checkAttachment({ bytes: new Uint8Array(await file.arrayBuffer()) });
+}
+
+/** The files of a form field as plain data for the services. */
+export async function formFiles(form: FormData, field: string): Promise<UploadedFile[]> {
+  const files = form.getAll(field).filter((f): f is File => f instanceof File);
+  return Promise.all(files.map(async (f) => ({ name: f.name, type: f.type, bytes: new Uint8Array(await f.arrayBuffer()) })));
+}
+
+/** A text field of a form (`null` when absent or a file). */
+export function formText(form: FormData, field: string): string | null {
+  const v = form.get(field);
+  return typeof v === 'string' ? v : null;
 }
