@@ -83,6 +83,8 @@ export const params: Translation<typeof Ru> = {
   'params.leadIdleDays.description': 'Necha kun hodisasiz qolgan lid sotuv menejeri navbatiga tushadi.',
   'params.kpNoAnswerDays.label': 'Javobsiz TT',
   'params.kpNoAnswerDays.description': 'TT yuborilgandan keyin mijozdan javob boʻlmasa, necha kundan soʻng menejer eslatish vazifasini oladi.',
+  'params.requestResponseWorkdays.label': 'Soʻrovga javob muddati',
+  'params.requestResponseWorkdays.description': 'Hamkasbning («… soʻrash») yoki HRning («HRdan soʻrash») soʻroviga javob berish uchun necha ish kuni beriladi. Muddatdan bir kun oldin va muddat oʻtganda ijrochi va muallif bildirishnoma oladi. Demo-qiymat.',
   'params.fraudMaxClaimsPerMonth.label': 'Belgigacha oyiga murojaatlar',
   'params.fraudMaxClaimsPerMonth.description': 'Bitta sugʻurtalangan shaxsning oyiga nechta murojaatiga «Tez-tez murojaatlar» belgisisiz ruxsat beriladi.',
   'params.fraudPriceExcessShare.label': 'Belgi uchun narxlar roʻyxatidan oshish',

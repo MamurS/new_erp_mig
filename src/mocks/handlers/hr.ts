@@ -1,3 +1,4 @@
+import { isActiveRequest } from '@/shared/domain/requests';
 import { matchesSearch } from '@/shared/lib/searchNormalize';
 import { msg } from '@/i18n/core';
 import { http } from 'msw';
@@ -113,7 +114,7 @@ function belowMinTasks(d: ReturnType<typeof db>, user: SessionUser & { companyId
   if (!refs) return;
   const comment = `После исключения по заявке HR: ${groupSize(after, rules)} из минимума ${rules.min}${rules.countsFamily ? ' (с членами семьи)' : ''}. Решите, что делать с условиями договора.`;
   for (const toRole of ['underwriter', 'sales_manager'] as const) {
-    if (d.tasks.some((x) => x.status === 'open' && x.action === 'below_min_group' && x.toRole === toRole && x.clientId === user.companyId)) continue;
+    if (d.tasks.some((x) => isActiveRequest(x.status) && x.action === 'below_min_group' && x.toRole === toRole && x.clientId === user.companyId)) continue;
     createTask(d, user, { action: 'below_min_group', toRole, subjectType: 'client', subjectId: user.companyId, comment }, refs);
   }
 }

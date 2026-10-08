@@ -67,8 +67,8 @@ test('underwriter: «Застрахованные» of a lead explains the stage
   await empty.getByRole('button', { name: 'Попросить менеджера' }).click();
   const dialog = page.getByRole('dialog', { name: 'Попросить менеджера' });
   await dialog.getByLabel('Комментарий').fill('Нужно для расчёта к пятнице');
-  await dialog.getByRole('button', { name: 'Отправить задачу' }).click();
-  await expect(page.getByText('Задача поставлена')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Отправить запрос' }).click();
+  await expect(page.getByText('Запрос отправлен')).toBeVisible();
 
   await relogin(page, (p) => loginStaff(p, 'sales_manager'));
   const sales = page;
@@ -119,7 +119,7 @@ test('contract stage: «Запросить у HR» → HR sees the task → uplo
   await empty.getByRole('button', { name: 'Запросить у HR' }).click();
   const dialog = page.getByRole('dialog', { name: 'Запросить у HR клиента' });
   await dialog.getByLabel('Комментарий').fill('Список сотрудников до 15.10');
-  await dialog.getByRole('button', { name: 'Отправить задачу' }).click();
+  await dialog.getByRole('button', { name: 'Отправить запрос' }).click();
   await expect(page.getByText('Задача отправлена в кабинет HR')).toBeVisible();
 
   await relogin(page, (p) => loginEmail(p, `hr@${client.inn}.example.uz`, /\/hr$/));
@@ -138,7 +138,7 @@ test('contract stage: «Запросить у HR» → HR sees the task → uplo
   await expect(page.getByTestId('notifications-count')).toHaveText('1');
   await page.getByTestId('notifications').click();
   const note = page.getByTestId('notification').first();
-  await expect(note).toContainText('выполнил(а) вашу задачу');
+  await expect(note).toContainText('выполнил(а) ваш запрос');
   await note.click();
   await expect(page).toHaveURL(new RegExp(`/staff/contracts/${contract.id}$`));
   await expect(page.getByRole('heading', { name: 'Приложение 2 — застрахованные: 2' })).toBeVisible();

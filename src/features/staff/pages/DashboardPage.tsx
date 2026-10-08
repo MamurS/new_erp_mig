@@ -22,6 +22,9 @@ import { KpiCard } from '../components/KpiCard';
 import { kpNewPath } from '@/features/kp/paths';
 import { canSeeQueueType, QUEUE_TYPE_META } from '@/shared/domain/queue';
 import { useTopbar } from '../topbar';
+import { can } from '@/shared/auth/permissions';
+import { useMyRequests } from '@/shared/api/queries/tasks';
+import { MyRequests, RequestRowActions } from '@/features/next/Requests';
 
 /** Where a queue row leads. */
 function queueRowPath(row: QueueItem, confirmed: boolean): string {
@@ -101,11 +104,14 @@ export default function DashboardPage() {
   const user = useUser()!;
   const navigate = useNavigate();
   const dashboard = useDashboard();
-  const [tab, setTab] = useState<QueueType | 'all'>('all');
+  const [tab, setTab] = useState<QueueType | 'all' | 'mine'>('all');
+  const canAsk = can(user, 'tasks.ask', { companyId: user.companyId });
+  const mine = useMyRequests(canAsk);
+  const mineOpen = (mine.data ?? []).filter((r) => r.status === 'open' || r.status === 'in_progress').length;
   const [f, setF] = useUrlFilters(['form', 'sort'] as const);
   const forms = parseLegalForms(f.form);
   const sort = parseSort(f.sort);
-  const queue = useQueue(tab, {
+  const queue = useQueue(tab === 'mine' ? 'all' : tab, {
     ...(forms.length ? { form: forms.join(',') } : {}),
     ...(sort ? { sort: `${sort.key}:${sort.dir}` } : {}),
   });
@@ -165,7 +171,10 @@ export default function DashboardPage() {
       key: 'action',
       header: '',
       align: 'right',
-      cell: (r) => (
+      cell: (r) =>
+        r.request ? (
+          <RequestRowActions row={r} onOpen={() => openRow(r)} />
+        ) : (
         <Button
           size="sm"
           variant={r.action === 'open' ? 'secondary' : 'primary'}
@@ -177,14 +186,16 @@ export default function DashboardPage() {
         >
           {r.action === 'confirm' ? t('common.confirm') : r.action === 'prepare_offer' ? t('staff.dashboard.prepareOffer') : t('common.open')}
         </Button>
-      ),
+        ),
     },
   ];
 
   // Tabs are the kinds of work in this role's queue (the server already filtered them by rights).
-  const queueTabs: { key: QueueType | 'all'; label: string; count?: number }[] = [
+  const queueTabs: { key: QueueType | 'all' | 'mine'; label: string; count?: number }[] = [
     { key: 'all', label: t('common.all') },
     ...(dashboard.data?.queueTypes ?? []).filter((q) => canSeeQueueType(user, q.type)).map((q) => ({ key: q.type, label: QUEUE_TYPE_META[q.type].tab, count: q.count })),
+    // The author's side of the requests (not a kind of work in the queue).
+    ...(canAsk ? [{ key: 'mine' as const, label: t('next.req.tab'), count: mineOpen }] : []),
   ];
 
   const now = new Date();
@@ -225,6 +236,9 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
+          {tab === 'mine' ? (
+            <MyRequests />
+          ) : (
           <DataTable
             caption={t('staff.dashboard.queueCaption')}
             columns={columns}
@@ -246,6 +260,7 @@ export default function DashboardPage() {
               ) : undefined
             }
           />
+          )}
         </Card>
       </div>
       <SideColumn label={t('staff.dashboard.summary')} testId="dashboard-side">

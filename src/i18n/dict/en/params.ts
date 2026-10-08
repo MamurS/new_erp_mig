@@ -83,6 +83,8 @@ export const params: Translation<typeof Ru> = {
   'params.leadIdleDays.description': 'After how many days without events a lead goes to the sales manager\'s queue.',
   'params.kpNoAnswerDays.label': 'Unanswered commercial proposal',
   'params.kpNoAnswerDays.description': 'How many days after a commercial proposal is sent without a client reply the manager gets a reminder task.',
+  'params.requestResponseWorkdays.label': 'Request response time',
+  'params.requestResponseWorkdays.description': 'How many working days are given to answer a colleague\'s request («Ask …») or an HR request («Request from HR»). A day before the deadline and when it is overdue, the executor and the author are notified. Demo value.',
   'params.fraudMaxClaimsPerMonth.label': 'Claims per month before flag',
   'params.fraudMaxClaimsPerMonth.description': 'How many claims per month one insured person may have without the “Frequent claims” flag.',
   'params.fraudPriceExcessShare.label': 'Price list excess for flag',

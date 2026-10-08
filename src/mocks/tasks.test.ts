@@ -82,7 +82,7 @@ describe('«Попросить …»: a task in the queue of the role', () => {
     expect((await call(`/deals/${deal.id}/census`, { method: 'POST', sid: sales, text: CENSUS })).status).toBe(200);
     expect(db().tasks.find((x) => x.id === asked.data.id)!.status).toBe('done');
     const notes = (await call<UserNotification[]>('/notifications', { sid: uw })).data;
-    expect(notes[0]).toMatchObject({ read: false, link: `/staff/deals/${deal.id}/census?upload=1` });
+    expect(notes[0]).toMatchObject({ read: false, link: `/staff/deals/${deal.id}` });
     expect(unpack(notes[0]!.text).key).toBe('next.notify.done');
     expect((await call('/notifications/read', { method: 'POST', sid: uw })).status).toBe(204);
     expect((await call<UserNotification[]>('/notifications', { sid: uw })).data.every((n) => n.read)).toBe(true);
@@ -94,13 +94,112 @@ describe('«Попросить …»: a task in the queue of the role', () => {
     const sales = await login(SALES);
     const deal = await leadDeal(uw);
     const task = (await call<WorkTask>('/tasks', { method: 'POST', sid: uw, json: { toRole: 'sales_manager', action: 'other', subjectType: 'deal', subjectId: deal.id } })).data;
-    expect((await call(`/tasks/${task.id}/done`, { method: 'POST', sid: uw })).status).toBe(404);
-    expect((await call<WorkTask>(`/tasks/${task.id}/done`, { method: 'POST', sid: sales })).data.status).toBe('done');
-    expect((await call(`/tasks/${task.id}/done`, { method: 'POST', sid: sales })).status).toBe(409);
+    expect((await call(`/tasks/${task.id}/done`, { method: 'POST', sid: uw, json: { comment: 'Сделано' } })).status).toBe(404);
+    // MIG staff say what was done.
+    expect((await call(`/tasks/${task.id}/done`, { method: 'POST', sid: sales, json: {} })).status).toBe(422);
+    expect((await call<WorkTask>(`/tasks/${task.id}/done`, { method: 'POST', sid: sales, json: { comment: 'Сделано' } })).data).toMatchObject({ status: 'done', resolution: 'Сделано' });
+    expect((await call(`/tasks/${task.id}/done`, { method: 'POST', sid: sales, json: { comment: 'Сделано' } })).status).toBe(409);
     const clinic = await login('admin@demo-clinic.uz');
     expect((await call('/tasks', { method: 'POST', sid: clinic, json: { toRole: 'operator', action: 'other', subjectType: 'deal', subjectId: deal.id } })).status).toBe(403);
     expect((await call('/tasks', { method: 'POST', sid: uw, json: { toRole: 'hr', action: 'other', subjectType: 'deal', subjectId: deal.id } })).status).toBe(422);
     expect((await call('/tasks', { method: 'POST', sid: uw, json: { toRole: 'sales_manager', action: 'other', subjectType: 'deal', subjectId: '00000000-0000-4000-8000-000000000000' } })).status).toBe(404);
+  });
+});
+
+describe('requests: the full cycle (DECISIONS «Запросы между сотрудниками: полный цикл»)', () => {
+  const ask = (sid: string, dealId: string, action = 'census_upload') =>
+    call<WorkTask & { key?: string }>('/tasks', { method: 'POST', sid, json: { toRole: 'sales_manager', action, subjectType: 'deal', subjectId: dealId, comment: 'К пятнице' } });
+
+  it('goes to the responsible manager by name, notifies them at once; the same request cannot be sent twice', async () => {
+    const uw = await login(UW);
+    const sales = await login(SALES);
+    const deal = await leadDeal(uw);
+    const owner = db().staff.find((s) => s.id === db().deals.find((x) => x.id === deal.id)!.ownerId)!;
+    const r = await ask(uw, deal.id);
+    expect(r.data).toMatchObject({ status: 'open', assigneeName: owner.fullName, byMe: true, overdue: false, subjectLink: `/staff/deals/${deal.id}` });
+    expect(r.data.history.map((h) => h.kind)).toEqual(['created']);
+    const note = (await call<UserNotification[]>('/notifications', { sid: sales })).data[0]!;
+    expect(unpack(note.text)).toMatchObject({ key: 'next.notify.asked', params: { who: db().staff.find((s) => s.email === UW)!.fullName, subject: expect.stringContaining(deal.number) } });
+    expect(note.link).toBe(`/staff/deals/${deal.id}/census?upload=1`);
+    const again = await ask(uw, deal.id);
+    expect(again.status).toBe(409);
+    expect(again.data.key).toBe('srv.task.duplicate');
+    // The plaque reads the open request of the object; the deal's events have it.
+    expect((await call<WorkTask[]>(`/tasks/about?subjectType=deal&subjectId=${deal.id}`, { sid: uw })).data.map((x) => x.id)).toEqual([r.data.id]);
+    expect(db().dealEvents.some((e) => e.dealId === deal.id && unpack(e.text).key === 'next.activity.created')).toBe(true);
+    expect((await call<WorkTask[]>('/tasks/mine', { sid: uw })).data[0]).toMatchObject({ id: r.data.id, status: 'open' });
+  });
+
+  it('without a responsible person it goes to the whole role; the first «Взять в работу» becomes the executor', async () => {
+    const uw = await login(UW);
+    const deal = await leadDeal(uw);
+    const legal = db().staff.filter((s) => s.role === 'legal' && s.active);
+    const r = (await call<WorkTask>('/tasks', { method: 'POST', sid: uw, json: { toRole: 'legal', action: 'other', subjectType: 'deal', subjectId: deal.id } })).data;
+    expect(r.assigneeName).toBeUndefined();
+    for (const l of legal) expect(db().notifications.some((n) => n.userId === l.id && unpack(n.text).key === 'next.notify.asked')).toBe(true);
+    const first = await login(legal[0]!.email);
+    const taken = await call<WorkTask>(`/tasks/${r.id}/take`, { method: 'POST', sid: first });
+    expect(taken.data).toMatchObject({ status: 'in_progress', assigneeName: legal[0]!.fullName });
+    expect((await call(`/tasks/${r.id}/take`, { method: 'POST', sid: first })).status).toBe(409);
+    if (legal[1]) {
+      const second = await login(legal[1].email);
+      expect((await call(`/tasks/${r.id}/take`, { method: 'POST', sid: second })).status).toBe(404);
+      expect((await call<QueueItem[]>('/queue?type=request', { sid: second })).data.some((q) => q.entityId === r.id)).toBe(false);
+    }
+    const notes = (await call<UserNotification[]>('/notifications', { sid: uw })).data;
+    expect(unpack(notes[0]!.text).key).toBe('next.notify.taken');
+  });
+
+  it('«Отклонить» needs a comment; the author sees it in «Мои запросы» and in the notification', async () => {
+    const uw = await login(UW);
+    const sales = await login(SALES);
+    const deal = await leadDeal(uw);
+    const r = (await ask(uw, deal.id)).data;
+    expect((await call(`/tasks/${r.id}/reject`, { method: 'POST', sid: sales, json: { comment: '' } })).status).toBe(422);
+    expect((await call(`/tasks/${r.id}/reject`, { method: 'POST', sid: uw, json: { comment: 'Не моё' } })).status).toBe(404);
+    const rejected = await call<WorkTask>(`/tasks/${r.id}/reject`, { method: 'POST', sid: sales, json: { comment: 'Клиент пришлёт данные в понедельник' } });
+    expect(rejected.data).toMatchObject({ status: 'rejected', resolution: 'Клиент пришлёт данные в понедельник' });
+    expect((await call<WorkTask[]>('/tasks/mine', { sid: uw })).data[0]).toMatchObject({ status: 'rejected', resolution: 'Клиент пришлёт данные в понедельник' });
+    const note = (await call<UserNotification[]>('/notifications', { sid: uw })).data[0]!;
+    expect(unpack(note.text).key).toBe('next.notify.rejected');
+    expect(note.detail).toBe('Клиент пришлёт данные в понедельник');
+    // Closed: the button is back, a new request may be sent.
+    expect((await ask(uw, deal.id)).status).toBe(200);
+  });
+
+  it('deadline: «Срок ответа на запрос» working days; a day before and when overdue both are notified once; «Напомнить» only after the deadline', async () => {
+    const uw = await login(UW);
+    const sales = await login(SALES);
+    const deal = await leadDeal(uw);
+    const r = (await ask(uw, deal.id)).data;
+    expect(Date.parse(r.dueAt)).toBeGreaterThan(Date.now() + 36 * 3_600_000);
+    expect((await call(`/tasks/${r.id}/remind`, { method: 'POST', sid: uw })).status).toBe(409);
+    const row = db().tasks.find((x) => x.id === r.id)!;
+    const count = (sid: string, key: string) => call<UserNotification[]>('/notifications', { sid }).then((x) => x.data.filter((n) => unpack(n.text).key === key).length);
+    row.dueAt = new Date(Date.now() + 3_600_000).toISOString();
+    expect(await count(sales, 'next.notify.dueSoon')).toBe(1);
+    expect(await count(uw, 'next.notify.dueSoon')).toBe(1);
+    row.dueAt = new Date(Date.now() - 3_600_000).toISOString();
+    expect(await count(sales, 'next.notify.overdue')).toBe(1);
+    expect(await count(sales, 'next.notify.overdue')).toBe(1);
+    expect((await call<WorkTask[]>('/tasks/mine', { sid: uw })).data[0]!.overdue).toBe(true);
+    expect((await call<QueueItem[]>('/queue?type=request', { sid: sales })).data.find((q) => q.entityId === r.id)).toMatchObject({ statusTone: 'danger', request: { overdue: true } });
+    expect((await call(`/tasks/${r.id}/remind`, { method: 'POST', sid: sales })).status).toBe(404);
+    const reminded = await call<WorkTask>(`/tasks/${r.id}/remind`, { method: 'POST', sid: uw });
+    expect(reminded.data.remindedAt).toBeTruthy();
+    expect(reminded.data.history.at(-1)!.kind).toBe('reminded');
+    expect(await count(sales, 'next.notify.reminded')).toBe(1);
+  });
+
+  it('a notification is read one by one or all at once; another person cannot read it', async () => {
+    const uw = await login(UW);
+    const sales = await login(SALES);
+    const deal = await leadDeal(uw);
+    await ask(uw, deal.id);
+    const n = (await call<UserNotification[]>('/notifications', { sid: sales })).data[0]!;
+    expect((await call(`/notifications/${n.id}/read`, { method: 'POST', sid: uw })).status).toBe(404);
+    expect((await call(`/notifications/${n.id}/read`, { method: 'POST', sid: sales })).status).toBe(204);
+    expect((await call<UserNotification[]>('/notifications', { sid: sales })).data[0]!.read).toBe(true);
   });
 });
 
@@ -132,6 +231,9 @@ describe('«Запросить у HR» and the contract checklist', () => {
     // Not asked yet: HR does not see the draft.
     expect((await call(`/contracts/${contract.id}/insured-list`, { method: 'POST', sid: hr, text: LIST })).status).toBe(404);
     const task = (await call<WorkTask>('/tasks/request-hr', { method: 'POST', sid: sales, json: { action: 'insured_list', subjectType: 'contract', subjectId: contract.id, comment: 'До 15.10' } })).data;
+    // The author has it in «Мои запросы»; the client's HR is notified at once.
+    expect((await call<WorkTask[]>('/tasks/mine', { sid: sales })).data.find((x) => x.id === task.id)).toMatchObject({ toRole: 'hr', status: 'open', byMe: true });
+    expect(db().notifications.some((n) => db().hrUsers.some((h) => h.id === n.userId && h.companyId === contract.clientId) && unpack(n.text).key === 'next.notify.asked')).toBe(true);
     expect(task).toMatchObject({ toRole: 'hr', contractId: contract.id, contractNumber: contract.number, link: '/hr' });
     expect(task.dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const hrTasks = (await call<WorkTask[]>('/tasks?status=open', { sid: hr })).data;

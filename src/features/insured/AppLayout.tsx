@@ -5,6 +5,7 @@ import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { cn } from '@/shared/lib/cn';
 import { useSession } from '@/shared/auth/session';
 import { PersonProvider } from './person';
+import { NotificationsBell } from '@/features/next/NotificationsBell';
 
 const TABS: { to: string; label: I18nKey; icon: LucideIcon; end?: boolean }[] = [
   { to: '/app', label: 'app.nav.home', icon: House, end: true },
@@ -20,7 +21,10 @@ export default function AppLayout() {
   const userId = useSession()?.user.id;
   return (
     <PersonProvider key={userId}>
-      <main className="flex-1 px-4 pb-28 pt-5">
+      <div className="flex justify-end px-2 pt-2" data-testid="app-topbar">
+        <NotificationsBell />
+      </div>
+      <main className="flex-1 px-4 pb-28 pt-1">
         <Outlet />
       </main>
       <nav

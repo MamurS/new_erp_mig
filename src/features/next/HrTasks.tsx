@@ -34,7 +34,7 @@ function TaskRow({ task }: { task: WorkTask }) {
       <div className="min-w-0 flex-1">
         <p className="font-semibold">
           {tm(task.title)}
-          {task.dueDate && <span className="num font-normal text-muted"> · {t('next.hr.due', { date: formatDate(task.dueDate) })}</span>}
+          <span className={task.overdue ? 'num font-semibold text-danger-text' : 'num font-normal text-muted'} data-overdue={task.overdue || undefined}> · {t('next.hr.due', { date: formatDate(task.dueDate) })}</span>
         </p>
         {task.comment && <p className="mt-0.5 text-[14px]">{task.comment}</p>}
         <p className="mt-0.5 text-[13px] text-muted">{t('next.hr.from', { name: task.createdByName })}</p>
@@ -61,7 +61,7 @@ function TaskRow({ task }: { task: WorkTask }) {
                 <Link to={task.link}>{t('next.hr.open')}</Link>
               </Button>
             )}
-            <Button size="sm" loading={done.isPending} onClick={() => void run(() => done.mutateAsync(task.id), t('next.hr.doneToast'))}>
+            <Button size="sm" loading={done.isPending} onClick={() => void run(() => done.mutateAsync({ id: task.id }), t('next.hr.doneToast'))}>
               {t('next.hr.markDone')}
             </Button>
           </>

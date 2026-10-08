@@ -1,3 +1,4 @@
+import { isActiveRequest, isOverdue as requestOverdue } from '@/shared/domain/requests';
 import { http } from 'msw';
 import { msg, t } from '@/i18n/core';
 import type { AuditEntry, SessionUser } from '@/shared/types';
@@ -503,22 +504,33 @@ const adminItems: Builder = (d, user) => {
   return out;
 };
 
-/** Tasks from colleagues and HR («Попросить …»): open tasks for the role, each leads to its place. */
+/**
+ * Requests from colleagues and HR («Попросить …»): the person's own and the role's unassigned ones, still
+ * waiting; each leads to its place, overdue ones are red.
+ */
 const requestItems: Builder = (d, user) =>
   d.tasks
-    .filter((t) => t.status === 'open' && t.toRole === user.role)
-    .map((t) => ({
-      id: t.id,
-      type: 'request' as const,
-      entityId: t.id,
-      who: t.clientName,
-      details: t.title,
-      status: msg('srv.dash.st.requestFrom', { name: t.createdByName }),
-      statusTone: 'info' as const,
-      dueAt: t.dueDate ? tzIso(parseIso(t.dueDate)) : t.createdAt,
-      action: 'open' as const,
-      link: t.link,
-    }));
+    .filter((t) => isActiveRequest(t.status) && t.toRole === user.role && (!t.assigneeId || t.assigneeId === user.id))
+    .map((t) => {
+      const overdue = requestOverdue(t);
+      return {
+        id: t.id,
+        type: 'request' as const,
+        entityId: t.id,
+        who: t.clientName,
+        details: t.title,
+        status: overdue
+          ? msg('srv.dash.st.requestOverdue', { name: t.createdByName })
+          : t.status === 'in_progress'
+            ? msg('srv.dash.st.requestTaken', { name: t.createdByName })
+            : msg('srv.dash.st.requestFrom', { name: t.createdByName }),
+        statusTone: overdue ? ('danger' as const) : t.status === 'in_progress' ? ('warning' as const) : ('info' as const),
+        dueAt: t.dueAt,
+        action: 'open' as const,
+        link: t.link,
+        request: { status: t.status, ...(t.assigneeName ? { assigneeName: t.assigneeName } : {}), mine: t.assigneeId === user.id, overdue },
+      };
+    });
 
 /** What each role works on (one place to read the whole map of the dashboard). */
 const ROLE_QUEUE: Partial<Record<SessionUser['role'], Builder[]>> = {

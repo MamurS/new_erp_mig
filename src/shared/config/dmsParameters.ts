@@ -375,6 +375,15 @@ const SPECS: Record<DmsParamKey, DmsParamSpec> = {
     integer: true,
     audience: 'staff',
   },
+  requestResponseWorkdays: {
+    group: 'kp',
+    unit: 'workdays',
+    defaultValue: 2,
+    min: 1,
+    max: 20,
+    integer: true,
+    audience: 'staff',
+  },
   fraudMaxClaimsPerMonth: {
     group: 'claims',
     unit: 'count',

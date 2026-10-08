@@ -167,7 +167,10 @@ export function unpack(packed: string): { key: string; params?: Params } {
 export function tm(packed: string | undefined | null): string {
   if (!packed) return '';
   const { key, params } = unpack(packed);
-  return hasKey(key) ? tKey(key, params) : packed;
+  if (!hasKey(key)) return packed;
+  // A parameter may itself be a packed message («{who} просит: {what}», what = an action's label).
+  const inner = params && Object.fromEntries(Object.entries(params).map(([k, v]) => [k, typeof v === 'string' && v !== packed && hasKey(unpack(v).key) ? tm(v) : v]));
+  return tKey(key, inner);
 }
 
 /** A map of labels read in the current language: `defineLabels('labels.role', ROLES).operator`. */

@@ -16,7 +16,10 @@ import type { TaskAction, TaskSubjectType } from '@/shared/types/dto';
 import { can } from '@/shared/auth/permissions';
 import { useUser } from '@/shared/auth/session';
 import { errorMessage } from '@/shared/api/client';
-import { useAskTask, useRequestHr } from '@/shared/api/queries/tasks';
+import { useAskTask, useRemindTask, useRequestHr, useTasksAbout } from '@/shared/api/queries/tasks';
+import type { WorkTask } from '@/shared/types/dto';
+import { formatDate, formatDateTime } from '@/shared/lib/format';
+import { cn } from '@/shared/lib/cn';
 import { ACTION_RIGHT, ACTION_ROLE, staffActionPath, type TaskRefs } from '@/shared/domain/nextStep';
 import { censusTemplateCsv } from '@/shared/domain/census';
 import { isStaffRole, ROLE_LABEL } from '@/shared/domain/labels';
@@ -42,14 +45,62 @@ export function useCanDo(action: TaskAction): boolean {
   return can(user, right, { companyId: user.companyId });
 }
 
-/** «Попросить {роль}»: a comment and a task in the role's queue. */
+/** Who a request went to, in the plaque and in «Мои запросы». */
+export const requestTo = (task: Pick<WorkTask, 'toRole' | 'assigneeName'>): string => (task.toRole === 'hr' ? t('next.req.toHr') : (task.assigneeName ?? roleName(task.toRole)));
+
+/**
+ * The open request instead of the button: «Запрос … отправлен {дата}, {статус}». Once the deadline has
+ * passed it is red and its author may «Напомнить» (a new notification to the executor, a mark in the history).
+ */
+export function RequestPlaque({ task }: { task: WorkTask }) {
+  const remind = useRemindTask();
+  const doRemind = async () => {
+    try {
+      await remind.mutateAsync(task.id);
+      toast.success(t('next.req.reminded'));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
+  return (
+    <div
+      role="status"
+      data-testid="request-plaque"
+      data-status={task.status}
+      data-overdue={task.overdue || undefined}
+      className={cn('flex flex-wrap items-center gap-2 rounded-card px-3 py-2 text-[13px]', task.overdue ? 'bg-danger-soft text-danger-text' : 'bg-accent-soft text-text')}
+    >
+      <span className="min-w-0 flex-1">
+        {t('next.req.sent', { what: tKey(`next.action.${task.action}`), to: requestTo(task), date: formatDate(task.createdAt), status: tKey(`next.req.status.${task.status}`) })}
+        {task.overdue ? <> · {t('next.req.overdue', { date: formatDate(task.dueDate) })}</> : <> · {t('next.req.due', { date: formatDate(task.dueDate) })}</>}
+        {task.remindedAt && <span className="text-muted"> · {t('next.req.remindedAt', { date: formatDateTime(task.remindedAt) })}</span>}
+      </span>
+      {task.byMe && task.overdue && (
+        <Button size="sm" variant="secondary" loading={remind.isPending} onClick={() => void doRemind()} data-testid="request-remind">
+          {t('next.req.remind')}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** The open request of this kind about the object, if any (one at a time). */
+function useOpenRequest(subjectType: TaskSubjectType, subjectId: string, action: TaskAction, toRole: Role | 'hr', enabled: boolean): WorkTask | undefined {
+  const about = useTasksAbout(subjectType, subjectId, enabled);
+  return about.data?.find((x) => x.action === action && x.toRole === toRole);
+}
+
+/** «Попросить {роль}»: a comment and a request to the responsible person (or the role); then the plaque. */
 export function AskButton({ role, action, subjectType, subjectId, size = 'md' }: { role: Role; action: TaskAction; subjectType: TaskSubjectType; subjectId: string; size?: Size }) {
   const user = useUser();
   const ask = useAskTask();
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [error, setError] = useState<string>();
-  if (!user || !isStaffRole(role) || !can(user, 'tasks.ask', { companyId: user.companyId })) return null;
+  const allowed = !!user && isStaffRole(role) && can(user, 'tasks.ask', { companyId: user.companyId });
+  const pending = useOpenRequest(subjectType, subjectId, action, role, allowed);
+  if (!allowed) return null;
+  if (pending) return <RequestPlaque task={pending} />;
   const label = tKey(`next.ask.${role}`);
   const send = async () => {
     const parsed = taskAskSchema.safeParse({ toRole: role, action, subjectType, subjectId, comment });
@@ -100,7 +151,10 @@ export function RequestHrButton({
   const request = useRequestHr();
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
-  if (!user || !can(user, 'tasks.request_hr')) return null;
+  const allowed = !!user && can(user, 'tasks.request_hr');
+  const pending = useOpenRequest(subjectType, subjectId, action, 'hr', allowed && hasHr);
+  if (!user || !allowed) return null;
+  if (pending) return <RequestPlaque task={pending} />;
   const send = async () => {
     const parsed = taskRequestHrSchema.safeParse({ action, subjectType, subjectId, comment });
     if (!parsed.success) return;

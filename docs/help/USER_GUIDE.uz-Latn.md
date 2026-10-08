@@ -69,11 +69,37 @@ Roʻyxat, yorliq yoki boʻlim maʼlumotlar hali kiritilmagani uchun boʻsh boʻl
 - **nega boʻsh** — bosqich va holatni hisobga olgan holda (lid uchun: «Sugʻurtalanganlar shartnoma kuchga kirgandan keyin paydo boʻladi»);
 - **nima qilish kerak va kim masʼul** — rol nomi;
 - **amal tugmasi**, agar buni oʻzingiz qila olsangiz: u toʻgʻridan-toʻgʻri kerakli joyga, ochiq shakl bilan olib boradi (masalan, baholash maʼlumotlari yoki 2-ilova faylini tanlash), fayl kerak boʻlsa yonida — «Shablonni yuklab olish»;
-- **«{rol}dan soʻrash»**, agar boshqa xodim masʼul boʻlsa: izohingiz va havola bilan vazifa ish stolida ushbu rol navbatida, «Hamkasblardan vazifalar» yorligʻida paydo boʻladi. Vazifa bajarilganda bildirishnoma olasiz (yuqori paneldagi qoʻngʻiroqcha); <!-- audience: staff hr -->
+- **«{rol}dan soʻrash»**, agar boshqa xodim masʼul boʻlsa: izohingiz bilan soʻrov masʼul xodimga (bitim yoki mijoz menejeriga, kotirovka anderrayteriga), u boʻlmasa — ushbu roldagi barcha xodimlarga yuboriladi. U ish stolidagi navbatda, «Hamkasblardan vazifalar» yorligʻida va ijrochining qoʻngʻiroqchasida paydo boʻladi. Obyektda tugma oʻrnida «… soʻrovi {sana} yuborildi — {kimga}, {holat}» plashkasi, soʻrovning oʻzi esa «Mening soʻrovlarim» yorligʻingizda paydo boʻladi («Hamkasblarga soʻrovlar» boʻlimi); <!-- audience: staff hr -->
 - **«HRdan soʻrash»**, agar maʼlumotni mijoz berishi kerak boʻlsa: vazifa HR kabinetida «MIGdan vazifalar» blokida paydo boʻladi. Mijozda hali kabinet boʻlmasa (TTgacha lid), CSV shabloni bilan tayyor xat ochiladi — matnni nusxalab, oʻz pochtangizdan yuboring; <!-- audience: staff -->
 - **«Batafsil maʼlumotnomada»** — ushbu qadam haqidagi qoʻllanma boʻlimi.
 
 Agar roʻyxat filtrlar yoki qidiruv sababli boʻsh boʻlsa, avvalgidek «Hech narsa topilmadi» koʻrsatiladi.
+
+### Bildirishnomalar qoʻngʻiroqchasi {#notifications}
+
+<!-- audience: all -->
+
+Yuqori paneldagi qoʻngʻiroqcha barcha portallarda bor. Undagi raqam — siz hali oʻqimagan bildirishnomalar soni.
+
+- **Nima keladi:** sizga yangi soʻrov («{Muallif} soʻraydi: {nima} — {obyekt}»), soʻrovingizga javob (ishga olindi, bajarildi, rad etildi — ijrochi izohi bilan), «Ertaga soʻrov muddati», «Soʻrov muddati oʻtdi» va muallif eslatmalari.
+- **Bildirishnomani bosish** obyektni — bitim, shartnoma, mijoz kartasi yoki amal kerak boʻlgan shaklni — ochadi va shu bildirishnomani oʻqilgan deb belgilaydi.
+- **«Hammasini oʻqilgan deb belgilash»** roʻyxat tepasida hisoblagichni nolga tushiradi.
+
+### Hamkasblarga soʻrovlar va «Mening soʻrovlarim» {#requests}
+
+<!-- audience: staff -->
+
+Soʻrov — hamkasbdan siz emas, u bajara oladigan qadamni bajarishni soʻrash: masalan, anderrayter menejerdan baholash maʼlumotlarini yuklashni soʻraydi. Soʻrovlar boʻsh boʻlimlarda va bitim roʻyxatida «{rol}dan soʻrash» va «HRdan soʻrash» tugmalari bilan yuboriladi.
+
+- **Kimga boradi.** Obyekt uchun masʼul xodimga: bitim yoki mijoz menejeriga, kotirovka anderrayteriga. Masʼul boʻlmasa, soʻrovni ushbu roldagi barcha xodimlar koʻradi; birinchi boʻlib «Ishga olish»ni bosgan ijrochi boʻladi, qolganlarda qator yoʻqoladi.
+- **Bir vaqtda bitta soʻrov.** Soʻrov ochiq ekan, obyektda tugma oʻrnida «… soʻrovi {sana} yuborildi — {kimga}, {holat}» plashkasi koʻrinadi va shu obyekt boʻyicha xuddi shu soʻrovni yuborib boʻlmaydi.
+- **Javob muddati** — «DMS parametrlari»dagi «Soʻrovga javob muddati» parametri (demo: 2 ish kuni). Muddatdan bir kun oldin va muddat oʻtganda ijrochi ham, muallif ham bildirishnoma oladi. Muddati oʻtgan soʻrov ikkalasida ham qizil rangda.
+- **«Eslatish».** Muddat oʻtganda plashkada va «Mening soʻrovlarim»da «Eslatish» tugmasi paydo boʻladi: ijrochi takroriy bildirishnoma oladi, soʻrov tarixida belgi paydo boʻladi.
+- **Tarix.** Soʻrov yuborilishi va har bir holat oʻzgarishi bitim «Hodisalar»iga va mijoz «Faollik»iga yoziladi.
+
+**Ijrochi.** Soʻrov ish stoli navbatida, «Hamkasblardan vazifalar» yorligʻida koʻrinadi. Qatorda — «Ishga olish», «Ochish» va «Rad etish» (izoh majburiy, muallif uni koʻradi). Ishga olingan soʻrov amal bajarilganda (masalan, baholash maʼlumotlari yuklanganda) oʻzi yopiladi yoki qoʻlda — izoh bilan «Bajarilgan deb belgilash».
+
+**Muallif.** Ish stolida «Mening soʻrovlarim» yorligʻi: nima, kimga, qaysi obyekt boʻyicha, qachon yuborilgan, muddat, holat (kutmoqda, ishda, bajarildi, rad etildi) va ijrochi izohi.
 
 ### Maʼlumotnoma {#using-help}
 
@@ -318,7 +344,7 @@ Majburiy band bajarilmaguncha keyingi bosqichga oʻtib boʻlmaydi: oʻtish tugma
 <!-- audience: staff -->
 **Kim:** menejer yoki anderrayter. «HRdan soʻrash» tugmasi boʻsh 2-ilovada, baholash maʼlumotlarida, mijoz kartasining «Sugʻurtalanganlar» yorligʻida va bitim roʻyxatida bor.
 
-1. Mijozda HR kabineti allaqachon boʻlsa (u TT yuborilganda ochiladi), izoh yozing va «Vazifani yuborish» tugmasini bosing. Vazifa muddati — 7 kun.
+1. Mijozda HR kabineti allaqachon boʻlsa (u TT yuborilganda ochiladi), izoh yozing va «Soʻrovni yuborish» tugmasini bosing. Javob muddati — «Soʻrovga javob muddati» parametri (demo: 2 ish kuni); soʻrov «Mening soʻrovlarim»da koʻrinadi.
 2. Kabinet hali boʻlmasa, mijozga xat ochiladi: matnni nusxalang, pochtani oching va CSV shablonini ilova qiling. Olingan faylni oʻzingiz yuklang.
 3. HR vazifani bajarganda bildirishnoma olasiz (yuqori paneldagi qoʻngʻiroqcha), roʻyxat bandi tayyor boʻladi.
 <!-- /audience -->
@@ -995,6 +1021,8 @@ Odatiy vaziyatlar va harakatlar tartibi; agar vaziyat roʻyxatda boʻlmasa, ITS 
 | **Shartnoma imzolanmaydi: eng kam sondan kam** | 2-ilovada xodimlar eng kam sondan kam, kotirovkada istisno tasdiqlanmagan. Toʻliq roʻyxatni yuklang yoki kotirovkada istisnoni kelishing. | <!-- audience: staff -->
 | **Chiqarishdan soʻng xodimlar eng kam sondan kam** | HR xodimni chiqarishi mumkin; anderrayter va menejer vazifa oladi va mijoz bilan shartnoma shartlarini hal qiladi. | <!-- audience: staff hr -->
 | **Ilovaga kirishda «Kod mos kelmadi yoki bu raqam topilmadi»** | Xabar ataylab nomaʼlum raqam va notoʻgʻri kod uchun bir xil va faqat kod kiritilgandan keyin chiqadi — shunda kim sugʻurtalanganini tanlash yoʻli bilan bilib boʻlmaydi. SMSdagi kodni tekshiring; u toʻgʻri boʻlsa — kompaniyangiz HRiga murojaat qiling, sugʻurtalanganlar roʻyxatidagi raqamni tekshirsin. | <!-- audience: staff hr insured -->
+| **Soʻrovga javob berishmayapti** | Ish stolida «Mening soʻrovlarim»ni oching: soʻrov kimga ketgani va ishga olingani koʻrinadi. Muddat oʻtganda «Eslatish»ni bosing — ijrochi takroriy bildirishnoma oladi. Baribir javob boʻlmasa, ijrochi yoki uning rahbari bilan bevosita bogʻlaning; javob muddatini «Soʻrovga javob muddati» parametri belgilaydi. | <!-- audience: staff -->
+| **Soʻrov notoʻgʻri odamga kelgan** | Navbat qatorida «Rad etish»ni bosing va kimga murojaat qilish kerakligini yozing — muallif izohni koʻradi va soʻrovni qayta yuborishi mumkin. | <!-- audience: staff -->
 
 ## 18. Xavfsizlik va maxfiylik {#security}
 

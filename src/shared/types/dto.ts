@@ -143,6 +143,8 @@ export interface QueueItem {
   policyId?: UUID;
   /** Where a `request` row (a task from a colleague or HR) leads: the place the task is about. */
   link?: string;
+  /** A `request` row: its state for the executor's actions («Взять в работу», «Отклонить», «Отметить выполненным»). */
+  request?: { status: TaskStatus; assigneeName?: string; mine: boolean; overdue: boolean };
   /** What `entityId` points to when the type alone does not say (payouts, scans). */
   subject?: 'claim' | 'registry' | 'contract' | 'endorsement' | 'insured';
   /** Legal form of `who` when the row's subject is a legal entity (client, clinic, assistance, payer). */
@@ -732,13 +734,43 @@ export interface WorkTask {
   link: string;
   createdByName: string;
   createdAt: ISODateTime;
-  dueDate?: ISODate;
-  status: 'open' | 'done';
+  /** The answer is due by (the «Срок ответа на запрос» parameter, in working days). */
+  dueAt: ISODateTime;
+  /** The day of `dueAt` (shown as «до …»). */
+  dueDate: ISODate;
+  /** `open` — waits for an executor, `in_progress` — taken, `done`, `rejected`. */
+  status: TaskStatus;
+  /** The person the request went to (the responsible one), or who took it from the role's pool. */
+  assigneeName?: string;
+  /** Closed (done or rejected) at / by. */
   doneAt?: ISODateTime;
   doneByName?: string;
+  /** The executor's comment on «Отметить выполненным» or «Отклонить». */
+  resolution?: string;
+  /** Past `dueAt` and not closed. */
+  overdue: boolean;
+  /** Asked by the person reading it (the author may «Напомнить»). */
+  byMe: boolean;
+  /** The last «Напомнить» of the author. */
+  remindedAt?: ISODateTime;
+  /** What the request is about, as the author sees it: a deal, contract number or the client. */
+  subjectLabel: string;
+  /** Where the author's object is (staff portal). */
+  subjectLink: string;
+  history: TaskEvent[];
   /** The contract the HR task is about (number and id for the action in place). */
   contractId?: UUID;
   contractNumber?: string;
+}
+
+export type TaskStatus = 'open' | 'in_progress' | 'done' | 'rejected';
+
+/** A line of the request's history (also written to the object's activity feed). */
+export interface TaskEvent {
+  at: ISODateTime;
+  kind: 'created' | 'taken' | 'done' | 'rejected' | 'reminded';
+  byName: string;
+  comment?: string;
 }
 
 export interface UserNotification {

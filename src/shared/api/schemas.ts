@@ -526,6 +526,9 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'payout_card_changed',
     'task_created',
     'task_done',
+    'task_taken',
+    'task_rejected',
+    'task_reminded',
   ]),
   targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill', 'parameter', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'ai', 'migration']),
   targetId: uuid.optional(),
@@ -629,6 +632,7 @@ export const queueItems = z.array(
     legalForm: z.enum(LEGAL_FORMS).optional(),
     policyId: uuid.optional(),
     link: z.string().optional(),
+    request: z.object({ status: z.enum(['open', 'in_progress', 'done', 'rejected']), assigneeName: z.string().optional(), mine: z.boolean(), overdue: z.boolean() }).optional(),
   }) satisfies z.ZodType<D.QueueItem>,
 );
 export const integrations = z.array(
@@ -865,6 +869,7 @@ const dmsParamKey = z.enum([
   'minGroupCountsFamily',
   'allowedLegalForms',
   'belowMinDuringTerm',
+  'requestResponseWorkdays',
 ]);
 /** Portals other than the MIG one receive only part of the values. */
 export const dmsParamValues: z.ZodType<Partial<T.DmsParamValues>> = z.record(dmsParamKey, z.number());

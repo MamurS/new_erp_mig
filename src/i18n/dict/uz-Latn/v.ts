@@ -63,6 +63,7 @@ export const v: Translation<typeof Ru> = {
   'v.max200Requests': 'Bir martada koʻpi bilan 200 ta ariza',
   'v.reasonMin5': 'Sababni koʻrsating: kamida 5 ta belgi',
   'v.reasonRequired': 'Sababni koʻrsating',
+  'v.commentRequired': 'Izoh yozing',
   'v.roleRequired': 'Rolni tanlang',
   'v.caseTypeRequired': 'Murojaat turini tanlang',
   'v.caseDescMin5': 'Murojaatni yozing: kamida 5 ta belgi',

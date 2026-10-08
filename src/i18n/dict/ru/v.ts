@@ -61,6 +61,7 @@ export const v = {
   'v.max200Requests': 'Не больше 200 заявок за раз',
   'v.reasonMin5': 'Укажите причину: минимум 5 символов',
   'v.reasonRequired': 'Укажите причину',
+  'v.commentRequired': 'Напишите комментарий',
   'v.roleRequired': 'Выберите роль',
   'v.caseTypeRequired': 'Выберите тип обращения',
   'v.caseDescMin5': 'Опишите обращение: минимум 5 символов',

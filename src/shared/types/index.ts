@@ -477,7 +477,10 @@ export type AuditAction =
   | 'family_request_decided'
   | 'payout_card_changed'
   | 'task_created'
-  | 'task_done';
+  | 'task_done'
+  | 'task_taken'
+  | 'task_rejected'
+  | 'task_reminded';
 
 export interface AuditEntry {
   id: UUID;
@@ -924,7 +927,8 @@ export type DmsParamKey =
   | 'minGroupSize'
   | 'minGroupCountsFamily'
   | 'allowedLegalForms'
-  | 'belowMinDuringTerm';
+  | 'belowMinDuringTerm'
+  | 'requestResponseWorkdays';
 
 export type DmsParamValues = Record<DmsParamKey, number>;
 

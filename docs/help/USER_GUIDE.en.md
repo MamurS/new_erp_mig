@@ -69,11 +69,37 @@ When a list, tab or section is empty because the data has not been entered yet, 
 - **why it is empty** — taking the stage and status into account (for a lead: “Insured persons appear once the contract is in force”);
 - **what to do and who is responsible** — the role name;
 - **an action button** if you can do it yourself: it leads straight to the right place with the form open (e.g. choosing the assessment data or appendix 2 file), next to it “Download the template” if a file is expected;
-- **“Ask {role}”** if another employee is responsible: a task with your comment and a link appears in that role’s queue on the dashboard, tab “Tasks from colleagues”. When it is done you are notified (the bell in the top bar); <!-- audience: staff hr -->
+- **“Ask {role}”** if another employee is responsible: the request with your comment goes to the responsible person (the manager of the deal or client, the underwriter of the quote), or, without one, to everyone with that role. It appears in the queue on the dashboard, tab “Tasks from colleagues”, and in the executor’s bell. On the object the button is replaced by the plaque “Request … sent {date} — {to}, {status}”, and the request itself is in your “My requests” tab (section “Requests to colleagues”); <!-- audience: staff hr -->
 - **“Request from HR”** if the client must provide the data: the task appears in the HR cabinet under “Tasks from MIG”. If the client has no cabinet yet (a lead before the commercial proposal), a ready letter with the CSV template opens — copy the text and send it from your mailbox; <!-- audience: staff -->
 - **“More in the help”** — the section of the guide about this step.
 
 If the list is empty because of filters or search, “Nothing found” is shown as before.
+
+### The notification bell {#notifications}
+
+<!-- audience: all -->
+
+The bell in the top bar is in every portal. The number on it is how many notifications you have not read yet.
+
+- **What comes:** a new request to you (“{Author} asks: {what} — {object}”), an answer to your request (taken, done, rejected — with the executor’s comment), “The request is due tomorrow”, “The request is overdue” and the author’s reminders.
+- **A click on a notification** opens the object — the deal, contract, client card or the form where an action is needed — and marks that notification read.
+- **“Mark all as read”** at the top of the list clears the counter.
+
+### Requests to colleagues and “My requests” {#requests}
+
+<!-- audience: staff -->
+
+A request asks a colleague to take a step that you cannot: for example, the underwriter asks the manager to upload the assessment data. Requests are sent with the “Ask {role}” and “Request from HR” buttons in empty sections and in the deal checklist.
+
+- **Who gets it.** The person responsible for the object: the manager of the deal or client, the underwriter of the quote. Without one, everyone with the role sees the request; the first to click “Take” becomes the executor, and the row disappears for the others.
+- **One request at a time.** While a request is open, the object shows the plaque “Request … sent {date} — {to}, {status}” instead of the button, and the same request about the same object cannot be sent.
+- **Response time** — the “Request response time” parameter in “DMS parameters” (demo: 2 working days). A day before the deadline and when it is overdue both the executor and the author are notified. An overdue request is red for both.
+- **“Remind”.** Once the deadline has passed, the plaque and “My requests” show “Remind”: the executor gets the notification again and the request’s history gets a mark.
+- **History.** Sending the request and every change of its status are written to the deal’s “Events” and the client’s “Activity”.
+
+**Executor.** The request is in the dashboard queue, tab “Tasks from colleagues”. The row has “Take”, “Open” and “Reject” (a comment is required; the author sees it). A taken request closes by itself when the action is done (for example, the assessment data is uploaded), or by hand — “Mark as done” with a comment.
+
+**Author.** The dashboard has the “My requests” tab: what, to whom, about which object, when it was sent, the deadline, the status (waiting, in progress, done, rejected) and the executor’s comment.
 
 ### Help {#using-help}
 
@@ -318,7 +344,7 @@ While a required item is not done, the deal cannot move to the next stage: the t
 <!-- audience: staff -->
 **Who:** manager or underwriter. “Request from HR” is in an empty appendix 2, in the assessment data, in the “Insured” tab of the client card and in the deal checklist.
 
-1. If the client already has an HR cabinet (it opens when the commercial proposal is sent), write a comment and click “Send the task”. The task is due in 7 days.
+1. If the client already has an HR cabinet (it opens when the commercial proposal is sent), write a comment and click “Send the request”. The response time is the “Request response time” parameter (demo: 2 working days); the request is in your “My requests”.
 2. If there is no cabinet yet, a letter to the client opens: copy the text, open your mail and attach the CSV template. Upload the received file yourself.
 3. When HR completes the task you are notified (the bell in the top bar) and the checklist item becomes done.
 <!-- /audience -->
@@ -995,6 +1021,8 @@ Typical situations and what to do; if a situation is not on the list, contact th
 | **A contract cannot be signed: below the minimum** | Appendix 2 has fewer employees than the minimum and no exception is approved in the quote. Upload the full list or approve the exception in the quote. | <!-- audience: staff -->
 | **After an exclusion the group is below the minimum** | HR can exclude the employee; the underwriter and the manager get a task and agree with the client what to do with the contract terms. | <!-- audience: staff hr -->
 | **The app says «The code did not match, or this number is not found»** | The message is deliberately the same for an unknown number and a wrong code and appears only after the code is entered — so nobody can find out by trial who is insured. Check the SMS code; if it is right, ask your company's HR to check the number in the list of insured people. | <!-- audience: staff hr insured -->
+| **Nobody answers the request** | Open “My requests” on the dashboard: it shows who got the request and whether it was taken. Once the deadline has passed, click “Remind” — the executor is notified again. If there is still no answer, contact the executor or their manager directly; the response time is the “Request response time” parameter. | <!-- audience: staff -->
+| **The request came to the wrong person** | Click “Reject” in the queue row and write whom to ask — the author sees the comment and can send the request again. | <!-- audience: staff -->
 
 ## 18. Security and privacy {#security}
 
