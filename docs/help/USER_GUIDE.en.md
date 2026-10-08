@@ -820,11 +820,11 @@ This section can be given to partners and clients separately: it contains only w
 
 <!-- audience: staff insured -->
 
-- **Home:** the policy card, the tiles “Book a doctor”, “Get money back for a receipt”, “Clinics nearby”, “Message us”, “Is it covered?”; the latest reimbursement; “What is left” for the limits; the “Your assistance 24/7” card.
-- **The “Me / {name}” switch** at the top: everything on the screen is shown for the selected family member.
+- **Home:** the policy card, the tiles “Book a doctor”, “Get money back for a receipt”, “Clinics nearby”, “Message us”, “Is it covered?”, “My family”; the latest reimbursement; “What is left” for the limits; the “Your assistance 24/7” card.
+- **The “Me / {name}” switch** at the top: everything on the screen is shown for the selected family member. For the employee the last item is “+ Add”: it opens the request for a family member right away.
 - **“Card for the clinic”:** the QR code and the short code for the reception. The code refreshes every minute — show the live screen, not a screenshot.
 - **Reimbursements:** sending a receipt, statuses, “Dispute” after a denial.
-- **“My family”:** add a family member (the request goes to HR).
+- **“My family”** (a tile on the home screen or “Profile”): who is insured with you and their status (on the policy / excluded), the “Add a family member” button and the “My requests” block — whom to add, the date, the status: under review by HR, approved, rejected with a reason. Family members are added only by a request through the company’s HR; when HR approves or rejects it, a notification comes to the bell on the home screen. An adult family member does not see the button — instead there is the hint “Family members can be added by the employee through whom you are insured”.
 - **Profile:** certificate, language, card for payouts, consent to data processing, “Sign out”.
 - **An adult family member** signs in with their own phone and can turn on “Allow {name} to see my claims” or withdraw it.
 

@@ -60,6 +60,6 @@ export const emptyPartner = {
   'emptyPartner.app.claims.why': 'Оплатили приём или лекарства сами? Сфотографируйте чек — МИГ вернёт деньги в пределах лимита.',
   'emptyPartner.app.appointments.why': 'Запишитесь в клинику сети ДМС — запись появится здесь, а клиника подтвердит время.',
   'emptyPartner.app.family.why': 'Супруга, детей или родителей добавляют в полис по заявке: отправьте её здесь, HR вашей компании её рассмотрит.',
-  'emptyPartner.app.family.request': 'Оформить заявку',
+  'emptyPartner.app.family.request': 'Добавить члена семьи',
   'emptyPartner.app.familyRequests.why': 'Здесь будут ваши заявки на членов семьи и их статус.',
 };

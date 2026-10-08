@@ -3,6 +3,7 @@
  * (HR approves them into a change request). An adult family member sees the employee only as the policyholder.
  */
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, ShieldCheck, UserRound } from 'lucide-react';
 import { useI18n, type I18nKey } from '@/i18n';
 import type { FamilyRelation } from '@/shared/types';
@@ -46,7 +47,12 @@ function PersonCard({ p, testId }: { p: FamilyProfile; testId: string }) {
       </span>
       <div className="min-w-0">
         <p className="font-bold">{p.fullName}</p>
-        <p className="text-[14px] text-muted">{RELATION_LABEL[p.relation]}</p>
+        <p className="text-[14px] text-muted">
+          {RELATION_LABEL[p.relation]} ·{' '}
+          <span className={cn('font-semibold', p.status === 'active' ? 'text-accent-text' : 'text-danger-text')} data-testid="family-member-status">
+            {t(p.status === 'active' ? 'app.family.status.active' : 'app.family.status.excluded')}
+          </span>
+        </p>
         {p.certificateNumber && (
           <p className="text-[14px]">
             {t('app.card.certificate')}: <span className="num font-semibold">{p.certificateNumber}</span>
@@ -246,13 +252,19 @@ function EmployeeFamily() {
   const { t } = useI18n();
   const family = useMyFamily();
   const requests = useMyFamilyRequests();
-  const [adding, setAdding] = useState(false);
+  // «+ Добавить» of the home switcher opens the form right away (`?add=1`, no personal data in the URL).
+  const [params, setParams] = useSearchParams();
+  const [adding, setAddingState] = useState(params.get('add') === '1');
+  const setAdding = (v: boolean) => {
+    setAddingState(v);
+    if (!v && params.has('add')) setParams({}, { replace: true });
+  };
   const members = (family.data ?? []).filter((p) => p.access !== 'self');
 
   if (adding) return <AddMemberForm onDone={() => setAdding(false)} />;
   return (
     <>
-      <Button onClick={() => setAdding(true)} className={BIG}>
+      <Button onClick={() => setAdding(true)} className={BIG} data-testid="family-add">
         <Plus className="h-5 w-5" aria-hidden />
         {t('app.family.add')}
       </Button>
@@ -318,6 +330,9 @@ function MemberFamily({ principalName }: { principalName: string }) {
           <p className="text-[14px] text-muted">{t('app.family.policyholderHint')}</p>
         </div>
       </section>
+      <p className="mt-3 rounded-card bg-sky px-4 py-3 text-[14px] text-sky-text" data-testid="family-add-hint">
+        {t('app.family.memberOnly')}
+      </p>
       <Section title={t('app.family.you')}>
         {family.isLoading ? (
           <CardSkeletons count={1} />
@@ -339,7 +354,7 @@ export default function FamilyPage() {
   const me = useMe();
   return (
     <div>
-      <ScreenHeader title={t('app.family.title')} back="/app/profile" />
+      <ScreenHeader title={t('app.family.title')} back="/app" />
       {me.isLoading ? (
         <Skeleton className="h-40 w-full rounded-card" />
       ) : me.isError || !me.data ? (

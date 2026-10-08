@@ -99,7 +99,7 @@ describe('family in the insured app', () => {
       /Karimova Dilnoza Rustamovna.*Karimov Temur Azizovich|Karimov Temur Azizovich.*Karimova Dilnoza Rustamovna/,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Добавить' }));
+    await user.click(screen.getByRole('button', { name: 'Добавить члена семьи' }));
     const form = await screen.findByRole('form', { name: 'Добавить члена семьи' });
     await user.click(within(form).getByRole('button', { name: 'Отправить заявку' }));
     expect(await within(form).findByText('Подтвердите согласие члена семьи')).toBeInTheDocument();

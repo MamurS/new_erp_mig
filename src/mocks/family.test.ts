@@ -5,7 +5,8 @@
  * change request and the premium by the contract terms, shared family limits and the age-limit task.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { SessionResponse } from '@/shared/types/dto';
+import type { SessionResponse, UserNotification } from '@/shared/types/dto';
+import { unpack } from '@/i18n/core';
 import type { FamilyProfile, FamilyRequest, HrFamilyMember, MeProfile, QueueItem } from '@/shared/types/dto';
 import type { LimitUsage, MyClaim, PolicyChange } from '@/shared/types';
 import { createMockServer } from './node';
@@ -259,6 +260,11 @@ describe('HR adds family members', () => {
     expect((await call(`/hr/family-requests/${second.data.id}/decision`, { method: 'POST', sid: hr, json: { decision: 'reject' } })).status).toBe(422);
     const rejected = await call<FamilyRequest>(`/hr/family-requests/${second.data.id}/decision`, { method: 'POST', sid: hr, json: { decision: 'reject', reason: 'Не является членом семьи' } });
     expect(rejected.data).toMatchObject({ status: 'rejected', rejectionReason: 'Не является членом семьи' });
+    // The employee is told in the app's bell: approved, then rejected with HR's reason.
+    const notes = (await call<UserNotification[]>('/notifications', { sid: app })).data;
+    expect(notes.map((n) => unpack(n.text).key)).toEqual(['app.family.notify.rejected', 'app.family.notify.approved']);
+    expect(notes[0]).toMatchObject({ link: '/app/family', detail: 'Не является членом семьи' });
+    expect((await call<UserNotification[]>('/notifications', { sid: her })).data).toHaveLength(0);
     expect(db().audit.filter((a) => a.action === 'family_request_created' || a.action === 'family_request_decided')).toHaveLength(4);
   });
 

@@ -54,6 +54,6 @@ export const emptyPartner: Translation<typeof Ru> = {
   'emptyPartner.app.claims.why': 'Qabul yoki dorilar uchun oʻzingiz toʻladingizmi? Chekni suratga oling — MIG pulni limit doirasida qaytaradi.',
   'emptyPartner.app.appointments.why': 'ITS tarmogʻidagi klinikaga yoziling — yozuv shu yerda paydo boʻladi, klinika esa vaqtni tasdiqlaydi.',
   'emptyPartner.app.family.why': 'Turmush oʻrtogʻi, bolalar yoki ota-onalar polisga ariza boʻyicha qoʻshiladi: uni shu yerda yuboring, kompaniyangiz HR xodimi koʻrib chiqadi.',
-  'emptyPartner.app.family.request': 'Ariza berish',
+  'emptyPartner.app.family.request': 'Oila aʼzosini qoʻshish',
   'emptyPartner.app.familyRequests.why': 'Oila aʼzolari boʻyicha arizalaringiz va ularning holati shu yerda boʻladi.',
 };

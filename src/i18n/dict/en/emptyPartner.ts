@@ -54,6 +54,6 @@ export const emptyPartner: Translation<typeof Ru> = {
   'emptyPartner.app.claims.why': 'Paid for a visit or medicines yourself? Take a photo of the receipt — MIG refunds it within your limit.',
   'emptyPartner.app.appointments.why': 'Book a clinic in the VHI network — the appointment appears here and the clinic confirms the time.',
   'emptyPartner.app.family.why': 'A spouse, children or parents are added to the policy on request: send it here and your company’s HR reviews it.',
-  'emptyPartner.app.family.request': 'Make a request',
+  'emptyPartner.app.family.request': 'Add a family member',
   'emptyPartner.app.familyRequests.why': 'Your requests for family members and their status will appear here.',
 };

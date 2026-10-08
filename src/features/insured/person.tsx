@@ -13,7 +13,8 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { EyeOff } from 'lucide-react';
+import { EyeOff, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useI18n } from '@/i18n';
 import type { FamilyProfile } from '@/shared/types/dto';
 import { useMyFamily } from '@/shared/api/queries/me';
@@ -73,13 +74,27 @@ export function usePersonLabel(): (p: FamilyProfile | undefined) => string {
   return (p) => (!p || p.access === 'self' ? t('app.family.me') : p.firstName);
 }
 
-/** The switcher «Я / {name}»: a radio group (arrow keys move and pick). Hidden for a person without family. */
-export function ProfileSwitcher({ className }: { className?: string }) {
+/**
+ * The switcher «Я / {name}»: a radio group (arrow keys move and pick). `addTo` (the employee only): the last chip
+ * «+ Добавить» opens the request to add a family member. Hidden for a person without family and without it.
+ */
+export function ProfileSwitcher({ className, addTo }: { className?: string; addTo?: string }) {
   const { t } = useI18n();
   const { family, person, select } = usePerson();
   const label = usePersonLabel();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  if (family.length < 2) return null;
+  const add = addTo ? (
+    <Link
+      to={addTo}
+      aria-label={t('app.family.addAria')}
+      data-testid="profile-add"
+      className="flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-dashed border-accent px-4 text-[15px] font-semibold text-accent-text hover:bg-accent-soft"
+    >
+      <Plus className="h-4 w-4" aria-hidden />
+      {t('app.family.addShort')}
+    </Link>
+  ) : null;
+  if (family.length < 2) return add ? <div className={cn('-mx-4 flex gap-2 overflow-x-auto px-4 pb-1', className)}>{add}</div> : null;
   const current = Math.max(
     0,
     family.findIndex((p) => p.id === person?.id),
@@ -100,12 +115,8 @@ export function ProfileSwitcher({ className }: { className?: string }) {
     refs.current[next]?.focus();
   };
   return (
-    <div
-      role="radiogroup"
-      aria-label={t('app.family.switcher')}
-      data-testid="profile-switcher"
-      className={cn('-mx-4 flex gap-2 overflow-x-auto px-4 pb-1', className)}
-    >
+    <div data-testid="profile-switcher" className={cn('-mx-4 flex gap-2 overflow-x-auto px-4 pb-1', className)}>
+      <div role="radiogroup" aria-label={t('app.family.switcher')} className="flex gap-2">
       {family.map((p, i) => {
         const on = i === current;
         return (
@@ -132,6 +143,8 @@ export function ProfileSwitcher({ className }: { className?: string }) {
           </button>
         );
       })}
+      </div>
+      {add}
     </div>
   );
 }
