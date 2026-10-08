@@ -1,5 +1,5 @@
 /* Contract lifecycle and claims settlement — LIFECYCLE_SPEC §17, e2e scenarios 1–8. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { acceptConsent, api, CODE, loginStaff, PASSWORD } from './helpers';
 
 /** Switches the role in the same tab (the same in-page mock DB) through the demo banner. */
@@ -51,14 +51,12 @@ const NAMES = ['Bekzod', 'Jasur', 'Sardor', 'Otabek', 'Rustam', 'Dilshod', 'Anva
 const extraEmployees = (n: number, tag: string) =>
   Array.from({ length: n }, (_, k) => `Xodimov${tag === '66' ? '' : 'a'} ${NAMES[k]} Aliyevich,1${k}.04.198${k},31${k}048${k}${tag}0000${k},+99893${tag}${String(k).padStart(5, '0')},Engineer,employee,`);
 
-/** Uploads a ten-employee appendix 2 through the in-page mock (CSV body). */
+/** Uploads a ten-employee appendix 2 through the API from the page (CSV body). */
 async function uploadAnnex2(page: Page, contractId: string): Promise<number> {
   const csv = ['fullName,birthDate,pinfl,phone,position,relation,principal_pinfl,student', 'Testov Test Testovich,15.03.1990,31503900000201,+998935550201,Engineer,employee,,', 'Testova Testa Testovna,01.07.1988,40107880000202,+998935550202,Accountant,employee,,', ...extraEmployees(8, '77').map((r) => `${r},`)].join('\n');
   return page.evaluate(
     async ({ id, csv }) => {
-      const raw = sessionStorage.getItem('mig.session');
-      const sid = raw ? (JSON.parse(raw) as { sessionId: string }).sessionId : '';
-      const res = await fetch(`/api/contracts/${id}/insured-list`, { method: 'POST', headers: { Authorization: `Bearer ${sid}`, 'Content-Type': 'text/csv' }, body: csv });
+      const res = await fetch(`/api/contracts/${id}/insured-list`, { method: 'POST', credentials: 'include', headers: { 'X-Requested-With': 'mig-web', 'Content-Type': 'text/csv' }, body: csv });
       return res.status;
     },
     { id: contractId, csv },

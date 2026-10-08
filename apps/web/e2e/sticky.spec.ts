@@ -5,7 +5,7 @@
  * pagination (and totals row) stays at the bottom of the screen while the table is on screen.
  * Long tables: MIG clients, assistance cases, a clinic registry, HR employees.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './test';
 import type { Role } from '@mig/contracts';
 import { loginStaff } from './helpers';
 

@@ -7,6 +7,7 @@ import type { Db } from './db';
 
 const DB_KEY = 'mig.mock.db';
 const SESS_KEY = 'mig.mock.sessions';
+const COOKIE_KEY = 'mig.mock.cookie';
 /**
  * Version of the seed and of the stored shape. Bump it when the seed changes in a way a saved state
  * must not survive (2: Latin names, legal form codes, ASCII document numbers; 3: migration batches and the
@@ -77,6 +78,37 @@ export function scheduleSaveDb(get: () => Db): void {
     pending = null;
     writeDb(get);
   }, 400);
+}
+
+// ---------- the session «cookie» of the browser mock ----------
+/*
+ * The API keeps the session in an HttpOnly cookie the page's code cannot read. MSW cannot set such a cookie: a
+ * mocked `Set-Cookie` would go to `document.cookie` and MSW's own store in localStorage — both readable by the page,
+ * and localStorage is not for sessions (CLAUDE.md rule 3). So the browser mock keeps the session id on the mock
+ * server's side, like the server's cookie jar of this tab: set by a sign-in, cleared by a logout, kept with the
+ * mock's other server state in sessionStorage so a reload stays signed in. Only the mock reads it.
+ */
+let cookieValue: string | null | undefined;
+
+export function mockCookie(): string | null {
+  if (cookieValue === undefined) {
+    try {
+      cookieValue = sessionStorage.getItem(COOKIE_KEY);
+    } catch {
+      cookieValue = null;
+    }
+  }
+  return cookieValue;
+}
+
+export function setMockCookie(value: string | null): void {
+  cookieValue = value;
+  try {
+    if (value) sessionStorage.setItem(COOKIE_KEY, value);
+    else sessionStorage.removeItem(COOKIE_KEY);
+  } catch {
+    /* the cookie lives in memory only */
+  }
 }
 
 export function clearSnapshot(): void {

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { SessionResponse } from '@mig/contracts/dto';
 import type { StaffUser } from '@mig/contracts';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { resetDb } from './db';
 
 const BASE = 'http://localhost/api';
@@ -14,9 +15,9 @@ beforeEach(() => resetDb());
 
 async function call<T>(path: string, init: { method?: string; sid?: string; json?: unknown } = {}): Promise<{ status: number; data: T }> {
   const headers = new Headers();
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) }));
   const text = await res.text();
   return { status: res.status, data: (text ? JSON.parse(text) : undefined) as T };
 }
@@ -24,7 +25,7 @@ async function login(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 
 const INVITE = { fullName: 'Karimov Aziz Bahodirovich', email: 'new.employee@demo.mig.uz', role: 'operator' };

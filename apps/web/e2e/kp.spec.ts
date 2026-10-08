@@ -1,5 +1,5 @@
 /* KP_SPEC §10: commercial offer on the GOLD brochure. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { api, CODE, failOnDialog, loginStaff, PASSWORD, logoutFromSidebar } from './helpers';
 
 const PAGES = 17;

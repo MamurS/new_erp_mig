@@ -36,8 +36,6 @@ export interface ApiEnv {
   demo: boolean;
   /** DEV/CI/STAGING ONLY: the password new e-mail accounts get instead of an invitation. */
   demoPassword?: string;
-  /** Until step 5: `Authorization: Bearer <session>` next to the cookie (development and ci only). */
-  bearerCompat: boolean;
   /** `mig_session` without `Secure` (local http only). */
   insecureDevCookie: boolean;
   inviteRedirectTo?: string;
@@ -73,13 +71,13 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
   if (!supabaseUrl || !serviceKey) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
   const sessionSecret = env.SESSION_SECRET || (prod ? '' : DEV_SESSION_SECRET);
   const smsHookSecret = env.SMS_HOOK_SECRET || (prod ? '' : DEV_SMS_HOOK_SECRET);
-  const bearerCompat = env.AUTH_BEARER_COMPAT === '1';
   if (prod) {
     if (sessionSecret.length < 32 || sessionSecret === DEV_SESSION_SECRET) throw new Error('SESSION_SECRET: at least 32 characters, not the development value');
     if (!/^v1,whsec_[A-Za-z0-9+/=]{32,}$/.test(smsHookSecret) || smsHookSecret === DEV_SMS_HOOK_SECRET) throw new Error('SMS_HOOK_SECRET: v1,whsec_<base64>, not the development value');
     if (env.DEMO_PASSWORD) throw new Error('DEMO_PASSWORD must not be set in production');
   }
-  if (bearerCompat && appEnv !== 'development' && appEnv !== 'ci') throw new Error('AUTH_BEARER_COMPAT is allowed in development and ci only (until step 5)');
+  // Step 4's temporary bearer sessions are gone: the web app uses the session cookie in every environment.
+  if (env.AUTH_BEARER_COMPAT) throw new Error('AUTH_BEARER_COMPAT was removed: sessions are cookies only');
   if (env.INSECURE_DEV_COOKIE === '1' && appEnv !== 'development') throw new Error('INSECURE_DEV_COOKIE is for local development only');
   return {
     appEnv,
@@ -97,7 +95,6 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     smsProvider: env.SMS_PROVIDER ?? 'log',
     demo: !prod,
     ...(env.DEMO_PASSWORD && !prod ? { demoPassword: env.DEMO_PASSWORD } : {}),
-    bearerCompat,
     insecureDevCookie: env.INSECURE_DEV_COOKIE === '1',
     ...(env.INVITE_REDIRECT_URL ? { inviteRedirectTo: env.INVITE_REDIRECT_URL } : {}),
     worker: env.WORKER === 'off' ? 'off' : 'inline',

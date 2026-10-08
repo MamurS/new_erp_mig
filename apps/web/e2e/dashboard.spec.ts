@@ -1,5 +1,5 @@
 /* The staff dashboard by role: every role sees its own queue and its own KPIs; nobody sees work it has no rights for. */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import type { StaffRole } from '@mig/contracts';
 import { api, loginStaff } from './helpers';
 

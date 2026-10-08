@@ -23,7 +23,7 @@ import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_INSURED_PHONE, DEMO_PASS
 import type { AssistanceCaseRow, AssistUserRow, Db, GuaranteeRow, IntegrationClientRow, WebhookEndpointRow } from '@mig/domain/store/db';
 import { seedClaimsFromRebill } from './seed-rebill-claims';
 import { int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
-import { DAY, isoDay, parseIso, tzIso } from './time';
+import { DAY, isoDay, monthStartTz, parseIso, tzIso } from './time';
 
 function hex(rng: Rng, n: number): string {
   let s = '';
@@ -46,12 +46,8 @@ export function seedAssistance(d: Db, opts: { now: number }): void {
   const underwriter = d.staff.find((s) => s.role === 'underwriter')!;
   const operator = d.staff.find((s) => s.role === 'operator')!;
   const accountant = d.staff.find((s) => s.role === 'accountant')!;
-  const monthStart = (offset: number) => {
-    const x = new Date(now);
-    x.setDate(1);
-    x.setMonth(x.getMonth() - offset);
-    return parseIso(isoDay(x.getTime()));
-  };
+  // The first day of a month in Tashkent (not by the machine's time zone).
+  const monthStart = (offset: number) => monthStartTz(now, offset);
   const periodOf = (m: number) => isoDay(monthStart(m)).slice(0, 7);
 
   // ---- companies and contracts (§4) ----

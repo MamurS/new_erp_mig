@@ -7,11 +7,12 @@ import { delay, HttpResponse, type DefaultBodyType, type HttpResponseResolver, t
 import type { ApiError } from '@mig/contracts';
 import { db } from './db';
 import { mockConfig } from './config';
-import { saveSessions, scheduleSaveDb } from './persist';
+import { mockCookie, saveSessions, scheduleSaveDb, setMockCookie } from './persist';
 import { DomainError as HttpError, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import { resolveSession } from '@mig/domain/services/session';
 import { memoryRepos } from '@mig/domain/store/memory';
 import { routeRequest } from '@mig/domain/http/request';
+import { hasCsrfHeader, readCookie } from '@mig/domain/http/csrf';
 
 // The mock answers only at the API address. A pattern with any prefix before /api would also catch
 // the dev server's own modules (/src/shared/api/queries/params.ts) and answer them with a 404.
@@ -37,14 +38,50 @@ export function baseCtx(): BaseCtx {
   return { repos, now: () => Date.now(), env: { demo: import.meta.env.VITE_DEMO_MODE === 'true' } };
 }
 
-function bearer(request: Request): string | null {
-  const m = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(request.headers.get('authorization') ?? '');
-  return m?.[1] ?? null;
+// ---------- the session cookie ----------
+/*
+ * The same scheme as the API (BACKEND_SPEC §7): the session is a cookie the page's code never sees; the answers of
+ * /auth/* carry no session id. The name is the API's local-development cookie (the API itself uses `__Host-…`).
+ *
+ * - In the browser (and the component tests, `createMockServer({ cookieJar: true })`) the «cookie» is kept on the
+ *   mock server's side (persist.ts: mockCookie) — a mocked Set-Cookie would land in document.cookie and MSW's
+ *   localStorage store, readable by the page.
+ * - In the mock's own tests the mock answers `Set-Cookie: mig_session=…; HttpOnly` and reads the request's `Cookie`
+ *   header (its first `mig_session`), so a test can hold several sessions at once, like an HTTP client of the API.
+ */
+export const MOCK_SESSION_COOKIE = 'mig_session';
+let cookieJar = false;
+
+/** The browser's cookie jar on the mock's side (the service worker in the page; component tests). */
+export function enableCookieJar(on: boolean): void {
+  cookieJar = on;
+}
+
+function sessionIdOf(request: Request): string | null {
+  return readCookie(request.headers.get('cookie'), MOCK_SESSION_COOKIE) ?? (cookieJar ? mockCookie() : null);
+}
+
+/** A sign-in completed: the session cookie for `sessionId` (headers of the answer; none with the jar). */
+export function startSession(sessionId: string): Record<string, string> {
+  if (cookieJar) {
+    setMockCookie(sessionId);
+    return {};
+  }
+  return { 'Set-Cookie': `${MOCK_SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Strict` };
+}
+
+/** A logout: the cookie goes (headers of the answer; none with the jar). */
+export function endSession(request: Request): Record<string, string> {
+  if (cookieJar) {
+    setMockCookie(null);
+    return {};
+  }
+  return readCookie(request.headers.get('cookie'), MOCK_SESSION_COOKIE) ? { 'Set-Cookie': `${MOCK_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0` } : {};
 }
 
 /** The signed-in person of the request (401 otherwise), as the services' context. */
 export function authCtx(request: Request): Promise<AuthCtx> {
-  return resolveSession(baseCtx(), bearer(request), { background: request.headers.get('X-Background') === '1' });
+  return resolveSession(baseCtx(), sessionIdOf(request), { background: request.headers.get('X-Background') === '1' });
 }
 
 export interface Ctx {
@@ -60,19 +97,21 @@ function isMutation(method: string): boolean {
 }
 
 /**
- * Wraps a handler with latency, failure injection, error mapping and persistence.
+ * Wraps a handler with latency, the CSRF rule, failure injection, error mapping and persistence.
+ * `csrf`: the request must carry `X-Requested-With: mig-web` (403 otherwise), as on the API.
  * `noFailures`: the simulated 500s never hit this route (the demo controls themselves).
  * `writes`: a GET that changes data, persisted like a mutation.
  */
 export function route(
   fn: (ctx: Ctx) => Promise<unknown> | unknown,
-  opts: { noFailures?: boolean; writes?: boolean } = {},
+  opts: { csrf?: boolean; noFailures?: boolean; writes?: boolean } = {},
 ): HttpResponseResolver<PathParams, DefaultBodyType, DefaultBodyType> {
   return async ({ request, params }) => {
     const startedAt = Date.now();
     const [lo, hi] = mockConfig.latency;
     if (hi > 0) await delay(lo + Math.floor(Math.random() * (hi - lo)));
     const url = new URL(request.url);
+    if (opts.csrf && !hasCsrfHeader(request.headers)) return errorResponse(new HttpError(403, 'forbidden', 'errors.csrf'));
     if (mockConfig.failures && !opts.noFailures && Math.random() < 0.1) {
       return HttpResponse.json(
         { code: 'server', key: 'errors.server' } satisfies ApiError,
@@ -85,6 +124,7 @@ export function route(
       if (out === undefined) return new HttpResponse(null, { status: 204 });
       return HttpResponse.json(out as DefaultBodyType);
     } catch (e) {
+      // A 401 leaves the «cookie» alone: a dead id is harmless, and clearing it could hit a session started since.
       if (e instanceof HttpError) return errorResponse(e);
       return HttpResponse.json(
         { code: 'server', key: 'errors.internal' } satisfies ApiError,

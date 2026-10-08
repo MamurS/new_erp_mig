@@ -15,18 +15,20 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import type pg from 'pg';
 import { routeRequest, type RouteRequest } from '@mig/domain/http/request';
-import { demoRoutes } from '@mig/domain/http/demoRoutes';
-import { PARTNER_BASE, ROUTES, routeKey, type RawResult, type RouteDef, type RouteDeps } from '@mig/domain/http/routes';
+import { CSRF_HEADER, CSRF_VALUE, needsCsrf } from '@mig/domain/http/csrf';
+import { demoRoutes, type DemoRouteOptions } from '@mig/domain/http/demoRoutes';
+import { ROUTES, routeKey, signedInBody, type RawResult, type RouteDef, type RouteDeps } from '@mig/domain/http/routes';
 import { fileAccess } from '@mig/domain/services/claims';
 import { runApiCall, TEST_IP_HEADER } from '@mig/domain/services/integrationKit';
 import { DomainError, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import type { BlobStore } from '@mig/domain/store/blob';
 import { postgresRepos } from '@mig/domain/store/postgres';
 import type { PiiCrypto } from '@mig/domain/store/pii';
-import { HookSignatureError, handleSendSmsHook, verifyHook, type SmsSender } from './auth/sms';
+import { HookSignatureError, handleSendSmsHook, verifyHook, type SmsSender, type TestPhoneCodes } from './auth/sms';
 import { RequestTx } from './db';
 import type { SupabaseStorage } from './files/storage';
 import type { AuthAdapter, AuthAnswer, RequestMeta } from './sessions';
+import { FAILURE_RATE, registerDemoControls, type DemoControls } from './demo';
 
 export interface AppOptions {
   pool: pg.Pool;
@@ -37,12 +39,15 @@ export interface AppOptions {
   /** Where file bytes live (Supabase Storage); `redeem` serves the signed links. */
   storage?: BlobStore & Partial<Pick<SupabaseStorage, 'redeem'>>;
   /** The Send SMS hook of Supabase Auth: its secret (`v1,whsec_…`) and the SMS adapter. */
-  smsHook?: { secret: string; sender: SmsSender };
+  smsHook?: { secret: string; sender: SmsSender; testCodes?: TestPhoneCodes | null };
   /** Demo routes (`/api/__demo/*`): development, ci and staging only, never production. */
-  demoRoutes?: { insuredPhone: string } | null;
+  demoRoutes?: DemoRouteOptions | null;
+  /** With the demo routes: the server's demo knobs (reset, failure simulation, test clock; demo.ts). */
+  demo?: DemoControls | null;
   /** The clock of the services (tests pin it). */
   now?: () => number;
-  logger?: boolean;
+  /** Fastify's request log: off, on (info), or a level (LOG_LEVEL). */
+  logger?: boolean | { level: string };
   /** Called with every unexpected error (tests collect them). */
   onError?: (e: unknown, route: string) => void;
 }
@@ -51,8 +56,7 @@ const INTERNAL = { code: 'server', key: 'errors.internal' } as const;
 const NOT_FOUND = { code: 'not_found', key: 'errors.notFound' } as const;
 const CSRF = { code: 'forbidden', key: 'errors.csrf' } as const;
 /** The header every mutating request of the web app sends (BACKEND_SPEC §7). */
-export const CSRF_HEADER = 'x-requested-with';
-export const CSRF_VALUE = 'mig-web';
+export { CSRF_HEADER, CSRF_VALUE };
 /** How long a signed file link lives. */
 export const SIGNED_LINK_SEC = 60;
 
@@ -76,8 +80,6 @@ function sendRaw(reply: FastifyReply, r: RawResult): FastifyReply {
 
 const json = (reply: FastifyReply, status: number, body: unknown) => reply.code(status).type('application/json').send(JSON.stringify(body));
 
-/** Cookie-authenticated mutations need the CSRF header; the partner API (bearer tokens) does not. */
-const needsCsrf = (r: Pick<RouteDef, 'method' | 'path' | 'auth'>) => r.method !== 'GET' && r.auth !== 'partner' && !r.path.startsWith(`${PARTNER_BASE}/`);
 
 const metaOf = (req: FastifyRequest): RequestMeta => ({ ip: req.ip, userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null });
 
@@ -118,7 +120,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   /** A DomainError or an unexpected error as the API answers it. */
   function fail(request: FastifyRequest, reply: FastifyReply, req: RouteRequest, e: unknown, route: string): FastifyReply {
     if (e instanceof DomainError) {
-      if (e.status === 401) for (const c of auth.expiredCookies(req)) reply.header('set-cookie', c);
+      if (e.status === 401) for (const c of auth.expiredCookies(req, e)) reply.header('set-cookie', c);
       return json(reply, e.status, e.body());
     }
     request.log.error({ err: e, route }, 'request failed');
@@ -140,6 +142,9 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
         const startedAt = Date.now();
         const req = routeRequest(fetchRequest(request), request.params as Record<string, string>, startedAt);
         if (needsCsrf(r) && req.header(CSRF_HEADER) !== CSRF_VALUE) return json(reply, 403, CSRF);
+        // «Имитировать сбои сети» of the demo deployment (never production): as the mock, not the demo routes or the partner API.
+        if (o.demo?.failures && r.auth !== 'partner' && !r.path.startsWith('/__demo/') && Math.random() < FAILURE_RATE)
+          return json(reply, 500, { code: 'server', key: 'errors.server' });
         const meta = metaOf(request);
         if (r.auth === 'partner') {
           // The partner API: its own bearer tokens; the partner is not a person of RLS (system, scoped by the key).
@@ -168,6 +173,13 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
             if (r.auth === 'none') return r.call(base, req, o.deps, () => signIn(tx, base, req, meta));
             return r.call(await signIn(tx, base, req, meta), req, o.deps);
           });
+          if (r.session === 'start') {
+            // A sign-in of the table itself (the adapter did not answer it): the id goes into the cookie only.
+            const { sessionId, body } = signedInBody(out);
+            if (!auth.issueCookie) throw new Error(`${routeKey(r)}: the auth adapter cannot issue a session cookie`);
+            return send(reply, { body, cookies: [auth.issueCookie(sessionId)] });
+          }
+          if (r.session === 'end' && auth.clearedCookie) reply.header('set-cookie', auth.clearedCookie());
           if (r.result === 'raw') return sendRaw(reply, out as RawResult);
           if (out === undefined) return reply.code(204).send();
           return json(reply, r.result === 201 ? 201 : 200, out);
@@ -180,6 +192,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
 
   for (const r of ROUTES) register(r);
   if (o.demoRoutes) for (const r of demoRoutes(o.demoRoutes)) register(r);
+  if (o.demoRoutes && o.demo) registerDemoControls(app, { pool: o.pool, controls: o.demo, log: (msg, data) => app.log.info(data ?? {}, msg) });
 
   // ---------------------------------------------------------------- API-only routes
 
@@ -227,7 +240,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
       const h = (n: string) => (typeof request.headers[n] === 'string' ? (request.headers[n] as string) : null);
       try {
         verifyHook(hook.secret, { id: h('webhook-id'), timestamp: h('webhook-timestamp'), signature: h('webhook-signature') }, body);
-        await handleSendSmsHook(hook.sender, JSON.parse(body) as unknown);
+        await handleSendSmsHook(hook.sender, JSON.parse(body) as unknown, hook.testCodes);
         return json(reply, 200, {});
       } catch (e) {
         const status = e instanceof HookSignatureError ? 401 : 500;

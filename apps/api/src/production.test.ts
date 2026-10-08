@@ -1,6 +1,6 @@
 /*
- * The API as production runs it (APP_ENV=production, assembled like server.ts): no demo routes, no test MFA
- * code, no bearer sessions, the `__Host-` cookie, SMS codes never in the log, development keys refused.
+ * The API as production runs it (APP_ENV=production, assembled like server.ts): no demo routes (nor the demo
+ * reset, failure simulation, test clock and «Войти как…»), no test MFA code, no bearer sessions, the `__Host-` cookie, SMS codes never in the log, development keys refused.
  *
  * Needs DATABASE_URL and the Supabase stack (CI job `api`); skipped otherwise.
  */
@@ -54,6 +54,17 @@ describe.skipIf(!hasDb || !hasSupabase)('production mode', () => {
     expect(routes).not.toContain('__demo');
     expect((await client.call('POST', '/__demo/mis-card')).status).toBe(404);
     expect((await client.call('GET', '/__demo/mis-card')).status).toBe(404);
+    // The server analogs of the mock's demo knobs (reset, failure simulation, test clock, «Войти как…»): none.
+    expect(api.demo).toBeNull();
+    for (const [method, path, body] of [
+      ['POST', '/__demo/reset', { xss: true }],
+      ['GET', '/__demo/failures', undefined],
+      ['POST', '/__demo/failures', { enabled: true }],
+      ['GET', '/__demo/clock', undefined],
+      ['POST', '/__demo/clock', { advanceMs: 3_600_000 }],
+      ['POST', '/__demo/login-as', { login: DEMO_STAFF[0]!.email }],
+    ] as const)
+      expect((await client.call(method, path, { body })).status, `${method} ${path}`).toBe(404);
   });
 
   it('accepts no demo code and no bearer session; the cookie is __Host-mig_session', async () => {

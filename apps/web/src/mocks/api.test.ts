@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { translate, type I18nKey } from '@mig/i18n';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 import type { SessionResponse } from '@mig/contracts/dto';
 
@@ -19,13 +20,13 @@ beforeEach(() => {
 
 async function call(path: string, init: RequestInit & { sid?: string; json?: unknown } = {}) {
   const headers = new Headers(init.headers);
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   let body = init.body;
   if (init.json !== undefined) {
     headers.set('Content-Type', 'application/json');
     body = JSON.stringify(init.json);
   }
-  const res = await fetch(`${BASE}${path}`, { ...init, headers, body });
+  const res = track(await fetch(`${BASE}${path}`, { ...init, headers, body }));
   const text = await res.text();
   let data: unknown = text;
   try {
@@ -36,19 +37,22 @@ async function call(path: string, init: RequestInit & { sid?: string; json?: unk
   return { status: res.status, data: data as Record<string, unknown> & unknown[] };
 }
 
-async function loginStaff(email: string): Promise<SessionResponse> {
+/** A sign-in as a test sees it: the answer's body and the session cookie it set. */
+type SignedIn = SessionResponse & { sessionId: string };
+
+async function loginStaff(email: string): Promise<SignedIn> {
   const a = await call('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   expect(a.status).toBe(200);
   const b = await call('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data as unknown as SessionResponse;
+  return { ...(b.data as unknown as SessionResponse), sessionId: lastSession() };
 }
 
-async function loginInsured(phone = '+998 90 000 00 01'): Promise<SessionResponse> {
+async function loginInsured(phone = '+998 90 000 00 01'): Promise<SignedIn> {
   const a = await call('/auth/phone', { method: 'POST', json: { phone } });
   const b = await call('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data as unknown as SessionResponse;
+  return { ...(b.data as unknown as SessionResponse), sessionId: lastSession() };
 }
 
 describe('mock auth', () => {
@@ -70,6 +74,41 @@ describe('mock auth', () => {
     expect(r.status).toBe(403);
     const r2 = await call('/audit?role=admin', { sid: sessionId });
     expect(r2.status).toBe(403);
+  });
+
+  it('the session is an HttpOnly cookie, as on the API: the answer has the person only; a bearer header is no session', async () => {
+    const a = await call('/auth/login', { method: 'POST', json: { email: 'operator@demo.mig.uz', password: 'Demo-2026!' } });
+    const res = await fetch(`${BASE}/auth/otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'mig-web' },
+      body: JSON.stringify({ challengeId: a.data.challengeId, code: '000000' }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('set-cookie')).toMatch(/^mig_session=[A-Za-z0-9_-]{20,}; Path=\/; HttpOnly; SameSite=Strict$/);
+    expect(Object.keys((await res.json()) as object)).toEqual(['user']);
+    const sid = /^mig_session=([^;]+)/.exec(res.headers.get('set-cookie')!)![1]!;
+    expect((await call('/auth/me', { sid })).status).toBe(200);
+    expect((await fetch(`${BASE}/auth/me`, { headers: { Authorization: `Bearer ${sid}`, Cookie: 'mig_session=' } })).status).toBe(401);
+    const out = await fetch(`${BASE}/auth/logout`, { method: 'POST', headers: withSession(new Headers(), sid) });
+    expect(out.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('CSRF: a mutation without X-Requested-With: mig-web is refused with 403, as on the API', async () => {
+    const { sessionId } = await loginStaff('operator@demo.mig.uz');
+    const claim = db().claims.find((c) => c.status === 'review' && c.category === 'dental')!;
+    const bare = await fetch(`${BASE}/claims/${claim.id}/transition`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: `mig_session=${sessionId}` },
+      body: JSON.stringify({ to: 'medical_review' }),
+    });
+    expect(bare.status).toBe(403);
+    expect(((await bare.json()) as { key: string }).key).toBe('errors.csrf');
+    expect(db().claims.find((c) => c.id === claim.id)!.status).toBe('review');
+    // Sign-in is a mutation too (a forged sign-in would plant another session); reads need no header.
+    const login = await fetch(`${BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'operator@demo.mig.uz', password: 'Demo-2026!' }) });
+    expect(login.status).toBe(403);
+    expect((await fetch(`${BASE}/auth/me`, { headers: { Cookie: `mig_session=${sessionId}` } })).status).toBe(200);
+    expect((await call(`/claims/${claim.id}/transition`, { method: 'POST', sid: sessionId, json: { to: 'medical_review' } })).status).toBe(200);
   });
 
   it('logout invalidates the session', async () => {
@@ -163,7 +202,8 @@ describe('mock scoping (IDOR)', () => {
   it('hr gets 404 for another company’s employee', async () => {
     const a = await call('/auth/login', { method: 'POST', json: { email: 'hr@demo-client.uz', password: 'Demo-2026!' } });
     const b = await call('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
-    const { sessionId, user } = b.data as unknown as SessionResponse;
+    const { user } = b.data as unknown as SessionResponse;
+    const sessionId = lastSession();
     const foreign = db().insured.find((i) => i.clientId !== user.companyId)!;
     expect((await call(`/hr/employees/${foreign.id}`, { sid: sessionId })).status).toBe(404);
     const own = db().insured.find((i) => i.clientId === user.companyId)!;
@@ -173,7 +213,8 @@ describe('mock scoping (IDOR)', () => {
   it('hr export has no PINFL or birth dates', async () => {
     const a = await call('/auth/login', { method: 'POST', json: { email: 'hr@demo-client.uz', password: 'Demo-2026!' } });
     const b = await call('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
-    const { sessionId, user } = b.data as unknown as SessionResponse;
+    const { user } = b.data as unknown as SessionResponse;
+    const sessionId = lastSession();
     const r = await call('/exports', { method: 'POST', sid: sessionId, json: { type: 'hr_employees' } });
     expect(r.status).toBe(200);
     const csv = String(r.data);

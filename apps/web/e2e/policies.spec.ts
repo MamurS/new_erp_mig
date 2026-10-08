@@ -1,5 +1,5 @@
 /* Policy issuance and changes of the insured list — POLICY_SPEC §10, e2e scenarios 1–4. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { api, CODE, loginStaff, PASSWORD, logoutFromSidebar } from './helpers';
 
 async function switchTo(page: Page, role: RegExp, home: RegExp): Promise<void> {

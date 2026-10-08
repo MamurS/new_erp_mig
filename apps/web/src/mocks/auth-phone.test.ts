@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 async function post(path: string, json: unknown) {
-  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(json) });
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'mig-web' }, body: JSON.stringify(json) });
   return { status: res.status, data: (await res.json()) as Record<string, unknown> };
 }
 

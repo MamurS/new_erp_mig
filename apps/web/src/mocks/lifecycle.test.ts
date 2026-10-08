@@ -9,6 +9,7 @@ import type { ClaimDetail, ContractView, DealCard, DealView, EndorsementView, Qu
 import type { Claim, KpDocument, MyClaim } from '@mig/contracts';
 import { tm } from '@mig/i18n';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 import { currentReserve, refreshFlags } from '@mig/domain/services/settlement';
 import { baseCtx } from './http';
@@ -22,10 +23,10 @@ beforeEach(() => resetDb());
 type Res<T> = { status: number; data: T };
 async function call<T = Record<string, unknown>>(path: string, init: { method?: string; sid?: string; json?: unknown; text?: string; form?: FormData } = {}): Promise<Res<T>> {
   const headers = new Headers();
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
   if (init.text !== undefined) headers.set('Content-Type', 'text/csv');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? init.text ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.form ?? init.text ?? (init.json === undefined ? undefined : JSON.stringify(init.json)) }));
   const text = await res.text();
   let data: unknown;
   try {
@@ -39,13 +40,13 @@ async function login(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status, email).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 async function loginPhone(phone: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/phone', { method: 'POST', json: { phone } });
   const b = await call<SessionResponse>('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]);
 const scan = (side: 'mig' | 'client') => {

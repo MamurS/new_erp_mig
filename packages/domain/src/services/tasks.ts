@@ -230,7 +230,11 @@ export async function sweepDeadlines(ctx: BaseCtx): Promise<void> {
     const kind = isOverdue(task, now) ? 'overdue' : isDueSoon(task, now) ? 'dueSoon' : null;
     if (!kind) continue;
     if (kind === 'overdue' ? task.overdueSent : task.dueSoonSent || task.overdueSent) continue;
-    await ctx.repos.tasks.update(task.id, kind === 'overdue' ? { overdueSent: true } : { dueSoonSent: true });
+    // Claim the reminder: of requests reading at the same time only one sets the flag (Postgres re-checks the
+    // condition after the other's commit), the others skip — the reminder goes once.
+    const sys = systemRepos(ctx, 'deadline reminders: the flag of a task is claimed once by whoever reads first');
+    const claimed = kind === 'overdue' ? await sys.tasks.updateWhere({ id: task.id, overdueSent: { ne: true } }, { overdueSent: true }) : await sys.tasks.updateWhere({ id: task.id, dueSoonSent: { ne: true } }, { dueSoonSent: true });
+    if (!claimed) continue;
     const text = msg(`next.notify.${kind}`, { what: whatOf(task), subject: task.subjectLabel });
     for (const id of await executorIds(ctx, task)) await notify(ctx, id, text, executorLink(task));
     await notify(ctx, task.createdById, text, task.subjectLink);

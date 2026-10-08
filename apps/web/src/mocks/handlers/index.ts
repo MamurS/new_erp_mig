@@ -8,9 +8,10 @@ import { delay, http, HttpResponse, type HttpHandler } from 'msw';
 import { DEMO_PASSWORD } from '@mig/seed/credentials';
 import { createMockProvider } from '@mig/domain/lib/aiProvider';
 import { routeRequest } from '@mig/domain/http/request';
-import { PARTNER_BASE, ROUTES, routeKey, type RawResult, type RouteDef, type RouteDeps } from '@mig/domain/http/routes';
+import { PARTNER_BASE, ROUTES, routeKey, signedInBody, type RawResult, type RouteDef, type RouteDeps } from '@mig/domain/http/routes';
+import { needsCsrf } from '@mig/domain/http/csrf';
 import { runApiCall, TEST_IP_HEADER } from '@mig/domain/services/integrationKit';
-import { API, authCtx, baseCtx, notFound, route } from '../http';
+import { API, authCtx, baseCtx, endSession, notFound, route, startSession } from '../http';
 import { mockConfig } from '../config';
 import { db } from '../db';
 import { saveSessions, scheduleSaveDb } from '../persist';
@@ -105,11 +106,17 @@ export function toMsw(r: RouteDef, opts: { noFailures?: boolean } = {}): HttpHan
         if (r.auth === 'none') out = await r.call(baseCtx(), req, deps, () => authCtx(request));
         else out = await r.call(await authCtx(request), req, deps);
         await knob?.after?.();
+        if (r.session === 'start') {
+          // The session id goes into the «cookie» (http.ts), the answer carries the person only — as on the API.
+          const { sessionId, body } = signedInBody(out);
+          return HttpResponse.json(body as never, { headers: startSession(sessionId) });
+        }
+        if (r.session === 'end') return HttpResponse.json(out as never, { headers: endSession(request) });
         if (r.result === 'raw') return rawResponse(out as RawResult);
         if (r.result === 201) return HttpResponse.json(out as never, { status: 201 });
         return out;
       },
-      { ...(r.writes ? { writes: true } : {}), ...(opts.noFailures ? { noFailures: true } : {}) },
+      { csrf: needsCsrf(r), ...(r.writes ? { writes: true } : {}), ...(opts.noFailures ? { noFailures: true } : {}) },
     ),
   );
 }

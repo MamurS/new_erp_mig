@@ -1,5 +1,5 @@
 /* Payment matching: the 1C statement by invoice number, then INN and exact amount; «Ручная разноска» for the rest. */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 import { api, loginStaff } from './helpers';
 
 const today = () => new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);

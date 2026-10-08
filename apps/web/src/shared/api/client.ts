@@ -1,10 +1,11 @@
 /*
- * The only way screens talk to the API. Adds the bearer session, normalises errors into ApiError,
- * validates responses with zod and turns 401 into a logout.
+ * The only way screens talk to the API. The session is the HttpOnly cookie of the API (BACKEND_SPEC §7): requests
+ * go with `credentials: 'include'` and the CSRF header `X-Requested-With: mig-web`, never with a token. Normalises
+ * errors into ApiError, validates responses with zod and turns 401 into a logout.
  */
 import type { z } from 'zod';
 import type { ApiError } from '@mig/contracts';
-import { clearSession, getSessionId } from '@/shared/auth/session';
+import { clearSession, sessionEpoch } from '@/shared/auth/session';
 import { markActivity } from '@/shared/auth/activity';
 import { logger } from '@/shared/lib/logger';
 import { t, tKey, type I18nKey } from '@mig/i18n';
@@ -92,9 +93,15 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
   opts: RequestOptions<S> = {},
 ): Promise<S extends z.ZodTypeAny ? z.infer<S> : unknown> {
   if (!opts.background) markActivity();
-  const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers, ...(opts.background ? { 'X-Background': '1' } : {}) };
-  const sid = getSessionId();
-  if (sid) headers.Authorization = `Bearer ${sid}`;
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...opts.headers,
+    // CSRF: the API refuses a mutation without it (403); a cross-site form cannot set a custom header.
+    'X-Requested-With': 'mig-web',
+    ...(opts.background ? { 'X-Background': '1' } : {}),
+  };
+  // Which sign-in this request belongs to (no session id is known to the page).
+  const epoch = sessionEpoch();
   let body: BodyInit | undefined;
   if (opts.body instanceof FormData || opts.body instanceof Blob) body = opts.body;
   else if (typeof opts.body === 'string' && opts.headers?.['Content-Type']) body = opts.body;
@@ -110,7 +117,7 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
       headers,
       body,
       signal: opts.signal,
-      credentials: 'omit',
+      credentials: 'include',
       cache: 'no-store',
       referrerPolicy: 'no-referrer',
     });
@@ -131,7 +138,7 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
       /* non-JSON error body */
     }
     // A 401 for a request sent with an older session (e.g. in flight during a role switch) must not end the new one.
-    if (res.status === 401 && !AUTH_PATHS.includes(path) && sid === getSessionId()) onUnauthorized();
+    if (res.status === 401 && !AUTH_PATHS.includes(path) && epoch === sessionEpoch()) onUnauthorized();
     throw new ApiRequestError(res.status, err);
   }
 

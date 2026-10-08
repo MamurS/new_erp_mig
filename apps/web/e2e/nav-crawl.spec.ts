@@ -3,7 +3,7 @@
  * real screen — not «Страница не найдена», not «Что-то пошло не так», no uncaught error in the page. The app of
  * the insured person: every tab of the bottom bar and every tile of the home screen.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import type { Role } from '@mig/contracts';
 import { EMAIL, HOME, loginInsured, loginStaff } from './helpers';
 

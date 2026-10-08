@@ -7,15 +7,14 @@ import pg from 'pg';
 import type { FastifyInstance } from 'fastify';
 import { DEMO_CODE, DEMO_PASSWORD } from '@mig/domain/auth/demo';
 import { routeRequest } from '@mig/domain/http/request';
-import { ROUTES, type RawResult, type RouteDef, type RouteDeps } from '@mig/domain/http/routes';
+import { ROUTES, signedInBody, type RawResult, type RouteDef, type RouteDeps } from '@mig/domain/http/routes';
+import { CSRF_HEADER, CSRF_VALUE, hasCsrfHeader, needsCsrf, readCookie } from '@mig/domain/http/csrf';
 import { runApiCall, TEST_IP_HEADER } from '@mig/domain/services/integrationKit';
 import { DomainError, type BaseCtx } from '@mig/domain/services/kernel';
 import { resolveSession } from '@mig/domain/services/session';
 import type { Db } from '@mig/domain/store/db';
 import { memoryRepos } from '@mig/domain/store/memory';
-import { TABLES } from '@mig/domain/store/schema';
-import { buildSeedSql } from '@mig/domain/store/sql/seed';
-import { identitiesOfDb } from '@mig/domain/auth/identity';
+import { loadSeed } from '../jobs/seedLoad';
 import { createMockProvider } from '@mig/domain/lib/aiProvider';
 import { createHelpProvider, helpDir } from '../help';
 
@@ -27,31 +26,8 @@ export function testPool(): pg.Pool {
   return new pg.Pool({ connectionString: DATABASE_URL, max: 4, application_name: 'mig-api-test' });
 }
 
-/**
- * Replaces the whole database content with the seed `db` (the generated seed.sql of that state). Runs as the
- * table owner: the append-only audit log is emptied with its truncate guard switched off for the moment.
- */
-export async function loadSeed(pool: pg.Pool, db: Db): Promise<void> {
-  const c = await pool.connect();
-  try {
-    await c.query(`select pg_advisory_lock(hashtext('mig-api-test-seed'))`);
-    await c.query('begin');
-    await c.query('alter table public.audit_log disable trigger audit_log_no_truncate');
-    await c.query(`truncate ${TABLES.map((t) => `public.${t.table}`).join(', ')}, public.app_auth_challenges, app.identity_sync, app.job_queue cascade`);
-    await c.query('alter table public.audit_log enable trigger audit_log_no_truncate');
-    await c.query('commit');
-    await c.query(buildSeedSql(db));
-    // Supabase Auth users the tests created (invited accounts) go too: the seed provisions its own.
-    const ids = identitiesOfDb(db).map((i) => i.userId);
-    await c.query(`delete from auth.users where not (id = any($1::uuid[]))`, [ids]).catch(() => undefined);
-  } catch (e) {
-    await c.query('rollback').catch(() => undefined);
-    throw e;
-  } finally {
-    await c.query(`select pg_advisory_unlock(hashtext('mig-api-test-seed'))`).catch(() => undefined);
-    c.release();
-  }
-}
+/** The seed loader (jobs/seedLoad.ts) the suites use for their own «now». */
+export { loadSeed };
 
 /** The dependencies both sides of a comparison share. */
 export function testDeps(): RouteDeps {
@@ -100,15 +76,13 @@ function answerOf(status: number, contentType: string, text: string, headers: Re
   return { status, contentType, body, text, headers };
 }
 
-/** How the Fastify client presents a session: the BFF cookie (the deployment) or a bearer id (the demo fixture). */
-export type SessionAs = 'bearer' | { cookie: string };
+/** The session cookie a client presents: the BFF's `__Host-mig_session` or `mig_session` (the mock, the demo fixture). */
+export type SessionAs = { cookie: string };
+const DEMO_COOKIE: SessionAs = { cookie: 'mig_session' };
 
-function headersOf(o: CallOptions, as: SessionAs = 'bearer'): Record<string, string> {
+function headersOf(o: CallOptions, as: SessionAs = DEMO_COOKIE): Record<string, string> {
   const h: Record<string, string> = { ...(o.headers ?? {}) };
-  if (o.session) {
-    if (as === 'bearer') h.authorization = `Bearer ${o.session}`;
-    else h.cookie = [h.cookie, `${as.cookie}=${o.session}`].filter(Boolean).join('; ');
-  }
+  if (o.session) h.cookie = [h.cookie, `${as.cookie}=${o.session}`].filter(Boolean).join('; ');
   if (o.raw) h['content-type'] = o.raw.contentType;
   else if (o.body !== undefined) h['content-type'] = 'application/json';
   return h;
@@ -123,7 +97,7 @@ export async function multipart(form: FormData): Promise<{ contentType: string; 
 }
 
 /** The Fastify app through `inject`; mutating requests carry the CSRF header of the web app unless `noCsrf`. */
-export function fastifyClient(app: FastifyInstance, as: SessionAs = 'bearer'): Client {
+export function fastifyClient(app: FastifyInstance, as: SessionAs = DEMO_COOKIE): Client {
   return {
     async call(method, path, o = {}) {
       const body = bodyOf(o);
@@ -167,9 +141,12 @@ export function memoryClient(db: Db, deps: RouteDeps, now: () => number): Client
       const url = new URL(`http://api.local/api${path}`);
       const found = match(method, url.pathname.slice(4));
       const body = bodyOf(o);
-      const request = new Request(url, { method, headers: headersOf(o), ...(body !== undefined ? { body: body as NonNullable<RequestInit['body']> } : {}) });
+      const headers = headersOf(o);
+      if (method !== 'GET' && !o.noCsrf) headers[CSRF_HEADER] = CSRF_VALUE;
+      const request = new Request(url, { method, headers, ...(body !== undefined ? { body: body as NonNullable<RequestInit['body']> } : {}) });
       if (!found) return json(404, { code: 'not_found', key: 'errors.notFound' });
       const { r, params } = found;
+      if (needsCsrf(r) && !hasCsrfHeader(request.headers)) return json(403, { code: 'forbidden', key: 'errors.csrf' });
       const startedAt = now();
       const req = routeRequest(request, params, startedAt);
       if (r.auth === 'partner') {
@@ -190,10 +167,14 @@ export function memoryClient(db: Db, deps: RouteDeps, now: () => number): Client
         );
         return raw(a);
       }
-      const bearer = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(req.header('authorization') ?? '')?.[1] ?? null;
-      const session = () => resolveSession(base(), bearer, { background: req.header('X-Background') === '1' });
+      const sid = readCookie(req.header('cookie'), DEMO_COOKIE.cookie);
+      const session = () => resolveSession(base(), sid, { background: req.header('X-Background') === '1' });
       try {
         const out = r.auth === 'none' ? await r.call(base(), req, deps, session) : await r.call(await session(), req, deps);
+        if (r.session === 'start') {
+          const { sessionId, body: user } = signedInBody(out);
+          return { ...json(200, user), headers: { 'set-cookie': [`${DEMO_COOKIE.cookie}=${sessionId}; Path=/; HttpOnly; SameSite=Strict`] } };
+        }
         if (r.result === 'raw') return raw(out as RawResult);
         if (out === undefined) return answerOf(204, '', '');
         return json(r.result === 201 ? 201 : 200, out);
@@ -208,19 +189,16 @@ export function memoryClient(db: Db, deps: RouteDeps, now: () => number): Client
 export type Who = { email: string } | { phone: string };
 
 /**
- * Signs in (password or phone, then the demo code) and returns the session: the id of the answer (the demo fixture,
- * the bearer path), or the value of the session cookie `cookie` (the BFF).
+ * Signs in (password or phone, then the demo code) and returns the value of the session cookie `cookie` (the BFF's
+ * `__Host-mig_session`; `mig_session` of the demo fixture and the memory reference by default).
  */
-export async function signIn(c: Client, who: Who, cookie?: string): Promise<string> {
+export async function signIn(c: Client, who: Who, cookie: string = DEMO_COOKIE.cookie): Promise<string> {
   const start = 'email' in who ? await c.call('POST', '/auth/login', { body: { email: who.email, password: DEMO_PASSWORD } }) : await c.call('POST', '/auth/phone', { body: { phone: who.phone } });
   if (start.status !== 200) throw new Error(`sign-in failed: ${start.status} ${start.text}`);
   const { challengeId } = start.body as { challengeId: string };
   const done = await c.call('POST', 'email' in who ? '/auth/otp' : '/auth/phone/verify', { body: { challengeId, code: DEMO_CODE } });
   if (done.status !== 200) throw new Error(`code failed: ${done.status} ${done.text}`);
-  if (cookie) {
-    const v = cookieOf(done, cookie);
-    if (!v) throw new Error('no session cookie');
-    return v;
-  }
-  return (done.body as { sessionId: string }).sessionId;
+  const v = cookieOf(done, cookie);
+  if (!v) throw new Error('no session cookie');
+  return v;
 }

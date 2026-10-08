@@ -3,7 +3,7 @@
  * side panel's user menu or in the insured app's profile; headings of key screens follow it, <html lang>
  * is set, and the choice survives a reload. Expected texts are read from the dictionaries themselves.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { ru } from '@mig/i18n/dict/ru/index';
 import { uzLatn } from '@mig/i18n/dict/uz-Latn/index';
 import { en } from '@mig/i18n/dict/en/index';

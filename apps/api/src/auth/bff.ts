@@ -19,18 +19,19 @@
  * app_metadata) become the database claims of the request; `X-Background: 1` does not extend activity.
  * `POST /auth/logout` ends the session, `?all=1` every session of the person (and the Supabase sessions).
  *
- * Until step 5 switches the web app to cookies, development and ci may also accept `Authorization: Bearer
- * <session>` and return `sessionId` (AUTH_BEARER_COMPAT=1); production never does (env.ts).
+ * The session is the cookie only: no `Authorization: Bearer` for people (that header belongs to the partner API)
+ * and no session id in any answer.
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import type { Role, SessionUser } from '@mig/contracts';
 import { loginSchema, otpSchema, phoneLoginSchema, phoneVerifySchema } from '@mig/contracts/forms';
-import { DEMO_CODE } from '@mig/domain/auth/demo';
+import { DEMO_CODE, DEMO_PASSWORD } from '@mig/domain/auth/demo';
+import { demoAccount, loginAsSchema, type DemoRouteOptions } from '@mig/domain/http/demoRoutes';
 import { devFactorId, devTotpSecret, totpCode } from '@mig/domain/auth/devMfa';
 import { APP_METADATA_KEYS, appMetadataOf, authPhone, sameAppMetadata } from '@mig/domain/auth/identity';
 import { idleLimitsFor } from '@mig/domain/auth/home';
 import type { RouteRequest } from '@mig/domain/http/request';
-import { audit, unauthorized, validate, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
+import { audit, notFound, unauthorized, validate, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import {
   checkLock,
   findAccount,
@@ -49,6 +50,7 @@ import type { Claims, RequestTx } from '../db';
 import type { AuthAdapter, AuthAnswer, AuthRoute, RequestMeta } from '../sessions';
 import { clearedCookie, readCookie, sessionCookie, type CookiePolicy } from './cookies';
 import { AuthApiError, type GoTrue, type TokenSet } from './gotrue';
+import type { TestPhoneCodes } from './sms';
 import { InvalidToken, type AccessClaims, type JwtVerifier } from './jwt';
 
 const CHALLENGE_TTL = 5 * 60_000;
@@ -60,8 +62,9 @@ const IDLE_GRACE = 60_000;
 
 export interface BffOptions {
   /**
-   * Refreshed tokens are stored outside the request transaction (Supabase rotates the refresh token: a request
-   * that rolls back must not lose the new one).
+   * Refreshed tokens and the session's activity are stored outside the request transaction (Supabase rotates the
+   * refresh token: a request that rolls back must not lose the new one; the activity must not lock the session
+   * rows for the whole request).
    */
   pool: Pick<pg.Pool, 'query'>;
   gotrue: GoTrue;
@@ -73,8 +76,6 @@ export interface BffOptions {
   cookie: CookiePolicy;
   /** Development, ci, staging: `000000` is the demo TOTP code; a person without a factor gets the demo factor. */
   testMfa: boolean;
-  /** Development and ci until step 5: `Authorization: Bearer <session>` and `sessionId` in the answer. */
-  bearerCompat: boolean;
   /** Brings the Supabase Auth user of an account in line with our tables (jobs/identity.ts). */
   syncIdentity?: (userId: string) => Promise<void>;
   /** Test MFA mode only: gives an account the demo TOTP factor (jobs/identity.ts). */
@@ -83,6 +84,10 @@ export interface BffOptions {
   now: () => number;
   /** Diagnostics without personal data. */
   log?: (msg: string, data?: Record<string, unknown>) => void;
+  /** DEMO/CI/STAGING ONLY (with `testMfa`): the codes the Send SMS hook sent; `000000` stands for the last one. */
+  testPhoneCodes?: TestPhoneCodes | null;
+  /** DEMO/CI/STAGING ONLY (with `testMfa`): the accounts «Войти как…» may sign in as. */
+  demoAccounts?: DemoRouteOptions;
 }
 
 interface SessionRec {
@@ -118,6 +123,14 @@ interface ChallengeRec {
 const ms = (col: string, as: string) => `(extract(epoch from ${col}) * 1000)::float8 as ${as}`;
 const ts = (n: number) => new Date(n).toISOString();
 
+/**
+ * 401 for a session the server has just ended (idle limit, revoked token, account gone): only this answer clears the
+ * cookie. An unknown session (ended earlier, e.g. by a logout) leaves the cookie alone — the answer to a request
+ * still in flight from before a new sign-in must not clear the new session's cookie.
+ */
+export const sessionEnded = () => Object.assign(unauthorized(), { endedSession: true as const });
+export const isSessionEnded = (e: unknown): boolean => (e as { endedSession?: boolean } | null)?.endedSession === true;
+
 /** Staff, HR, clinics and assistance companies sign in with a second factor; the insured with a phone code. */
 const needsAal2 = (role: Role) => role !== 'insured';
 
@@ -129,12 +142,7 @@ export function bffAuth(o: BffOptions): AuthAdapter {
   const open = async (enc: Buffer | Uint8Array, ver: number) => o.crypto.open(new Uint8Array(enc), ver);
   const log = o.log ?? (() => undefined);
 
-  const secretOf = (req: RouteRequest): string | null => {
-    const fromCookie = readCookie(req.header('cookie'), o.cookie.name);
-    if (fromCookie) return fromCookie;
-    if (!o.bearerCompat) return null;
-    return /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(req.header('authorization') ?? '')?.[1] ?? null;
-  };
+  const secretOf = (req: RouteRequest): string | null => readCookie(req.header('cookie'), o.cookie.name);
 
   // ------------------------------------------------------------------ sessions
 
@@ -164,7 +172,7 @@ export function bffAuth(o: BffOptions): AuthAdapter {
 
   const expiryOf = (t: TokenSet) => (t.expires_at ? t.expires_at * 1000 : Date.now() + t.expires_in * 1000);
 
-  /** A new session after a completed sign-in: the cookie, and the session id while the bearer path lives. */
+  /** A new session after a completed sign-in: the cookie (the answer carries only the person). */
   async function createSession(
     tx: RequestTx,
     base: BaseCtx,
@@ -209,7 +217,7 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     );
     await recordSignIn(base, user);
     return {
-      body: { user, ...(o.bearerCompat ? { sessionId: secret } : {}) },
+      body: { user },
       cookies: [sessionCookie(o.cookie, secret)],
     };
   }
@@ -267,12 +275,12 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     const now = o.now();
     if (now - s.last_activity > idleLimitsFor(s.role).timeoutMs + IDLE_GRACE) {
       await endSession(sql, s.session_id);
-      throw unauthorized();
+      throw sessionEnded();
     }
     const user = await sessionUserFor(base, s.user_id, s.role);
     if (!user) {
       await endSession(sql, s.session_id);
-      throw unauthorized();
+      throw sessionEnded();
     }
     let claims: AccessClaims;
     try {
@@ -282,24 +290,32 @@ export function bffAuth(o: BffOptions): AuthAdapter {
       if (e instanceof InvalidToken || (e instanceof AuthApiError && e.status >= 400 && e.status < 500)) {
         log('session ended: token', { reason: e instanceof Error ? e.message : 'token' });
         await endSession(sql, s.session_id);
-        throw unauthorized();
+        throw sessionEnded();
       }
       throw e;
     }
     const aal = claims.aal === 'aal2' ? 'aal2' : 'aal1';
     if (claims.sub !== s.user_id || (needsAal2(user.role) && aal !== 'aal2')) {
       await endSession(sql, s.session_id);
-      throw unauthorized();
+      throw sessionEnded();
     }
-    let lastActivity = s.last_activity;
-    if (req.header('X-Background') !== '1') {
-      lastActivity = now;
-      await sql.query(`update public.app_sessions set last_activity = $2 where id_hash = $1`, [
-        hash('session', secret),
-        ts(now),
-      ]);
+    const active = req.header('X-Background') !== '1';
+    const lastActivity = active ? now : s.last_activity;
+    if (active || s.role !== user.role) {
+      /*
+       * The activity (and a changed role) is written outside the request's transaction, in one short statement:
+       * held for the whole request, the session rows would serialize every parallel request of the person and
+       * deadlock with a logout (it deletes `sessions`, then `app_sessions` by cascade). No row: the session has
+       * just ended (a logout in parallel) — 401, not 500.
+       */
+      const { rowCount } = await o.pool.query(
+        `with s as (update public.sessions set role = $3, last_activity = $4 where id = $2 returning id)
+         update public.app_sessions a set last_activity = case when $6 then $5::timestamptz else a.last_activity end
+          from s where a.id_hash = $1 and a.session_id = s.id`,
+        [hash('session', secret), s.session_id, user.role, lastActivity, ts(now), active],
+      );
+      if (!rowCount) throw unauthorized();
     }
-    await base.repos.sessions.update(s.session_id, { role: user.role, lastActivity });
     const meta2: Record<string, unknown> = {};
     for (const k of APP_METADATA_KEYS)
       if (claims.app_metadata?.[k] !== undefined) meta2[k] = claims.app_metadata[k];
@@ -317,6 +333,16 @@ export function bffAuth(o: BffOptions): AuthAdapter {
       },
       claims: { sub: claims.sub, role: 'authenticated', aal, app_metadata: meta2 as Claims['app_metadata'] },
     };
+  }
+
+  /**
+   * An account created or changed moments ago may still wait in the identity queue for the worker: its Supabase Auth
+   * user is brought in line first, so the first sign-in right after the account was created works.
+   */
+  async function ensureSynced(tx: RequestTx, userId: string): Promise<void> {
+    if (!o.syncIdentity) return;
+    const { rows } = await tx.system().query(`select 1 from app.identity_sync where user_id = $1::uuid`, [userId]);
+    if (rows.length) await o.syncIdentity(userId);
   }
 
   // ------------------------------------------------------------------ challenges
@@ -388,10 +414,15 @@ export function bffAuth(o: BffOptions): AuthAdapter {
 
   const login: AuthRoute = async (tx, base, req, meta) => {
     const { email, password } = validate(loginSchema, await req.json());
+    return passwordStep(tx, base, email, password, meta);
+  };
+
+  async function passwordStep(tx: RequestTx, base: BaseCtx, email: string, password: string, meta: RequestMeta): Promise<AuthAnswer> {
     const P = await loadParams(base);
     const key = `email:${email}`;
     await checkLock(base, P, key);
     const account = await findAccount(base, email);
+    if (account) await ensureSynced(tx, account.id);
     let tokens: TokenSet | null = null;
     if (account) {
       try {
@@ -441,10 +472,14 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     return {
       body: { challengeId, resendInSec: RESEND_SEC, ...(enrollment ? { totpEnrollment: enrollment } : {}) },
     };
-  };
+  }
 
   const otp: AuthRoute = async (tx, base, req, meta) => {
     const { challengeId, code } = validate(otpSchema, await req.json());
+    return codeStep(tx, base, challengeId, code, meta);
+  };
+
+  async function codeStep(tx: RequestTx, base: BaseCtx, challengeId: string, code: string, meta: RequestMeta): Promise<AuthAnswer> {
     const sql = tx.system();
     const c = await loadChallenge(sql, challengeId, 'password');
     if (!c || !c.user_id || !c.role || !c.factor_id || !c.access_enc || c.access_key_ver === null)
@@ -471,14 +506,19 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     const user = tokens.user.id === c.user_id ? await sessionUserFor(base, c.user_id, c.role) : null;
     if (!user) throw invalidCode();
     return createSession(tx, base, tokens, user, 'aal2', meta);
-  };
+  }
 
   const phone: AuthRoute = async (tx, base, req, meta) => {
     const { phone: number } = validate(phoneLoginSchema, await req.json());
+    return phoneStep(tx, base, number, meta);
+  };
+
+  async function phoneStep(tx: RequestTx, base: BaseCtx, number: string, meta: RequestMeta): Promise<AuthAnswer> {
     const P = await loadParams(base);
     const key = `phone:${number}`;
     await checkLock(base, P, key);
     const person = await base.repos.insured.first({ where: { phone: number, status: 'active' } });
+    if (person?.userId) await ensureSynced(tx, person.userId);
     // Supabase Auth sends the code (or refuses an unknown number): the answer is the same either way.
     await o.gotrue
       .sendPhoneOtp(authPhone(number), meta.ip)
@@ -506,10 +546,14 @@ export function bffAuth(o: BffOptions): AuthAdapter {
       meta,
     );
     return { body: { challengeId, resendInSec: RESEND_SEC } };
-  };
+  }
 
   const phoneVerify: AuthRoute = async (tx, base, req, meta) => {
     const { challengeId, code } = validate(phoneVerifySchema, await req.json());
+    return phoneCodeStep(tx, base, challengeId, code, meta);
+  };
+
+  async function phoneCodeStep(tx: RequestTx, base: BaseCtx, challengeId: string, code: string, meta: RequestMeta): Promise<AuthAnswer> {
     const sql = tx.system();
     const c = await loadChallenge(sql, challengeId, 'phone');
     if (!c || !c.phone_enc || c.phone_key_ver === null) throw invalidCode();
@@ -518,11 +562,10 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     if (!c.user_id) return wrongCode(sql, base, challengeId, c);
     let tokens: TokenSet;
     try {
-      tokens = await o.gotrue.verifyPhoneOtp(
-        authPhone(await open(c.phone_enc, c.phone_key_ver)),
-        code,
-        meta.ip,
-      );
+      const number = authPhone(await open(c.phone_enc, c.phone_key_ver));
+      // Test mode: the demo code of a phone that is not a demo phone stands for the code its SMS carried.
+      const effective = o.testMfa && code === DEMO_CODE ? (o.testPhoneCodes?.take(number) ?? code) : code;
+      tokens = await o.gotrue.verifyPhoneOtp(number, effective, meta.ip);
     } catch (e) {
       if (e instanceof AuthApiError && e.status < 500) return wrongCode(sql, base, challengeId, c);
       throw e;
@@ -533,7 +576,34 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     const user = tokens.user.id === c.user_id ? await sessionUserFor(base, c.user_id, 'insured') : null;
     if (!user) throw invalidCode();
     return createSession(tx, base, tokens, user, 'aal1', meta);
+  }
+
+  /**
+   * DEMO/CI/STAGING ONLY — «Войти как…» (`POST /__demo/login-as`): the two steps of a real sign-in of a demo account
+   * in one request (the demo password, the demo code of the test MFA mode, the fixed code of the demo phones), so
+   * the session is a real Supabase session behind the BFF cookie. Only demo accounts; never registered in production.
+   */
+  const loginAs: AuthRoute = async (tx, base, req, meta) => {
+    const accounts = o.demoAccounts;
+    if (!accounts || !o.testMfa) throw notFound();
+    const { login: who } = validate(loginAsSchema, await req.json());
+    const acc = demoAccount(accounts, who);
+    if (!acc) throw notFound();
+    await endCurrent(tx, req);
+    const first =
+      'email' in acc ? await passwordStep(tx, base, acc.email, DEMO_PASSWORD, meta) : await phoneStep(tx, base, acc.phone, meta);
+    const { challengeId } = first.body as { challengeId: string };
+    const done =
+      'email' in acc ? await codeStep(tx, base, challengeId, DEMO_CODE, meta) : await phoneCodeStep(tx, base, challengeId, DEMO_CODE, meta);
+    return done;
   };
+
+  /** The session a «Войти как…» replaces ends first (its cookie is overwritten by the new one). */
+  async function endCurrent(tx: RequestTx, req: RouteRequest): Promise<void> {
+    const secret = secretOf(req);
+    const s = secret ? await loadSession(tx.system(), secret) : null;
+    if (s) await endSession(tx.system(), s.session_id);
+  }
 
   const resend: AuthRoute = async (tx, _base, req, meta) => {
     const { challengeId } = validate(resendSchema, await req.json());
@@ -589,9 +659,10 @@ export function bffAuth(o: BffOptions): AuthAdapter {
       'POST /auth/phone': phone,
       'POST /auth/phone/verify': phoneVerify,
       'POST /auth/logout': logout,
+      ...(o.demoAccounts && o.testMfa ? { 'POST /__demo/login-as': loginAs } : {}),
     },
-    expiredCookies: (req) =>
-      readCookie(req.header('cookie'), o.cookie.name) ? [clearedCookie(o.cookie)] : [],
+    expiredCookies: (req, error) =>
+      readCookie(req.header('cookie'), o.cookie.name) && isSessionEnded(error) ? [clearedCookie(o.cookie)] : [],
   };
 }
 

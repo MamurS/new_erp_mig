@@ -86,8 +86,9 @@ export async function login(page: Page, role: Role): Promise<void> {
 }
 
 /**
- * Calls the (mocked) API from inside the page. The mock runs in the page's service worker, so
- * Playwright's `page.request` would bypass it; an in-page fetch goes through it like the app does.
+ * Calls the API from inside the page, as the app does: the session cookie and the CSRF header. The mock runs in the
+ * page (its service worker), so Playwright's `page.request` would bypass it; an in-page fetch goes through it, and
+ * against the backend it carries the page's session cookie.
  */
 export async function api(
   page: Page,
@@ -98,12 +99,9 @@ export async function api(
 ): Promise<{ status: number; data: unknown }> {
   return page.evaluate(
     async ({ method, path, body, headers }) => {
-      const raw = sessionStorage.getItem('mig.session');
-      const sid = raw ? (JSON.parse(raw) as { sessionId: string }).sessionId : '';
-      const h: Record<string, string> = { ...headers };
-      if (sid) h.Authorization = `Bearer ${sid}`;
+      const h: Record<string, string> = { 'X-Requested-With': 'mig-web', ...headers };
       if (body !== undefined) h['Content-Type'] = 'application/json';
-      const res = await fetch(`/api${path}`, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+      const res = await fetch(`/api${path}`, { method, headers: h, credentials: 'include', body: body === undefined ? undefined : JSON.stringify(body) });
       const text = await res.text();
       let data: unknown = text;
       try {

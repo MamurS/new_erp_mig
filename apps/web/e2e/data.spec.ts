@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, fastForward, test } from './test';
 import { acceptConsent, api, failOnDialog, login, loginStaff } from './helpers';
 
 test('5. Masking: PINFL absent until reveal, visible 30 s, then masked again; audit written', async ({ page }) => {
@@ -22,7 +22,7 @@ test('5. Masking: PINFL absent until reveal, visible 30 s, then masked again; au
   const pinfl = (await revealed.textContent())!;
   expect(await page.content()).toContain(pinfl);
 
-  await page.clock.fastForward(31_000);
+  await fastForward(page, 31_000);
   await expect(page.getByTestId('masked-pinfl')).toBeVisible();
   expect(await page.content()).not.toContain(pinfl);
 

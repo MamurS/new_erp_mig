@@ -54,7 +54,7 @@ export function testStack(pool: pg.Pool, crypto: PiiCrypto): TestStack {
   };
 }
 
-/** The deployment's sign-in for the tests: test MFA mode, the `__Host-` cookie, no bearer path unless asked. */
+/** The deployment's sign-in for the tests: test MFA mode, the `__Host-` cookie. */
 export function testBff(pool: pg.Pool, crypto: PiiCrypto, stack: TestStack, o: Partial<BffOptions> = {}) {
   return bffAuth({
     pool,
@@ -64,7 +64,6 @@ export function testBff(pool: pg.Pool, crypto: PiiCrypto, stack: TestStack, o: P
     sessionSecret: DEV_SESSION_SECRET,
     cookie: cookiePolicy(false),
     testMfa: true,
-    bearerCompat: false,
     syncIdentity: stack.identity.syncOne,
     ensureDemoFactor: stack.identity.ensureDemoFactor,
     now: () => Date.now(),

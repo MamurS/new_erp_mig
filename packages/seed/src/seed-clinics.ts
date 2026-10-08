@@ -20,7 +20,7 @@ import type {
 } from '@mig/domain/store/db';
 import { DEMO_CLINIC_USERS, DEMO_PASSWORD } from './credentials';
 import { chance, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
-import { at, DAY, isoDay, parseIso, tzIso } from './time';
+import { at, DAY, isoDay, monthStartTz, parseIso, tzIso } from './time';
 
 type Catalogue = [code: string, name: string, category: ServiceCategory, price: number, gp?: true][];
 
@@ -202,12 +202,8 @@ export function seedClinics(
 
   // ---- visits: three months back for registries, a few today ----
   const policyOf = (i: InsuredRow) => base.policies.find((p) => p.id === i.policyId);
-  const monthStart = (offset: number) => {
-    const d = new Date(now);
-    d.setDate(1);
-    d.setMonth(d.getMonth() - offset);
-    return parseIso(isoDay(d.getTime()));
-  };
+  // The first day of a month in Tashkent (not by the machine's time zone: in the evening UTC it is already the next day there).
+  const monthStart = (offset: number) => monthStartTz(now, offset);
   const eligible = people.filter((i) => {
     const p = policyOf(i);
     return p && p.status === 'active' && parseIso(p.startDate) <= monthStart(2);

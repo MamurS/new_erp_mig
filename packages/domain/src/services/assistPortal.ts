@@ -54,7 +54,7 @@ import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { AssistUserRow, AssistanceCaseRow, GuaranteeRow, InsuredRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
+import { asSystem, audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
 import { q, type Qs } from './list';
 import { loadParams, type ParamsView } from './params';
 import { assignmentsOf, assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
@@ -76,6 +76,7 @@ import type { PartnerScope } from './partnerIntegration';
 import { principalOf } from './family';
 import { fieldLabel, MEDICAL_TTL, medicalRecords } from './insured';
 import { limitsFor } from './views';
+import { canonicalJson } from '../lib/json';
 
 export interface AssistCtx {
   user: SessionUser;
@@ -181,9 +182,9 @@ function addWorkdays(fromIso: string, days: number): string {
 export async function toRebillView(ctx: BaseCtx, b: Rebill): Promise<RebillView> {
   // Checks and the fee are recomputed by the system on every read; names of MIG staff are shown to the assistance.
   const sys = systemRepos(ctx, 'rebill view: recomputed checks and fee, names of the MIG staff who accepted and paid');
-  const before = JSON.stringify(b);
+  const before = canonicalJson(b);
   await recomputeRebill(ctx, b);
-  if (JSON.stringify(b) !== before) await sys.rebills.put(b);
+  if (canonicalJson(b) !== before) await sys.rebills.put(b);
   const P = await loadParams(ctx);
   const name = async (id?: string) => (id ? (await sys.staff.get(id))?.fullName : undefined);
   const a = await assistanceOf(ctx, b.assistanceId);
@@ -722,7 +723,8 @@ export async function requestGuaranteeOnCall(ctx: AuthCtx, body: unknown): Promi
   const visit: Visit = { id: randomId(), clinicId: clinic.id, insuredId: i.id, openedById: user.id, method: 'policy', openedAt: tzIso(now), expiresAt: tzIso(now + VISIT_TTL_MS) };
   await r.visits.insert(visit);
   const actor = { id: user.id, clinicId: clinic.id, displayName: user.displayName, role: user.role, assistanceId };
-  const g = await createGuarantee(ctx, actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
+  // The letter belongs to the clinic of the referral (its row is the clinic's): the system writes it for the assistance.
+  const g = await createGuarantee(asSystem(ctx, 'assistance referral: the guarantee letter in the clinic of the referral'), actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
   if (c) await r.cases.update(c.id, { links: { ...c.links, guaranteeId: g.id }, ...(c.status === 'open' ? { status: 'in_progress' as const } : {}) });
   return toGuaranteeView(ctx, g);
 }

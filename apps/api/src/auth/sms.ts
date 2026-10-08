@@ -91,11 +91,39 @@ export function signHook(secret: string, id: string, timestamp: number, body: st
 export const smsText = (code: string): string => translate('ru', 'srv.auth.smsCode', { code });
 
 /** Handles one call of the Send SMS hook: the body is `{ user: { phone }, sms: { otp, phone? } }`. */
-export async function handleSendSmsHook(sender: SmsSender, body: unknown): Promise<void> {
+/**
+ * DEV/CI/STAGING ONLY (the test mode of sign-in, never production): the last code the Send SMS hook received per
+ * phone, for a short while. The demo code `000000` of a phone that is not a demo phone (an insured person added
+ * by a test) stands for it, as `000000` stands for the TOTP code of a demo factor (auth/bff.ts).
+ */
+export interface TestPhoneCodes {
+  record(phone: string, code: string): void;
+  /** The code last sent to this phone (digits) within five minutes, once. */
+  take(phone: string): string | null;
+}
+
+export function testPhoneCodes(now: () => number = () => Date.now()): TestPhoneCodes {
+  const codes = new Map<string, { code: string; at: number }>();
+  return {
+    record(phone, code) {
+      codes.set(phone.replace(/\D/g, ''), { code, at: now() });
+      if (codes.size > 1000) codes.delete(codes.keys().next().value!);
+    },
+    take(phone) {
+      const key = phone.replace(/\D/g, '');
+      const c = codes.get(key);
+      codes.delete(key);
+      return c && now() - c.at < 5 * 60_000 ? c.code : null;
+    },
+  };
+}
+
+export async function handleSendSmsHook(sender: SmsSender, body: unknown, testCodes?: TestPhoneCodes | null): Promise<void> {
   const b = body as { user?: { phone?: string }; sms?: { otp?: string; phone?: string } };
   const phone = String(b.sms?.phone || b.user?.phone || '').replace(/\D/g, '');
   const code = String(b.sms?.otp ?? '');
   if (!/^\d{9,15}$/.test(phone) || !/^\d{4,10}$/.test(code))
     throw new Error('send-sms hook: no phone or code');
+  testCodes?.record(phone, code);
   await sender.send(phone, smsText(code));
 }

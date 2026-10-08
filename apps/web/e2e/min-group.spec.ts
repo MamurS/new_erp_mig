@@ -4,7 +4,7 @@
  * the head of underwriting with a comment; a contract below the minimum without an exception is not signed;
  * HR is warned about an exclusion below the minimum and a task reaches the underwriter.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { api, CODE, loginStaff, PASSWORD } from './helpers';
 
 interface Deal {

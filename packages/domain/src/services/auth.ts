@@ -9,7 +9,6 @@
  */
 import { z } from 'zod';
 import type { SessionUser } from '@mig/contracts';
-import type { SessionResponse } from '@mig/contracts/dto';
 import { loginSchema, otpSchema, phoneLoginSchema, phoneVerifySchema } from '@mig/contracts/forms';
 import { DEMO_CODE } from '../auth/demo';
 import { randomToken } from '../lib/random';
@@ -18,6 +17,15 @@ import type { ChallengeRow } from '../store/db';
 import { audit, DomainError, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { sessionUserFor } from './session';
+
+/**
+ * A completed sign-in inside the server: the new session's id goes into the session cookie (the adapters set
+ * it), the answer's body is `{ user }` (SessionResponse) — the browser's code never sees the id.
+ */
+export interface SignedIn {
+  sessionId: string;
+  user: SessionUser;
+}
 
 const CHALLENGE_TTL = 5 * 60_000;
 const NIL = '00000000-0000-4000-8000-000000000000';
@@ -93,7 +101,7 @@ export async function recordSignIn(ctx: BaseCtx, user: SessionUser): Promise<voi
   await audit(ctx, user, 'login', { targetType: 'session' });
 }
 
-async function verify(ctx: BaseCtx, challengeId: string, code: string): Promise<SessionResponse> {
+async function verify(ctx: BaseCtx, challengeId: string, code: string): Promise<SignedIn> {
   const r = ctx.repos;
   const P = await loadParams(ctx);
   const c = await r.challenges.get(challengeId);
@@ -145,7 +153,7 @@ export async function resend(ctx: BaseCtx, body: unknown): Promise<{ challengeId
 }
 
 /** POST /auth/otp. */
-export async function otp(ctx: BaseCtx, body: unknown): Promise<SessionResponse> {
+export async function otp(ctx: BaseCtx, body: unknown): Promise<SignedIn> {
   const { challengeId, code } = validate(otpSchema, body);
   return verify(ctx, challengeId, code);
 }
@@ -164,7 +172,7 @@ export async function phoneLogin(ctx: BaseCtx, body: unknown): Promise<{ challen
 }
 
 /** POST /auth/phone/verify. */
-export async function phoneVerify(ctx: BaseCtx, body: unknown): Promise<SessionResponse> {
+export async function phoneVerify(ctx: BaseCtx, body: unknown): Promise<SignedIn> {
   const { challengeId, code } = validate(phoneVerifySchema, body);
   return verify(ctx, challengeId, code);
 }

@@ -10,6 +10,8 @@ import * as I from '@mig/contracts/integration';
 import { assistanceOn } from '@mig/domain/assistance';
 import { tm, translate } from '@mig/i18n';
 import { createMockServer } from './node';
+import { isoDay } from '@mig/domain/lib/time';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 import { requireAssistanceScope } from '@mig/domain/services/assistance';
 import { baseCtx } from './http';
@@ -26,9 +28,9 @@ type Res<T = Record<string, unknown>> = { status: number; data: T };
 
 async function call<T = Record<string, unknown>>(path: string, init: { method?: string; sid?: string; json?: unknown } = {}): Promise<Res<T>> {
   const headers = new Headers();
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) }));
   const text = await res.text();
   return { status: res.status, data: (text ? JSON.parse(text) : undefined) as T };
 }
@@ -37,10 +39,11 @@ async function login(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+// The day in Tashkent (the services' day), not the UTC date.
+const today = () => isoDay(Date.now());
 const A1 = () => db().assistances[0]!;
 const A2 = () => db().assistances[1]!;
 const demoInsured = () => db().insured.find((i) => i.phone === '+998900000001')!;
@@ -135,7 +138,8 @@ describe('guarantee letters, reserve and write-off (§5.2, §5.3)', () => {
     const reg = await login('registrar@demo-clinic.uz');
     const card = await call<{ shortCode: string }>('/me/card-token', { sid: await (async () => {
       const a = await call<{ challengeId: string }>('/auth/phone', { method: 'POST', json: { phone: '+998900000001' } });
-      return (await call<SessionResponse>('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } })).data.sessionId;
+      await call<SessionResponse>('/auth/phone/verify', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
+      return lastSession();
     })() });
     const visit = await call<{ visitId: string }>('/clinic/check', { method: 'POST', sid: reg, json: { qrToken: card.data.shortCode } });
     const svc = d.priceLists.find((p) => p.clinicId === demoClinicId())!.items.find((p) => p.requiresGuarantee && p.category === 'diagnostics_advanced')!;

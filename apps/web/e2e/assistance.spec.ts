@@ -1,5 +1,5 @@
 /* Assistance companies — ASSISTANCE_SPEC §14, e2e scenarios 1–8. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { acceptConsent, api, failOnDialog, loginStaff, logoutFromSidebar } from './helpers';
 
 /** Switch the role in the same tab (and the same in-page mock DB) through the demo banner. */

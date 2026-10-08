@@ -4,7 +4,7 @@
  * the manager's queue with a link back, «Запросить у HR» reaches the HR cabinet («Задачи от МИГ») and the
  * upload there notifies the manager, the deal checklist blocks the next stage and names what is missing.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { api, CODE, loginStaff, PASSWORD } from './helpers';
 
 interface Deal {

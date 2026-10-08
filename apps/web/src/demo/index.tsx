@@ -1,6 +1,6 @@
 /*
  * Demo module. Loaded only when VITE_DEMO_MODE === 'true'; absent from other builds.
- * «Войти как…» performs a real login through the mock API, it never changes the role client-side.
+ * «Войти как…» performs a real login through the API (mock or server), it never changes the role client-side.
  */
 import './messages';
 import { defineLabels, t } from '@/i18n';
@@ -53,19 +53,16 @@ const GROUP_TITLE = defineLabels('demo.group', ['mig', 'assist', 'clinic', 'hr',
 
 const accountLabel = (a: Account) => a.label ?? ROLE_LABEL[a.role];
 
+/**
+ * «Войти как…»: a real sign-in of the demo account in one step (`POST /__demo/login-as`: the demo password and code
+ * on the mock, Supabase Auth on the API of ci/staging) — a new session cookie, never a client-side role change.
+ */
 async function loginAs(acc: Account): Promise<Role> {
   const current = getSession();
   if (current) await request('/auth/logout', { method: 'POST' }).catch(() => undefined);
-  let challengeId: string;
-  if (acc.role === 'insured') {
-    challengeId = (await request('/auth/phone', { method: 'POST', body: { phone: normalizePhone(acc.login) }, schema: S.challenge })).challengeId;
-    const res = await request('/auth/phone/verify', { method: 'POST', body: { challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
-    // Commit the new session (and any guard redirect it causes) before the caller navigates home.
-    flushSync(() => setSession(res));
-    return res.user.role;
-  }
-  challengeId = (await request('/auth/login', { method: 'POST', body: { email: acc.login, password: DEMO_PASSWORD }, schema: S.challenge })).challengeId;
-  const res = await request('/auth/otp', { method: 'POST', body: { challengeId, code: DEMO_CODE }, schema: S.sessionResponse });
+  const login = acc.role === 'insured' ? normalizePhone(acc.login) : acc.login;
+  const res = await request('/__demo/login-as', { method: 'POST', body: { login }, schema: S.sessionResponse });
+  // Commit the new session (and any guard redirect it causes) before the caller navigates home.
   flushSync(() => setSession(res));
   return res.user.role;
 }

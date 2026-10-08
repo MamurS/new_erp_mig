@@ -10,6 +10,7 @@ import type { SessionResponse } from '@mig/contracts/dto';
 import type { Contract, PolicyChange } from '@mig/contracts';
 import { daysInclusive } from '@mig/domain/policies';
 import { createMockServer } from './node';
+import { lastSession, track, withSession } from './test-session';
 import { db, resetDb } from './db';
 import { DEMO_INSURED_PHONE } from '@mig/seed/credentials';
 import { endorsementLines } from '@mig/domain/services/lifecycle';
@@ -26,9 +27,9 @@ beforeEach(() => {
 
 async function call<T = unknown>(path: string, init: { method?: string; sid?: string; json?: unknown } = {}) {
   const headers = new Headers();
-  if (init.sid) headers.set('Authorization', `Bearer ${init.sid}`);
+  withSession(headers, init.sid);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) });
+  const res = track(await fetch(`${BASE}${path}`, { method: init.method ?? 'GET', headers, body: init.json === undefined ? undefined : JSON.stringify(init.json) }));
   const text = await res.text();
   return { status: res.status, data: (text ? JSON.parse(text) : undefined) as T };
 }
@@ -36,7 +37,7 @@ async function loginStaff(email: string): Promise<string> {
   const a = await call<{ challengeId: string }>('/auth/login', { method: 'POST', json: { email, password: 'Demo-2026!' } });
   const b = await call<SessionResponse>('/auth/otp', { method: 'POST', json: { challengeId: a.data.challengeId, code: '000000' } });
   expect(b.status).toBe(200);
-  return b.data.sessionId;
+  return lastSession();
 }
 
 const demo = () => db().insured.find((i) => i.phone === DEMO_INSURED_PHONE)!;

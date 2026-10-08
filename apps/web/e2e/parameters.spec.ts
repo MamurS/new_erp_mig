@@ -1,5 +1,5 @@
 /* «Параметры ДМС»: an admin proposes, an underwriter confirms (four-eyes), everyone reads, the audit keeps old and new value. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { failOnDialog, loginStaff } from './helpers';
 
 async function switchTo(page: Page, item: RegExp, label: string): Promise<void> {

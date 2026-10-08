@@ -3,7 +3,8 @@ import { assemble } from './assemble';
 import { readEnv } from './env';
 
 const env = readEnv();
-const { app, pool, worker } = await assemble(env, { logger: true });
+// LOG_LEVEL (info by default): `warn` leaves only failures in the request log (the e2e-backend run).
+const { app, pool, worker } = await assemble(env, { logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 worker?.start();
 
 const stop = async () => {

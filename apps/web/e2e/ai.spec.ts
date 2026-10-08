@@ -1,5 +1,5 @@
 /* AI coverage check — AI_COVERAGE_SPEC §7, e2e scenarios 1–6. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { acceptConsent, api, loginStaff } from './helpers';
 
 async function switchTo(page: Page, label: string, home: RegExp): Promise<void> {

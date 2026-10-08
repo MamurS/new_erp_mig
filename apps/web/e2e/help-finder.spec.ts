@@ -4,7 +4,7 @@
  * chosen asks; ↑/↓ and Enter open a result; «Спросить в справке» of Ctrl+K opens the help with the answer;
  * with the AI scenario off there is no «Спросить» row and the search keeps working.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { loginStaff } from './helpers';
 
 const field = (page: Page) => page.getByRole('combobox', { name: 'Найдите термин или задайте вопрос' });

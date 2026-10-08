@@ -4,7 +4,7 @@
  * view of «Скачать PDF» with a title page and a table of contents, the admin tab of questions — and the
  * fraud subsection never reaching HR, clinics or the insured person (TOC, search, answers, PDF).
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import { login, loginStaff, logoutFromSidebar } from './helpers';
 
 /** window.print() would open the browser dialog: count the calls instead. */

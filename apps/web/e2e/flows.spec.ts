@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, fastForward, test } from './test';
 import { api, login, loginStaff } from './helpers';
 
 test('9. Operator: confirm an appointment in the queue and take a claim to approved', async ({ page }) => {
@@ -73,8 +73,7 @@ test('10. Insured: send a receipt; the upload is re-encoded without EXIF; status
   expect(claim.attachments).toHaveLength(1);
   expect(claim.attachments[0]!.mime).toBe('image/jpeg');
   const b64 = await page.evaluate(async (url) => {
-    const sid = (JSON.parse(sessionStorage.getItem('mig.session')!) as { sessionId: string }).sessionId;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${sid}` } });
+    const res = await fetch(url, { credentials: 'include' });
     const bytes = new Uint8Array(await res.arrayBuffer());
     let s = '';
     for (const x of bytes) s += String.fromCharCode(x);
@@ -105,10 +104,12 @@ test('11. Four eyes: underwriter cannot approve own limit request', async ({ pag
 test('12. Inactivity timeout: warning, then logout', async ({ page }) => {
   await page.clock.install();
   await loginStaff(page, 'operator');
-  await page.clock.fastForward('13:05');
+  // Idle from here: a request still starting after the jump would count as activity (seen under a loaded machine).
+  await page.waitForLoadState('networkidle');
+  await fastForward(page, '13:05');
   await expect(page.getByRole('dialog', { name: 'Вы ещё здесь?' })).toBeVisible();
   await expect(page.getByTestId('idle-countdown')).toHaveText(/^1:\d\d$/);
-  await page.clock.fastForward('02:00');
+  await fastForward(page, '02:00');
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByText('Сессия завершена из-за неактивности. Войдите снова')).toBeVisible();
 });
