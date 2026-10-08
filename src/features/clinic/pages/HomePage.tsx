@@ -12,13 +12,22 @@ import { useCan } from '@/shared/auth/guards';
 import { PageTitle, Panel } from '../components';
 import { t } from '@/i18n';
 
-function Tile({ label, value, hint, to, tone }: { label: string; value: string; hint?: string; to: string; tone?: 'warning' }) {
-  return (
-    <Link to={to} className={cn('flex flex-col gap-1 rounded-card border border-border bg-surface p-4 hover:border-accent', tone === 'warning' && 'border-warning bg-warning-soft')}>
+/** A figure of the home screen; a link only when there is a screen behind it for this person (`to`). */
+function Tile({ label, value, hint, to, tone }: { label: string; value: string; hint?: string; to?: string; tone?: 'warning' }) {
+  const body = (
+    <>
       <span className="text-[13px] text-muted">{label}</span>
       <span className={cn('font-heading text-[26px] font-semibold num', tone === 'warning' && 'text-warning-text')}>{value}</span>
       {hint && <span className={cn('text-[12px]', tone === 'warning' ? 'text-warning-text' : 'text-muted')}>{hint}</span>}
+    </>
+  );
+  const cls = cn('flex flex-col gap-1 rounded-card border border-border bg-surface p-4', to && 'hover:border-accent', tone === 'warning' && 'border-warning bg-warning-soft');
+  return to ? (
+    <Link to={to} className={cls}>
+      {body}
     </Link>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }
 
@@ -57,7 +66,7 @@ export default function HomePage() {
                 label={t('clinic.home.currentRegistry')}
                 value={o.currentRegistry ? formatMoney(o.currentRegistry.claimed) : '—'}
                 hint={o.currentRegistry ? REGISTRY_STATUS_LABEL[o.currentRegistry.status] : t('clinic.home.notCreated')}
-                to={canRegistries ? (o.currentRegistry ? `/clinic/registries/${o.currentRegistry.id}` : '/clinic/registries') : '/clinic'}
+                to={canRegistries ? (o.currentRegistry ? `/clinic/registries/${o.currentRegistry.id}` : '/clinic/registries') : undefined}
               />
             </div>
             <Panel title={t('clinic.home.events')}>

@@ -60,7 +60,7 @@ function principalNames(p: InsuredRow | undefined): Pick<MeProfile, 'principalNa
 
 const REPLIES = [
   'Спасибо! Передали вопрос специалисту, ответим в течение часа.',
-  'Проверили: услуга входит в вашу программу. Можно записываться.',
+  'Посмотрим условия вашей программы и ответим здесь же.',
   'Уточните, пожалуйста, дату приёма и название клиники.',
 ];
 
@@ -259,7 +259,8 @@ export const meHandlers = [
       const { me } = requireInsured(ctx.request);
       const d = db();
       const { c, who } = myClaimOf(d, me, param(ctx, 'id'));
-      return toMyClaim(d, c, who);
+      // A family member's claim: the screen shows that person's limits, not the signed-in one's.
+      return { ...toMyClaim(d, c, who), ...(who.id !== me.id ? { personId: who.id } : {}) };
     }),
   ),
   http.post(

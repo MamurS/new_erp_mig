@@ -132,7 +132,8 @@ export default function ClaimStatusPage() {
   const { claimId } = useParams();
   const validId = isUuid(claimId) ? claimId : undefined;
   const q = useMyClaim(validId);
-  const limits = useMeLimits();
+  // The limits of the person the claim belongs to (a family member's claim shows that member's).
+  const limits = useMeLimits(q.data?.personId);
 
   const notFound = !validId || (q.error instanceof ApiRequestError && q.error.status === 404);
 

@@ -141,7 +141,7 @@ export const authHandlers = [
   ),
   http.post(
     `${API}/auth/logout`,
-    route(({ request }) => {
+    route(({ request, url }) => {
       let auth;
       try {
         auth = requireSession(request);
@@ -149,7 +149,9 @@ export const authHandlers = [
         return { ok: true as const };
       }
       const d = db();
-      d.sessions = d.sessions.filter((s) => s.id !== auth.session.id);
+      // `?all=1` — «Выйти на всех устройствах»: every session of the person ends, not only this one.
+      const all = url.searchParams.get('all') === '1';
+      d.sessions = d.sessions.filter((s) => (all ? s.userId !== auth.session.userId : s.id !== auth.session.id));
       audit(auth.user, 'logout', { targetType: 'session' });
       return { ok: true as const };
     }),

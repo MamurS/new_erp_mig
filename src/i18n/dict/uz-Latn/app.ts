@@ -169,7 +169,7 @@ export const app: Translation<typeof Ru> = {
   'app.chat.placeholder': 'Xabar',
   'app.chat.send': 'Yuborish',
   'app.chat.operator': 'MIG operatori',
-  'app.chat.limit': '{n} / 1000',
+  'app.chat.limit': '{n} / {max}',
   'app.chat.empty': 'Bizga yozing — operator bir necha daqiqada javob beradi',
   'app.profile.title': 'Profil',
   'app.profile.phone': 'Telefon',

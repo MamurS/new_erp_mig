@@ -169,7 +169,7 @@ export const app: Translation<typeof Ru> = {
   'app.chat.placeholder': 'Message',
   'app.chat.send': 'Send',
   'app.chat.operator': 'MIG operator',
-  'app.chat.limit': '{n} / 1000',
+  'app.chat.limit': '{n} / {max}',
   'app.chat.empty': 'Message us — an operator will reply within a couple of minutes',
   'app.profile.title': 'Profile',
   'app.profile.phone': 'Phone',

@@ -6,7 +6,7 @@ import { SideColumn } from '@/shared/ui/side-column';
 import { StickySectionsCtx } from '@/shared/ui/sticky-sections';
 import { t, tm } from '@/i18n';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Pencil, RotateCcw } from 'lucide-react';
 import type { ActivationRule, PaymentFrequency, PricingBasis, ProgramCode } from '@/shared/types';
 import type { ContractView } from '@/shared/types/dto';
@@ -369,8 +369,13 @@ function InsuredList({ c, editable, hasHr, focus }: { c: ContractView; editable:
 
 function Finance({ c }: { c: ContractView }) {
   const navigate = useNavigate();
+  const { hash } = useLocation();
+  // «Открыть счёт» of the client card leads to `#invoices`: the block is scrolled into view once it is there.
+  useEffect(() => {
+    if (hash === '#invoices') document.getElementById('invoices')?.scrollIntoView({ block: 'start' });
+  }, [hash]);
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid scroll-mt-4 gap-4 lg:grid-cols-2" id="invoices" data-testid="contract-finance">
       <Card title={t('staffLc.contract.invoices')} bodyClassName="p-0">
         {c.invoices.length ? (
           <TableScroll>

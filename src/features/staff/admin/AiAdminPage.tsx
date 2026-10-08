@@ -32,7 +32,8 @@ import { HelpQuestionsTab } from './HelpQuestionsTab';
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
 
-function SettingsForm({ current, pending }: { current: AiSettings; pending: boolean }) {
+/** `available`: the providers the server can call (the others need the backend); not a fixed list in the screen. */
+function SettingsForm({ current, pending, available }: { current: AiSettings; pending: boolean; available: readonly AiProviderId[] }) {
   const propose = useProposeAiSettings();
   const [draft, setDraft] = useState<AiSettings>(current);
   const [threshold, setThreshold] = useState(String(Math.round(current.confidenceThreshold * 100)));
@@ -100,9 +101,9 @@ function SettingsForm({ current, pending }: { current: AiSettings; pending: bool
               <td className="py-2">
                 <Select aria-label={t('staffOps.ai.providerAria', { name: AI_SCENARIO_LABEL[s] })} className="h-8" value={draft.scenarios[s].provider} onChange={(e) => setScenario(s, { provider: e.target.value as AiProviderId })}>
                   {(Object.keys(AI_PROVIDER_LABEL) as AiProviderId[]).map((p) => (
-                    <option key={p} value={p} disabled={p !== 'mock'}>
+                    <option key={p} value={p} disabled={!available.includes(p)}>
                       {AI_PROVIDER_LABEL[p]}
-                      {p !== 'mock' ? t('staffOps.ai.withBackend') : ''}
+                      {!available.includes(p) ? t('staffOps.ai.withBackend') : ''}
                     </option>
                   ))}
                 </Select>
@@ -235,7 +236,7 @@ export default function AiAdminPage() {
               return (
                 <div className="grid gap-4 xl:grid-cols-2">
                   <div className="flex flex-col gap-4">
-                    <SettingsForm current={v.settings} pending={!!pending} />
+                    <SettingsForm current={v.settings} pending={!!pending} available={v.providersAvailable} />
                     {pending && (
                       <Card title={t('staffOps.ai.pendingTitle')}>
                         <p className="text-[13px]">

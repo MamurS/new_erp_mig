@@ -344,6 +344,7 @@ export interface MyClaim {
   canAppeal?: boolean;
   appealStatus?: 'open' | 'resolved';
   letterAvailable?: boolean;               // письмо о решении по убытку
+  personId?: UUID;                         // член семьи, чей это убыток (не сам вошедший)
 }
 
 export type Specialty =

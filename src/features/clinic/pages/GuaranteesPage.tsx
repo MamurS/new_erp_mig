@@ -19,7 +19,6 @@ import { FilesPicker, GuaranteeChip, PageTitle, Panel } from '../components';
 import { EmptyHelp } from '../emptyNext';
 import { t } from '@/i18n';
 
-/** Client-side PDF stub of an approved letter; no patient data in the file or its name. */
 /** Who decides the letter (ASSISTANCE_SPEC §7): the patient's assistance, or MIG for escalations and clients without one. */
 function decisionOwner(g: { assistanceId?: string | null; assistanceName?: string; escalated?: boolean }): string {
   if (!g.assistanceId) return t('common.mig');
@@ -27,6 +26,7 @@ function decisionOwner(g: { assistanceId?: string | null; assistanceName?: strin
   return g.assistanceName ?? t('clinic.gp.ownerAssist');
 }
 
+/** Client-side PDF of an approved letter (until the server makes the real one); no patient data in the file or its name. */
 function guaranteePdf(g: GuaranteeView): string {
   return buildPdf(
     [
