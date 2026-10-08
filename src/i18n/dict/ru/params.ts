@@ -81,6 +81,8 @@ export const params = {
   'params.leadIdleDays.description': 'Через сколько дней без событий лид попадает в очередь менеджера по продажам.',
   'params.kpNoAnswerDays.label': 'КП без ответа',
   'params.kpNoAnswerDays.description': 'Через сколько дней после отправки КП без ответа клиента менеджер получает задачу напомнить.',
+  'params.requestResponseWorkdays.label': 'Срок ответа на запрос',
+  'params.requestResponseWorkdays.description': 'Сколько рабочих дней даётся на ответ на запрос коллеги («Попросить …») или HR («Запросить у HR»). За сутки до срока и при просрочке исполнитель и автор получают уведомление. Демо-значение.',
   'params.fraudMaxClaimsPerMonth.label': 'Обращений в месяц до флага',
   'params.fraudMaxClaimsPerMonth.description': 'Сколько обращений одного застрахованного в месяц допускается без флага «Частые обращения».',
   'params.fraudPriceExcessShare.label': 'Превышение прайса для флага',

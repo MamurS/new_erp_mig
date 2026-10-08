@@ -677,3 +677,8 @@ export const taskRequestHrSchema = z.object({
   comment: z.string().trim().max(500, msg('v.tooLong', { max: 500 })).default(''),
 });
 export type TaskRequestHrInput = z.input<typeof taskRequestHrSchema>;
+/** «Отклонить» a request: the executor says why (the author sees it). */
+export const taskRejectSchema = z.object({ comment: text(3, 500, msg('v.reasonRequired')) });
+/** «Отметить выполненным» by hand: what was done (MIG staff); HR may leave it empty. */
+export const taskDoneSchema = z.object({ comment: text(3, 500, msg('v.commentRequired')) });
+export const taskDoneHrSchema = z.object({ comment: z.string().trim().max(500, msg('v.tooLong', { max: 500 })).default('') });

@@ -12,6 +12,7 @@ import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useAssistOverview } from '@/shared/api/queries/assist';
 import { LanguageButton } from '@/shared/ui/language-switch';
+import { NotificationsBell } from '@/features/next/NotificationsBell';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Breadcrumbs } from '@/shared/ui/page';
 import { Skeleton } from '@/shared/ui/states';
@@ -69,6 +70,7 @@ export default function AssistLayout() {
               <Breadcrumbs items={crumbs.length ? crumbs : [{ label: t('assist.nav.dashboard') }]} />
             </div>
             <HelpContextButton />
+            <NotificationsBell />
             <LanguageButton />
             {action}
             <CreateMenu />

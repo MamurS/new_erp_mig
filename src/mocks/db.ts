@@ -385,8 +385,15 @@ export interface Db {
 }
 
 /** A task for a role (staff) or for the HR of a client (`toRole: 'hr'`, `clientId`). */
-export interface TaskRow extends WorkTask {
+export interface TaskRow extends Omit<WorkTask, 'overdue' | 'byMe'> {
   createdById: UUID;
+  /** The executor: the responsible person, or who took the request from the role's pool. */
+  assigneeId?: UUID;
+  /** The deal the request is about (its «События» feed), if any. */
+  dealId?: UUID;
+  /** «Завтра срок» and «Просрочен» were sent (once each). */
+  dueSoonSent?: boolean;
+  overdueSent?: boolean;
 }
 
 /** An in-app notification of one person (e.g. «задача выполнена»). */

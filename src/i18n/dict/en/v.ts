@@ -63,6 +63,7 @@ export const v: Translation<typeof Ru> = {
   'v.max200Requests': 'No more than 200 requests at a time',
   'v.reasonMin5': 'Give a reason: at least 5 characters',
   'v.reasonRequired': 'Give a reason',
+  'v.commentRequired': 'Write a comment',
   'v.roleRequired': 'Select a role',
   'v.caseTypeRequired': 'Select the case type',
   'v.caseDescMin5': 'Describe the case: at least 5 characters',

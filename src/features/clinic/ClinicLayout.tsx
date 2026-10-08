@@ -10,6 +10,7 @@ import { IdleWatcher } from '@/shared/auth/IdleWatcher';
 import { ROLE_LABEL } from '@/shared/domain/labels';
 import { useClinicOverview } from '@/shared/api/queries/clinic';
 import { LanguageButton } from '@/shared/ui/language-switch';
+import { NotificationsBell } from '@/features/next/NotificationsBell';
 import { AppSidebar, SidebarProvider, SidebarToggle, type SidebarGroup } from '@/shared/ui/app-sidebar';
 import { Skeleton } from '@/shared/ui/states';
 import { t } from '@/i18n';
@@ -78,6 +79,7 @@ export default function ClinicLayout() {
               )}
             </div>
             <HelpContextButton className="ml-auto" />
+            <NotificationsBell />
             <LanguageButton />
             <CreateMenu />
           </header>
