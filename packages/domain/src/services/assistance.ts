@@ -32,14 +32,16 @@ import { registryStatusAfterReview } from '../clinics';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClaimRow, InsuredRow } from '../store/db';
-import { conflict, DomainError, notFound, todayIso, type BaseCtx } from './kernel';
+import { asSystem, conflict, DomainError, notFound, systemRepos, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, priceListOf, refreshStoredGuarantee } from './clinic';
 import { limitsFor, PAID_LIKE_STATUSES } from './views';
 
 
 /** Assignments of one policy (every rule of ../assistance.ts looks at one policy at a time). */
-const assignmentsOf = (ctx: BaseCtx, policyId: UUID): Promise<AssistanceAssignment[]> => ctx.repos.assignments.list({ where: { policyId } });
+/** Assignments of one policy (`undefined`: of every policy): routing reads them whoever asks. */
+export const assignmentsOf = (ctx: BaseCtx, policyId?: UUID): Promise<AssistanceAssignment[]> =>
+  systemRepos(ctx, 'routing: which assistance company serves a policy on a date').assignments.list(policyId ? { where: { policyId } } : {});
 
 export async function assistanceOf(ctx: BaseCtx, id: UUID): Promise<AssistanceCompany> {
   const a = await ctx.repos.assistances.get(id);
@@ -58,7 +60,8 @@ export async function currentAssistance(ctx: BaseCtx, policyId: UUID): Promise<U
 
 /** Keeps the cached `assistanceId` of policies and clients in line with the assignments for today. */
 export async function syncAssistance(ctx: BaseCtx): Promise<void> {
-  const r = ctx.repos;
+  // A cache of the assignments on policies and clients: kept by the system.
+  const r = systemRepos(ctx, 'cached assistance of policies and clients (follows the assignments)');
   const today = todayIso(ctx);
   const assignments = await r.assignments.list();
   const policies = await r.policies.list();
@@ -110,18 +113,21 @@ export async function requireInsuredOf(ctx: BaseCtx, assistanceId: UUID, insured
 
 /** People whose policy is assigned to the assistance today. */
 export async function rosterOf(ctx: BaseCtx, assistanceId: UUID): Promise<InsuredRow[]> {
+  const r = systemRepos(ctx, 'roster of an assistance company: people of the policies assigned to it today');
   const today = todayIso(ctx);
-  const assignments = await ctx.repos.assignments.list();
-  const policies = (await ctx.repos.policies.list()).filter((p) => assistanceOn(assignments, p.id, today) === assistanceId).map((p) => p.id);
+  const assignments = await r.assignments.list();
+  const policies = (await r.policies.list()).filter((p) => assistanceOn(assignments, p.id, today) === assistanceId).map((p) => p.id);
   if (!policies.length) return [];
-  return ctx.repos.insured.list({ where: { policyId: { in: policies } } });
+  return r.insured.list({ where: { policyId: { in: policies } } });
 }
 
 // ---------------------------------------------------------------- payers & price lists
 
 export async function insuredOfVisit(ctx: BaseCtx, visitId: UUID | undefined): Promise<InsuredRow | undefined> {
-  const v = visitId ? await ctx.repos.visits.get(visitId) : null;
-  return v ? ((await ctx.repos.insured.get(v.insuredId)) ?? undefined) : undefined;
+  // The payer of a service follows the patient of the visit, also after the visit closed.
+  const r = systemRepos(ctx, 'payer of a service: the patient of a visit and their policy');
+  const v = visitId ? await r.visits.get(visitId) : null;
+  return v ? ((await r.insured.get(v.insuredId)) ?? undefined) : undefined;
 }
 
 /** Payer of a registry line: the assistance of the policy on the service date, otherwise MIG (§5.3). */
@@ -221,7 +227,8 @@ export async function findRegistryLine(ctx: BaseCtx, lineId: UUID): Promise<{ r:
 }
 
 /** Automatic checks of one rebill line against the data of MIG (§5.5). */
-export async function checksFor(ctx: BaseCtx, rebill: Pick<Rebill, 'id' | 'assistanceId'>, line: Pick<RebillLine, 'registryLineId'>): Promise<RebillLine['checks']> {
+export async function checksFor(person: BaseCtx, rebill: Pick<Rebill, 'id' | 'assistanceId'>, line: Pick<RebillLine, 'registryLineId'>): Promise<RebillLine['checks']> {
+  const ctx = asSystem(person, 'automatic checks of a rebill line against the data of MIG');
   const found = await findRegistryLine(ctx, line.registryLineId);
   if (!found) return [{ code: 'not_paid_to_clinic', message: msg('srv.rebill.registryLineNotFound') }];
   const { r, l } = found;
@@ -279,7 +286,8 @@ function monthBounds(period: string): { from: string; to: string } {
 }
 
 /** Fee of the rebill by the model of the contract, with the formula shown to both sides. */
-export async function feeOf(ctx: BaseCtx, a: AssistanceCompany, period: string, claimsAmount: number): Promise<Rebill['fee']> {
+export async function feeOf(person: BaseCtx, a: AssistanceCompany, period: string, claimsAmount: number): Promise<Rebill['fee']> {
+  const ctx = asSystem(person, 'fee of a rebill: counts of insured persons and cases of the assistance company');
   const { from, to } = monthBounds(period);
   const today = todayIso(ctx);
   const assignments = await ctx.repos.assignments.list();
@@ -345,7 +353,9 @@ export function rebillStatusAfterReview(lines: RebillLine[]): Rebill['status'] {
 }
 
 /** Accepted lines of an accepted rebill become MIG claims with the `assistance` source (§5.5). */
-export async function claimsFromRebill(ctx: BaseCtx, b: Rebill, actorName: string): Promise<void> {
+export async function claimsFromRebill(person: BaseCtx, b: Rebill, actorName: string): Promise<void> {
+  // Accepted lines become claims of MIG: the system's bookkeeping after the rebill decision.
+  const ctx = asSystem(person, 'claims created from the accepted lines of a rebill');
   const r = ctx.repos;
   const P = await loadParams(ctx);
   const now = tzIso(ctx.now());
@@ -393,7 +403,8 @@ export async function claimsFromRebill(ctx: BaseCtx, b: Rebill, actorName: strin
 
 // ---------------------------------------------------------------- KPI & quality control
 
-export async function kpiOf(ctx: BaseCtx, a: AssistanceCompany, now = ctx.now()): Promise<AssistanceKpi> {
+export async function kpiOf(person: BaseCtx, a: AssistanceCompany, now = person.now()): Promise<AssistanceKpi> {
+  const ctx = asSystem(person, 'KPI of an assistance company (aggregates over its portfolio)');
   const r = ctx.repos;
   const roster = await rosterOf(ctx, a.id);
   const people = new Set(roster.map((i) => i.id));
@@ -422,7 +433,9 @@ export async function kpiOf(ctx: BaseCtx, a: AssistanceCompany, now = ctx.now())
 }
 
 /** Adds this month's 5% sample of the assistance's decisions to the MIG queue (deterministic, idempotent). */
-export async function ensureQaSample(ctx: BaseCtx, now = ctx.now()): Promise<void> {
+export async function ensureQaSample(person: BaseCtx, now = person.now()): Promise<void> {
+  // The monthly quality-control sample: a job run on read.
+  const ctx = asSystem(person, 'monthly quality-control sample of assistance decisions');
   const r = ctx.repos;
   const P = await loadParams(ctx);
   const month = isoDay(now).slice(0, 7);

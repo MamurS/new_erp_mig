@@ -163,7 +163,8 @@ site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://127.0.0.1:3000"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
-jwt_expiry = 3600
+# The API refreshes access tokens on the server (BFF, BACKEND_SPEC §7): 10 minutes.
+jwt_expiry = 600
 # JWT issuer URL. If not set, defaults to auth.external_url.
 # jwt_issuer = ""
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
@@ -173,8 +174,9 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
-enable_signup = true
+# Allow/disallow new user signups to your project. Accounts are created only by the API (service role,
+# invitations); nobody signs up by themselves.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -196,18 +198,20 @@ password_requirements = ""
 # rp_origins = ["http://127.0.0.1:3000"]
 
 [auth.rate_limit]
+# LOCAL/CI: every request reaches Supabase Auth from the API (one IP), and the tests sign in hundreds of times.
+# Production sets its limits in the deployment and lets Supabase Auth see the client IP (GOTRUE_RATE_LIMIT_HEADER).
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
 email_sent = 2
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
-sms_sent = 30
+sms_sent = 1000
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
 anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
-token_refresh = 150
+token_refresh = 10000
 # Number of sign up and sign-in requests that can be made in a 5 minute interval per IP address (excludes anonymous users).
-sign_in_sign_ups = 30
+sign_in_sign_ups = 10000
 # Number of OTP / Magic link verifications that can be made in a 5 minute interval per IP address.
-token_verifications = 30
+token_verifications = 10000
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.
 web3 = 30
 
@@ -256,18 +260,20 @@ otp_expiry = 3600
 # content_path = "./supabase/templates/password_changed_notification.html"
 
 [auth.sms]
-# Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+# Turns the phone provider on (sign-in by a one-time code); sign-ups stay off ([auth] enable_signup = false).
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
-max_frequency = "5s"
+# LOCAL/CI: the tests sign the same person in many times; production uses 60s (the app's resend timer).
+max_frequency = "1s"
 
-# Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# DEV/CI ONLY: the demo phones (packages/seed/src/credentials.ts) get the fixed code 000000, no SMS is sent.
+[auth.sms.test_otp]
+998900000001 = "000000"
+998900000002 = "000000"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -282,17 +288,27 @@ max_frequency = "5s"
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
-# [auth.hook.custom_access_token]
-# enabled = true
-# uri = "pg-functions://<database>/<schema>/<hook_name>"
+# The claims carry only the roles and bindings of app_metadata (migration …_auth_sessions.sql).
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
+
+# SMS of one-time codes go to the API (apps/api/src/auth/sms.ts), which hands them to the SMS adapter.
+# DEV/CI ONLY secret (the API's SMS_HOOK_SECRET default outside production); the API listens on 8787 locally.
+[auth.hook.send_sms]
+enabled = true
+uri = "http://host.docker.internal:8787/api/hooks/send-sms"
+secrets = "v1,whsec_bWlnLWRtcyBkZXYtb25seSBzbXMgaG9vayBzZWNyZXQ="
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# LOCAL/CI: the Supabase CLI turns phone sign-in off unless a provider is enabled, even with the Send SMS hook.
+# This placeholder is never called: with [auth.hook.send_sms] enabled Supabase Auth hands every SMS to the hook
+# (the API's SMS adapter), and the demo phones use [auth.sms.test_otp]. Real providers plug into the API, not here.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
-# DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+enabled = true
+account_sid = "unused-sms-goes-through-the-send-sms-hook"
+message_service_sid = "unused"
+auth_token = "unused"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
@@ -301,8 +317,8 @@ max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

@@ -28,7 +28,7 @@ import { asPricingRule, contractPricing, personPremium, PricingError, type Prici
 import { randomId } from '../lib/random';
 import { isoDay, parseIso, tzIso } from '../lib/time';
 import type { ChangeRequestRow, ClientRow, InsuredRow } from '../store/db';
-import { conflict, errorOf, notFound, todayIso, type BaseCtx } from './kernel';
+import { asSystem, conflict, errorOf, notFound, systemRepos, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { createInsured, createListedInsured, nextPolicyNumber, refreshPolicyTotals } from './policy';
 import { notifyAssistance, syncAssistance } from './assistance';
@@ -57,13 +57,16 @@ export async function clientRow(ctx: BaseCtx, id: UUID): Promise<ClientRow> {
 }
 
 export async function dealEvent(ctx: BaseCtx, dealId: UUID, actorName: string, text: string): Promise<void> {
-  await ctx.repos.dealEvents.insert({ id: randomId(), dealId, at: tzIso(ctx.now()), actorName, text }, { at: 'start' });
+  // The deal feed records events of any party (the client's HR, legal, signatures).
+  await systemRepos(ctx, 'the deal feed records events of any party').dealEvents.insert({ id: randomId(), dealId, at: tzIso(ctx.now()), actorName, text }, { at: 'start' });
 }
 
 const STAGE_ORDER: DealStage[] = ['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active'];
 
 /** Moves a deal forward (never back, never out of `lost`), with an event in its feed. */
-export async function moveDeal(ctx: BaseCtx, dealId: UUID | undefined, stage: DealStage, actorName: string, text?: string): Promise<void> {
+export async function moveDeal(person: BaseCtx, dealId: UUID | undefined, stage: DealStage, actorName: string, text?: string): Promise<void> {
+  // The pipeline follows events of any party (the client's answer, signatures, payments).
+  const ctx = asSystem(person, 'the sales pipeline follows events of any party');
   const deal = dealId ? await ctx.repos.deals.get(dealId) : null;
   if (!deal || deal.stage === 'lost') return;
   if (STAGE_ORDER.indexOf(stage) <= STAGE_ORDER.indexOf(deal.stage) && stage !== deal.stage) return;
@@ -164,7 +167,10 @@ export async function createContractInvoices(ctx: BaseCtx, c: Contract): Promise
 // ---------------------------------------------------------------- signing
 
 /** After any signature: a fully signed document is finalised once. */
-export async function afterSigning(ctx: BaseCtx, kind: 'contract' | 'endorsement', id: UUID, actorName: string): Promise<void> {
+export async function afterSigning(person: BaseCtx, kind: 'contract' | 'endorsement', id: UUID, actorName: string): Promise<void> {
+  // Consequences of a signature (deal stage, invoices, coming into force, applying an endorsement) are the
+  // system's, also when the client's HR signs.
+  const ctx = asSystem(person, 'consequences of a signature: deal stage, invoices, coming into force, applying an endorsement');
   if (kind === 'contract') {
     const c = await contractOf(ctx, id);
     if (!isFullySigned(c.signing)) {
@@ -220,7 +226,10 @@ async function reload(ctx: BaseCtx, c: Contract): Promise<void> {
  * of the contract and after payments, so the state is current without background jobs. `c` is saved and
  * holds the current state afterwards.
  */
-export async function refreshContract(ctx: BaseCtx, c: Contract, now = ctx.now()): Promise<void> {
+export async function refreshContract(person: BaseCtx, c: Contract, now = person.now()): Promise<void> {
+  // A job run on read: its effects (signatures from EDO, the policy and insured persons on coming into force,
+  // expiry) are the system's, whoever reads the contract.
+  const ctx: BaseCtx = { ...person, repos: systemRepos(person, 'the lazy server clock of contracts: EDO events, coming into force, expiry') };
   const r = ctx.repos;
   if (edoArrived(c.signing, now)) {
     c.signing = addSignature(c.signing, 'client', edoClientSignature(c.signing, c.params.clientSignatory.name, todayIso(ctx)));

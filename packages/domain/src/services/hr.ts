@@ -16,7 +16,7 @@ import { isActiveRequest } from '../requests';
 import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { InsuredRow, PolicyChangeRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, systemRepos, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { paginate, q } from './list';
 import { loadParams } from './params';
 import { familyOf } from './family';
@@ -384,7 +384,8 @@ export async function stats(ctx: AuthCtx): Promise<HrStats> {
   const now = ctx.now();
   const qStart = new Date(now);
   qStart.setMonth(Math.floor(qStart.getMonth() / 3) * 3, 1);
-  const claimsQ = (await ctx.repos.claims.list({ where: { insuredId: { in: ids } } })).filter((c) => parseIso(c.createdAt) >= qStart.getTime()).length;
+  // HR never reads claims: only their count, under k-anonymity.
+  const claimsQ = (await systemRepos(ctx, 'HR statistics: the number of claims of the company this quarter (k-anonymous)').claims.list({ where: { insuredId: { in: ids } } })).filter((c) => parseIso(c.createdAt) >= qStart.getTime()).length;
   const appUsers = employees.filter((e) => e.appStatus === 'active').length;
   const client = (await ctx.repos.clients.get(user.companyId))!;
   const year = new Date(now).getFullYear();

@@ -7,7 +7,7 @@ import { detectFlags } from '../settlement';
 import { randomId } from '../lib/random';
 import { parseIso, tzIso } from '../lib/time';
 import type { ClaimRow } from '../store/db';
-import type { BaseCtx } from './kernel';
+import { systemRepos, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { currentAssistance } from './assistance';
 
@@ -55,7 +55,9 @@ export function reserveOnDate(c: ClaimRow, date: string): number {
  * Recomputes fraud flags; dismissed flags keep their comment. Sets `c.flags` and saves them when the claim
  * is stored already.
  */
-export async function refreshFlags(ctx: BaseCtx, c: ClaimRow, P?: ParamsView): Promise<FraudFlag[]> {
+export async function refreshFlags(person: BaseCtx, c: ClaimRow, P?: ParamsView): Promise<FraudFlag[]> {
+  // Fraud checks compare the claim with all claims of the insurer: the system's work, whoever submits it.
+  const ctx: BaseCtx = { ...person, repos: systemRepos(person, 'fraud flags of a claim: compared with every claim of the insurer') };
   const params = P ?? (await loadParams(ctx));
   const i = await ctx.repos.insured.get(c.insuredId);
   const policy = i ? await ctx.repos.policies.get(i.policyId) : null;

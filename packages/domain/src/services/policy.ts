@@ -9,7 +9,7 @@ import { formatMoney } from '../lib/format';
 import { randomId } from '../lib/random';
 import { tzIso } from '../lib/time';
 import type { ClientRow, InsuredRow, PolicyChangeRow } from '../store/db';
-import { DomainError, errorOf, type BaseCtx } from './kernel';
+import { DomainError, errorOf, systemRepos, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { annualPremiumOf } from './family';
 
@@ -163,12 +163,14 @@ export function toPolicyChange(row: PolicyChangeRow): PolicyChange {
  * Saves the counters (and sets them on `policy`); other changes of `policy` are the caller's to save.
  */
 export async function refreshPolicyTotals(ctx: BaseCtx, policy: Policy): Promise<void> {
-  const members = await ctx.repos.insured.list({ where: { policyId: policy.id, status: 'active' } });
+  // Derived counters of the policy and the client: kept by the system after any change of the insured list.
+  const r = systemRepos(ctx, 'derived counters of a policy and its client after a change of the insured list');
+  const members = await r.insured.list({ where: { policyId: policy.id, status: 'active' } });
   policy.insuredCount = members.length;
   policy.familyCount = members.filter((i) => i.relation !== 'employee').length;
-  await ctx.repos.policies.update(policy.id, { insuredCount: policy.insuredCount, familyCount: policy.familyCount });
-  const client = await ctx.repos.clients.get(policy.clientId);
-  if (client && client.activePolicyId === policy.id) await ctx.repos.clients.update(client.id, { premium: policy.premium });
+  await r.policies.update(policy.id, { insuredCount: policy.insuredCount, familyCount: policy.familyCount });
+  const client = await r.clients.get(policy.clientId);
+  if (client && client.activePolicyId === policy.id) await r.clients.update(client.id, { premium: policy.premium });
 }
 
 export async function requestChange(

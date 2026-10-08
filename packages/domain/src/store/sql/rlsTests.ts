@@ -10,6 +10,7 @@
  *   insert / update / delete — on an «own» row (inside the predicate) succeeds iff the matrix allows it,
  *   on a «foreign» row (outside it) never does. Every attempt is rolled back.
  */
+import { API_TABLES, BUCKETS } from './migrationsAuth';
 import type { Role } from '@mig/contracts';
 import type { Db } from '../db';
 import { snake } from '../columns';
@@ -277,7 +278,8 @@ rollback;
 function rlsEnabledFile(): { sql: string; count: number } {
   const lines = [
     `select is((select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity), 0::bigint, 'every table in public has row level security');`,
-    `select is((select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind in ('r', 'p')), ${TABLES.length}::bigint, 'public holds exactly the tables of schema.ts');`,
+    `select is((select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind in ('r', 'p')), ${TABLES.length + API_TABLES.length}::bigint, 'public holds exactly the tables of schema.ts and the API tables');`,
+    ...API_TABLES.map((t) => `select ok((select relrowsecurity from pg_class where oid = 'public.${t}'::regclass), ${lit(`${t} has row level security`)});`),
     `select is((select count(*) from information_schema.role_table_grants where grantee = 'anon' and table_schema = 'public'), 0::bigint, 'anon has no privilege on public');`,
     ...TABLES.map((t) => `select ok((select relrowsecurity from pg_class where oid = 'public.${t.table}'::regclass), ${lit(`${t.table} has row level security`)});`),
     ...TABLES.flatMap((t) =>
@@ -439,6 +441,79 @@ rollback;
   };
 }
 
+/**
+ * BFF sessions, sign-in challenges, the identity sync, the Custom Access Token Hook, cleanup and file storage
+ * (BACKEND_SPEC §7, §8, §10; migrations …_auth_sessions.sql and …_files_storage.sql).
+ */
+function authStorageFile(_db: Db, ids: Identity[]): { sql: string; count: number } {
+  const op = ids.find((i) => i.role === 'operator')!;
+  const hr = ids.find((i) => i.role === 'hr')!;
+  const c = (i: Identity) => `${lit(JSON.stringify(i.claims))}::jsonb`;
+  const staffId = String(op.claims.sub);
+  const hookIn = JSON.stringify({ user_id: staffId, authentication_method: 'password', claims: { sub: staffId, aud: 'authenticated', role: 'authenticated', aal: 'aal1', app_metadata: { provider: 'email', providers: ['email'], role: 'hr', company_id: FIX(9), is_admin: true }, user_metadata: { role: 'admin' } } });
+  const sess = (id: string, user: string, idle: string) =>
+    `insert into public.sessions (id, user_id, role, created_at, last_activity) values ('${id}', '${user}', 'operator', (extract(epoch from now()) * 1000)::bigint, (extract(epoch from now()) * 1000)::bigint);
+insert into public.app_sessions (id_hash, session_id, user_id, role, aal, refresh_enc, refresh_key_ver, access_enc, access_key_ver, access_expires_at, created_at, last_activity) values (convert_to('${id}', 'UTF8'), '${id}', '${user}', 'operator', 'aal2', '\\x00', 1, '\\x00', 1, now(), now(), now() - interval '${idle}');`;
+  const lines = [
+    ...API_TABLES.flatMap((t) => [
+      `select is((tests.as_user(${c(op)}, 'select 1 from public.${t}')).n, -1, ${lit(`authenticated cannot read ${t}`)});`,
+      `select is((tests.as_user(${c(hr)}, 'delete from public.${t}')).n, -1, ${lit(`authenticated cannot delete from ${t}`)});`,
+      `select ok(not has_table_privilege('anon', 'public.${t}', 'select'), ${lit(`anon cannot read ${t}`)});`,
+    ]),
+    // The Custom Access Token Hook keeps only the roles and bindings of app_metadata, never user_metadata.
+    `select is((public.custom_access_token_hook(${lit(hookIn)}::jsonb) -> 'claims' -> 'app_metadata'), '{"provider": "email", "providers": ["email"], "role": "hr", "company_id": "${FIX(9)}"}'::jsonb, 'the access token hook keeps only the role and bindings of app_metadata');`,
+    `select is((public.custom_access_token_hook(${lit(hookIn)}::jsonb) -> 'claims' -> 'user_metadata'), '{}'::jsonb, 'user_metadata never reaches the token');`,
+    `select is((public.custom_access_token_hook(${lit(hookIn)}::jsonb) -> 'claims' ->> 'sub'), ${lit(staffId)}, 'the required claims stay');`,
+    `select ok(not has_function_privilege('authenticated', 'public.custom_access_token_hook(jsonb)', 'execute'), 'users cannot call the access token hook');`,
+    `select ok(not has_function_privilege('anon', 'public.custom_access_token_hook(jsonb)', 'execute'), 'anon cannot call the access token hook');`,
+    `select ok(not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') or has_function_privilege('supabase_auth_admin', 'public.custom_access_token_hook(jsonb)', 'execute'), 'Supabase Auth may call the hook');`,
+    // Account changes are queued for Supabase Auth; the seed is not.
+    `select is((select count(*) from app.identity_sync), 0::bigint, 'the seed queues no identity sync');`,
+    `update public.staff set role = 'legal' where id = '${staffId}';`,
+    `select is((select count(*) from app.identity_sync where user_id = '${staffId}'), 1::bigint, 'a role change queues the identity sync');`,
+    `insert into public.hr_users (id, email, full_name, company_id) values ('${FIX(31)}', 'new-hr@test.uz', 'Test', '${String((hr.claims.app_metadata as Record<string, unknown>).company_id)}');`,
+    `select is((select count(*) from app.identity_sync where user_id = '${FIX(31)}'), 1::bigint, 'a new account queues the identity sync');`,
+    `select is((tests.as_user(${c(op)}, 'select 1 from app.identity_sync')).n, -1, 'users cannot read the identity queue');`,
+    // A session ended in public.sessions ends the BFF session too; the cleanup job removes idle ones.
+    sess('t-fresh', staffId, '1 minute'),
+    sess('t-idle', staffId, '40 minutes'),
+    `delete from public.sessions where id = 't-fresh';`,
+    `select is((select count(*) from public.app_sessions where session_id = 't-fresh'), 0::bigint, 'ending a session ends its BFF row');`,
+    `insert into public.app_auth_challenges (id_hash, kind, lock_key, expires_at) values ('\\x01', 'password', 'k', now() - interval '1 minute'), ('\\x02', 'phone', 'k', now() + interval '5 minutes');`,
+    `select ok((app.job_cleanup_expired() ->> 'app_sessions')::int >= 1, 'the cleanup job ends idle BFF sessions');`,
+    `select is((select count(*) from public.app_sessions where session_id = 't-idle'), 0::bigint, 'the idle session is gone');`,
+    `select is((select count(*) from public.app_auth_challenges), 1::bigint, 'expired sign-in challenges are gone, live ones stay');`,
+    // Files: where the bytes are and their hash.
+    `select has_column('public', 'files', 'bucket', 'files.bucket');`,
+    `select has_column('public', 'files', 'object_name', 'files.object_name');`,
+    `select has_column('public', 'files', 'sha256', 'files.sha256');`,
+    `select throws_ok($$ insert into public.files (id, mime, bucket) values ('${FIX(41)}', 'image/png', 'receipts') $$, '23514', null, 'a bucket needs an object name');`,
+    `select throws_ok($$ insert into public.files (id, mime, bucket, object_name, sha256) values ('${FIX(42)}', 'image/png', 'public', '${FIX(42)}', '${'0'.repeat(64)}') $$, '23514', null, 'only the private buckets');`,
+    `select ok(tests.private_buckets(), 'the buckets of Storage are private (where Storage is installed)');`,
+    `select ok(has_table_privilege('service_role', 'app.job_queue', 'update'), 'the API worker takes queued jobs');`,
+  ];
+  const asserts = lines.filter((l) => /^select (is|ok|has_column|throws_ok)\(/.test(l));
+  return {
+    sql: `-- Sessions, sign-in, identity sync, the token hook, cleanup and files (BACKEND_SPEC §7, §8, §10): generated by scripts/gen-rls-tests.mjs. Do not edit.
+begin;
+${HELPERS}
+create or replace function tests.private_buckets() returns boolean
+  language plpgsql as $$
+begin
+  if to_regclass('storage.buckets') is null then
+    return true;
+  end if;
+  return (select count(*) from storage.buckets where id = any(array[${BUCKETS.map((b) => lit(b.id)).join(', ')}]) and not public) = ${BUCKETS.length};
+end $$;
+select plan(${asserts.length});
+${lines.join('\n')}
+select * from finish();
+rollback;
+`,
+    count: asserts.length,
+  };
+}
+
 export const TESTS_DIR = 'supabase/tests';
 
 export function buildRlsTests(db: Db): (SqlFile & { count: number })[] {
@@ -448,6 +523,7 @@ export function buildRlsTests(db: Db): (SqlFile & { count: number })[] {
   add('00_rls_enabled_test.sql', rlsEnabledFile());
   add('01_scenarios_test.sql', scenariosFile(db, ids));
   add('02_audit_jobs_test.sql', auditFile(db, ids));
+  add('03_auth_storage_test.sql', authStorageFile(db, ids));
   for (const id of ids) add(`10_rls_${snake(id.role)}_test.sql`, matrixFile(db, ids, id));
   return files;
 }

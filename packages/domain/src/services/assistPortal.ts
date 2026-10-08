@@ -54,10 +54,10 @@ import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { AssistUserRow, AssistanceCaseRow, GuaranteeRow, InsuredRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
 import { q, type Qs } from './list';
 import { loadParams, type ParamsView } from './params';
-import { assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
+import { assignmentsOf, assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
 import {
   clinicOf,
   clinicResponseMinutes,
@@ -94,7 +94,7 @@ export function requireAssist(ctx: AuthCtx, action?: Action, sub?: string): Assi
 
 /** Scope of records of policies on their event dates, with the assignments loaded once. */
 async function scopeChecker(ctx: BaseCtx, assistanceId: UUID): Promise<(policyId: UUID, at: string) => 'full' | 'read' | 'none'> {
-  const assignments: AssistanceAssignment[] = await ctx.repos.assignments.list();
+  const assignments: AssistanceAssignment[] = await assignmentsOf(ctx);
   const today = todayIso(ctx);
   return (policyId, at) => assistanceScope(assignments, assistanceId, policyId, at.slice(0, 10), today);
 }
@@ -179,11 +179,13 @@ function addWorkdays(fromIso: string, days: number): string {
 
 /** A rebill with fresh checks, fee and totals (saved when they changed) and the names of the people. */
 export async function toRebillView(ctx: BaseCtx, b: Rebill): Promise<RebillView> {
+  // Checks and the fee are recomputed by the system on every read; names of MIG staff are shown to the assistance.
+  const sys = systemRepos(ctx, 'rebill view: recomputed checks and fee, names of the MIG staff who accepted and paid');
   const before = JSON.stringify(b);
   await recomputeRebill(ctx, b);
-  if (JSON.stringify(b) !== before) await ctx.repos.rebills.put(b);
+  if (JSON.stringify(b) !== before) await sys.rebills.put(b);
   const P = await loadParams(ctx);
-  const name = async (id?: string) => (id ? (await ctx.repos.staff.get(id))?.fullName : undefined);
+  const name = async (id?: string) => (id ? (await sys.staff.get(id))?.fullName : undefined);
   const a = await assistanceOf(ctx, b.assistanceId);
   return {
     ...b,
@@ -224,9 +226,11 @@ export async function ownRebill(ctx: BaseCtx, assistanceId: UUID, id: UUID): Pro
 
 /** Appointments of people whose policy was assigned to the assistance when the request was made. */
 export async function appointmentsOf(ctx: BaseCtx, assistanceId: UUID): Promise<Appointment[]> {
-  const people = new Map((await ctx.repos.insured.list()).map((i) => [i.id, i]));
+  // The scope is the assignment on the date of the request (also a former assistance, read-only): checked here.
+  const r = systemRepos(ctx, 'appointments of the people an assistance company serves, scoped by the assignment on the date');
+  const people = new Map((await r.insured.list()).map((i) => [i.id, i]));
   const scopeOn = await scopeChecker(ctx, assistanceId);
-  return (await ctx.repos.appointments.list()).filter((a) => {
+  return (await r.appointments.list()).filter((a) => {
     const who = people.get(a.insuredId);
     return !!who && scopeOn(who.policyId, a.createdAt) !== 'none';
   });
@@ -366,7 +370,9 @@ export async function disputeRebillLine(ctx: BaseCtx, b: Rebill, lineId: string,
 
 export async function overview(ctx: AuthCtx): Promise<AssistOverview> {
   const { user, assistanceId } = requireAssist(ctx);
-  const r = ctx.repos;
+  // The desktop counts the company's cases, letters, lines and rebills for every role of it (RLS shows each
+  // table to some roles only); the queue items stay role-specific below.
+  const r = systemRepos(ctx, 'assistance desktop: counters of the company\'s cases, letters, registry lines and rebills');
   const a = await assistanceOf(ctx, assistanceId);
   const P = await loadParams(ctx);
   const now = ctx.now();
@@ -826,7 +832,7 @@ export async function clinics(ctx: AuthCtx): Promise<AssistClinic[]> {
       clinicLegalForm: c.legalForm,
       city: c.district,
       specialties: c.specialties,
-      ownPrices: await ctx.repos.clinicContracts.exists({ clinicId: c.id, payer: assistanceId }),
+      ownPrices: await systemRepos(ctx, 'network clinics: whether the company has own prices with a clinic').clinicContracts.exists({ clinicId: c.id, payer: assistanceId }),
       priceList: await priceListOf(ctx, c.id, assistanceId),
     });
   }

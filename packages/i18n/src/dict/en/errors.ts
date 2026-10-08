@@ -14,6 +14,7 @@ export const errors: Translation<typeof Ru> = {
   'errors.badResponse': 'The server returned an unexpected response. Please try again later',
   'errors.badJson': 'Invalid JSON',
   'errors.tooLarge': 'The request is too large',
+  'errors.csrf': 'The request was rejected. Reload the page and try again',
   'errors.unknown': 'Something went wrong. Please try again',
   'errors.docsUnavailable': 'Documentation is unavailable',
 };

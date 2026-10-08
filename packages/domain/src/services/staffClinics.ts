@@ -13,7 +13,7 @@ import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClinicUserRow } from '../store/db';
 import { linesOf, settleRegistry, subStatus, subTotals } from './assistance';
 import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, refreshStoredGuarantee, toGuaranteeView, toRegistrySummary, toRegistryView } from './clinic';
-import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
+import { asSystem, audit, conflict, DomainError, forbidden, notFound, requirePermission, requireStaff, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { toUserView } from './clinicPortal';
 import { loadParams } from './params';
 import { revokeKey, toClientView } from './partnerIntegration';
@@ -61,7 +61,7 @@ function canReadRegistries(user: SessionUser): boolean {
 
 export async function card(ctx: AuthCtx, id: UUID): Promise<ClinicCard> {
   requirePermission(requireStaff(ctx), 'clinics.read');
-  return clinicCard(ctx, await clinicOf(ctx, id));
+  return clinicCard(asSystem(ctx, 'clinic card for MIG staff: users, keys, webhooks, API errors, registries'), await clinicOf(ctx, id));
 }
 
 export async function createClinic(ctx: AuthCtx, body: unknown): Promise<Clinic> {

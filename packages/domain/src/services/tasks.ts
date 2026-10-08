@@ -23,7 +23,7 @@ import { addWorkdays, canRemind, isActiveRequest, isDueSoon, isOverdue } from '.
 import { randomId } from '../lib/random';
 import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
-import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { asSystem, audit, conflict, forbidden, notFound, requirePermission, systemRepos, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { dealContract } from './lifecycle';
 
@@ -115,7 +115,9 @@ const executorLink = (task: TaskRow) => task.link;
  * A line in the request's history and in the activity of its object (the deal's events, the client's log).
  * Changes `task.history` in place: the caller saves the task.
  */
-async function record(ctx: BaseCtx, task: TaskRow, kind: TaskEvent['kind'], byName: string, comment?: string): Promise<void> {
+async function record(person: BaseCtx, task: TaskRow, kind: TaskEvent['kind'], byName: string, comment?: string): Promise<void> {
+  // The activity of the request's deal and client is written whoever acts on the request (HR included).
+  const ctx = asSystem(person, 'activity of a request in the feed of its deal and the log of its client');
   const at = tzIso(ctx.now());
   task.history.push({ at, kind, byName, ...(comment ? { comment } : {}) });
   const to = task.assigneeName ?? msg(`labels.role.${task.toRole}`);
@@ -245,7 +247,9 @@ export function taskView(t: TaskRow, viewerId: string, now = Date.now()): WorkTa
  * The action was done: open requests about it (for this deal, contract or client) close and their authors
  * are notified. Returns how many were closed.
  */
-export async function completeTasks(ctx: BaseCtx, actions: TaskAction | readonly TaskAction[], refs: { dealId?: string; contractId?: string; clientId?: string }, byName: string): Promise<number> {
+export async function completeTasks(person: BaseCtx, actions: TaskAction | readonly TaskAction[], refs: { dealId?: string; contractId?: string; clientId?: string }, byName: string): Promise<number> {
+  // A step of the pipeline done closes the requests about it, whoever did it (requests of other roles too).
+  const ctx = asSystem(person, 'a step done closes the open requests about it (requests of any role)');
   const list = typeof actions === 'string' ? [actions] : actions;
   let n = 0;
   for (const task of await ctx.repos.tasks.list({ where: { status: { in: ['open', 'in_progress'] }, action: { in: list } } })) {
@@ -433,5 +437,5 @@ export async function clientPipeline(ctx: BaseCtx, clientId: string): Promise<Cl
 export async function pipeline(ctx: AuthCtx, clientId: string): Promise<ClientPipeline> {
   requirePermission(ctx.user, 'clients.read');
   if (!(await ctx.repos.clients.get(clientId))) throw notFound();
-  return clientPipeline(ctx, clientId);
+  return clientPipeline({ ...ctx, repos: systemRepos(ctx, 'client pipeline: deal stage, contract and invoice numbers of a client the person may read') }, clientId);
 }

@@ -142,19 +142,44 @@ export default tseslint.config(
     files: ['apps/web/src/features/documents/DocFrame.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...htmlSinks] },
   },
+  // Packages are shared with the server: no app aliases, no reaching into the web app (rule below, with systemDb).
   {
-    // Packages are shared with the server: no app aliases, no reaching into the web app.
+    files: ['scripts/**/*.mjs', 'apps/api/*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // BACKEND_SPEC §2.3: the service role (RLS bypass) only for jobs and system tasks. A request runs as its
+    // person; the route table, the services and the request adapter never import systemDb (the narrow
+    // privileged capability is `ctx.system`, see packages/domain/src/services/kernel.ts).
     files: ['packages/*/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: [{ group: ['@/*', '@mig/web', '@mig/web/*', '**/apps/web/**'], message: 'Packages must not import the web app.' }] },
+        {
+          patterns: [
+            { group: ['**/systemDb', '**/systemDb.ts', '@mig/api', '@mig/api/*'], message: 'systemDb (service role) is for jobs and system tasks only, not for routes or services.' },
+            { group: ['@/*', '@mig/web', '@mig/web/*', '**/apps/web/**'], message: 'Packages must not import the web app.' },
+          ],
+        },
       ],
     },
   },
   {
-    files: ['scripts/**/*.mjs'],
-    languageOptions: { globals: { ...globals.node } },
+    files: ['apps/api/src/**/*.ts'],
+    ignores: ['apps/api/src/systemDb.ts', 'apps/api/src/jobs/**', 'apps/api/src/**/*.test.ts', 'apps/api/src/test/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { group: ['**/systemDb', '**/systemDb.ts'], message: 'systemDb (service role) is for jobs and system tasks only, not for the request adapter.' },
+            // The API takes from the web app only its pure help engine (DECISIONS: help on the server).
+            { regex: '^@/(?!shared/help/|features/ai/redact$)', message: 'The API imports from the web app only the help engine.' },
+            { group: ['**/apps/web/**', '@mig/web', '@mig/web/*'], message: 'The API imports from the web app only the help engine (by the @/ alias).' },
+          ],
+        },
+      ],
+    },
   },
   {
     files: ['apps/web/src/shared/lib/storage.ts'],

@@ -12,6 +12,7 @@ export const errors = {
   'errors.badResponse': 'Сервер вернул неожиданный ответ. Повторите позже',
   'errors.badJson': 'Некорректный JSON',
   'errors.tooLarge': 'Слишком большой запрос',
+  'errors.csrf': 'Запрос отклонён. Обновите страницу и повторите',
   'errors.unknown': 'Что-то пошло не так. Повторите попытку',
   'errors.docsUnavailable': 'Документация недоступна',
 } satisfies Record<string, string>;

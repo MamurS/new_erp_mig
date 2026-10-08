@@ -2,6 +2,7 @@
 import { Building2, CalendarClock, FileCheck, Headphones, LayoutDashboard, MessagesSquare, PlugZap, Receipt, ClipboardList, Search, Users, type LucideIcon } from 'lucide-react';
 import type { AssistanceRole } from '@mig/contracts';
 import { defineLabels, t, type I18nKey } from '@/i18n';
+import { ASSIST_SECTION_ROLES } from '@mig/domain/help/routeMap';
 
 export type AssistNavGroup = 'work' | 'refs' | 'finance' | 'admin';
 export const ASSIST_NAV_GROUPS: AssistNavGroup[] = ['work', 'refs', 'finance', 'admin'];
@@ -15,10 +16,10 @@ export interface AssistSection {
   group: AssistNavGroup;
 }
 
-const ALL: AssistanceRole[] = ['asst_operator', 'asst_doctor', 'asst_billing', 'asst_admin'];
-
-/** The label is read in the current language each time. */
-function section(path: string, labelKey: I18nKey, icon: LucideIcon, roles: AssistanceRole[], group: AssistNavGroup): AssistSection {
+/** The label is read in the current language each time; the roles come from the shared screen map. */
+function section(path: string, labelKey: I18nKey, icon: LucideIcon, group: AssistNavGroup): AssistSection {
+  const roles = ASSIST_SECTION_ROLES[path];
+  if (!roles) throw new Error(`No roles for ${path} in ASSIST_SECTION_ROLES`);
   return {
     path,
     get label() {
@@ -31,17 +32,17 @@ function section(path: string, labelKey: I18nKey, icon: LucideIcon, roles: Assis
 }
 
 export const ASSIST_SECTIONS: AssistSection[] = [
-  section('/assist', 'assist.nav.dashboard', LayoutDashboard, ALL, 'work'),
-  section('/assist/insured', 'assist.nav.insured', Search, ['asst_operator', 'asst_doctor'], 'refs'),
-  section('/assist/cases', 'assist.nav.cases', Headphones, ['asst_operator', 'asst_doctor'], 'work'),
-  section('/assist/appointments', 'assist.nav.appointments', CalendarClock, ['asst_operator'], 'work'),
-  section('/assist/chat', 'assist.nav.chat', MessagesSquare, ['asst_operator'], 'work'),
-  section('/assist/guarantees', 'assist.nav.guarantees', FileCheck, ['asst_doctor', 'asst_operator'], 'work'),
-  section('/assist/registries', 'assist.nav.registries', ClipboardList, ['asst_doctor', 'asst_billing'], 'finance'),
-  section('/assist/rebills', 'assist.nav.rebills', Receipt, ['asst_billing'], 'finance'),
-  section('/assist/clinics', 'assist.nav.clinics', Building2, ALL, 'refs'),
-  section('/assist/users', 'assist.nav.users', Users, ['asst_admin'], 'admin'),
-  section('/assist/integration', 'assist.nav.integration', PlugZap, ['asst_admin'], 'admin'),
+  section('/assist', 'assist.nav.dashboard', LayoutDashboard, 'work'),
+  section('/assist/insured', 'assist.nav.insured', Search, 'refs'),
+  section('/assist/cases', 'assist.nav.cases', Headphones, 'work'),
+  section('/assist/appointments', 'assist.nav.appointments', CalendarClock, 'work'),
+  section('/assist/chat', 'assist.nav.chat', MessagesSquare, 'work'),
+  section('/assist/guarantees', 'assist.nav.guarantees', FileCheck, 'work'),
+  section('/assist/registries', 'assist.nav.registries', ClipboardList, 'finance'),
+  section('/assist/rebills', 'assist.nav.rebills', Receipt, 'finance'),
+  section('/assist/clinics', 'assist.nav.clinics', Building2, 'refs'),
+  section('/assist/users', 'assist.nav.users', Users, 'admin'),
+  section('/assist/integration', 'assist.nav.integration', PlugZap, 'admin'),
 ];
 
 export function assistRoles(path: string): AssistanceRole[] {
