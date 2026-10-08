@@ -25,6 +25,7 @@ import { limitsFor, toMyClaim } from './views';
 import { createAppointment, emitWebhook, FILED_CLAIM_SEQ_FLOOR, nextClaimNumber, pushEvent } from './clinic';
 import { currentAssistance } from './assistance';
 import { handlerOf, refreshFlags, sha256Hex } from './settlement';
+import { stripImageMetadata } from '../lib/imageMeta';
 
 /** An uploaded file as the adapter read it from the form. */
 export interface Upload {
@@ -93,7 +94,8 @@ function receiptImage(file: Upload): { bytes: Uint8Array; mime: ImageMime } {
   if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'image/webp') {
     throw new DomainError(422, 'validation', 'srv.receipt.onlyImages', { fields: { files: msg('srv.file.unsupported') } });
   }
-  return { bytes, mime };
+  // Metadata (Exif with GPS, XMP) is removed on the server too: the stored bytes and the receipt hash are of the clean image.
+  return { bytes: stripImageMetadata(bytes), mime };
 }
 
 const chatView = ({ insuredId: _i, visibleAt: _v, ...m }: { insuredId: string; visibleAt: string } & ChatMessage): ChatMessage => m;

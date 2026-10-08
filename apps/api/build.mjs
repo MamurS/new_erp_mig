@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /*
- * Builds the API into dist/server.js with esbuild (one ESM bundle; fastify and pg stay in node_modules).
+ * Builds the API into dist/server.js, the background worker into dist/worker.js and the demo-account provisioning
+ * (dev/ci/staging) into dist/provision-demo.js with esbuild (ESM bundles; fastify and pg stay in node_modules).
  * `--watch`: rebuilds on change and restarts the server (`node --watch` on the bundle).
  */
 import { build, context } from 'esbuild';
@@ -10,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const options = {
-  entryPoints: [resolve(here, 'src/server.ts')],
-  outfile: resolve(here, 'dist/server.js'),
+  entryPoints: { server: resolve(here, 'src/server.ts'), worker: resolve(here, 'src/worker.ts'), 'provision-demo': resolve(here, 'src/provisionDemo.ts') },
+  outdir: resolve(here, 'dist'),
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -28,7 +29,7 @@ if (process.argv.includes('--watch')) {
   const ctx = await context(options);
   await ctx.rebuild();
   await ctx.watch();
-  spawn(process.execPath, ['--watch', '--enable-source-maps', options.outfile], { stdio: 'inherit', cwd: resolve(here, '../..') });
+  spawn(process.execPath, ['--watch', '--enable-source-maps', resolve(here, 'dist/server.js')], { stdio: 'inherit', cwd: resolve(here, '../..') });
 } else {
   await build(options);
 }

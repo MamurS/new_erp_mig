@@ -84,12 +84,12 @@ export async function attachGuaranteeFiles(ctx: BaseCtx, g: GuaranteeRow, files:
   const before = g.attachments.length;
   try {
     for (const file of files) {
-      const { mime } = checkAttachment(file);
+      const { bytes, mime } = checkAttachment(file);
       const id = randomId();
       const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
       const fileName = `document-${g.attachments.length + 1}.${ext}`;
-      await ctx.repos.files.insert({ id, mime, bytes: file.bytes, guaranteeId: g.id, clinicId: g.clinicId, fileName });
-      g.attachments.push({ id, kind: 'referral', fileName, mime, sizeBytes: file.bytes.length, url: `/api/files/${id}` });
+      await ctx.repos.files.insert({ id, mime, bytes, guaranteeId: g.id, clinicId: g.clinicId, fileName });
+      g.attachments.push({ id, kind: 'referral', fileName, mime, sizeBytes: bytes.length, url: `/api/files/${id}` });
     }
   } finally {
     if (g.attachments.length !== before) await ctx.repos.guarantees.update(g.id, { attachments: g.attachments });

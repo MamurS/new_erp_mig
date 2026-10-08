@@ -1,45 +1,56 @@
 /*
- * Integration tests of the Fastify app over Postgres with row-level security (BACKEND_SPEC §12.2): sign-in and
- * sessions, endpoints of every area, isolation between companies, clinics and assistance companies (in the API
- * and in the database itself), the audit log with its hash chain, the partner API, unknown and demo routes.
+ * Integration tests of the Fastify app over Postgres with row-level security (BACKEND_SPEC §12.2): sign-in with
+ * Supabase Auth and BFF cookie sessions, endpoints of every area, isolation between companies, clinics and
+ * assistance companies (in the API and in the database itself), the audit log with its hash chain, the partner
+ * API, unknown and demo routes, help answers with screen links.
  *
- * Needs DATABASE_URL (CI job `api`); skipped otherwise.
+ * Needs DATABASE_URL and the Supabase stack (CI job `api`); skipped otherwise.
  */
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEMO_PASSWORD } from '@mig/domain/auth/demo';
-import { devPiiCrypto } from '@mig/domain/store/pii';
+import { randomBytes } from 'node:crypto';
+import { DEV_HMAC_KEY } from '@mig/domain/store/devKeys';
+import { aesPiiCrypto, devAesPiiCrypto, DEV_PII_KEY } from '@mig/domain/store/piiAes';
 import type { Db } from '@mig/domain/store/db';
 import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_HR, DEMO_INSURED_PHONE, DEMO_STAFF } from '@mig/seed/credentials';
 import { createSeed } from '@mig/seed/seed';
 import { buildApp } from './app';
+import { SESSION_COOKIE } from './auth/cookies';
 import { claimsOf, RequestTx } from './db';
-import { fastifyClient, hasDb, loadSeed, signIn, testDeps, testPool, type Client } from './test/support';
+import { fastifyClient, hasDb, loadSeed, signIn as signInAs, testDeps, testPool, type Client, type Who } from './test/support';
+import { hasSupabase, testBff, testStack, type TestStack } from './test/supabase';
 
 const T = Math.floor(Date.now() / 60_000) * 60_000;
+/** Signs in through Supabase Auth (test MFA mode) and returns the value of the session cookie. */
+const signIn = (c: Client, who: Who) => signInAs(c, who, SESSION_COOKIE);
 const staffEmail = (role: string) => DEMO_STAFF.find((s) => s.role === role)!.email;
 
-describe.skipIf(!hasDb)('API (Fastify) over Postgres with RLS', () => {
+describe.skipIf(!hasDb || !hasSupabase)('API (Fastify) over Postgres with RLS', () => {
   let pool: pg.Pool;
   let app: FastifyInstance;
   let api: Client;
   let d: Db;
+  let stack: TestStack;
+  const crypto = devAesPiiCrypto();
   const errors: string[] = [];
 
   beforeAll(async () => {
     d = createSeed({ now: T });
     pool = testPool();
     await loadSeed(pool, createSeed({ now: T }));
+    stack = testStack(pool, crypto);
     app = await buildApp({
       pool,
-      crypto: devPiiCrypto(),
+      crypto,
       deps: testDeps(),
-      demoPassword: DEMO_PASSWORD,
+      auth: testBff(pool, crypto, stack),
+      storage: stack.storage,
       demoRoutes: { insuredPhone: DEMO_INSURED_PHONE },
       onError: (e, route) => errors.push(`${route}: ${e instanceof Error ? e.message : String(e)}`),
     });
-    api = fastifyClient(app);
+    api = fastifyClient(app, { cookie: SESSION_COOKIE });
   });
 
   afterAll(async () => {
@@ -56,7 +67,8 @@ describe.skipIf(!hasDb)('API (Fastify) over Postgres with RLS', () => {
       const me = await api.call('GET', '/auth/me', { session: sid });
       expect(me.status).toBe(200);
       expect(me.body).toMatchObject({ role: 'operator', displayName: DEMO_STAFF.find((s) => s.role === 'operator')!.fullName });
-      expect((await pool.query('select count(*)::int as n from public.sessions where id = $1', [sid])).rows[0].n).toBe(1);
+      const op = d.staff.find((s) => s.email === staffEmail('operator'))!;
+      expect((await pool.query(`select count(*)::int as n from public.app_sessions where user_id = $1 and aal = 'aal2'`, [op.id])).rows[0].n).toBeGreaterThan(0);
     });
 
     it('rejects a wrong password, audits it and counts it for the lockout', async () => {
@@ -206,6 +218,55 @@ describe.skipIf(!hasDb)('API (Fastify) over Postgres with RLS', () => {
     });
   });
 
+  describe('personal data in the database (AES-256-GCM, HMAC search, key rotation)', () => {
+    const me = () => d.insured.find((i) => i.phone === DEMO_INSURED_PHONE)!;
+
+    it('ciphertexts hold no plaintext; the search hash finds the person; the mask is stored next to them', async () => {
+      const { rows } = await pool.query(`select pinfl_enc, pinfl_key_ver, pinfl_hmac, pinfl_mask, phone_enc from public.insured where id = $1`, [me().id]);
+      const r = rows[0];
+      expect(r.pinfl_key_ver).toBe(1);
+      expect(Buffer.from(r.pinfl_enc).toString('latin1')).not.toContain(me().pinfl);
+      expect(Buffer.from(r.phone_enc).toString('latin1')).not.toContain(me().phone.slice(4));
+      expect(await crypto.open(r.pinfl_enc, 1)).toBe(me().pinfl);
+      expect(r.pinfl_mask).not.toContain(me().pinfl.slice(0, 10));
+      const byHash = await pool.query(`select id::text from public.insured where pinfl_hmac = $1`, [Buffer.from(await crypto.hmac(me().pinfl))]);
+      expect(byHash.rows.map((x) => x.id)).toEqual([me().id]);
+    });
+
+    it('after a key rotation old values stay readable and new ones are sealed with the current version', async () => {
+      const rotated = aesPiiCrypto({ keys: new Map([[1, DEV_PII_KEY], [2, new Uint8Array(randomBytes(32))]]), current: 2, hmacKey: DEV_HMAC_KEY });
+      const app2 = await buildApp({ pool, crypto: rotated, deps: testDeps(), auth: testBff(pool, rotated, stack), storage: stack.storage });
+      try {
+        const c = fastifyClient(app2, { cookie: SESSION_COOKIE });
+        const hr = await signIn(c, { email: DEMO_HR.email });
+        const added = await c.call('POST', '/hr/employees', { session: hr, body: { fullName: 'Rotatsiya Test Testovich', birthDate: '1991-02-03', pinfl: '31234567890124', phone: '+998901112244', position: 'Инженер', startDate: '2026-12-01' } });
+        expect(added.status, added.text).toBeLessThan(300);
+        const fresh = (await pool.query(`select new_person_key_ver from public.policy_changes order by _created_at desc limit 1`)).rows[0];
+        expect(fresh.new_person_key_ver).toBe(2);
+        const op = await signIn(c, { email: staffEmail('operator') });
+        const old = await c.call('POST', `/insured/${me().id}/reveal`, { session: op, body: { field: 'pinfl', reason: 'Проверка после ротации ключа' } });
+        expect(old.body).toMatchObject({ value: me().pinfl });
+        // A value written with version 2 is read back by the rotated key set.
+        const pending = await c.call('GET', '/policy-changes', { session: await signIn(c, { email: staffEmail('underwriter') }) });
+        expect(JSON.stringify(pending.body)).toContain('Rotatsiya Test Testovich');
+      } finally {
+        await app2.close();
+      }
+    });
+  });
+
+  describe('help answers', () => {
+    it('carry the same «Открыть раздел» links as the mock, only for screens the role may open', async () => {
+      const acc = await signIn(api, { email: staffEmail('accountant') });
+      const a = await api.call('POST', '/ai/help-answer', { session: acc, body: { question: 'как разнести платёж от другой компании', locale: 'ru' } });
+      expect(a.status).toBe(200);
+      expect((a.body as { openRoutes: unknown[] }).openRoutes).toContainEqual({ route: '/staff/invoices/queue', label: 'Ручная разноска', labelKey: 'staff.nav.paymentQueue' });
+      const sales = await signIn(api, { email: staffEmail('sales_manager') });
+      const b = await api.call('POST', '/ai/help-answer', { session: sales, body: { question: 'как разнести платёж от другой компании', locale: 'ru' } });
+      expect((b.body as { openRoutes: { route: string }[] }).openRoutes.some((r) => r.route === '/staff/invoices/queue')).toBe(false);
+    });
+  });
+
   describe('the audit log', () => {
     it('keeps an unbroken hash chain after the API wrote to it', async () => {
       const { rows } = await pool.query('select ok, checked::int from app.verify_audit_chain()');
@@ -248,10 +309,11 @@ describe.skipIf(!hasDb)('API (Fastify) over Postgres with RLS', () => {
       const r = await api.call('POST', '/__demo/mis-card', { session: sid });
       expect(r.status).toBe(200);
       expect(r.body).toMatchObject({ shortCode: expect.any(String) });
-      const prod = await buildApp({ pool, crypto: devPiiCrypto(), deps: testDeps(), demoPassword: DEMO_PASSWORD, demoRoutes: null });
+      const prod = await buildApp({ pool, crypto, deps: testDeps(), auth: testBff(pool, crypto, stack), storage: stack.storage, demoRoutes: null });
       try {
-        const sid2 = await signIn(fastifyClient(prod), { email: DEMO_CLINIC_USERS[1]!.email });
-        expect((await fastifyClient(prod).call('POST', '/__demo/mis-card', { session: sid2 })).status).toBe(404);
+        const client = fastifyClient(prod, { cookie: SESSION_COOKIE });
+        const sid2 = await signIn(client, { email: DEMO_CLINIC_USERS[1]!.email });
+        expect((await client.call('POST', '/__demo/mis-card', { session: sid2 })).status).toBe(404);
       } finally {
         await prod.close();
       }

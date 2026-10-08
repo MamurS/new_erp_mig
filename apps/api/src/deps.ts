@@ -2,18 +2,18 @@
 import { createMockProvider } from '@mig/domain/lib/aiProvider';
 import { randomToken } from '@mig/domain/lib/random';
 import type { RouteDeps } from '@mig/domain/http/routes';
+import { receiptPng } from './files/receiptImage';
 import { createHelpProvider, helpDir } from './help';
 
-/** A 1×1 PNG: seeded receipts have no stored picture (Storage comes in part 2). */
-const BLANK_PNG = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=', 'base64'));
-
-export function serverDeps(o: { helpDir?: string; demo: boolean; demoPassword?: string }): RouteDeps {
+export function serverDeps(o: { helpDir?: string; demo: boolean }): RouteDeps {
   return {
     // Stage 1: the AI provider is the deterministic mock (BACKEND_SPEC §1, «настоящая модель ИИ» is stage 2).
     aiProvider: () => createMockProvider({ latency: false }),
     help: createHelpProvider(helpDir(o.helpDir), o.demo) as RouteDeps['help'],
-    receiptPng: async () => BLANK_PNG,
-    // Without demo accounts an invited person gets an unusable random password (Supabase Auth invitations: part 2).
-    invitePassword: o.demoPassword ?? randomToken(24),
+    // Seeded receipts have lines, not a photo: a drawn slip (files/receiptImage.ts).
+    receiptPng: async (lines) => receiptPng(lines),
+    // Passwords live in Supabase Auth (an invitation, or the demo password in development: jobs/identity.ts);
+    // the services' virtual password field gets an unusable random value.
+    invitePassword: randomToken(24),
   };
 }

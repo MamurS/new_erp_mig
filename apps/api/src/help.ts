@@ -4,13 +4,14 @@
  * before indexing, so a role cannot find what it may not read. Demo-only articles are served only when the
  * deployment has demo routes (ci, staging).
  *
- * Part 1 difference from the mock: answers carry no «open the screen» links (the route map of the screens
- * lives in the web app with its navigation icons); a later step moves it to a package.
+ * Answers carry the same «Открыть раздел» links as the mock: the screen map is shared
+ * (packages/domain/src/help/routeMap.ts).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Role } from '@mig/contracts';
 import type { HelpArticle, HelpLocale, HelpTerm } from '@mig/contracts/help';
+import { openRoutesFor } from '@mig/domain/help/routeMap';
 import type { HelpProvider } from '@mig/domain/services/help';
 import { redactForAi } from '@/features/ai/redact';
 import { answerQuestion } from '@/shared/help/answer';
@@ -72,6 +73,6 @@ export function createHelpProvider(dir: string, demo: boolean): HelpProvider<Hel
     glossaryAnchor: GLOSSARY_ANCHOR,
     search: (index, query) => searchHelp(index, query),
     redact: (question, names) => redactForAi(question, { names }).text,
-    answer: (index, question) => answerQuestion(index, question, { openRoutes: () => [] }),
+    answer: (index, question, role) => answerQuestion(index, question, { openRoutes: (text) => openRoutesFor(text, role) }),
   };
 }

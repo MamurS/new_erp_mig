@@ -14,6 +14,11 @@
 | `…0400_rls.sql` | `enable row level security` и политики всех таблиц, привилегии `authenticated` (без `anon`), привилегии на колонки |
 | `…0500_audit.sql` | цепочка хэшей `audit_log`, запрет изменения, `app.audit()`, `app.verify_audit_chain()` |
 | `…0600_jobs.sql` | `app.job_catalog`, `app.job_queue`, `app.job_cleanup_expired()`, `app.job_verify_audit_chain()`, регистрация в pg_cron (если расширение есть) |
+| `20261010000100_auth_sessions.sql` | BFF-сессии `public.app_sessions` и шаги входа `public.app_auth_challenges` (RLS без политик — только сервисная роль); очередь синхронизации с Supabase Auth `app.identity_sync` и триггеры на `staff`, `hr_users`, `clinic_users`, `assist_users`, `insured`; Custom Access Token Hook `public.custom_access_token_hook`; `app.job_cleanup_expired()` с очисткой BFF-сессий, шагов входа и выполненных заданий |
+| `20261010000200_files_storage.sql` | у `files` колонки `bucket`, `object_name`, `sha256`, `size_bytes`; приватные бакеты Storage `receipts`, `contract-scans`, `guarantee-attachments`, `documents`, `help-assets` (если схема Storage есть; иначе их создаёт API при старте) |
+
+Генератор миграций части 2 — `packages/domain/src/store/sql/migrationsAuth.ts` (те же `node scripts/gen-schema.mjs` и
+тест сверки).
 
 Новое изменение схемы — новый файл миграции (новая функция-раздел в `migrations.ts` с новым именем), а не
 правка старого после выката на staging.
@@ -45,7 +50,32 @@
 - Шифруются без HMAC: `chat.text`, `cases.description/resolution`, `claims.opinion`, `policy_changes.new_person`,
   `change_requests.new_person`, `contract_insured.rows`, `migration_batches.files`, `webhooks.signing_secret`.
 - Карта выплат — только `payout_card_mask` и `payout_card_token` (токен банка, этап 2).
-- `key_ver = 0` — открытый текст dev-seed; в рабочем окружении такого быть не должно.
+- Шифрование — AES-256-GCM (`packages/domain/src/store/piiAes.ts`, Node `crypto`): `*_enc` = IV (12 байт) ‖ шифротекст ‖
+  тег (16 байт), `*_key_ver` — версия ключа из `PII_KEYS`; новые значения — текущей версией (`PII_KEY_CURRENT`), старые
+  читаются, пока их ключ есть в `PII_KEYS` (ротация — новая версия ключа, перешифрование старых строк — отдельной задачей).
+- `supabase/seed.sql` зашифрован опубликованным dev-ключом версии 1 (IV выводится из значения, файл стабилен) и HMAC на
+  dev-ключе; открытых ПДн в файле нет. Production не запускается с dev-ключами.
+- `key_ver = 0` — открытый текст старого dev-seed: читается только вне production (`allowPlaintextV0`).
+
+## Файлы
+
+- Байты — в приватном бакете Supabase Storage, имя объекта — id строки `files` (UUID, без ПДн); строка хранит `bucket`,
+  `object_name`, `sha256` (хэш сохранённых байтов: повторы чеков, целостность сканов) и `size_bytes`. Бакет — по строке:
+  чеки и вложения убытков — `receipts`, вложения ГП — `guarantee-attachments`, сканы договоров и ДС — `contract-scans`,
+  остальное — `documents`.
+- Репозиторий postgres пишет объект до строки (откат запроса оставляет лишь объект без строки, его никто не отдаёт) и
+  читает байты только в `files.get`; списки байты не грузят.
+
+## Сессии и вход (часть 2 шага 4)
+
+- `app_sessions`: HMAC идентификатора из cookie (`SESSION_SECRET`), пользователь, роль, AAL, access- и refresh-токены
+  Supabase (зашифрованы ключом ПДн), срок access-токена, `auth_session_id` (сессия Supabase), создание, последняя
+  активность, IP, user-agent. Каждая строка продолжает строку `public.sessions` (FK `on delete cascade`): сервисы
+  завершают сессии там (выход, деактивация), и BFF-строка уходит вместе с ней.
+- `app_auth_challenges`: шаг входа между паролем и TOTP-кодом (токены aal1 зашифрованы) или между телефоном и SMS-кодом
+  (телефон зашифрован); попытки, ключ блокировки, срок 5 минут.
+- `app.identity_sync`: учётные записи, которые Supabase Auth должен догнать (новая, роль, привязка, e-mail, телефон,
+  деактивация); выполняет воркер API. Загрузка seed очереди не создаёт (`set_config('mig.seeding', 'on')`).
 
 ## Права
 
@@ -60,7 +90,8 @@
 ## Фоновые задачи
 
 Расписания — `packages/domain/src/services/jobs.ts` (UTC). `db`-задачи pg_cron выполняет сам;
-`api`-задачи попадают в `app.job_queue` (`taken_at`/`done_at`/`error` заполняет API).
+`api`-задачи попадают в `app.job_queue` (`taken_at`/`done_at`/`error` заполняет воркер API: `apps/api/src/jobs/worker.ts`,
+сервисы — `packages/domain/src/services/jobRunner.ts`; строки берутся `for update skip locked`).
 
 ## Проверка планов
 

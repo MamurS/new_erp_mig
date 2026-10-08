@@ -381,7 +381,7 @@ docs/                      ТЗ, решения, справка, OpenAPI
 Схема Postgres (self-hosted Supabase, BACKEND_SPEC §5–§6, §9–§10) строится из одного декларативного описания `packages/domain/src/store/schema.ts`: у каждой коллекции репозитория описано каждое поле её типа строки (компилятор не пропустит новое поле без колонки), права — строками-предикатами по матрице `permissions.ts`. Из него генерируются и коммитятся:
 
 - `supabase/migrations/*.sql` — `node scripts/gen-schema.mjs` (функции `app.*`, таблицы, RLS, журнал аудита с цепочкой хэшей, задания pg_cron); заодно `docs/backend/RLS.md` — кто что может в каждой таблице;
-- `supabase/seed.sql` — `node scripts/gen-seed-sql.mjs` (из `createSeed`, «сегодня» = 09.10.2026; ПДн записаны открытым текстом с версией ключа 0 — только для разработки);
+- `supabase/seed.sql` — `node scripts/gen-seed-sql.mjs` (из `createSeed`, «сегодня» = 09.10.2026; ПДн зашифрованы AES-256-GCM опубликованным dev-ключом версии 1 — только для разработки и CI; в конце — пользователи Supabase Auth всех демо-аккаунтов с TOTP-факторами, см. «API (бэкенд)»);
 - `supabase/tests/*_test.sql` — `node scripts/gen-rls-tests.mjs` (pgTAP: каждая роль × каждая таблица × select/insert/update/delete на своих и чужих строках, сценарии §6, аудит, задания).
 
 Всё сразу: `npm run db:gen`. Тест `packages/domain/src/store/sql/generated.test.ts` падает, если закоммиченные файлы отличаются от генератора. Руками миграции не правятся.
@@ -399,34 +399,87 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
 ## API (бэкенд)
 
-Сервер `apps/api` (`@mig/api`, Node 20, Fastify; BACKEND_SPEC §2, §4, шаг 4 — часть 1). Эндпоинты не пишутся заново: и мок, и сервер строятся из одной таблицы маршрутов.
+Сервер `apps/api` (`@mig/api`, Node 20, Fastify; BACKEND_SPEC §2, §4, §5, §7–§10, шаг 4). Эндпоинты не пишутся заново: и мок, и сервер строятся из одной таблицы маршрутов.
 
 - **Таблица маршрутов** — `packages/domain/src/http/routes.ts`: для каждого эндпоинта метод, путь, вид входа (`session` — сессия, `none` — без сессии, `partner` — партнёрский API со своими токенами, `demo` — только в демо/ci/staging), вид тела (`json`, `form`, `text`, `none`), вызов сервиса и вид ответа (`json`, `201`, `raw` — CSV, файлы, problem+json). Порядок — порядок сопоставления. Тело читает один и тот же `packages/domain/src/http/request.ts` (лимит 1 МБ для JSON, 400 на битый JSON, multipart). Демо-маршруты — отдельно (`http/demoRoutes.ts`).
 - **MSW-адаптер** — `apps/web/src/mocks/handlers/index.ts` строит обработчики MSW из таблицы; в вебе остались только ручки мока: задержка, имитация сбоев, сохранение состояния, задержка «распознавания» чека, `/api/__demo/reset` и `/api/__demo/failures`.
-- **Fastify-адаптер** — `apps/api/src/app.ts`: регистрирует каждый маршрут таблицы, собирает из полученных байтов `Request` и разбирает его тем же кодом, переводит `DomainError` и результат в те же ответы.
-- **Репозитории Postgres** — `packages/domain/src/store/postgres.ts` (SQL строится в пакете, драйвер `pg` — в API за интерфейсом `SqlSession`): DSL Where/Query → параметризованный SQL, порядок хранения `_pos`, строки возвращаются в том же виде, что и в памяти. ПДн — через интерфейс `PiiCrypto` (`store/pii.ts`); сейчас dev-реализация как в `seed.sql` (открытый текст, `key_ver = 0`, HMAC на dev-ключе).
-- **Транзакция на запрос и RLS** — `apps/api/src/db.ts`: запрос начинается под сервисной ролью (сессия, вход), затем `set local role authenticated` и `set_config('request.jwt.claims', …, true)` с claims человека (`sub`, `aal`, `app_metadata.role/company_id/clinic_id/assistance_id/insured_id`). Сервисы видят данные через RLS. Узкая привилегированная возможность — `ctx.system` / `systemRepos(ctx, причина)` в сервисах (каждое место — в `docs/DECISIONS.md`); `apps/api/src/systemDb.ts` — только для задач и обслуживания, импорт в обработчики запрещён ESLint.
-- **Сессии (временно, до части 2)** — таблица `sessions`, заголовок `Authorization: Bearer <sessionId>`, как в моке; демо-пароль проверяется только при заданном `DEMO_PASSWORD` (dev/ci), код — `000000`. Часть 2 заменит это на BFF-cookie и Supabase Auth.
+- **Fastify-адаптер** — `apps/api/src/app.ts`: регистрирует каждый маршрут таблицы, собирает из полученных байтов `Request` и разбирает его тем же кодом, переводит `DomainError` и результат в те же ответы. Сборка из окружения — `apps/api/src/assemble.ts` (её запускает `server.ts` и строят тесты).
+- **Репозитории Postgres** — `packages/domain/src/store/postgres.ts` (SQL строится в пакете, драйвер `pg` — в API за интерфейсом `SqlSession`): DSL Where/Query → параметризованный SQL, порядок хранения `_pos`, строки возвращаются в том же виде, что и в памяти.
+- **Транзакция на запрос и RLS** — `apps/api/src/db.ts`: запрос начинается под сервисной ролью (сессия, вход), затем `set local role authenticated` и `set_config('request.jwt.claims', …, true)` с claims из **проверенного access-токена Supabase** (`sub`, `aal`, `app_metadata.role/company_id/clinic_id/assistance_id/insured_id`). Узкая привилегированная возможность — `ctx.system` / `systemRepos(ctx, причина)` (каждое место — в `docs/DECISIONS.md`); `apps/api/src/systemDb.ts` — только для задач и обслуживания (`apps/api/src/jobs/`), импорт в обработчики запрещён ESLint.
 
-Локально против запущенного Supabase:
+### Вход и сессии (Supabase Auth + BFF, §7)
+
+- **Сотрудники МИГ, HR, клиники, ассистансы**: `POST /api/auth/login` проверяет e-mail и пароль в Supabase Auth (GoTrue, REST через `fetch`, `apps/api/src/auth/gotrue.ts`), `POST /api/auth/otp` — код TOTP-фактора (challenge + verify → `aal2`). У кого фактора ещё нет, получает его при первом входе: ответ `login` содержит `totpEnrollment: { uri, secret }` (otpauth для приложения-аутентификатора; экран для QR — шаг 5).
+- **Тестовый режим MFA** (`APP_ENV` = development, ci, staging; в production его нет): демо-код `000000` API превращает в текущий код демо-фактора (секрет выводится из id учётной записи dev-ключом, `packages/domain/src/auth/devMfa.ts`) и проверяет его в Supabase Auth как обычный код; новые учётные записи без фактора получают демо-фактор.
+- **Застрахованные**: `POST /api/auth/phone` просит Supabase Auth отправить одноразовый код, `POST /api/auth/phone/verify` проверяет его. SMS: Auth Hook «Send SMS» Supabase Auth → `POST /api/hooks/send-sms` (подпись Standard Webhooks, секрет `SMS_HOOK_SECRET`) → SMS-адаптер (`apps/api/src/auth/sms.ts`). Адаптер этапа 1 — `log`: пишет в журнал разработки факт отправки, код — только вне production. Демо-телефоны получают фиксированный код `000000` через `[auth.sms.test_otp]` (`supabase/config.toml`), SMS для них не отправляется. **Как подключить провайдера МИГ:** реализовать `SmsSender` (`send(phone, text)`) в `auth/sms.ts`, зарегистрировать под именем в `smsSender()` (учётные данные провайдера — из переменных окружения API) и выбрать `SMS_PROVIDER=<имя>`; в Supabase Auth ничего не меняется (провайдер в его настройках — заглушка: при включённом hook он не вызывается).
+- **Роли и привязки** — только в `app_metadata` пользователя Supabase Auth; их выставляет API сервисной ролью (`apps/api/src/jobs/identity.ts`): триггеры кладут каждую новую учётную запись и каждое изменение e-mail, телефона, роли, привязки или активности в `app.identity_sync`, воркер создаёт/обновляет пользователя, деактивированных — блокирует. Custom Access Token Hook (`public.custom_access_token_hook`) оставляет в токене только эти ключи и убирает `user_metadata`. Если claims токена разошлись с записью (роль сменили), API синхронизирует пользователя и обновляет токен в том же запросе.
+- **Приглашения**: новая учётная запись (пользователь МИГ, HR-кабинет клиента, пользователи клиники и ассистанса) создаётся неподтверждённой, письмо отправляет Supabase Auth (`inviteUserByEmail`) через SMTP своего развёртывания (`GOTRUE_SMTP_HOST`, `GOTRUE_SMTP_PORT`, `GOTRUE_SMTP_USER`, `GOTRUE_SMTP_PASS`, `GOTRUE_SMTP_ADMIN_EMAIL`, `GOTRUE_SMTP_SENDER_NAME` — переменные контейнера auth, шаг 6), ссылка ведёт на `INVITE_REDIRECT_URL`. В development/ci с `DEMO_PASSWORD` вместо письма ставится демо-пароль и демо-фактор (локально SMTP нет).
+- **Демо-аккаунты в Supabase Auth**: последний блок `supabase/seed.sql` (`packages/domain/src/store/sql/authSeed.ts`) создаёт пользователей всех учётных записей seed (id = id наших таблиц, `app_metadata`, демо-пароль, TOTP-факторы); `supabase db reset` и CI делают это сами, для staging — `APP_ENV=staging DATABASE_URL=… npm run provision:demo -w @mig/api` (production отказывается).
+- **BFF-сессии** (`apps/api/src/auth/bff.ts`): браузер получает только cookie `__Host-mig_session` (`HttpOnly; Secure; SameSite=Strict; Path=/`), токены Supabase хранятся на сервере в `app_sessions` (зашифрованы ключом ПДн), access-токен (10 минут) сервер обновляет сам; тайм-аут неактивности по ролям (15/30 минут + минута) проверяет сервер; `X-Background: 1` активность не продлевает; `POST /api/auth/logout` завершает сессию, `?all=1` — все сессии человека и его сессии Supabase. Ответы `/api/auth/*` прежние (`{ user }`; `challengeId`, `resendInSec`); `sessionId` и `Authorization: Bearer <сессия>` — только при `AUTH_BEARER_COMPAT=1` в development/ci до шага 5 (переход фронтенда на cookie). Локально по http (`APP_ENV=development`) можно `INSECURE_DEV_COOKIE=1`: cookie `mig_session` без `Secure`.
+- **CSRF**: каждый изменяющий запрос порталов обязан нести `X-Requested-With: mig-web`, иначе 403 `errors.csrf`. Не нужен партнёрскому API (свои bearer-токены, без cookie) и подписанному hook Supabase.
+- **Ограничения попыток** — параметры ДМС (`loginMaxAttempts`, `loginWindowMinutes`, `loginLockMinutes`) на серверных счётчиках (`login_failures`, `lockouts`; проверки ПИНФЛ клиниками — `check_attempts`, `check_locks`), очистка — задача `cleanup-expired`.
+
+### Персональные данные (§5)
+
+AES-256-GCM с версиями ключей (`PII_KEYS`, `PII_KEY_CURRENT`), поиск по равенству — HMAC-SHA-256 отдельным ключом (`PII_HMAC_KEY`), маску пишет API рядом с шифротекстом; полное значение — только `reveal` с причиной и аудитом. Номер карты выплат не хранится (маска и токен банка). Ротация: добавить новую версию в `PII_KEYS` и сделать её текущей — старые значения читаются старым ключом, новые пишутся новым.
+
+### Файлы (§8)
+
+Загрузка только через API: тип по магическим байтам, размер и количество; метаданные изображений (Exif с GPS, XMP, текстовые блоки PNG, EXIF/XMP WebP) удаляются на сервере побайтно (`packages/domain/src/lib/imageMeta.ts`, без библиотек обработки изображений). Байты — в приватных бакетах Supabase Storage под UUID строки, SHA-256 и размер — в строке `files`. Скачивание `GET /api/files/:id` — после проверки прав (байты идут через API, как ждёт фронтенд); `GET /api/files/:id/link` — с теми же правами ссылка на 60 секунд (`/api/files/signed?token=…`: токен Storage, срок проверяет Storage; Storage наружу не открыт). Картинка засеянных чеков рисуется сервером (`apps/api/src/files/receiptImage.ts`).
+
+### Фоновые задачи (§10)
+
+Расписания — `packages/domain/src/services/jobs.ts`; pg_cron выполняет `db`-задачи и ставит `api`-задачи в `app.job_queue`, их берёт воркер (`apps/api/src/jobs/worker.ts`) и выполняет тем же сервисным кодом, что и мок (`packages/domain/src/services/jobRunner.ts`). Воркер работает в процессе API (`WORKER=inline`) или отдельно: `node apps/api/dist/worker.js` (`npm run worker -w @mig/api`, тогда у API `WORKER=off`).
+
+### Переменные окружения
+
+| Переменная | Обязательна | Что это |
+|---|---|---|
+| `APP_ENV` | нет (`development`) | `production`, `staging`, `ci`, `development`. Вне production: демо-маршруты, тестовый режим MFA, dev-ключи по умолчанию |
+| `DATABASE_URL` | да | Postgres (роль с правами владельца схемы и `service_role`) |
+| `DB_POOL_SIZE`, `HOST`, `PORT`, `HELP_DIR` | нет | пул (10), адрес (127.0.0.1:8787), каталог справки (`docs/help`) |
+| `SUPABASE_URL` | да | Kong самостоятельного Supabase (внутренняя сеть), к нему добавляются `/auth/v1` и `/storage/v1` |
+| `SUPABASE_SERVICE_ROLE_KEY` | да | сервисный ключ Supabase (админ-API Auth, Storage) |
+| `SUPABASE_JWT_SECRET` | нет | секрет HS256-токенов (если Auth подписывает общим секретом; иначе ключи берутся из JWKS) |
+| `PII_KEYS` | в production | `1:<base64 32 байт>,2:<…>` — ключи AES-256-GCM по версиям; вне production по умолчанию dev-ключ версии 1 |
+| `PII_KEY_CURRENT` | нет | версия для новых значений (по умолчанию наибольшая) |
+| `PII_HMAC_KEY` | в production | ключ HMAC поиска (≥ 32 байт) |
+| `SESSION_SECRET` | в production | ключ HMAC идентификаторов сессий (≥ 32 символов) |
+| `SMS_HOOK_SECRET` | в production | `v1,whsec_<base64>` — тот же, что у hook «Send SMS» в Supabase Auth |
+| `SMS_PROVIDER` | нет (`log`) | SMS-адаптер |
+| `INVITE_REDIRECT_URL` | нет | куда ведёт ссылка приглашения |
+| `WORKER` | нет (`inline`) | `off` — воркер запущен отдельно |
+| `DEMO_PASSWORD` | только dev/ci/staging | пароль новых учётных записей вместо приглашения; в production запрещена |
+| `AUTH_BEARER_COMPAT` | только dev/ci | `1` — `sessionId` в ответе входа и `Authorization: Bearer` до шага 5 |
+| `INSECURE_DEV_COOKIE` | только development | `1` — cookie `mig_session` без `Secure` для http://localhost |
+
+Production не запускается без обязательных секретов, с опубликованными dev-значениями (ключ ПДн, HMAC-ключ, секрет сессий, секрет hook), с `DEMO_PASSWORD`, `AUTH_BEARER_COMPAT` или `INSECURE_DEV_COOKIE`; в нём нет демо-маршрутов и кода `000000` (проверяют `apps/api/src/crypto.test.ts` и `production.test.ts`). Supabase Auth в рабочем развёртывании: `GOTRUE_JWT_EXP=600`, MFA TOTP включена, hooks как в `supabase/config.toml` (URI hook — адрес API во внутренней сети, свой секрет), `GOTRUE_RATE_LIMIT_HEADER=X-Mig-Client-Ip` (API передаёт IP клиента), без `[auth.sms.test_otp]`, SMTP МИГ; полный `deploy/.env.example` — шаг 6.
+
+### Запуск локально
 
 ```
-npx supabase db start && npx supabase db reset     # Postgres с миграциями и seed
-npm run api:build                                    # apps/api/dist/server.js (esbuild)
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres DEMO_PASSWORD='Demo-2026!' npm run api:dev
-# по умолчанию http://127.0.0.1:8787/api; PORT, HOST, APP_ENV (development|ci|staging), HELP_DIR, DB_POOL_SIZE
+npx supabase start -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,realtime,mailpit,postgres-meta
+npx supabase db reset                                 # миграции, seed, пользователи Supabase Auth демо-аккаунтов
+npm run api:build                                     # apps/api/dist/{server,worker,provision-demo}.js (esbuild)
+eval "$(npx supabase status -o env --override-name api.url=SUPABASE_URL --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY | grep -E '^SUPABASE_(URL|SERVICE_ROLE_KEY)=' | sed 's/^/export /')"
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres DEMO_PASSWORD='Demo-2026!' AUTH_BEARER_COMPAT=1 INSECURE_DEV_COOKIE=1 npm run api:dev
+```
+
+API слушает `http://127.0.0.1:8787/api`; hook «Send SMS» локального Supabase вызывает `http://host.docker.internal:8787/api/hooks/send-sms` (коды недемо-телефонов — в журнале API). Проверка вручную:
+
+```
+curl -s -XPOST localhost:8787/api/auth/login -H 'content-type: application/json' -H 'x-requested-with: mig-web' -d '{"email":"underwriter@demo.mig.uz","password":"Demo-2026!"}'
+curl -si -XPOST localhost:8787/api/auth/otp -H 'content-type: application/json' -H 'x-requested-with: mig-web' -d '{"challengeId":"<challengeId>","code":"000000"}'   # Set-Cookie: mig_session=…
+curl -s localhost:8787/api/dashboard -H 'cookie: mig_session=<значение>'
+```
+
+### Тесты
+
+```
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run api:test
 ```
 
-Проверка вручную:
-
-```
-curl -s -XPOST localhost:8787/api/auth/login -H 'content-type: application/json' -d '{"email":"underwriter@demo.mig.uz","password":"Demo-2026!"}'
-curl -s -XPOST localhost:8787/api/auth/otp -H 'content-type: application/json' -d '{"challengeId":"<challengeId>","code":"000000"}'
-curl -s localhost:8787/api/dashboard -H 'authorization: Bearer <sessionId>'
-```
-
-Тесты API (`apps/api/src/*.test.ts`, нужен `DATABASE_URL`, без него пропускаются; в CI — задача `api`): тест соответствия мок ↔ postgres (`conformance.test.ts`: все GET-маршруты таблицы для каждого демо-аккаунта и сценарии записи всех порталов, одинаковые часы и случайные числа, ответы должны совпасть) и интеграционные тесты приложения (`app.test.ts`: вход, области, изоляция компаний/клиник/ассистансов в API и в самой БД, аудит и цепочка хэшей, партнёрский API, демо-маршруты). Тесты загружают seed под своё «сегодня», а в конце возвращают канонический seed.
+`SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY` берутся из окружения, а против локального стека (`127.0.0.1:54322`) — из `npx supabase status`; без них наборы, которым нужен Supabase, пропускаются (без `DATABASE_URL` — все). В CI это задача `api` (`supabase start` без лишних сервисов → `db reset` → `api:build` → `api:test` с переменными из `supabase status`). Наборы `apps/api/src/*.test.ts`: соответствие мок ↔ postgres (`conformance.test.ts`, вход — фикстура мока `test/demoAuth.ts`, одинаковая на обеих сторонах), приложение (`app.test.ts`: области, изоляция, RLS, аудит, ПДн и ротация ключей, ссылки справки), вход и сессии (`auth.test.ts`: TOTP, первый вход с подключением фактора, телефон, флаги cookie, CSRF, тайм-ауты, фоновые запросы, обновление токена, выход везде, смена роли, приглашения, hook SMS), файлы (`files.test.ts`), задачи (`jobs.test.ts`), production (`production.test.ts`), шифрование и окружение (`crypto.test.ts`, без базы). Тесты загружают seed под своё «сегодня», а в конце возвращают канонический seed.
 
 ## Безопасность
 

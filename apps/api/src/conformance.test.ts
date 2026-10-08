@@ -2,7 +2,9 @@
  * Conformance memory ↔ postgres (BACKEND_SPEC §4.4): the same scenarios run through the same route table and
  * services once over the memory repositories and once over the Postgres repositories (the Fastify app, row-level
  * security on), both from the same seed, with the same clock and the same random numbers; every answer must be
- * identical (status and body).
+ * identical (status and body). Sign-in on both sides is the mock's own (the demo fixture test/demoAuth.ts: demo
+ * password, demo code, bearer session ids), so it consumes the same random numbers; Supabase Auth and the BFF
+ * sessions are tested in auth.test.ts. File bytes go to an in-memory blob store (Storage: files.test.ts).
  *
  * Needs DATABASE_URL (CI job `api`); skipped otherwise.
  */
@@ -11,12 +13,13 @@ import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ROUTES } from '@mig/domain/http/routes';
-import { DEMO_PASSWORD } from '@mig/domain/auth/demo';
-import { devPiiCrypto } from '@mig/domain/store/pii';
+import { memoryBlobStore } from '@mig/domain/store/blob';
+import { devAesPiiCrypto } from '@mig/domain/store/piiAes';
 import type { Db } from '@mig/domain/store/db';
 import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_CLINIC_USERS, DEMO_HR, DEMO_INSURED_PHONE, DEMO_SPOUSE_PHONE, DEMO_STAFF } from '@mig/seed/credentials';
 import { createSeed } from '@mig/seed/seed';
 import { buildApp } from './app';
+import { demoAuth } from './test/demoAuth';
 import { fastifyClient, hasDb, loadSeed, memoryClient, multipart, signIn, testDeps, testPool, type Answer, type CallOptions, type Client, type Who } from './test/support';
 
 // ---------------------------------------------------------------- deterministic randomness
@@ -164,7 +167,7 @@ describe.skipIf(!hasDb)('conformance: memory ↔ postgres', () => {
     seed = createSeed({ now: T });
     pool = testPool();
     await loadSeed(pool, createSeed({ now: T }));
-    app = await buildApp({ pool, crypto: devPiiCrypto(), deps, demoPassword: DEMO_PASSWORD, now: () => Date.now(), onError: (e, route) => errors.push(`${route}: ${e instanceof Error ? e.message : String(e)}`) });
+    app = await buildApp({ pool, crypto: devAesPiiCrypto(), deps, auth: demoAuth(), storage: memoryBlobStore(), now: () => Date.now(), onError: (e, route) => errors.push(`${route}: ${e instanceof Error ? e.message : String(e)}`) });
     mem = memoryClient(seed, deps, () => Date.now());
     pgc = fastifyClient(app);
   });

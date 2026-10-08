@@ -10,7 +10,9 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "worker": "node dist/worker.js",
+    "provision:demo": "node dist/provision-demo.js"
   },
   "dependencies": {
     "@mig/contracts": "*",

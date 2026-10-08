@@ -4,6 +4,7 @@
  * the queue of manual allocation; certificates; change requests of a contract in force.
  */
 import { msg, t, tm } from '@mig/i18n';
+import { stripImageMetadata } from '../lib/imageMeta';
 import Papa from 'papaparse';
 import type { BankPayment, ClauseOverride, Contract, Endorsement, Invoice, Payment, SessionUser, Signing } from '@mig/contracts';
 import type { BankPaymentView, CertificateView, ChangeRequestView, ContractView, EndorsementView, ImportPaymentsResult, InvoiceView } from '@mig/contracts/dto';
@@ -224,7 +225,7 @@ export function checkScan(form: ScanForm | null): Scan {
   if (file.size === 0 || file.size > SCAN_MAX_BYTES) throw new DomainError(422, 'validation', 'srv.file.tooLarge20mb', { fields: { file: msg('srv.file.tooLarge20mb') } });
   const mime = detectMime(file.bytes);
   if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') throw new DomainError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { file: msg('srv.file.unsupported') } });
-  return { side, bytes: file.bytes, mime };
+  return { side, bytes: stripImageMetadata(file.bytes), mime };
 }
 
 /** An `age_banded` contract without a usable band table cannot go further (legal review, signing). */

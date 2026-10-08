@@ -9,6 +9,8 @@ import { qi, snake } from '../columns';
 import { REVEAL, SEQUENCES, TABLES, sequenceName, type TableSpec } from '../schema';
 import { META_COLUMNS, LOG_ID, hasSecrets, indexColumn, keyColumn, lit, physicalColumns, readableColumns } from './physical';
 import { ALL_ROLES, ASSIST_ROLES, CLINIC_ROLES, OPS, STAFF_ROLES, cached, grantExpression } from './rls';
+import { CLEANUP_STATEMENTS, cleanupFunction } from './cleanup';
+import { authMigrations } from './migrationsAuth';
 
 export interface SqlFile {
   name: string;
@@ -457,7 +459,6 @@ function jobs(): string {
     const cmd = j.runner === 'db' ? j.sql! : `select app.enqueue_job(${lit(j.name)})`;
     return `    perform cron.schedule(${lit(`mig:${j.name}`)}, ${lit(j.cron)}, ${lit(cmd)});`;
   });
-  const now = `(extract(epoch from now()) * 1000)::bigint`;
   return `${HEADER('Background jobs (BACKEND_SPEC §10): schedules from packages/domain/src/services/jobs.ts.')}
 -- Jobs that need the domain services are queued for the API (step 4 runs them with the system context).
 create table app.job_queue (
@@ -488,30 +489,7 @@ create or replace function app.enqueue_job(p_name text) returns void
   language sql volatile security definer set search_path = ''
 as $$ insert into app.job_queue (name) values (p_name) $$;
 
--- Expired sessions, challenges, attempt counters and tokens (epoch columns are milliseconds).
-create or replace function app.job_cleanup_expired() returns jsonb
-  language plpgsql volatile security definer set search_path = ''
-as $$
-declare
-  v_now bigint := ${now};
-  v_day bigint := 24 * 3600 * 1000;
-  v jsonb := '{}'::jsonb;
-  n bigint;
-begin
-  delete from public.sessions where last_activity < v_now - 12 * 3600 * 1000; get diagnostics n = row_count; v := v || jsonb_build_object('sessions', n);
-  delete from public.challenges where expires_at < v_now; get diagnostics n = row_count; v := v || jsonb_build_object('challenges', n);
-  delete from public.grants where expires_at < v_now; get diagnostics n = row_count; v := v || jsonb_build_object('grants', n);
-  delete from public.lockouts where until < v_now; get diagnostics n = row_count; v := v || jsonb_build_object('lockouts', n);
-  delete from public.login_failures where "at" < v_now - v_day; get diagnostics n = row_count; v := v || jsonb_build_object('login_failures', n);
-  delete from public.check_attempts where "at" < v_now - v_day; get diagnostics n = row_count; v := v || jsonb_build_object('check_attempts', n);
-  delete from public.check_locks where until < v_now; get diagnostics n = row_count; v := v || jsonb_build_object('check_locks', n);
-  delete from public.card_tokens where expires_at < v_now; get diagnostics n = row_count; v := v || jsonb_build_object('card_tokens', n);
-  delete from public.access_tokens where expires_at < v_now; get diagnostics n = row_count; v := v || jsonb_build_object('access_tokens', n);
-  delete from public.idempotency where "at" < v_now - v_day; get diagnostics n = row_count; v := v || jsonb_build_object('idempotency', n);
-  delete from public.api_calls where "at" < v_now - 3600 * 1000; get diagnostics n = row_count; v := v || jsonb_build_object('api_calls', n);
-  return v;
-end $$;
-
+${cleanupFunction(CLEANUP_STATEMENTS)}
 -- Daily check of the audit chain: on a break every active MIG admin gets a notification.
 create or replace function app.job_verify_audit_chain() returns boolean
   language plpgsql volatile security definer set search_path = ''
@@ -562,6 +540,7 @@ export function buildMigrations(): SqlFile[] {
     { name: '20261009000400_rls.sql', sql: rls() },
     { name: '20261009000500_audit.sql', sql: audit() },
     { name: '20261009000600_jobs.sql', sql: jobs() },
+    ...authMigrations(),
   ];
 }
 

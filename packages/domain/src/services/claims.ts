@@ -196,30 +196,36 @@ export interface FileContent {
   download?: string;
 }
 
-export async function getFile(ctx: AuthCtx, id: string): Promise<FileContent> {
+/**
+ * The file row a person may get (403 for a role that may not read files of its kind, 404 for a file that is
+ * missing or hidden from the person). Used by the download and by the API's signed links.
+ */
+export async function fileAccess(ctx: AuthCtx, id: string): Promise<FileRow> {
   const { user } = ctx;
   const own = await ctx.repos.files.get(id);
   // A file the person's RLS hides still answers like the mock (403 for a role that may not read files of its
   // kind, 404 otherwise): the system's copy decides only that, and a hidden file is never returned.
   const f = own ?? (await systemRepos(ctx, 'files: 403 or 404 for a file hidden by RLS, as the mock answers').files.get(id));
   if (!f) throw notFound();
-  const visible = () => {
-    if (!own) throw notFound();
-  };
   if (f.guaranteeId) {
     // Guarantee-letter attachments: the clinic that uploaded them and MIG staff with guarantees.read.
     if (!can(user, 'guarantees.read', { clinicId: f.clinicId })) throw notFound();
-    visible();
-    if (!f.bytes) throw notFound();
-    // PDFs are never rendered inline in the app: download only (CLINIC_SPEC §9.7).
-    return { bytes: f.bytes, mime: f.mime, ...(f.mime === 'application/pdf' ? { download: f.fileName ?? 'document.pdf' } : {}) };
-  }
-  if (user.role === 'insured') {
+  } else if (user.role === 'insured') {
     if (!f.insuredId || f.insuredId !== user.insuredId) throw notFound();
   } else if (!can(user, 'claims.read') || !isStaffRole(user.role)) {
     throw forbidden();
   }
-  visible();
+  if (!own) throw notFound();
+  return own;
+}
+
+export async function getFile(ctx: AuthCtx, id: string): Promise<FileContent> {
+  const f = await fileAccess(ctx, id);
+  if (f.guaranteeId) {
+    if (!f.bytes) throw notFound();
+    // PDFs are never rendered inline in the app: download only (CLINIC_SPEC §9.7).
+    return { bytes: f.bytes, mime: f.mime, ...(f.mime === 'application/pdf' ? { download: f.fileName ?? 'document.pdf' } : {}) };
+  }
   if (!f.bytes) return { bytes: null, mime: 'image/png', seedText: f.seedText ?? ['Файл недоступен после перезагрузки'] };
   // PDFs are never rendered inline: download only, under a neutral name.
   return { bytes: f.bytes, mime: f.mime, ...(f.mime === 'application/pdf' ? { download: f.fileName ?? 'document.pdf' } : {}) };

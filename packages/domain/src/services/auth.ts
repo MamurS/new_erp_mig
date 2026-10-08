@@ -2,6 +2,10 @@
  * Sign-in (SPEC §5): e-mail + password (staff, HR, clinics, assistance) or phone (the insured), then a
  * one-time code. Attempt limits are DMS parameters (loginMaxAttempts, loginWindowMinutes, loginLockMinutes);
  * a lockout is kept per account key, and per phone number for both known and unknown numbers.
+ *
+ * The endpoints below are the mock's sign-in (demo password, demo code). The API signs in with Supabase Auth
+ * (apps/api/src/auth/bff.ts) and shares the rest from here: the account lookup, the attempt counters and
+ * lockouts, and what a successful sign-in records.
  */
 import { z } from 'zod';
 import type { SessionUser } from '@mig/contracts';
@@ -18,17 +22,19 @@ import { sessionUserFor } from './session';
 const CHALLENGE_TTL = 5 * 60_000;
 const NIL = '00000000-0000-4000-8000-000000000000';
 
-const invalidCreds = () => new DomainError(401, 'unauthorized', 'srv.auth.invalidCreds');
-const invalidCode = () => new DomainError(401, 'unauthorized', 'srv.auth.invalidCode');
+export const invalidCreds = () => new DomainError(401, 'unauthorized', 'srv.auth.invalidCreds');
+export const invalidCode = () => new DomainError(401, 'unauthorized', 'srv.auth.invalidCode');
 
-async function checkLock(ctx: BaseCtx, P: ParamsView, key: string): Promise<void> {
+/** 429 while the key is locked out (expired lockouts are dropped first). */
+export async function checkLock(ctx: BaseCtx, P: ParamsView, key: string): Promise<void> {
   await ctx.repos.lockouts.removeWhere({ until: { lte: ctx.now() } });
   if (await ctx.repos.lockouts.exists({ key })) {
     throw new DomainError(429, 'rate_limited', 'srv.auth.locked', { params: { minutes: P.dmsParam('loginLockMinutes') } });
   }
 }
 
-async function recordFailure(ctx: BaseCtx, P: ParamsView, key: string): Promise<void> {
+/** A failed attempt for the key; enough of them within the window lock the key out. */
+export async function recordFailure(ctx: BaseCtx, P: ParamsView, key: string): Promise<void> {
   const r = ctx.repos;
   const now = ctx.now();
   await r.loginFailures.removeWhere({ at: { lte: now - P.dmsParam('loginWindowMinutes') * 60_000 } });
@@ -55,6 +61,38 @@ async function roleOf(ctx: BaseCtx, c: ChallengeRow): Promise<SessionUser['role'
   return (await r.staff.get(c.userId))?.role;
 }
 
+/** An active account with this e-mail (staff, HR, clinic, assistance), in that order. */
+export async function findAccount(ctx: BaseCtx, email: string): Promise<{ id: string; password: string; kind: ChallengeRow['kind']; role: SessionUser['role'] } | null> {
+  const r = ctx.repos;
+  const staff = await r.staff.first({ where: { email, active: true } });
+  if (staff) return { id: staff.id, password: staff.password, kind: 'staff', role: staff.role };
+  const hr = await r.hrUsers.first({ where: { email } });
+  if (hr) return { id: hr.id, password: hr.password, kind: 'hr', role: 'hr' };
+  const clinicUser = await r.clinicUsers.first({ where: { email, active: true } });
+  if (clinicUser) return { id: clinicUser.id, password: clinicUser.password, kind: 'clinic', role: clinicUser.role };
+  const assistUser = await r.assistUsers.first({ where: { email, active: true } });
+  if (assistUser) return { id: assistUser.id, password: assistUser.password, kind: 'assist', role: assistUser.role };
+  return null;
+}
+
+/** A failed password: counted for the lockout and audited (no account named). */
+export async function passwordFailed(ctx: BaseCtx, P: ParamsView, key: string, email: string): Promise<never> {
+  const staff = await ctx.repos.staff.first({ where: { email, active: true } });
+  await recordFailure(ctx, P, key);
+  await audit(ctx, { id: NIL, displayName: 'Неизвестный', role: staff?.role ?? 'operator' }, 'login_failed', { targetType: 'session' });
+  throw invalidCreds();
+}
+
+/** What a successful sign-in records: the last login of the account and the `login` audit entry. */
+export async function recordSignIn(ctx: BaseCtx, user: SessionUser): Promise<void> {
+  const r = ctx.repos;
+  const lastLoginAt = tzIso(ctx.now());
+  if (await r.staff.exists({ id: user.id })) await r.staff.update(user.id, { lastLoginAt });
+  else if (await r.clinicUsers.exists({ id: user.id })) await r.clinicUsers.update(user.id, { lastLoginAt });
+  else if (await r.assistUsers.exists({ id: user.id })) await r.assistUsers.update(user.id, { lastLoginAt });
+  await audit(ctx, user, 'login', { targetType: 'session' });
+}
+
 async function verify(ctx: BaseCtx, challengeId: string, code: string): Promise<SessionResponse> {
   const r = ctx.repos;
   const P = await loadParams(ctx);
@@ -77,11 +115,7 @@ async function verify(ctx: BaseCtx, challengeId: string, code: string): Promise<
   const sessionId = randomToken(32);
   const now = ctx.now();
   await r.sessions.insert({ id: sessionId, userId: user.id, role: user.role, createdAt: now, lastActivity: now });
-  const lastLoginAt = tzIso(now);
-  if (await r.staff.exists({ id: user.id })) await r.staff.update(user.id, { lastLoginAt });
-  else if (await r.clinicUsers.exists({ id: user.id })) await r.clinicUsers.update(user.id, { lastLoginAt });
-  else if (await r.assistUsers.exists({ id: user.id })) await r.assistUsers.update(user.id, { lastLoginAt });
-  await audit(ctx, user, 'login', { targetType: 'session' });
+  await recordSignIn(ctx, user);
   return { sessionId, user };
 }
 
@@ -89,27 +123,21 @@ async function verify(ctx: BaseCtx, challengeId: string, code: string): Promise<
 
 /** POST /auth/login: e-mail and password; a code challenge on success. */
 export async function login(ctx: BaseCtx, body: unknown): Promise<{ challengeId: string; resendInSec: number }> {
-  const r = ctx.repos;
   const { email, password } = validate(loginSchema, body);
   const P = await loadParams(ctx);
   const key = `email:${email}`;
   await checkLock(ctx, P, key);
-  const staff = await r.staff.first({ where: { email, active: true } });
-  const hr = await r.hrUsers.first({ where: { email } });
-  const clinicUser = await r.clinicUsers.first({ where: { email, active: true } });
-  const assistUser = await r.assistUsers.first({ where: { email, active: true } });
-  const account = staff ?? hr ?? clinicUser ?? assistUser;
-  if (!account || account.password !== password) {
-    await recordFailure(ctx, P, key);
-    await audit(ctx, { id: NIL, displayName: 'Неизвестный', role: staff?.role ?? 'operator' }, 'login_failed', { targetType: 'session' });
-    throw invalidCreds();
-  }
-  return newChallenge(ctx, account.id, staff ? 'staff' : clinicUser ? 'clinic' : assistUser ? 'assist' : 'hr');
+  const account = await findAccount(ctx, email);
+  if (!account || account.password !== password) return passwordFailed(ctx, P, key, email);
+  return newChallenge(ctx, account.id, account.kind);
 }
+
+/** The body of POST /auth/resend. */
+export const resendSchema = z.object({ challengeId: z.string().trim().min(1).max(128) });
 
 /** POST /auth/resend: the same challenge lives another five minutes. */
 export async function resend(ctx: BaseCtx, body: unknown): Promise<{ challengeId: string; resendInSec: number }> {
-  const { challengeId } = validate(z.object({ challengeId: z.string().trim().min(1).max(128) }), body);
+  const { challengeId } = validate(resendSchema, body);
   const c = await ctx.repos.challenges.get(challengeId);
   if (!c || c.expiresAt < ctx.now()) throw invalidCode();
   await ctx.repos.challenges.update(c.id, { expiresAt: ctx.now() + CHALLENGE_TTL });

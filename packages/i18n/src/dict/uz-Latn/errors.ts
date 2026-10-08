@@ -14,6 +14,7 @@ export const errors: Translation<typeof Ru> = {
   'errors.badResponse': 'Server kutilmagan javob qaytardi. Keyinroq qayta urining',
   'errors.badJson': 'JSON notoʻgʻri',
   'errors.tooLarge': 'Soʻrov juda katta',
+  'errors.csrf': 'Soʻrov rad etildi. Sahifani yangilang va qayta urinib koʻring',
   'errors.unknown': 'Nimadir notoʻgʻri ketdi. Qayta urining',
   'errors.docsUnavailable': 'Hujjatlar mavjud emas',
 };

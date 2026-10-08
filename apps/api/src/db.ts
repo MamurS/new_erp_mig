@@ -12,6 +12,7 @@
  */
 import pg from 'pg';
 import type { Role, SessionUser } from '@mig/contracts';
+import { appMetadataOf } from '@mig/domain/auth/identity';
 import type { Sql, SqlResult, SqlSession } from '@mig/domain/store/postgres';
 
 /** The claims of a person as the Custom Access Token Hook will put them into the JWT (BACKEND_SPEC §7). */
@@ -29,23 +30,11 @@ export interface Claims {
 }
 
 /**
- * Claims of a signed-in person. Part 1: the session store of the mock (sign-in with a one-time code), so the
- * code counts as the second factor (`aal2`); part 2 takes `aal` from Supabase Auth (TOTP for staff, clinics,
- * assistance companies).
+ * Claims of a person built from the server-side record (the demo test fixture and RLS tests). The deployment takes
+ * them from the verified Supabase access token instead (auth/bff.ts); both carry the same `app_metadata`.
  */
-export function claimsOf(user: SessionUser): Claims {
-  return {
-    sub: user.id,
-    role: 'authenticated',
-    aal: 'aal2',
-    app_metadata: {
-      role: user.role,
-      ...(user.companyId ? { company_id: user.companyId } : {}),
-      ...(user.clinicId ? { clinic_id: user.clinicId } : {}),
-      ...(user.assistanceId ? { assistance_id: user.assistanceId } : {}),
-      ...(user.insuredId ? { insured_id: user.insuredId } : {}),
-    },
-  };
+export function claimsOf(user: SessionUser, aal: 'aal1' | 'aal2' = 'aal2'): Claims {
+  return { sub: user.id, role: 'authenticated', aal, app_metadata: appMetadataOf(user) };
 }
 
 /** node-pg sends a Buffer as bytea; a plain Uint8Array (WebCrypto, TextEncoder) must become one. */

@@ -2,6 +2,7 @@ import { BadgeCheck, FolderInput, Banknote, BarChart3, Building2, CalendarClock,
 import { defineLabels, t, type I18nKey } from '@/i18n';
 import type { StaffRole } from '@mig/contracts';
 import type { QueueType } from '@mig/contracts/dto';
+import { INSURED_CARD_ROLES as CARD_ROLES, STAFF_SECTION_ROLES } from '@mig/domain/help/routeMap';
 
 /** Order of the groups in the side navigation. */
 export const STAFF_NAV_GROUPS = ['work', 'sales', 'claims', 'partners', 'finance', 'reports', 'admin'] as const;
@@ -20,9 +21,10 @@ export interface StaffSection {
   group: StaffNavGroup;
 }
 
-const ALL: StaffRole[] = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer'];
-
-function section(path: string, labelKey: string, icon: LucideIcon, roles: StaffRole[], inNav: boolean, group: StaffNavGroup): StaffSection {
+/** Roles of a section come from the shared screen map (packages/domain/src/help/routeMap.ts). */
+function section(path: string, labelKey: string, icon: LucideIcon, inNav: boolean, group: StaffNavGroup): StaffSection {
+  const roles = STAFF_SECTION_ROLES[path];
+  if (!roles) throw new Error(`No roles for ${path} in STAFF_SECTION_ROLES`);
   const key = `staff.nav.${labelKey}` as I18nKey;
   return {
     path,
@@ -38,35 +40,35 @@ function section(path: string, labelKey: string, icon: LucideIcon, roles: StaffR
 
 /** Route access matrix for the staff portal (SPEC §3). */
 export const STAFF_SECTIONS: StaffSection[] = [
-  section('/staff', 'dashboard', LayoutDashboard, ALL, true, 'work'),
-  section('/staff/deals', 'deals', Kanban, ['sales_manager', 'underwriter'], true, 'sales'),
-  section('/staff/quotes', 'quotes', Kanban, ['sales_manager', 'underwriter'], false, 'sales'),
-  section('/staff/clients', 'clients', Building2, ['operator', 'underwriter', 'accountant', 'admin', 'sales_manager', 'legal'], true, 'sales'),
-  section('/staff/contracts', 'contracts', FileSignature, ['operator', 'underwriter', 'accountant', 'sales_manager', 'legal'], true, 'sales'),
-  section('/staff/endorsements', 'endorsements', FilePen, ['underwriter', 'sales_manager', 'legal', 'accountant'], true, 'sales'),
-  section('/staff/invoices', 'invoices', Landmark, ['underwriter', 'accountant', 'sales_manager'], true, 'finance'),
-  section('/staff/invoices/queue', 'paymentQueue', Banknote, ['accountant'], true, 'finance'),
-  section('/staff/policies', 'policies', FileText, ['operator', 'underwriter', 'accountant', 'sales_manager'], true, 'sales'),
-  section('/staff/claims', 'claims', Receipt, ['operator', 'doctor_expert', 'accountant', 'claims_officer'], true, 'claims'),
-  section('/staff/appointments', 'appointments', CalendarClock, ['operator', 'doctor_expert'], true, 'work'),
-  section('/staff/clinics', 'clinics', Hospital, ['operator', 'underwriter', 'doctor_expert', 'admin'], true, 'partners'),
-  section('/staff/guarantees', 'guarantees', FileCheck, ['operator', 'doctor_expert'], true, 'claims'),
-  section('/staff/registries', 'registries', ClipboardList, ['operator', 'accountant'], true, 'partners'),
-  section('/staff/assistance', 'assistance', Handshake, ALL, true, 'partners'),
-  section('/staff/rebills', 'rebills', ReceiptText, ['claims_officer', 'accountant'], true, 'finance'),
-  section('/staff/qa', 'qa', BadgeCheck, ['doctor_expert'], true, 'work'),
-  section('/staff/policy-changes', 'policyChanges', UserPlus, ['operator', 'underwriter', 'accountant'], true, 'work'),
-  section('/staff/limit-requests', 'limitRequests', SlidersHorizontal, ['operator', 'underwriter'], true, 'work'),
-  section('/staff/reports', 'reports', BarChart3, ['underwriter', 'accountant'], true, 'reports'),
-  section('/staff/reports/reserves', 'reserves', PiggyBank, ['claims_officer', 'underwriter', 'accountant'], true, 'claims'),
-  section('/staff/audit', 'audit', ScrollText, ['admin'], true, 'admin'),
-  section('/staff/admin/users', 'users', Users, ['admin'], true, 'admin'),
-  section('/staff/admin/parameters', 'parameters', Settings2, ALL, true, 'admin'),
-  section('/staff/admin/ai', 'ai', Sparkles, ['admin'], true, 'admin'),
-  section('/staff/admin/migration', 'migration', FolderInput, ['admin'], true, 'admin'),
+  section('/staff', 'dashboard', LayoutDashboard, true, 'work'),
+  section('/staff/deals', 'deals', Kanban, true, 'sales'),
+  section('/staff/quotes', 'quotes', Kanban, false, 'sales'),
+  section('/staff/clients', 'clients', Building2, true, 'sales'),
+  section('/staff/contracts', 'contracts', FileSignature, true, 'sales'),
+  section('/staff/endorsements', 'endorsements', FilePen, true, 'sales'),
+  section('/staff/invoices', 'invoices', Landmark, true, 'finance'),
+  section('/staff/invoices/queue', 'paymentQueue', Banknote, true, 'finance'),
+  section('/staff/policies', 'policies', FileText, true, 'sales'),
+  section('/staff/claims', 'claims', Receipt, true, 'claims'),
+  section('/staff/appointments', 'appointments', CalendarClock, true, 'work'),
+  section('/staff/clinics', 'clinics', Hospital, true, 'partners'),
+  section('/staff/guarantees', 'guarantees', FileCheck, true, 'claims'),
+  section('/staff/registries', 'registries', ClipboardList, true, 'partners'),
+  section('/staff/assistance', 'assistance', Handshake, true, 'partners'),
+  section('/staff/rebills', 'rebills', ReceiptText, true, 'finance'),
+  section('/staff/qa', 'qa', BadgeCheck, true, 'work'),
+  section('/staff/policy-changes', 'policyChanges', UserPlus, true, 'work'),
+  section('/staff/limit-requests', 'limitRequests', SlidersHorizontal, true, 'work'),
+  section('/staff/reports', 'reports', BarChart3, true, 'reports'),
+  section('/staff/reports/reserves', 'reserves', PiggyBank, true, 'claims'),
+  section('/staff/audit', 'audit', ScrollText, true, 'admin'),
+  section('/staff/admin/users', 'users', Users, true, 'admin'),
+  section('/staff/admin/parameters', 'parameters', Settings2, true, 'admin'),
+  section('/staff/admin/ai', 'ai', Sparkles, true, 'admin'),
+  section('/staff/admin/migration', 'migration', FolderInput, true, 'admin'),
 ];
 
-export const INSURED_CARD_ROLES: StaffRole[] = ['operator', 'underwriter', 'doctor_expert', 'claims_officer'];
+export const INSURED_CARD_ROLES: StaffRole[] = CARD_ROLES;
 
 export function sectionRoles(path: string): StaffRole[] {
   return STAFF_SECTIONS.find((s) => s.path === path)?.roles ?? [];

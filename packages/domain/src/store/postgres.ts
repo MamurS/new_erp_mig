@@ -10,7 +10,8 @@
  * - rows come back like memory rows: `ts` as `YYYY-MM-DDTHH:mm:ss+05:00`, `date` as `YYYY-MM-DD`, `bigint` and
  *   `epoch` as numbers, json as values, SQL NULL as a missing property (or `null` for `T | null` fields);
  * - identity data is sealed with `PiiCrypto` (ciphertext, key version, search HMAC, mask); payout cards keep
- *   only the mask; virtual fields (passwords, file bytes) are not stored.
+ *   only the mask; passwords are not stored (Supabase Auth); file bytes go to the blob store (Supabase Storage)
+ *   under the row's id, and the row keeps the bucket, the object name, the SHA-256 and the size.
  *
  * Row-level security: user repositories run as `authenticated` with the person's claims. Statements that RLS
  * reserves to the system by design (docs/backend/RLS.md) run privileged in the same transaction:
@@ -22,7 +23,8 @@
  * Anything else RLS does not allow fails loudly (`RlsDenied`), never silently: a write whose visible rows were
  * not all changed is an error.
  */
-import type { Db } from './db';
+import { bucketOf, sha256OfBytes, type BlobStore, type BucketId } from './blob';
+import type { Db, FileRow } from './db';
 import { piiMask, type PiiCrypto } from './pii';
 import { isOp, type Op, type Query, type Where } from './query';
 import type { InsertOptions, LogTable, MapStore, Repos, SeqName, SetStore, Table } from './repo';
@@ -59,6 +61,8 @@ export interface PgReposOptions {
    * sign-in works without Supabase Auth. Part 2 removes it (passwords live in Supabase Auth).
    */
   demoPassword?: string;
+  /** Where file bytes live (Supabase Storage in the API). Without it the bytes of new files are not kept. */
+  blobs?: BlobStore;
 }
 
 /** A statement that row-level security did not let through (a service/RLS mismatch: a bug to fix). */
@@ -367,12 +371,32 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
       const tuples: string[] = [];
       for (const r of chunk) {
         const pairs = await rowColumns(t, r, p);
+        if (t.spec.collection === 'files' && o.blobs) pairs.push(...(await storeFile(r, p)));
         cols = pairs.map(([c]) => c);
         const pos = opts?.at === 'start' ? `-nextval('app.pos_seq')` : `nextval('app.pos_seq')`;
         tuples.push(`(${[...pairs.map(([, v]) => v), pos].join(', ')})`);
       }
       await run(`insert into ${t.table} (${[...cols, '_pos'].map(qi).join(', ')}) values ${tuples.join(', ')}`, p.values, privileged);
     }
+  }
+
+  /**
+   * The bytes of a new file row go to the blob store under the row's id; the row gets the bucket, the object name,
+   * the SHA-256 and the size (BACKEND_SPEC §8). The object is written before the row: a rolled-back request
+   * leaves at most an unreferenced object, never a row without its bytes.
+   */
+  async function storeFile(r: Rec, p: Params): Promise<[string, string][]> {
+    const bytes = r.bytes instanceof Uint8Array ? r.bytes : null;
+    if (!bytes || !o.blobs) return [['bucket', p.add(null, 'text')], ['object_name', p.add(null, 'uuid')], ['sha256', p.add(null, 'text')], ['size_bytes', p.add(null, 'bigint')]];
+    const f = r as unknown as FileRow;
+    const bucket = bucketOf(f);
+    await o.blobs.put(bucket, f.id, bytes, f.mime);
+    return [
+      ['bucket', p.add(bucket, 'text')],
+      ['object_name', p.add(f.id, 'uuid')],
+      ['sha256', p.add(await sha256OfBytes(bytes), 'text')],
+      ['size_bytes', p.add(bytes.length, 'bigint')],
+    ];
   }
 
   /** The audit log is written only through app.audit() (hash chain, actor from the claims). */
@@ -499,6 +523,34 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
   for (const t of maps.values()) {
     if (t.spec.kind === 'keyed' || t.spec.kind === 'nested') out[t.spec.collection] = table(t);
     else if (t.spec.kind === 'log') out[t.spec.collection] = logTable(t);
+  }
+  if (o.blobs) out.files = filesWithBlobs(out.files as Table<Rec, PropertyKey>, o.blobs);
+
+  /** Where the bytes of a file row are (the row must be visible to the session). */
+  async function objectOf(id: unknown): Promise<{ bucket: BucketId; name: string } | null> {
+    if (typeof id !== 'string' || !UUID.test(id)) return null;
+    const { rows } = await run(`select bucket, object_name::text as name from public.files where id = $1::uuid`, [id], false);
+    const r = rows[0];
+    return r?.bucket && r.name ? { bucket: r.bucket as BucketId, name: String(r.name) } : null;
+  }
+
+  /**
+   * `files.get` brings the bytes from the blob store (only there: lists never load bytes). A removed row leaves
+   * its object behind (the request may still roll back); such objects are never served, since every download
+   * goes through a row the person may see.
+   */
+  function filesWithBlobs(files: Table<Rec, PropertyKey>, blobs: BlobStore): Table<Rec, PropertyKey> {
+    return {
+      ...files,
+      async get(k) {
+        const row = await files.get(k);
+        if (!row) return null;
+        const obj = await objectOf(k);
+        const bytes = obj ? await blobs.get(obj.bucket, obj.name) : null;
+        if (bytes) row.bytes = bytes;
+        return row;
+      },
+    };
   }
 
   // ------------------------------------------------------------------ singletons
