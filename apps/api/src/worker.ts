@@ -2,6 +2,8 @@
  * The background worker as its own process (`node apps/api/dist/worker.js`): for deployments that run the API
  * with WORKER=off on several instances and one worker next to them. Same configuration as the API.
  */
+import { writeFileSync } from 'node:fs';
+
 import { GoTrue } from './auth/gotrue';
 import { createPool } from './db';
 import { readEnv } from './env';
@@ -24,8 +26,18 @@ const identity = identitySync({
 const worker = createWorker({ pool, crypto: env.crypto, identity, log: serverLog });
 worker.start();
 // The worker's own timer is unref'd (inside the API it must not keep the process alive); alone, the process has
-// nothing else to wait for and would exit at once: this handle keeps it running until a signal.
-const keepAlive = setInterval(() => undefined, 60_000);
+// nothing else to wait for and would exit at once: this handle keeps it running until a signal. It also refreshes
+// a heartbeat file, the container health check of deploy/docker-compose.yml (`docker compose up --wait` needs one).
+const HEARTBEAT_FILE = '/tmp/worker-heartbeat';
+const beat = () => {
+  try {
+    writeFileSync(HEARTBEAT_FILE, String(Date.now()));
+  } catch {
+    // Outside a container /tmp may be read-only: the heartbeat only serves the health check.
+  }
+};
+beat();
+const keepAlive = setInterval(beat, 15_000);
 
 const stop = async () => {
   clearInterval(keepAlive);
