@@ -6,11 +6,11 @@ export function readDicts(dictRoot: string): {
   values: Record<Locale, Map<string, string>>;
   files: Record<Locale, Map<string, string>>;
 };
-export function findUsages(srcRoot: string, keys: string[], repoRoot: string): Map<string, string>;
+export function findUsages(srcRoots: string | readonly string[], keys: string[], repoRoot: string): Map<string, string>;
 export function toCsv(rows: string[][]): string;
 export const GUIDE_PREFIX: string;
 export function guideTitles(repoRoot: string): Record<Locale, Map<string, string>>;
-export function buildRows(dictRoot: string, srcRoot: string, repoRoot: string): string[][];
+export function buildRows(dictRoot: string, srcRoots: string | readonly string[], repoRoot: string): string[][];
 export function normalizeUz(s: string): string;
 export function applyCsv(
   csvText: string,

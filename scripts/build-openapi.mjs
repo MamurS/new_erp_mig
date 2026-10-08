@@ -2,7 +2,7 @@
 /*
  * Generates the integration API contract from the zod schemas (CLINIC_SPEC §6.6):
  *   docs/integration/openapi.yaml         — for the backend team
- *   public/docs/integration/openapi.json  — for the «Документация» tab of the clinic cabinet
+ *   apps/web/public/docs/integration/openapi.json  — for the «Документация» tab of the clinic cabinet
  *
  *   node scripts/build-openapi.mjs
  *
@@ -16,9 +16,10 @@ import { createServer } from 'vite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
+const web = resolve(root, 'apps/web');
 const server = await createServer({
-  root,
-  configFile: resolve(root, 'vite.config.ts'),
+  root: web,
+  configFile: resolve(web, 'vite.config.ts'),
   logLevel: 'error',
   appType: 'custom',
   server: { middlewareMode: true, hmr: false },
@@ -28,7 +29,7 @@ try {
   const { buildOpenApi, toYaml } = await server.ssrLoadModule('/src/shared/integration/openapi-files.ts');
   const doc = buildOpenApi();
   const yamlPath = resolve(root, 'docs/integration/openapi.yaml');
-  const jsonPath = resolve(root, 'public/docs/integration/openapi.json');
+  const jsonPath = resolve(web, 'public/docs/integration/openapi.json');
   mkdirSync(dirname(yamlPath), { recursive: true });
   mkdirSync(dirname(jsonPath), { recursive: true });
   writeFileSync(yamlPath, toYaml(doc));

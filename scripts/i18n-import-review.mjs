@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /*
- * Writes a reviewed docs/i18n-review.csv back into src/i18n/dict/<locale>/<namespace>.ts.
+ * Writes a reviewed docs/i18n-review.csv back into packages/i18n/src/dict/<locale>/<namespace>.ts.
  * Only changed cells are written; empty cells mean "no change"; unknown keys are reported.
  * Uzbek apostrophes are normalised: oʻ/gʻ → U+02BB, other apostrophes → U+02BC.
  * Usage: node scripts/i18n-import-review.mjs [reviewed.csv] [--dry-run]
- * Afterwards run `npm run typecheck && npx vitest run src/i18n`.
+ * Afterwards run `npm run typecheck && npx vitest run i18n`.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -15,7 +15,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const file = resolve(args.find((a) => !a.startsWith('--')) ?? join(root, 'docs/i18n-review.csv'));
-const report = applyCsv(readFileSync(file, 'utf8'), join(root, 'src/i18n/dict'), { dryRun });
+const report = applyCsv(readFileSync(file, 'utf8'), join(root, 'packages/i18n/src/dict'), { dryRun });
 console.log(`${dryRun ? '[dry run] ' : ''}updated ${report.updated}, added ${report.added}, unchanged ${report.unchanged}`);
 if (report.guide) console.log(`skipped ${report.guide} guide titles (help.guide.*): edit them in docs/help/USER_GUIDE.<locale>.md`);
 if (report.unknown.length) {

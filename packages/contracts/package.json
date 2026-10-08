@@ -1,0 +1,16 @@
+{
+  "name": "@mig/contracts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The API contract: types and zod schemas of requests and responses, shared by the web app, the mock and the API.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@mig/domain": "*",
+    "@mig/i18n": "*",
+    "zod": "^3.25.76"
+  }
+}

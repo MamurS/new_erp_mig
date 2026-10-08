@@ -10,6 +10,6 @@ import { buildRows, toCsv } from './i18n-review-lib.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const out = resolve(process.argv[2] ?? join(root, 'docs/i18n-review.csv'));
-const rows = buildRows(join(root, 'src/i18n/dict'), join(root, 'src'), root);
+const rows = buildRows(join(root, 'packages/i18n/src/dict'), [join(root, 'apps/web/src'), join(root, 'packages')], root);
 writeFileSync(out, toCsv(rows));
 console.log(`${rows.length} keys → ${out}`);

@@ -1,0 +1,98 @@
+/*
+ * Family members on the mock server (FAMILY_SPEC): the family of an employee, the access of a signed-in
+ * insured person to another person of the family, consents, the payout card and the premium of a
+ * family member. Rules themselves live in src/shared/domain/family.ts.
+ */
+import type { FamilyMemberBrief, Policy, UUID } from '@mig/contracts';
+import { allows, familyAccess, isDependentChild, isFamilyRelation, type AgeLimits, type FamilyAccessLevel, type FamilyDataKind } from '@mig/domain/family';
+import { tariffOf } from '@mig/domain/policies';
+import type { ClaimRow, Db, InsuredRow } from './db';
+import { httpErrorOf, notFound } from './http';
+import { contractPricing, personPremium, PricingError } from '@mig/domain/pricing';
+import { dmsParam } from './params';
+import { isoDay } from '@mig/seed/time';
+
+export const ageLimits = (): AgeLimits => ({ maxChildAge: dmsParam('maxChildAge'), studentMaxAge: dmsParam('studentMaxAge') });
+export const todayIso = (): string => isoDay(Date.now());
+
+/** Family members of an employee (every status). */
+export function familyOf(d: Db, employeeId: UUID): InsuredRow[] {
+  return d.insured.filter((i) => i.principalId === employeeId);
+}
+
+export function principalOf(d: Db, i: Pick<InsuredRow, 'principalId'>): InsuredRow | undefined {
+  return i.principalId ? d.insured.find((x) => x.id === i.principalId) : undefined;
+}
+
+/** Names and relations of an employee's family (other screens list them instead of «семья: N»). */
+export function familyBrief(d: Db, i: InsuredRow): FamilyMemberBrief[] {
+  if (i.relation !== 'employee') return [];
+  return familyOf(d, i.id).flatMap((m) => (isFamilyRelation(m.relation) ? [{ id: m.id, fullName: m.fullName, relation: m.relation, status: m.status }] : []));
+}
+
+/** The card reimbursements are paid to: the person's own, else the employee's (a family member by default). */
+export function payoutCardOf(d: Db, i: InsuredRow): { card: string; own: boolean } {
+  if (i.payoutCard) return { card: i.payoutCard, own: true };
+  return { card: principalOf(d, i)?.payoutCard ?? '', own: false };
+}
+
+export function hasConsent(d: Db, ownerId: UUID, viewerId: UUID): boolean {
+  return d.familyConsents.some((c) => c.ownerId === ownerId && c.viewerId === viewerId && !c.revokedAt);
+}
+
+export function accessOf(d: Db, viewer: InsuredRow, target: InsuredRow): FamilyAccessLevel {
+  return familyAccess(viewer, target, { today: todayIso(), limits: ageLimits(), consent: (o, v) => hasConsent(d, o, v) });
+}
+
+/**
+ * The person a /api/me request is about: the signed-in person, or `personId` of the family when the access
+ * allows that kind of data. Anyone else — another family, an adult without consent for medical data — is 404.
+ */
+export function personFor(d: Db, me: InsuredRow, personId: string | null, kind: FamilyDataKind): { person: InsuredRow; access: FamilyAccessLevel } {
+  if (!personId || personId === me.id) return { person: me, access: 'self' };
+  if (!/^[0-9a-f-]{36}$/i.test(personId)) throw notFound();
+  const person = d.insured.find((x) => x.id === personId);
+  if (!person) throw notFound();
+  const access = accessOf(d, me, person);
+  if (!allows(access, kind)) throw notFound();
+  return { person, access };
+}
+
+/** `?personId=` of a /api/me request. */
+export const personIdParam = (url: URL): string | null => url.searchParams.get('personId');
+
+export function isDependent(i: InsuredRow): boolean {
+  return isDependentChild(i, todayIso(), ageLimits());
+}
+
+/**
+ * Annual premium of a person on the policy: by the terms of the policy's contract (by type or by the age band
+ * on `on`); a policy without a contract — by type from the policy tariff.
+ */
+export function annualPremiumOf(d: Db, policy: Pick<Policy, 'tariff' | 'premium' | 'insuredCount' | 'program' | 'contractId'>, person: Pick<InsuredRow, 'relation' | 'birthDate'>, on: string): number {
+  const c = policy.contractId ? d.contracts.find((x) => x.id === policy.contractId) : undefined;
+  const t = tariffOf(policy);
+  const pricing = c ? contractPricing(c.params) : contractPricing({ premiumEmployee: t.employee, premiumFamily: t.family });
+  try {
+    return personPremium(pricing, person, on).annual;
+  } catch (e) {
+    if (e instanceof PricingError) throw httpErrorOf(422, 'validation', e.problem);
+    throw e;
+  }
+}
+
+/** An appointment of a person whose medical data the signed-in person may see; anything else is 404. */
+export function myAppointment(d: Db, me: InsuredRow, id: string) {
+  const a = d.appointments.find((x) => x.id === id);
+  const who = a ? d.insured.find((x) => x.id === a.insuredId) : undefined;
+  if (!a || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
+  return a;
+}
+
+/** A claim of a person whose medical data the signed-in person may see; anything else is 404. */
+export function myClaimOf(d: Db, me: InsuredRow, id: string): { c: ClaimRow; who: InsuredRow } {
+  const c = d.claims.find((x) => x.id === id);
+  const who = c ? d.insured.find((x) => x.id === c.insuredId) : undefined;
+  if (!c || !who || (who.id !== me.id && accessOf(d, me, who) !== 'full')) throw notFound();
+  return { c, who };
+}

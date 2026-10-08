@@ -1,0 +1,15 @@
+{
+  "name": "@mig/seed",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Deterministic demo data generator, shared by the mock and the database seed.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@mig/contracts": "*",
+    "@mig/domain": "*",
+    "@mig/i18n": "*"
+  }
+}

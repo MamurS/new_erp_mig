@@ -1,8 +1,8 @@
 dist
 node_modules
-public/mockServiceWorker.js
+apps/web/public/mockServiceWorker.js
 package-lock.json
 playwright-report
 test-results
 vendor
-src/features/kp/templates/gold.ts
+apps/web/src/features/kp/templates/gold.ts

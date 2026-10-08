@@ -1,0 +1,11 @@
+{
+  "name": "@mig/i18n",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Interface strings in three languages (ru, uz-Latn, en) without React: dictionaries, t(), msg(), labels.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  }
+}
