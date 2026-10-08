@@ -1,6 +1,6 @@
 /* Demo accounts of the mock server (SPEC §2). */
 import type { StaffAuthority, StaffRole } from '@mig/contracts';
-import { DEMO_PASSWORD, DEMO_UNDERWRITER_NAME } from '@mig/domain/auth/demo';
+import { DEMO_UNDERWRITER_NAME } from '@mig/domain/auth/demo';
 
 export { DEMO_CODE, DEMO_PASSWORD } from '@mig/domain/auth/demo';
 
