@@ -1,0 +1,16 @@
+{
+  "name": "@mig/domain",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Business rules: permissions, pricing, numbering, DMS parameters, documents; no React, no browser.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@mig/contracts": "*",
+    "@mig/i18n": "*",
+    "papaparse": "^5.7.0",
+    "zod": "^3.25.76"
+  }
+}

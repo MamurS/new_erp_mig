@@ -1,0 +1,100 @@
+import { expect, test } from '@playwright/test';
+import type { Role } from '@mig/contracts';
+import { api, login, logoutFromSidebar } from './helpers';
+
+const FORBIDDEN_ROUTES: Record<Role, string[]> = {
+  operator: ['/staff/reports', '/staff/audit', '/staff/admin/users', '/hr', '/app'],
+  underwriter: ['/staff/claims', '/staff/appointments', '/staff/audit', '/staff/admin/users', '/hr'],
+  doctor_expert: ['/staff/clients', '/staff/policies', '/staff/reports', '/staff/audit', '/staff/limit-requests', '/staff/policy-changes'],
+  accountant: ['/staff/insured/00000000-0000-4000-8000-000000000000', '/staff/appointments', '/staff/clinics', '/staff/audit', '/staff/limit-requests'],
+  admin: ['/staff/claims', '/staff/policies', '/staff/appointments', '/staff/reports', '/staff/insured/00000000-0000-4000-8000-000000000000', '/staff/policy-changes'],
+  hr: ['/staff', '/staff/clients', '/app', '/clinic'],
+  clinic_registrar: ['/staff', '/staff/clinics', '/hr', '/app', '/clinic/integration', '/clinic/registries', '/clinic/users'],
+  clinic_admin: ['/staff', '/staff/registries', '/hr', '/app'],
+  insured: ['/staff', '/hr', '/staff/claims', '/clinic', '/assist'],
+  asst_operator: ['/staff', '/hr', '/clinic', '/app', '/assist/rebills', '/assist/users', '/assist/integration'],
+  asst_doctor: ['/staff', '/staff/guarantees', '/assist/rebills', '/assist/users', '/assist/chat'],
+  asst_billing: ['/staff', '/assist/insured', '/assist/cases', '/assist/users'],
+  asst_admin: ['/staff', '/assist/insured', '/assist/rebills', '/hr'],
+  sales_manager: ['/staff/claims', '/staff/audit', '/staff/admin/users', '/staff/rebills', '/hr'],
+  legal: ['/staff/claims', '/staff/deals', '/staff/audit', '/staff/reports/reserves', '/hr'],
+  claims_officer: ['/staff/deals', '/staff/clients', '/staff/audit', '/staff/admin/users', '/hr'],
+};
+
+test.describe('2. Route matrix: forbidden routes lead to /403', () => {
+  for (const [role, routes] of Object.entries(FORBIDDEN_ROUTES) as [Role, string[]][]) {
+    test(role, async ({ page }) => {
+      await login(page, role);
+      for (const r of routes) {
+        await page.goto(r);
+        await expect(page, `${role} → ${r}`).toHaveURL(/\/403$/);
+        await expect(page.getByRole('heading', { name: 'Нет доступа' })).toBeVisible();
+      }
+    });
+  }
+});
+
+const FORBIDDEN_API: Record<Role, [string, string, unknown?][]> = {
+  operator: [['GET', '/audit'], ['GET', '/admin/users'], ['GET', '/reports/premium-by-month'], ['POST', '/exports', { type: 'clients' }], ['GET', '/hr/employees']],
+  underwriter: [['GET', '/claims'], ['GET', '/appointments'], ['GET', '/audit'], ['POST', '/exports', { type: 'claims_financial' }]],
+  doctor_expert: [['GET', '/clients'], ['GET', '/policies'], ['GET', '/reports/loss-ratio-by-client'], ['GET', '/admin/users']],
+  accountant: [['GET', '/audit'], ['GET', '/appointments'], ['GET', '/clinics'], ['POST', '/limit-requests', {}]],
+  admin: [['GET', '/claims'], ['GET', '/policies'], ['GET', '/appointments'], ['GET', '/reports/loss-ratio-by-client']],
+  hr: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/audit'], ['GET', '/me/claims'], ['POST', '/exports', { type: 'clients' }], ['GET', '/clinic/overview']],
+  insured: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/hr/employees'], ['GET', '/audit'], ['GET', '/dashboard'], ['GET', '/clinic/overview']],
+  clinic_registrar: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/guarantees'], ['GET', '/registries'], ['GET', '/clinic/integration/keys'], ['GET', '/clinic/registries'], ['GET', '/clinic/users'], ['GET', '/me/policy'], ['GET', '/dashboard']],
+  asst_operator: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/insured'], ['GET', '/audit'], ['GET', '/rebills'], ['GET', '/assist/rebills'], ['GET', '/assist/users'], ['GET', '/clinic/overview'], ['GET', '/policy-changes']],
+  asst_doctor: [['GET', '/clients'], ['GET', '/policies'], ['GET', '/guarantees'], ['GET', '/assist/rebills'], ['GET', '/assist/users'], ['GET', '/qa']],
+  asst_billing: [['GET', '/clients'], ['GET', '/assist/insured?q=а'], ['GET', '/assist/cases'], ['GET', '/rebills'], ['GET', '/assist/integration/keys']],
+  asst_admin: [['GET', '/clients'], ['GET', '/assist/insured?q=а'], ['GET', '/assist/rebills'], ['GET', '/assistance']],
+  clinic_admin: [['GET', '/clients'], ['GET', '/claims'], ['GET', '/audit'], ['GET', '/guarantees'], ['GET', '/registries'], ['GET', '/hr/employees'], ['POST', '/clinics', {}]],
+  sales_manager: [['GET', '/claims'], ['GET', '/audit'], ['GET', '/reports/reserves'], ['POST', '/payments', {}]],
+  legal: [['GET', '/claims'], ['GET', '/claims/00000000-0000-4000-8000-000000000000'], ['GET', '/reports/claims-register'], ['GET', '/audit']],
+  claims_officer: [['GET', '/deals'], ['GET', '/audit'], ['POST', '/quotes', {}], ['GET', '/admin/users']],
+};
+
+test.describe('3. API matrix: forbidden endpoints answer 403/404', () => {
+  for (const [role, calls] of Object.entries(FORBIDDEN_API) as [Role, [string, string, unknown?][]][]) {
+    test(role, async ({ page }) => {
+      await login(page, role);
+      for (const [method, path, body] of calls) {
+        const r = await api(page, method, path, body);
+        expect([403, 404], `${role} ${method} ${path} → ${r.status}`).toContain(r.status);
+      }
+      // A client-supplied role header is ignored.
+      const spoof = await api(page, 'GET', '/audit', undefined, { 'X-Role': 'admin' });
+      if (role !== 'admin') expect([403, 404]).toContain(spoof.status);
+    });
+  }
+
+  test('no session → 401', async ({ page }) => {
+    await page.goto('/login');
+    await expect(page.getByLabel('Email')).toBeVisible(); // mocks are running once the app renders
+    expect((await api(page, 'GET', '/dashboard')).status).toBe(401);
+  });
+});
+
+test.describe('4. IDOR', () => {
+  test('insured gets 404 for a foreign claim id', async ({ page }) => {
+    await login(page, 'operator');
+    const list = (await api(page, 'GET', '/claims?pageSize=5')).data as { items: { id: string; insuredName: string }[] };
+    const foreign = list.items.find((c) => !c.insuredName.startsWith('Karimov Aziz'))!;
+    await logoutFromSidebar(page);
+    await login(page, 'insured');
+    expect((await api(page, 'GET', `/me/claims/${foreign.id}`)).status).toBe(404);
+    const mine = (await api(page, 'GET', '/me/claims')).data as { id: string }[];
+    expect((await api(page, 'GET', `/me/claims/${mine[0]!.id}`)).status).toBe(200);
+    await page.goto(`/app/claims/${foreign.id}`);
+    await expect(page.getByText('Такого возмещения нет')).toBeVisible();
+  });
+
+  test('hr gets 404 for another company’s employee', async ({ page }) => {
+    await login(page, 'operator');
+    const others = (await api(page, 'GET', '/insured?pageSize=100')).data as { items: { id: string; clientName: string }[] };
+    const foreign = others.items.find((i) => i.clientName !== 'Toshkent Agrologistika')!;
+    await logoutFromSidebar(page);
+    await login(page, 'hr');
+    expect((await api(page, 'GET', `/hr/employees/${foreign.id}`)).status).toBe(404);
+    expect((await api(page, 'DELETE', `/hr/employees/${foreign.id}`, { excludeFrom: '2026-12-01' })).status).toBe(404);
+  });
+});

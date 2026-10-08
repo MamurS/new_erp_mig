@@ -1,7 +1,7 @@
 /*
  * Shared code of the native-speaker review round trip:
  *   scripts/i18n-export-review.mjs  → docs/i18n-review.csv (key | ru | uz-Latn | en | where used)
- *   scripts/i18n-import-review.mjs  ← the reviewed CSV, written back into src/i18n/dict/<locale>/<ns>.ts
+ *   scripts/i18n-import-review.mjs  ← the reviewed CSV, written back into packages/i18n/src/dict/<locale>/<ns>.ts
  * Dictionary files are plain `'key': 'value',` entries, so they are read and patched as text.
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -60,8 +60,11 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** key → source files using it (exact key, else the longest dynamic prefix such as `labels.role`). */
-export function findUsages(srcRoot, keys, repoRoot) {
+/**
+ * key → source files using it (exact key, else the longest dynamic prefix such as `labels.role`).
+ * `srcRoots`: one directory or several (the web app and the packages).
+ */
+export function findUsages(srcRoots, keys, repoRoot) {
   // One pass over the sources: every quoted key-like literal and every `prefix.${…}` template head.
   const literal = new Map();
   const add = (k, f) => {
@@ -69,7 +72,7 @@ export function findUsages(srcRoot, keys, repoRoot) {
     if (!set) literal.set(k, (set = new Set()));
     set.add(f);
   };
-  for (const file of walk(srcRoot)) {
+  for (const file of [srcRoots].flat().flatMap((d) => walk(d))) {
     const f = relative(repoRoot, file);
     const text = readFileSync(file, 'utf8');
     for (const m of text.matchAll(/['"`]([a-zA-Z][\w-]*(?:\.[\w-]+)+)\.?['"`]/g)) add(m[1], f);
@@ -113,10 +116,10 @@ export function guideTitles(repoRoot) {
   return out;
 }
 
-export function buildRows(dictRoot, srcRoot, repoRoot) {
+export function buildRows(dictRoot, srcRoots, repoRoot) {
   const { values } = readDicts(dictRoot);
   const keys = [...values.ru.keys()].sort();
-  const usage = findUsages(srcRoot, keys, repoRoot);
+  const usage = findUsages(srcRoots, keys, repoRoot);
   const rows = keys.map((k) => [k, values.ru.get(k) ?? '', values['uz-Latn'].get(k) ?? '', values.en.get(k) ?? '', usage.get(k) ?? '']);
   // The user guide is reviewed in its markdown files; its article titles are listed for orientation.
   const titles = guideTitles(repoRoot);

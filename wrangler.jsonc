@@ -1,5 +1,6 @@
 // Cloudflare Workers static-assets deployment (Workers Builds runs `npx wrangler deploy`).
-// Security headers come from public/_headers; VITE_* variables are set in the Cloudflare dashboard.
+// The web app lives in apps/web (npm workspaces); `npm run build` copies its build to ./dist.
+// Security headers come from apps/web/public/_headers; VITE_* variables are set in the Cloudflare dashboard.
 {
   "name": "new-erp-mig",
   "compatibility_date": "2025-09-01",
