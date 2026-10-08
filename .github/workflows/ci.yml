@@ -42,7 +42,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/2
+      - run: npm run test:e2e -w @mig/web -- --shard=${{ matrix.shard }}/2
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
