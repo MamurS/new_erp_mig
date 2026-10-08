@@ -10,7 +10,7 @@ import { ageOn, isFamilyRelation, reachedAgeLimit } from '@mig/domain/family';
 import { msg } from '@mig/i18n';
 import type { ClientRow, Db, FamilyRequestRow, InsuredRow, PolicyChangeRow } from './db';
 import { HttpError } from './http';
-import { maskBirthDate, maskPinfl } from './mask';
+import { maskBirthDate, maskPinfl } from '@mig/domain/lib/mask';
 import { requestChange } from './policy-core';
 import { ageLimits, todayIso } from './family-core';
 

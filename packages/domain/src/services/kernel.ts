@@ -8,6 +8,7 @@ import type { ApiError, AuditAction, AuditEntry, SessionUser } from '@mig/contra
 import { hasKey, unpack, type I18nKey, type Params } from '@mig/i18n';
 import { can, type Action, type PermissionContext } from '../auth/permissions';
 import { randomId } from '../lib/random';
+import { tzIso } from '../lib/time';
 import type { SessionRow } from '../store/db';
 import type { Repos } from '../store/repo';
 
@@ -98,10 +99,7 @@ export function requireOwn(user: SessionUser, action: Action, pctx: PermissionCo
   if (!can(user, action, pctx)) throw notFound();
 }
 
-/** `2026-09-29T14:21:00+05:00` (Tashkent time). */
-export function tzIso(ms: number): string {
-  return `${new Date(ms + 5 * 3600_000).toISOString().slice(0, 19)}+05:00`;
-}
+export { tzIso } from '../lib/time';
 
 export type AuditActor = Pick<SessionUser, 'id' | 'displayName' | 'role'> & { assistanceId?: string };
 export type AuditTarget = Pick<AuditEntry, 'targetType'> & Partial<Pick<AuditEntry, 'targetId' | 'targetLabel' | 'reason' | 'assistanceId'>>;

@@ -25,7 +25,7 @@ import {
 import { hashString, int, mulberry32, pick, randomId, randomToken, uuidFrom } from '@mig/seed/rng';
 import { DAY, isoDay, tzIso } from '@mig/seed/time';
 import { limitsFor, toInsuredDetail, toInsuredListItem } from '../views';
-import { formatPhoneFull } from '../mask';
+import { formatPhoneFull } from '@mig/domain/lib/mask';
 
 const MEDICAL_TTL = 15 * 60_000;
 

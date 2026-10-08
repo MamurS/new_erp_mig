@@ -5,7 +5,7 @@ import { insuredVisibility } from '@mig/domain/auth/permissions';
 import { CLAIM_TO_LIMIT, claimTransitions, requiresMedicalReview, toMyClaimStatus } from '@mig/domain/claims';
 import type { ClaimRow, ClientRow, Db, InsuredRow } from './db';
 import type { LegalFormCode } from '@mig/domain/config/legalForms';
-import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from './mask';
+import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from '@mig/domain/lib/mask';
 import { PROGRAMS } from '@mig/seed/programs';
 import { limitExtras } from './assistance-core';
 import { DAY, isoDay, parseIso } from '@mig/seed/time';

@@ -70,7 +70,7 @@ import {
   upsertDraftRebill,
 } from '../assistance-core';
 import { clinicOf, clinicResponseMinutes, createAppointment, emitWebhook, isOverdueRequest, priceListOf, pushEvent, recomputeRegistry, refreshGuarantee, respondToAppointment, toGuaranteeView } from '../clinic-core';
-import { maskBirthDate, maskPhone, maskPinfl, formatPhoneFull } from '../mask';
+import { maskBirthDate, maskPhone, maskPinfl, formatPhoneFull } from '@mig/domain/lib/mask';
 import { PROGRAMS } from '@mig/seed/programs';
 import { principalOf } from '../family-core';
 import { randomId, randomToken } from '@mig/seed/rng';

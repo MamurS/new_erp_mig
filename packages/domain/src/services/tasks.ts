@@ -21,6 +21,7 @@ import { isStaffRole } from '../labels';
 import { taskLink, taskTitle } from '../nextStep';
 import { addWorkdays, canRemind, isActiveRequest, isDueSoon, isOverdue } from '../requests';
 import { randomId } from '../lib/random';
+import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
 import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
@@ -34,7 +35,6 @@ export interface SubjectRefs {
   contractNumber?: string;
 }
 
-const isoDay = (ms: number) => tzIso(ms).slice(0, 10);
 
 /** The deal's current contract: the latest version. */
 export async function dealContract(ctx: BaseCtx, dealId: string): Promise<Contract | undefined> {

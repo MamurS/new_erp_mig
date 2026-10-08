@@ -13,7 +13,7 @@ import { db, type ClaimRow, type Db, type FamilyRequestRow, type InsuredRow } fr
 import { API, audit, body, conflict, forbidden, HttpError, insuredLabel, notFound, param, requireSession, route, validate } from '../http';
 import { accessOf, ageLimits, familyOf, hasConsent, isDependent, myAppointment, myClaimOf, payoutCardOf, personFor, personIdParam, principalOf, todayIso } from '../family-core';
 import { toFamilyRequest } from '../family-requests';
-import { maskCard, maskPhone, maskPinfl } from '../mask';
+import { maskCard, maskPhone, maskPinfl } from '@mig/domain/lib/mask';
 import { scheduleSaveDb } from '../persist';
 import { randomId, randomToken } from '@mig/seed/rng';
 import { DAY, parseIso, tzIso } from '@mig/seed/time';

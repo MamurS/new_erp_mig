@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from './mask';
+import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from '@mig/domain/lib/mask';
 
 describe('mock masking', () => {
   it('masks PINFL leaving last 4', () => {
