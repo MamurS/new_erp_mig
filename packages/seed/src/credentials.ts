@@ -1,8 +1,7 @@
 /* Demo accounts of the mock server (SPEC §2). */
 import type { StaffAuthority, StaffRole } from '@mig/contracts';
 
-export const DEMO_PASSWORD = 'Demo-2026!';
-export const DEMO_CODE = '000000';
+export { DEMO_CODE, DEMO_PASSWORD } from '@mig/domain/auth/demo';
 
 export interface DemoStaff {
   role: StaffRole;

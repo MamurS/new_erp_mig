@@ -61,10 +61,11 @@ function isMutation(method: string): boolean {
 /**
  * Wraps a handler with latency, failure injection, error mapping and persistence.
  * `noFailures`: the simulated 500s never hit this route (the demo controls themselves).
+ * `writes`: a GET that changes data, persisted like a mutation.
  */
 export function route(
   fn: (ctx: Ctx) => Promise<unknown> | unknown,
-  opts: { noFailures?: boolean } = {},
+  opts: { noFailures?: boolean; writes?: boolean } = {},
 ): HttpResponseResolver<PathParams, DefaultBodyType, DefaultBodyType> {
   return async ({ request, params }) => {
     const [lo, hi] = mockConfig.latency;
@@ -90,7 +91,7 @@ export function route(
     } finally {
       const d = db();
       saveSessions(d);
-      if (isMutation(request.method)) scheduleSaveDb(db);
+      if (isMutation(request.method) || opts.writes) scheduleSaveDb(db);
     }
   };
 }
