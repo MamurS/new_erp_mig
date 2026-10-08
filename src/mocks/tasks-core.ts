@@ -124,7 +124,8 @@ export function createTask(
   refs: SubjectRefs,
 ): TaskRow {
   const now = Date.now();
-  const dueAt = addWorkdays(now, dmsParam('requestResponseWorkdays'));
+  // MIG staff answer each other in «Срок ответа на внутренний запрос», the client's HR in its own term.
+  const dueAt = addWorkdays(now, dmsParam(input.toRole === 'hr' ? 'clientResponseWorkdays' : 'requestResponseWorkdays'));
   const subject = subjectOf(input.subjectType, input.subjectId, refs);
   const who = input.toRole === 'hr' ? undefined : responsibleFor(d, input.toRole, refs);
   const task: TaskRow = {

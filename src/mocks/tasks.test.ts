@@ -8,6 +8,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ClientPipeline, ContractView, DashboardSummary, DealCard, DealView, QueueItem, SessionResponse, UserNotification, WorkTask } from '@/shared/types/dto';
 import { unpack } from '@/i18n/core';
+import { addWorkdays } from '@/shared/domain/requests';
 import { createMockServer } from './node';
 import { db, resetDb } from './db';
 
@@ -172,7 +173,8 @@ describe('requests: the full cycle (DECISIONS «Запросы между сот
     const sales = await login(SALES);
     const deal = await leadDeal(uw);
     const r = (await ask(uw, deal.id)).data;
-    expect(Date.parse(r.dueAt)).toBeGreaterThan(Date.now() + 36 * 3_600_000);
+    // «Срок ответа на внутренний запрос»: 2 working days (demo).
+    expect(Math.abs(Date.parse(r.dueAt) - addWorkdays(Date.now(), 2))).toBeLessThan(60_000);
     expect((await call(`/tasks/${r.id}/remind`, { method: 'POST', sid: uw })).status).toBe(409);
     const row = db().tasks.find((x) => x.id === r.id)!;
     const count = (sid: string, key: string) => call<UserNotification[]>('/notifications', { sid }).then((x) => x.data.filter((n) => unpack(n.text).key === key).length);
@@ -231,6 +233,8 @@ describe('«Запросить у HR» and the contract checklist', () => {
     // Not asked yet: HR does not see the draft.
     expect((await call(`/contracts/${contract.id}/insured-list`, { method: 'POST', sid: hr, text: LIST })).status).toBe(404);
     const task = (await call<WorkTask>('/tasks/request-hr', { method: 'POST', sid: sales, json: { action: 'insured_list', subjectType: 'contract', subjectId: contract.id, comment: 'До 15.10' } })).data;
+    // «Срок ответа клиента на запрос МИГ»: 5 working days (demo), not the internal 2.
+    expect(Math.abs(Date.parse(task.dueAt) - addWorkdays(Date.now(), 5))).toBeLessThan(60_000);
     // The author has it in «Мои запросы»; the client's HR is notified at once.
     expect((await call<WorkTask[]>('/tasks/mine', { sid: sales })).data.find((x) => x.id === task.id)).toMatchObject({ toRole: 'hr', status: 'open', byMe: true });
     expect(db().notifications.some((n) => db().hrUsers.some((h) => h.id === n.userId && h.companyId === contract.clientId) && unpack(n.text).key === 'next.notify.asked')).toBe(true);

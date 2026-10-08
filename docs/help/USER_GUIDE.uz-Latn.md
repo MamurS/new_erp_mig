@@ -93,7 +93,7 @@ Soʻrov — hamkasbdan siz emas, u bajara oladigan qadamni bajarishni soʻrash: 
 
 - **Kimga boradi.** Obyekt uchun masʼul xodimga: bitim yoki mijoz menejeriga, kotirovka anderrayteriga. Masʼul boʻlmasa, soʻrovni ushbu roldagi barcha xodimlar koʻradi; birinchi boʻlib «Ishga olish»ni bosgan ijrochi boʻladi, qolganlarda qator yoʻqoladi.
 - **Bir vaqtda bitta soʻrov.** Soʻrov ochiq ekan, obyektda tugma oʻrnida «… soʻrovi {sana} yuborildi — {kimga}, {holat}» plashkasi koʻrinadi va shu obyekt boʻyicha xuddi shu soʻrovni yuborib boʻlmaydi.
-- **Javob muddati** — «DMS parametrlari»dagi «Soʻrovga javob muddati» parametri (demo: 2 ish kuni). Muddatdan bir kun oldin va muddat oʻtganda ijrochi ham, muallif ham bildirishnoma oladi. Muddati oʻtgan soʻrov ikkalasida ham qizil rangda.
+- **Javob muddati** — «DMS parametrlari»da ular ikkita, ikkalasi ham «demo-qiymat» belgisi bilan: «Ichki soʻrovga javob muddati» — MIG xodimlari oʻrtasida (demo: 2 ish kuni), «Mijozning MIG soʻroviga javob muddati» — HRga soʻrovlar uchun (demo: 5 ish kuni). Muddatdan bir kun oldin va muddat oʻtganda ijrochi ham, muallif ham bildirishnoma oladi. Muddati oʻtgan soʻrov ikkalasida ham qizil rangda.
 - **«Eslatish».** Muddat oʻtganda plashkada va «Mening soʻrovlarim»da «Eslatish» tugmasi paydo boʻladi: ijrochi takroriy bildirishnoma oladi, soʻrov tarixida belgi paydo boʻladi.
 - **Tarix.** Soʻrov yuborilishi va har bir holat oʻzgarishi bitim «Hodisalar»iga va mijoz «Faollik»iga yoziladi.
 
@@ -344,7 +344,7 @@ Majburiy band bajarilmaguncha keyingi bosqichga oʻtib boʻlmaydi: oʻtish tugma
 <!-- audience: staff -->
 **Kim:** menejer yoki anderrayter. «HRdan soʻrash» tugmasi boʻsh 2-ilovada, baholash maʼlumotlarida, mijoz kartasining «Sugʻurtalanganlar» yorligʻida va bitim roʻyxatida bor.
 
-1. Mijozda HR kabineti allaqachon boʻlsa (u TT yuborilganda ochiladi), izoh yozing va «Soʻrovni yuborish» tugmasini bosing. Javob muddati — «Soʻrovga javob muddati» parametri (demo: 2 ish kuni); soʻrov «Mening soʻrovlarim»da koʻrinadi.
+1. Mijozda HR kabineti allaqachon boʻlsa (u TT yuborilganda ochiladi), izoh yozing va «Soʻrovni yuborish» tugmasini bosing. Javob muddati — «Mijozning MIG soʻroviga javob muddati» parametri (demo: 5 ish kuni); soʻrov «Mening soʻrovlarim»da koʻrinadi.
 2. Kabinet hali boʻlmasa, mijozga xat ochiladi: matnni nusxalang, pochtani oching va CSV shablonini ilova qiling. Olingan faylni oʻzingiz yuklang.
 3. HR vazifani bajarganda bildirishnoma olasiz (yuqori paneldagi qoʻngʻiroqcha), roʻyxat bandi tayyor boʻladi.
 <!-- /audience -->
@@ -1021,7 +1021,7 @@ Odatiy vaziyatlar va harakatlar tartibi; agar vaziyat roʻyxatda boʻlmasa, ITS 
 | **Shartnoma imzolanmaydi: eng kam sondan kam** | 2-ilovada xodimlar eng kam sondan kam, kotirovkada istisno tasdiqlanmagan. Toʻliq roʻyxatni yuklang yoki kotirovkada istisnoni kelishing. | <!-- audience: staff -->
 | **Chiqarishdan soʻng xodimlar eng kam sondan kam** | HR xodimni chiqarishi mumkin; anderrayter va menejer vazifa oladi va mijoz bilan shartnoma shartlarini hal qiladi. | <!-- audience: staff hr -->
 | **Ilovaga kirishda «Kod mos kelmadi yoki bu raqam topilmadi»** | Xabar ataylab nomaʼlum raqam va notoʻgʻri kod uchun bir xil va faqat kod kiritilgandan keyin chiqadi — shunda kim sugʻurtalanganini tanlash yoʻli bilan bilib boʻlmaydi. SMSdagi kodni tekshiring; u toʻgʻri boʻlsa — kompaniyangiz HRiga murojaat qiling, sugʻurtalanganlar roʻyxatidagi raqamni tekshirsin. | <!-- audience: staff hr insured -->
-| **Soʻrovga javob berishmayapti** | Ish stolida «Mening soʻrovlarim»ni oching: soʻrov kimga ketgani va ishga olingani koʻrinadi. Muddat oʻtganda «Eslatish»ni bosing — ijrochi takroriy bildirishnoma oladi. Baribir javob boʻlmasa, ijrochi yoki uning rahbari bilan bevosita bogʻlaning; javob muddatini «Soʻrovga javob muddati» parametri belgilaydi. | <!-- audience: staff -->
+| **Soʻrovga javob berishmayapti** | Ish stolida «Mening soʻrovlarim»ni oching: soʻrov kimga ketgani va ishga olingani koʻrinadi. Muddat oʻtganda «Eslatish»ni bosing — ijrochi takroriy bildirishnoma oladi. Baribir javob boʻlmasa, ijrochi yoki uning rahbari bilan bevosita bogʻlaning; javob muddatini «Ichki soʻrovga javob muddati» va «Mijozning MIG soʻroviga javob muddati» parametrlari belgilaydi. | <!-- audience: staff -->
 | **Soʻrov notoʻgʻri odamga kelgan** | Navbat qatorida «Rad etish»ni bosing va kimga murojaat qilish kerakligini yozing — muallif izohni koʻradi va soʻrovni qayta yuborishi mumkin. | <!-- audience: staff -->
 
 ## 18. Xavfsizlik va maxfiylik {#security}
