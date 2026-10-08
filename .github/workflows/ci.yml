@@ -52,6 +52,21 @@ jobs:
             apps/web/test-results
           retention-days: 7
 
+  # Database: migrations, seed and the pgTAP tests (RLS matrix, scenarios, audit) on a local Supabase Postgres.
+  db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx supabase db start
+      - run: npx supabase db reset
+      - run: npx supabase test db
+
   gitleaks:
     runs-on: ubuntu-latest
     steps:

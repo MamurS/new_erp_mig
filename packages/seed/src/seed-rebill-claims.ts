@@ -5,7 +5,7 @@
  */
 import type { Rebill } from '@mig/contracts';
 import { CATEGORY_TO_CLAIM_OF_SERVICE } from '@mig/domain/clinics';
-import { randomId } from '@mig/domain/lib/random';
+import { hashString, mulberry32, uuidFrom } from '@mig/domain/lib/rng';
 import { paramsView } from '@mig/domain/services/params';
 import type { ClaimRow, Db } from '@mig/domain/store/db';
 import { DAY, tzIso } from './time';
@@ -24,7 +24,8 @@ export function seedClaimsFromRebill(d: Db, b: Rebill, actorName: string, opts: 
     const svc = (d.priceLists.find((p) => p.clinicId === r.clinicId)?.items ?? []).find((p) => p.code === l.serviceCode);
     const n = P.maxDocSeq('claim', d.claims.map((c) => c.number)) + 1;
     const claim: ClaimRow = {
-      id: randomId(),
+      // Derived from the line: the seed stays deterministic (supabase/seed.sql is generated from it).
+      id: uuidFrom(mulberry32(hashString(`claim:${line.registryLineId}`))),
       number: P.nextDocNumber('claim', { year, n }),
       insuredId: who.id,
       insuredName: who.fullName,

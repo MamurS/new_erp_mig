@@ -6,3 +6,6 @@ playwright-report
 test-results
 vendor
 apps/web/src/features/kp/templates/gold.ts
+# Generated database files (npm run db:gen)
+supabase
+docs/backend/RLS.md
