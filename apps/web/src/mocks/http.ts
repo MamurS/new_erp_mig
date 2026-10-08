@@ -8,10 +8,11 @@ import { db } from './db';
 import type { Db, SessionRow } from './db';
 import { mockConfig } from './config';
 import { saveSessions, scheduleSaveDb } from './persist';
+import { DomainError as HttpError, forbidden, notFound, unauthorized, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
+import { resolveSession } from '@mig/domain/services/session';
+import { memoryRepos } from '@mig/domain/store/memory';
 import { randomId } from '@mig/seed/rng';
 import { tzIso } from '@mig/seed/time';
-import { hasKey, unpack, type I18nKey, type Params } from '@mig/i18n';
-import { LEGAL_FORMS, isLegalForm, legalNameCollator, type LegalFormCode } from '@mig/domain/config/legalForms';
 
 // The mock answers only at the API address. A pattern with any prefix before /api would also catch
 // the dev server's own modules (/src/shared/api/queries/params.ts) and answer them with a 404.
@@ -22,50 +23,29 @@ function apiBase(): string {
 }
 export const API = apiBase();
 
-/**
- * Errors carry only a code, a message key and its params (no text): the client picks the text in its
- * language. Field errors are packed keys, see msg() in src/i18n/core.ts.
- */
-export class HttpError extends Error {
-  readonly params?: Params;
-  readonly fields?: Record<string, string>;
-  constructor(
-    readonly status: number,
-    readonly code: ApiError['code'],
-    readonly key: I18nKey,
-    opts: { params?: Params; fields?: Record<string, string> } = {},
-  ) {
-    super(key);
-    this.params = opts.params;
-    this.fields = opts.fields;
-  }
-}
-
-export const unauthorized = () => new HttpError(401, 'unauthorized', 'errors.unauthorized');
-export const forbidden = () => new HttpError(403, 'forbidden', 'errors.forbidden');
-export const notFound = () => new HttpError(404, 'not_found', 'errors.notFound');
-export const conflict = (key: I18nKey, params?: Params) => new HttpError(409, 'conflict', key, { params });
-
-/**
- * A message produced by shared code (src/shared/domain): a packed key from msg(), or plain text while
- * that code still returns text (sent as `srv.text` with the text as a param).
- */
-export function messageKey(message: string): { key: I18nKey; params?: Params } {
-  const { key, params } = unpack(message);
-  return hasKey(key) ? { key: key as I18nKey, params } : { key: 'srv.text', params: { text: message } };
-}
-
-/** HttpError from a shared-code message (see messageKey). */
-export function httpErrorOf(status: number, code: ApiError['code'], message: string, fields?: Record<string, string>): HttpError {
-  const { key, params } = messageKey(message);
-  return new HttpError(status, code, key, { params, fields });
-}
+// Errors, validation and list helpers are shared with the API server (packages/domain/src/services).
+export { DomainError as HttpError, unauthorized, forbidden, notFound, conflict, messageKey, errorOf as httpErrorOf } from '@mig/domain/services/kernel';
 
 export function errorResponse(e: HttpError): Response {
-  const body: ApiError = { code: e.code, key: e.key };
-  if (e.params) body.params = e.params;
-  if (e.fields) body.fields = e.fields;
-  return HttpResponse.json(body, { status: e.status });
+  return HttpResponse.json(e.body(), { status: e.status });
+}
+
+// ---------- the service adapter ----------
+/** The repositories over the in-memory database (the same services run on Postgres in the API). */
+export const repos = memoryRepos(db);
+
+export function baseCtx(): BaseCtx {
+  return { repos, now: () => Date.now(), env: { demo: import.meta.env.VITE_DEMO_MODE === 'true' } };
+}
+
+function bearer(request: Request): string | null {
+  const m = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(request.headers.get('authorization') ?? '');
+  return m?.[1] ?? null;
+}
+
+/** The signed-in person of the request (401 otherwise), as the services' context. */
+export function authCtx(request: Request): Promise<AuthCtx> {
+  return resolveSession(baseCtx(), bearer(request), { background: request.headers.get('X-Background') === '1' });
 }
 
 export interface Ctx {
@@ -237,70 +217,7 @@ export function insuredLabel(id: string): string {
 }
 
 // ---------- lists ----------
-export function pageParams(url: URL): { page: number; pageSize: number } {
-  const page = Math.max(1, Math.min(10_000, Number(url.searchParams.get('page')) || 1));
-  const pageSize = Math.max(1, Math.min(100, Number(url.searchParams.get('pageSize')) || 25));
-  return { page, pageSize };
-}
-
-export function paginate<T>(items: T[], url: URL): { items: T[]; total: number; page: number; pageSize: number } {
-  const { page, pageSize } = pageParams(url);
-  return { items: items.slice((page - 1) * pageSize, page * pageSize), total: items.length, page, pageSize };
-}
-
-type SortGetter<T> = ((x: T) => string | number | null | undefined) & { collator?: Intl.Collator };
-
-/** `?sort=premium:desc` over an allow-list of keys. */
-export function sortBy<T>(items: T[], url: URL, allowed: Record<string, SortGetter<T>>, fallback?: string): T[] {
-  const raw = url.searchParams.get('sort') ?? fallback ?? '';
-  const [key = '', dir = 'asc'] = raw.split(':');
-  const get = allowed[key];
-  if (!get) return items;
-  const mul = dir === 'desc' ? -1 : 1;
-  return [...items].sort((a, b) => {
-    const va = get(a);
-    const vb = get(b);
-    if (va === vb) return 0;
-    if (va === null || va === undefined) return 1;
-    if (vb === null || vb === undefined) return -1;
-    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul;
-    if (get.collator) return get.collator.compare(String(va), String(vb)) * mul;
-    return String(va).localeCompare(String(vb), 'ru') * mul;
-  });
-}
-
-/** Sort key of a legal entity's name: case, quotes and apostrophe variants ignored (names carry no form). */
-export function byLegalName<T>(get: (x: T) => string | null | undefined): SortGetter<T> {
-  return Object.assign((x: T) => get(x), { collator: legalNameCollator });
-}
-
-/** Sort key of a legal form: the order of LEGAL_FORMS. */
-export function byLegalForm<T>(get: (x: T) => LegalFormCode | null | undefined): SortGetter<T> {
-  return (x: T) => {
-    const f = get(x);
-    return f ? LEGAL_FORMS.indexOf(f) : null;
-  };
-}
-
-/** `?form=llc,jsc`: the selected legal forms, or null when the filter is off. Unknown codes are ignored. */
-export function legalFormsParam(url: URL, key = 'form'): Set<LegalFormCode> | null {
-  const codes = (url.searchParams.get(key) ?? '').split(',').filter(isLegalForm);
-  return codes.length ? new Set(codes) : null;
-}
-
-/** Keeps the rows whose legal form is selected in `?form=` (all rows when the filter is off). */
-export function filterLegalForm<T>(items: T[], url: URL, get: (x: T) => LegalFormCode | null | undefined, key = 'form'): T[] {
-  const forms = legalFormsParam(url, key);
-  if (!forms) return items;
-  return items.filter((x) => {
-    const f = get(x);
-    return !!f && forms.has(f);
-  });
-}
-
-export function q(url: URL): string {
-  return (url.searchParams.get('q') ?? '').trim().toLowerCase().slice(0, 100);
-}
+export { pageParams, paginate, sortBy, byLegalName, byLegalForm, legalFormsParam, filterLegalForm, q } from '@mig/domain/services/list';
 
 export function param(ctx: Ctx, key: string): string {
   const v = ctx.params[key];

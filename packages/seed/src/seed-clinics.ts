@@ -17,7 +17,7 @@ import type {
   StaffRow,
   WebhookDeliveryRow,
   WebhookEndpointRow,
-} from './db';
+} from '@mig/domain/store/db';
 import { DEMO_CLINIC_USERS, DEMO_PASSWORD } from './credentials';
 import { chance, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
 import { at, DAY, isoDay, parseIso, tzIso } from './time';

@@ -53,15 +53,5 @@ export function hashString(s: string): number {
   return h >>> 0;
 }
 
-/** Cryptographically random helpers for runtime-created entities and sessions. */
-export function randomId(): string {
-  return crypto.randomUUID();
-}
-
-export function randomToken(bytes = 32): string {
-  const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
-  let bin = '';
-  for (const x of buf) bin += String.fromCharCode(x);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
+// Runtime ids and tokens live in the domain (the services create rows); kept here for the seed's callers.
+export { randomId, randomToken } from '@mig/domain/lib/random';

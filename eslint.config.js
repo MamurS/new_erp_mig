@@ -109,6 +109,8 @@ export default tseslint.config(
       // The mock server and the demo seed: seed data and server-side texts that are data (audit, chat, activity).
       'apps/web/src/mocks/**',
       'packages/seed/**',
+      // The services: server-side texts that are data (audit labels, chat replies, activity), as in the mock.
+      'packages/domain/src/services/**',
       'apps/web/src/test/**',
       '**/*.test.{ts,tsx}',
       // Documents keep their own language (the approved KP template, contracts, endorsements, certificates).

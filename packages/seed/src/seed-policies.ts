@@ -4,7 +4,7 @@
  */
 import type { ClientDocument, Policy } from '@mig/contracts';
 import { proRataDelta, tariffOf } from '@mig/domain/policies';
-import type { ClientRow, HrUserRow, InsuredRow, PolicyChangeRow, StaffRow } from './db';
+import type { ClientRow, HrUserRow, InsuredRow, PolicyChangeRow, StaffRow } from '@mig/domain/store/db';
 import { digits, int, mulberry32, pick, SEED, uuidFrom } from './rng';
 import { DAY, isoDay, tzIso } from './time';
 

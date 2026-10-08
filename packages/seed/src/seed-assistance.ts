@@ -20,7 +20,7 @@ import { formatMoney } from '@mig/domain/lib/format';
 import { registryTotals } from '@mig/domain/clinics';
 import { docNumber } from '@mig/domain/numbering';
 import { DEMO_ASSIST2_OPERATOR, DEMO_ASSIST_USERS, DEMO_INSURED_PHONE, DEMO_PASSWORD } from './credentials';
-import type { AssistanceCaseRow, AssistUserRow, Db, GuaranteeRow, IntegrationClientRow, WebhookEndpointRow } from './db';
+import type { AssistanceCaseRow, AssistUserRow, Db, GuaranteeRow, IntegrationClientRow, WebhookEndpointRow } from '@mig/domain/store/db';
 import { int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
 import { DAY, isoDay, parseIso, tzIso } from './time';
 

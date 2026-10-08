@@ -25,7 +25,7 @@ import type {
   Rebill,
 } from '@mig/contracts';
 import { chance, digits, hashString, int, mulberry32, pick, SEED, uuidFrom, type Rng } from './rng';
-import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from './db';
+import type { ChatRow, ClaimRow, ClientRow, Db, FileRow, HrUserRow, InsuredDocRow, InsuredRow, StaffRow } from '@mig/domain/store/db';
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_PASSWORD, DEMO_STAFF } from './credentials';
 import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from './time';
 import { PROGRAMS, perPersonPremium } from './programs';
