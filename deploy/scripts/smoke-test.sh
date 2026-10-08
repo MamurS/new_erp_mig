@@ -95,6 +95,9 @@ if $COMPOSE logs caddy 2>/dev/null | grep -q SecretName; then echo "smoke: a que
 log "backup of this stack and its restore into a second throwaway stack"
 $COMPOSE --profile tools run --rm -T backup /scripts/backup.sh >"$WORK/backup.log" 2>&1 || { cat "$WORK/backup.log"; exit 1; }
 tail -n 1 "$WORK/backup.log"
+# The backup container writes as root with umask 077: hand the files to the user running the test (a CI runner
+# is not root) so they can be listed and restored.
+docker run --rm -v "$WORK/backups:/backups" postgres:15.19-alpine3.24 chown -R "$(id -u):$(id -g)" /backups
 LATEST=$(ls -1 "$WORK/backups/daily" | tail -n 1)
 RESTORE_PROJECT="$PROJECT-restore" sh "$DEPLOY/backup/restore-check.sh" "$WORK/backups/daily/$LATEST" >"$WORK/restore.log" 2>&1 ||
   { tail -n 40 "$WORK/restore.log"; exit 1; }

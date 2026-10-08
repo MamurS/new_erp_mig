@@ -33,6 +33,10 @@ docker run --rm --network host \
   -v "$OUT_DIR:/backups" -v "$DEPLOY/backup:/scripts:ro" \
   "$IMAGE" sh /scripts/backup.sh
 
+# The backup container runs as root and keeps the files private (umask 077): give them to the user running the
+# test (a CI runner is not root) so the manifest can be read and the temporary directory removed.
+docker run --rm -v "$OUT_DIR:/backups" "$IMAGE" chown -R "$(id -u):$(id -g)" /backups
+
 LATEST=$(ls -1 "$OUT_DIR/daily" | sort | tail -n 1)
 cat "$OUT_DIR/daily/$LATEST/manifest.txt"
 sh "$DEPLOY/backup/restore-check.sh" "$OUT_DIR/daily/$LATEST"
