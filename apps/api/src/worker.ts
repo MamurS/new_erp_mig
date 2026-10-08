@@ -23,8 +23,12 @@ const identity = identitySync({
 });
 const worker = createWorker({ pool, crypto: env.crypto, identity, log: serverLog });
 worker.start();
+// The worker's own timer is unref'd (inside the API it must not keep the process alive); alone, the process has
+// nothing else to wait for and would exit at once: this handle keeps it running until a signal.
+const keepAlive = setInterval(() => undefined, 60_000);
 
 const stop = async () => {
+  clearInterval(keepAlive);
   await worker.stop();
   await pool.end();
   process.exit(0);

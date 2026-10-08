@@ -1,0 +1,453 @@
+# MIG ДМС — production/staging stack (BACKEND_SPEC §2, §11). Step-by-step instructions: deploy/README.md.
+#
+#   cd deploy && cp .env.example .env && <fill in .env> && docker compose up -d --build
+#
+# - The official self-hosted Supabase services with pinned images (the versions of Supabase CLI 2.120.0 that CI
+#   and the tests use): Postgres 15 with pg_cron, Auth (GoTrue), PostgREST, Storage, Kong; postgres-meta and
+#   Studio only with the profile `studio` (deploy/docker-compose.studio.yml binds them to 127.0.0.1 for an SSH
+#   tunnel), imgproxy only with the profile `imgproxy` (not used by the API).
+# - `api` (Fastify, apps/api/dist/server.js) and `worker` (apps/api/dist/worker.js): the image of deploy/Dockerfile.
+# - `caddy`: TLS, the web app, /api → api. THE ONLY SERVICE WITH PUBLISHED PORTS (80 → redirect, 443).
+# - `migrate`: a one-shot service that applies supabase/migrations in order before `api` starts.
+# - Tools (profile `tools`, run on demand): `backup` (pg_dump + Storage files, deploy/backup/), `offsite` (rclone
+#   copy of the backups to S3-compatible storage).
+#
+# Networks: `backend` is internal (no route to the Internet): Postgres, PostgREST, Storage, Kong, Studio never
+# reach out and are never reached from outside. `egress` gives outbound access to those that need it: Caddy
+# (ACME, clients), Auth (SMTP of MIG), the API and the worker (SMS provider at stage 2).
+
+name: mig-dms
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '20m'
+    max-file: '5'
+
+x-api-env: &api-env
+  APP_ENV: ${APP_ENV:?APP_ENV is production or staging}
+  NODE_ENV: production
+  HOST: 0.0.0.0
+  PORT: '8787'
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+  # The owner of the schemas (as `supabase db push` and the local stack); RLS still applies: every request switches
+  # to `authenticated` with the person's claims (apps/api/src/db.ts).
+  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?}@db:5432/postgres
+  SUPABASE_URL: http://kong:8000
+  SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?}
+  SUPABASE_JWT_SECRET: ${JWT_SECRET:?}
+  PII_KEYS: ${PII_KEYS:-}
+  PII_KEY_CURRENT: ${PII_KEY_CURRENT:-}
+  PII_HMAC_KEY: ${PII_HMAC_KEY:-}
+  SESSION_SECRET: ${SESSION_SECRET:-}
+  SMS_HOOK_SECRET: ${SMS_HOOK_SECRET:?}
+  SMS_PROVIDER: ${SMS_PROVIDER:-log}
+  INVITE_REDIRECT_URL: https://${DOMAIN:?}/
+  # STAGING ONLY (demo data): new e-mail accounts get this password instead of an invitation. The API refuses to
+  # start in production when it is set.
+  DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+
+services:
+  # ---------------------------------------------------------------- Supabase
+  db:
+    image: public.ecr.aws/supabase/postgres:15.19.0.004
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    command: ['postgres', '-c', 'config_file=/etc/postgresql/postgresql.conf', '-c', 'log_min_messages=fatal']
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: '5432'
+      POSTGRES_PORT: '5432'
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:?}
+      JWT_EXP: '600'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - db-config:/etc/postgresql-custom
+      - ./supabase/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./supabase/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres', '-h', 'localhost']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    shm_size: 256m
+
+  auth:
+    image: public.ecr.aws/supabase/gotrue:v2.197.0
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend, egress]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:9999/health']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: '9999'
+      # Links in e-mails (invitations): Supabase Auth is not public; see deploy/README.md «Приглашения».
+      API_EXTERNAL_URL: https://${DOMAIN:?}/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:?}@db:5432/postgres
+      GOTRUE_SITE_URL: https://${DOMAIN:?}
+      GOTRUE_URI_ALLOW_LIST: https://${DOMAIN:?}/
+      # Accounts are created only by the API (service role, invitations): nobody signs up (config.toml [auth]).
+      GOTRUE_DISABLE_SIGNUP: 'true'
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: 'false'
+      GOTRUE_SECURITY_MANUAL_LINKING_ENABLED: 'false'
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      # The API refreshes access tokens on the server (BFF, BACKEND_SPEC §7): 10 minutes.
+      GOTRUE_JWT_EXP: '600'
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:?}
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: 'true'
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: '10'
+      GOTRUE_PASSWORD_MIN_LENGTH: '10'
+      GOTRUE_PASSWORD_REQUIRED_CHARACTERS: 'abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789'
+      # E-mail and password (staff, HR, clinics, assistance) + the TOTP factor (MFA).
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+      GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: 'true'
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: 'true'
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: 'true'
+      GOTRUE_MFA_PHONE_ENROLL_ENABLED: 'false'
+      GOTRUE_MFA_PHONE_VERIFY_ENABLED: 'false'
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: '10'
+      # SMTP of MIG (invitations).
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-MIG DMS}
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      # Insured people: phone and a one-time code. Every SMS goes to the «Send SMS» hook → the API → its SMS
+      # adapter; the Twilio values are placeholders GoTrue needs to turn the phone provider on, never called.
+      GOTRUE_EXTERNAL_PHONE_ENABLED: 'true'
+      GOTRUE_SMS_AUTOCONFIRM: 'true'
+      GOTRUE_SMS_OTP_EXP: '300'
+      GOTRUE_SMS_OTP_LENGTH: '6'
+      GOTRUE_SMS_MAX_FREQUENCY: 60s
+      GOTRUE_SMS_TEMPLATE: 'Your code is {{ .Code }}'
+      GOTRUE_SMS_PROVIDER: twilio
+      GOTRUE_SMS_TWILIO_ACCOUNT_SID: unused-sms-goes-through-the-send-sms-hook
+      GOTRUE_SMS_TWILIO_MESSAGE_SERVICE_SID: unused
+      GOTRUE_SMS_TWILIO_AUTH_TOKEN: unused
+      GOTRUE_HOOK_SEND_SMS_ENABLED: 'true'
+      # Supabase Auth accepts plain http for hooks only on localhost and host.docker.internal: the API answers to
+      # that name on the internal network (alias of `api` below); the hook is signed (SMS_HOOK_SECRET).
+      GOTRUE_HOOK_SEND_SMS_URI: http://host.docker.internal:8787/api/hooks/send-sms
+      GOTRUE_HOOK_SEND_SMS_SECRETS: ${SMS_HOOK_SECRET:?}
+      # Claims of the access token: only the role and the bindings of app_metadata (migration …_auth_sessions.sql).
+      GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED: 'true'
+      GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI: pg-functions://postgres/public/custom_access_token_hook
+      # Rate limits per client: the API passes the client IP in X-Mig-Client-Ip (apps/api/src/auth/gotrue.ts).
+      GOTRUE_RATE_LIMIT_HEADER: X-Mig-Client-Ip
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: ${AUTH_RATE_LIMIT_EMAIL_SENT:-60}
+      GOTRUE_RATE_LIMIT_SMS_SENT: ${AUTH_RATE_LIMIT_SMS_SENT:-300}
+      GOTRUE_RATE_LIMIT_VERIFY: ${AUTH_RATE_LIMIT_VERIFY:-60}
+      GOTRUE_RATE_LIMIT_TOKEN_REFRESH: ${AUTH_RATE_LIMIT_TOKEN_REFRESH:-1800}
+      GOTRUE_RATE_LIMIT_OTP: ${AUTH_RATE_LIMIT_OTP:-60}
+      GOTRUE_MFA_RATE_LIMIT_CHALLENGE_AND_VERIFY: ${AUTH_RATE_LIMIT_MFA:-15}
+
+  rest:
+    image: public.ecr.aws/supabase/postgrest:v16.4
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ['postgrest']
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:?}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,graphql_public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_MAX_ROWS: '1000'
+      PGRST_JWT_SECRET: ${JWT_SECRET:?}
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:?}
+      PGRST_APP_SETTINGS_JWT_EXP: '600'
+
+  storage:
+    image: public.ecr.aws/supabase/storage-api:v1.79.36
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:5000/status']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    environment:
+      ANON_KEY: ${ANON_KEY:?}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY:?}
+      POSTGREST_URL: http://rest:3000
+      AUTH_JWT_SECRET: ${JWT_SECRET:?}
+      PGRST_JWT_SECRET: ${JWT_SECRET:?}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD:?}@db:5432/postgres
+      FILE_SIZE_LIMIT: '52428800'
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: ${STORAGE_IMAGE_TRANSFORMATION:-false}
+      IMGPROXY_URL: http://imgproxy:5001
+    volumes:
+      - storage-data:/var/lib/storage
+
+  kong:
+    image: public.ecr.aws/supabase/kong:2.8.1
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    depends_on:
+      auth:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_DNS_NOT_FOUND_TTL: '1'
+      KONG_DNS_VALID_TTL: '5'
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      KONG_NGINX_WORKER_PROCESSES: '2'
+      SUPABASE_ANON_KEY: ${ANON_KEY:?}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:?}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?}
+    # The keys go into the declarative config when the container starts (as in the official stack).
+    entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
+    volumes:
+      - ./supabase/kong.yml:/home/kong/temp.yml:ro
+    healthcheck:
+      test: ['CMD', 'kong', 'health']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  meta:
+    image: public.ecr.aws/supabase/postgres-meta:v0.100.0
+    profiles: [studio]
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: '8080'
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: '5432'
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+
+  studio:
+    image: public.ecr.aws/supabase/studio:2026.10.05-sha-94b8b06
+    profiles: [studio]
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    depends_on:
+      meta:
+        condition: service_started
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      DEFAULT_ORGANIZATION_NAME: MIG
+      DEFAULT_PROJECT_NAME: MIG DMS
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: http://127.0.0.1:${STUDIO_LOCAL_PORT:-8000}
+      SUPABASE_ANON_KEY: ${ANON_KEY:?}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:?}
+      AUTH_JWT_SECRET: ${JWT_SECRET:?}
+      NEXT_PUBLIC_ENABLE_LOGS: 'false'
+
+  imgproxy:
+    image: darthsim/imgproxy:v3.26.0
+    profiles: [imgproxy]
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    environment:
+      IMGPROXY_BIND: ':5001'
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+      IMGPROXY_USE_ETAG: 'true'
+      IMGPROXY_ENABLE_WEBP_DETECTION: 'true'
+    volumes:
+      - storage-data:/var/lib/storage:ro
+
+  # ---------------------------------------------------------------- the application
+  api:
+    image: ${API_IMAGE:-mig-dms/api:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: api
+    restart: unless-stopped
+    logging: *logging
+    networks:
+      backend:
+        # The «Send SMS» hook of Supabase Auth calls http://host.docker.internal:8787 (see `auth`).
+        aliases: [host.docker.internal]
+      egress: {}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      kong:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    environment:
+      <<: *api-env
+      # The background worker runs in its own service below.
+      WORKER: 'off'
+    # Several API containers share the load (Caddy balances them); docs/backend/LOAD.md: 4 on 8 vCPU in production,
+    # 1 on staging (demo SMS codes are caught by the API process that asked for them).
+    deploy:
+      replicas: ${API_REPLICAS:-1}
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+
+  worker:
+    image: ${API_IMAGE:-mig-dms/api:local}
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend, egress]
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ['node', '--enable-source-maps', 'apps/api/dist/worker.js']
+    environment:
+      <<: *api-env
+    healthcheck:
+      disable: true
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
+
+  caddy:
+    image: ${CADDY_IMAGE:-mig-dms/caddy:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: caddy
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend, egress]
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${PUBLISH_ADDR:-0.0.0.0}:${HTTP_PORT:-80}:80'
+      - '${PUBLISH_ADDR:-0.0.0.0}:${HTTPS_PORT:-443}:443'
+      - '${PUBLISH_ADDR:-0.0.0.0}:${HTTPS_PORT:-443}:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN:?}
+      CADDY_TLS: ${CADDY_TLS:?CADDY_TLS is an e-mail for automatic certificates or the paths of provided ones}
+      API_UPSTREAM: api
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - ${TLS_CERTS_DIR:-./certs}:/certs:ro
+
+  # ---------------------------------------------------------------- tools (profile `tools`, run on demand)
+  # One-shot: applies pending migrations, then exits; `api` and `worker` start only after it succeeded (so a plain
+  # `docker compose up -d`, e.g. by Coolify, migrates first). deploy/scripts/deploy.sh also runs it explicitly
+  # after the pre-migration backup.
+  migrate:
+    image: postgres:15.19-alpine3.24
+    restart: 'no'
+    networks: [backend]
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      PGDATABASE: postgres
+    volumes:
+      - ../supabase/migrations:/migrations:ro
+      - ./scripts/migrate.sh:/usr/local/bin/migrate.sh:ro
+    entrypoint: ['sh', '/usr/local/bin/migrate.sh']
+
+  backup:
+    image: postgres:15.19-alpine3.24
+    profiles: [tools]
+    networks: [backend]
+    environment:
+      PGHOST: db
+      PGPORT: '5432'
+      # supabase_admin (superuser of the Supabase image): the dump covers the auth and storage schemas too.
+      PGUSER: supabase_admin
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      PGDATABASE: postgres
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-30}
+      BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-12}
+      STORAGE_DIR: /storage
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - storage-data:/storage
+      - ./backup:/scripts:ro
+    entrypoint: ['sh']
+
+  offsite:
+    image: rclone/rclone:1.71.2
+    profiles: [tools]
+    networks: [egress]
+    environment:
+      RCLONE_CONFIG_OFFSITE_TYPE: s3
+      RCLONE_CONFIG_OFFSITE_PROVIDER: ${BACKUP_S3_PROVIDER:-Other}
+      RCLONE_CONFIG_OFFSITE_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      RCLONE_CONFIG_OFFSITE_REGION: ${BACKUP_S3_REGION:-}
+      RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      RCLONE_CONFIG_OFFSITE_NO_CHECK_BUCKET: 'true'
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+
+networks:
+  backend:
+    internal: true
+  egress: {}
+
+volumes:
+  db-data:
+  db-config:
+  storage-data:
+  caddy-data:
+  caddy-config:

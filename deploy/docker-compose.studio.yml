@@ -1,0 +1,12 @@
+# Studio for MIG's administrator (optional): `docker compose -f docker-compose.yml -f docker-compose.studio.yml
+# --profile studio up -d`. Kong (and through it Studio with basic auth DASHBOARD_USERNAME/DASHBOARD_PASSWORD)
+# is bound to 127.0.0.1 of the server only — never to a public address. From the administrator's computer:
+#
+#   ssh -N -L 8000:127.0.0.1:8000 admin@<server>     then open http://127.0.0.1:8000
+#
+# or through the VPN of MIG. Stop it when done: `docker compose --profile studio stop studio meta`.
+services:
+  kong:
+    networks: [backend, egress]
+    ports:
+      - '127.0.0.1:${STUDIO_LOCAL_PORT:-8000}:8000'

@@ -10,6 +10,7 @@ import { can } from '../auth/permissions';
 import { canSeeQueueType, QUEUE_TYPES } from '../queue';
 import { formatParamValue, paramLabel } from '../config/dmsParameters';
 import { canApproveDecision, FLAG_LABEL } from '../settlement';
+import { assistanceOn } from '../assistance';
 import { LIMIT_CATEGORY_LABEL, SPECIALTY_LABEL } from '../labels';
 import { CLAIM_CATEGORY_LABEL } from '../claims';
 import { formatMoney, formatPercent } from '../lib/format';
@@ -20,11 +21,11 @@ import { originalReminderDue } from '../contracts';
 import { ageLimitDate, childAgeLimit, reachedAgeLimit } from '../family';
 import { isActiveRequest, isOverdue as requestOverdue } from '../requests';
 import type { ClientRow } from '../store/db';
-import { forbidden, requireStaff, systemRepos, type AuthCtx, type BaseCtx } from './kernel';
+import { forbidden, requireStaff, systemRepos, todayIso, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
-import { isOverdueRequest } from './clinic';
-import { assistanceName, currentAssistance, linesOf, subTotals } from './assistance';
+import { isOverdueRequestOf } from './clinic';
+import { assignmentsOf, assistanceName, linesOf, subTotals } from './assistance';
 import { assistanceLegalFormOf, clientLegalFormOf, clinicLegalFormOf } from './views';
 import { dealContract, latestQuote, toDealView } from './lifecycle';
 import { ageLimits } from './family';
@@ -171,6 +172,17 @@ async function attentionFor(ctx: BaseCtx, P: ParamsView, user: SessionUser, now:
   return out;
 }
 
+function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    const list = out.get(k);
+    if (list) list.push(r);
+    else out.set(k, [r]);
+  }
+  return out;
+}
+
 type Builder = (ctx: BaseCtx, P: ParamsView, user: SessionUser, now: number) => Promise<QueueItem[]>;
 const DUE = (iso: string | undefined, now: number) => iso ?? tzIso(now);
 const ru = (iso: string) => isoDay(parseIso(iso)).split('-').reverse().join('.');
@@ -180,12 +192,18 @@ const assistanceLabel = async (ctx: BaseCtx, id: string | null | undefined) => (
 
 /** Requests of clients without an assistance that nobody confirmed yet; a silent clinic hands them to MIG. */
 const appointmentItems: Builder = async (ctx, P, user, now) => {
+  // One read of the assignments and of the clinics for the whole queue (not one query per person or request):
+  // the same rule as currentAssistance() and isOverdueRequest().
+  const [people, appointments, assignments, clinics] = await Promise.all([ctx.repos.insured.list(), ctx.repos.appointments.list(), assignmentsOf(ctx), ctx.repos.clinics.list()]);
+  const today = todayIso(ctx);
+  const byPolicy = groupBy(assignments, (x) => x.policyId);
   const served = new Set<string>();
-  for (const i of await ctx.repos.insured.list()) if (await currentAssistance(ctx, i.policyId)) served.add(i.id);
+  for (const i of people) if (assistanceOn(byPolicy.get(i.policyId) ?? [], i.policyId, today)) served.add(i.id);
+  const clinicById = new Map(clinics.map((c) => [c.id, c]));
   const out: QueueItem[] = [];
-  for (const a of await ctx.repos.appointments.list()) {
+  for (const a of appointments) {
     if (a.status !== 'requested' || parseIso(a.startsAt) < now - 3600_000 || served.has(a.insuredId)) continue;
-    const noResponse = await isOverdueRequest(ctx, a, now, P);
+    const noResponse = isOverdueRequestOf(a, clinicById.get(a.clinicId), now, P);
     out.push({
       id: a.id,
       type: noResponse ? 'clinic_no_response' : 'appointment',
@@ -203,8 +221,8 @@ const appointmentItems: Builder = async (ctx, P, user, now) => {
 
 const assistanceServiceItems: Builder = async (ctx, _P, _user, now) => {
   const out: QueueItem[] = [];
-  const cases = await ctx.repos.cases.list();
-  for (const a of await ctx.repos.assistances.list()) {
+  const [cases, assistances] = await Promise.all([ctx.repos.cases.list(), ctx.repos.assistances.list()]);
+  for (const a of assistances) {
     const breached = cases.filter((c) => c.assistanceId === a.id && c.status !== 'resolved' && parseIso(c.slaDueAt) < now);
     if (breached.length) {
       out.push({ id: breached[0]!.id, type: 'assistance_sla', entityId: a.id, who: a.name, details: msg('srv.dash.q.slaBreached', { count: breached.length }), status: msg('srv.dash.st.slaBreached'), statusTone: 'danger', dueAt: breached.map((c) => c.slaDueAt).sort()[0]!, action: 'open' });

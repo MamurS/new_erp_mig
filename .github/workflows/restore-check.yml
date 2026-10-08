@@ -1,0 +1,28 @@
+# Monthly restore check (BACKEND_SPEC §11): the newest production backup from the separate storage is restored
+# into a throwaway stack on the staging server and verified (row counts of every table, the audit hash chain,
+# Storage files); the stack is removed afterwards. Does nothing until RESTORE_CHECK_ENABLED is 'true'.
+# The env file holds READ-ONLY credentials of the backup bucket (deploy/README.md «Ежемесячная проверка»).
+name: Restore check
+
+on:
+  schedule:
+    - cron: '17 3 3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-check
+  cancel-in-progress: false
+
+jobs:
+  restore-check:
+    if: vars.RESTORE_CHECK_ENABLED == 'true'
+    runs-on: [self-hosted, mig-staging]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - run: deploy/backup/restore-check.sh --latest-offsite production
+        env:
+          SERVER_ENV_FILE: ${{ vars.RESTORE_CHECK_ENV_FILE || '/opt/mig-dms/restore-check.env' }}
