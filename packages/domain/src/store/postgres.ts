@@ -572,12 +572,12 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
       return Object.fromEntries(rows.map((r) => [String(r.lineId), String(r.reason)]));
     },
     async set(k, v) {
-      // Written by the API (system): no role may write the flags (RLS.md).
-      await run(`insert into ${flags.table} (line_id, reason) values ($1::uuid, $2::text) on conflict (line_id) do update set reason = excluded.reason`, [k, v], true);
+      // The reviewer of rebills writes the flags under RLS (RLS.md).
+      await run(`insert into ${flags.table} (line_id, reason) values ($1::uuid, $2::text) on conflict (line_id) do update set reason = excluded.reason`, [k, v], flags.systemInsert);
     },
     async delete(k) {
       if (!UUID.test(k)) return;
-      await run(`delete from ${flags.table} where line_id = $1::uuid`, [k], true);
+      await run(`delete from ${flags.table} where line_id = $1::uuid`, [k], flags.systemOnly);
     },
   };
 

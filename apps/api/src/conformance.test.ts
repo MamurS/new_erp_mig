@@ -357,6 +357,9 @@ describe.skipIf(!hasDb)('conformance: memory ↔ postgres', () => {
       ok.push(await as(staff('accountant')).then((acc) => acc('accountant', 'POST', `/rebills/${draftRebill.id}/pay`)));
       ok.push(await billing('asst_billing', 'GET', `/assist/rebills/${draftRebill.id}`));
     }
+    // The AI precheck of a rebill: the reviewer sets and clears the flags of its lines under RLS.
+    const paidRebill = d.rebills.find((x) => x.status !== 'draft');
+    if (paidRebill) await claimsOfficer('claims_officer', 'POST', `/rebills/${paidRebill.id}/ai-precheck`);
     ok.push(await as(staff('sales_manager')).then((s2) => s2('sales', 'GET', `/assistance/${d.assistUsers[0]!.assistanceId}/card`)));
     for (const x of ok) expect(x.pg.status, JSON.stringify(x.pg.body).slice(0, 300)).toBeLessThan(300);
 
