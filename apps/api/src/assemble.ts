@@ -95,7 +95,7 @@ export async function assemble(
     smsHook: { secret: env.smsHookSecret, sender: sms, testCodes },
     demoRoutes: env.demo ? demoOptions : null,
     demo,
-    ...(demo ? { runClocks: () => jobs.runJob('contract-lifecycle') } : {}),
+    ...(demo ? { runClocks: async () => { await jobs.runJob('contract-lifecycle'); await jobs.runJob('task-deadlines'); } } : {}),
     now,
     logger: o.logger ?? false,
   });

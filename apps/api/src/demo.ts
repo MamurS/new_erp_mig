@@ -145,8 +145,9 @@ export function registerDemoControls(app: FastifyInstance, o: { pool: pg.Pool; c
     const body = parse(demoClockSchema, request.body);
     if (!body) return json(reply, 400, BAD);
     await controls.set({ offsetMs: 'offsetMs' in body ? body.offsetMs : Math.min(MAX_CLOCK_OFFSET, controls.offsetMs + body.advanceMs) });
-    // The date clocks are a background job (services/jobs.ts `contract-lifecycle`, every 15 minutes): a jump of the
-    // test clock runs it at once, as the schedule would have on the way (contracts coming into force, invoices overdue).
+    // The date clocks are background jobs (services/jobs.ts `contract-lifecycle`, `task-deadlines`, every 15 minutes): a
+    // jump of the test clock runs them at once, as the schedule would have on the way (contracts coming into force,
+    // invoices and requests overdue).
     await o.runClocks?.();
     return json(reply, 200, { now: controls.now(), offsetMs: controls.offsetMs });
   });
