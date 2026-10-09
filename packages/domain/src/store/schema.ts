@@ -1694,7 +1694,7 @@ export const TABLES: readonly TableSpec[] = [
         select: { actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit'], staff: ALL },
         ...rw(STAFF_READ('rebills.review')),
         delete: STAFF_READ('rebills.review'),
-        note: 'AI precheck flags of rebill lines: MIG reviewers read them; the reviewer of rebills sets and clears them («ИИ-предпроверка»).',
+        note: 'AI precheck flags of rebill lines: MIG reviewers read them; the reviewer of rebills sets and clears them (the AI precheck).',
       },
     },
   ),

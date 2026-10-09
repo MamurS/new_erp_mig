@@ -1017,7 +1017,7 @@ create policy integrations_seed_select on public.integrations_seed for select to
   using ((select app.active()) and true);
 grant select on public.integrations_seed to authenticated;
 
--- ai_rebill_flags: AI precheck flags of rebill lines: MIG reviewers read them; the reviewer of rebills sets and clears them («ИИ-предпроверка»).
+-- ai_rebill_flags: AI precheck flags of rebill lines: MIG reviewers read them; the reviewer of rebills sets and clears them (the AI precheck).
 alter table public.ai_rebill_flags enable row level security;
 create policy ai_rebill_flags_select on public.ai_rebill_flags for select to authenticated
   using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit']::text[]))));

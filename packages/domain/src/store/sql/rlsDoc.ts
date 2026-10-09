@@ -41,7 +41,15 @@ Helper functions of the predicates (schema \`app\`, SECURITY DEFINER): \`company
 under them and their employee; \`my_person_ids()\` — the person, their children and adult family members who
 gave consent; \`clinic_patient_ids()\` — patients with an open visit of the clinic; \`assist_covers(policy, day)\`
 / \`assist_covers_insured(person, day)\` — the policy is assigned to the assistance company on that day;
-\`client_of_contract(contract)\`; \`registry_has_payer(lines, assistance)\`.
+\`client_of_contract(contract)\`; \`registry_has_payer(lines, assistance)\`; \`client_of_deal(deal)\` — HR writes the
+feed of the own company's deal; \`my_card_ids()\` — the person and the active family under them (card codes);
+\`hr_asked_contract(contract)\` — an open request of MIG to HR for appendix 2 of a draft; \`assist_access(policy)\` /
+\`assist_scope(policy, day)\` — the assistance scope of the domain (today, or read-only for 12 months after the
+assignment ended); \`policy_of_insured(person)\`. A group may have several scopes, each with its own action gate.
+
+What a role must learn about rows it may not read (counts, sums, codes, whether a slot is taken) and side effects in
+another party's feed go through the narrow SECURITY DEFINER functions \`app.fact_*\` (migration \`…_app_facts.sql\`,
+\`docs/PRIVILEGED_AUDIT.md\`): each checks \`app.active()\` and the permission itself and returns only the value.
 
 | Table | select | insert | update | delete | Why |
 |---|---|---|---|---|---|
