@@ -51,7 +51,9 @@ const CASES = [
   ['claims@demo.mig.uz', '/claims?q=ali'],
   ['claims@demo.mig.uz', '/claims?sort=reserve:desc&page=2'],
   ['sales@demo.mig.uz', '/deals'],
+  ['sales@demo.mig.uz', '/deals/:first'],
   ['sales@demo.mig.uz', '/contracts'],
+  ['sales@demo.mig.uz', '/contracts/:first'],
   ['accountant@demo.mig.uz', '/invoices'],
   ['accountant@demo.mig.uz', '/payments/queue'],
   ['accountant@demo.mig.uz', '/registries'],
@@ -88,9 +90,20 @@ const quantile = (sorted, q) => (sorted.length ? sorted[Math.min(sorted.length -
 
 const cookies = new Map();
 const rows = [];
-for (const [login, path] of CASES) {
+/** `/x/:first` — the card of the first row of the list `/x` (cards are measured as well as lists). */
+async function resolve(path, headers) {
+  if (!path.endsWith('/:first')) return path;
+  const list = path.slice(0, -'/:first'.length);
+  const j = await (await fetch(`${API}${list}`, { headers })).json();
+  const first = (Array.isArray(j) ? j : j.items)?.[0];
+  if (!first?.id) throw new Error(`${list}: no rows for ${path}`);
+  return `${list}/${first.id}`;
+}
+
+for (const [login, template] of CASES) {
   if (!cookies.has(login)) cookies.set(login, await signIn(login));
   const headers = { ...HEADERS, cookie: cookies.get(login) };
+  const path = await resolve(template, headers);
   const times = [];
   let status = 0;
   let size = 0;
@@ -109,7 +122,7 @@ for (const [login, path] of CASES) {
     if (i >= opt.warmup) times.push(ms);
   }
   times.sort((a, b) => a - b);
-  const row = { login, path, status, items, bytes: size, p50: Math.round(quantile(times, 0.5)), p95: Math.round(quantile(times, 0.95)) };
+  const row = { login, path: template, status, items, bytes: size, p50: Math.round(quantile(times, 0.5)), p95: Math.round(quantile(times, 0.95)) };
   rows.push(row);
   process.stderr.write(`${path} ${status} p50=${row.p50} p95=${row.p95}\n`);
 }

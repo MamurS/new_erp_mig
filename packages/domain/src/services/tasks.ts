@@ -8,8 +8,8 @@
  * - Statuses: open (ожидает) → in_progress (в работе) → done / rejected. A request closes by itself when its
  *   action is done (`completeTasks` is called by those services) or by hand with a comment.
  * - The executor is notified at once; the author when the request is taken, done or rejected; both a day
- *   before the deadline and when it is overdue (`sweepDeadlines`, run when anyone reads tasks or
- *   notifications); «Напомнить» of the author notifies the executor again.
+ *   before the deadline and when it is overdue (`sweepDeadlines`: the background job `task-deadlines`, every 15
+ *   minutes; reads only read); «Напомнить» of the author notifies the executor again.
  * - Every step goes to the object's activity: the deal's «События» and the client's «Активность».
  */
 import { msg } from '@mig/i18n';
@@ -25,7 +25,7 @@ import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
 import type { Where } from '../store/query';
 import { allOf } from './list';
-import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, forbidden, notFound, requirePermission, SYSTEM_ACTOR, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { dealContract } from './lifecycle';
 import { completeTasks } from './system/consequences';
@@ -103,7 +103,9 @@ export function isExecutor(task: TaskRow, user: Pick<SessionUser, 'id' | 'role' 
   return !task.assigneeId || task.assigneeId === user.id;
 }
 
-export async function notify(ctx: BaseCtx, userId: string, text: string, link?: string, detail?: string): Promise<NotificationRow> {
+/** An in-app notification (the bell). The system (author of the background jobs' requests) gets none. */
+export async function notify(ctx: BaseCtx, userId: string, text: string, link?: string, detail?: string): Promise<NotificationRow | null> {
+  if (userId === SYSTEM_ACTOR.id) return null;
   const n: NotificationRow = { id: randomId(), userId, text, ...(detail ? { detail } : {}), ...(link ? { link } : {}), createdAt: tzIso(ctx.now()), read: false };
   return ctx.repos.notifications.insert(n, { at: 'start' });
 }
@@ -136,6 +138,8 @@ export async function createTask(
   actor: Pick<SessionUser, 'id' | 'displayName'>,
   input: { action: TaskAction; toRole: Role; subjectType: TaskSubjectType; subjectId: string; comment: string },
   refs: SubjectRefs,
+  /** A request of a background job: its own title (packed key) and the executor's place. */
+  opts: { title?: string; link?: string } = {},
 ): Promise<TaskRow> {
   const now = ctx.now();
   const P = await loadParams(ctx);
@@ -151,9 +155,9 @@ export async function createTask(
     subjectId: input.subjectId,
     clientId: refs.clientId,
     clientName: refs.clientName,
-    title: taskTitle(input.action, { deal: refs.dealNumber, contract: refs.contractNumber, client: refs.clientName }),
+    title: opts.title ?? taskTitle(input.action, { deal: refs.dealNumber, contract: refs.contractNumber, client: refs.clientName }),
     comment: input.comment,
-    link: taskLink(input.action, input.toRole, refs),
+    link: opts.link ?? taskLink(input.action, input.toRole, refs),
     createdById: actor.id,
     createdByName: actor.displayName,
     createdAt: tzIso(now),
@@ -232,9 +236,8 @@ export async function sweepDeadlines(ctx: BaseCtx): Promise<void> {
     const kind = isOverdue(task, now) ? 'overdue' : isDueSoon(task, now) ? 'dueSoon' : null;
     if (!kind) continue;
     if (kind === 'overdue' ? task.overdueSent : task.dueSoonSent || task.overdueSent) continue;
-    // Claim the reminder: of requests reading at the same time only one sets the flag (Postgres re-checks the
-    // condition after the other's commit), the others skip — the reminder goes once. The reader may update every
-    // request it sees (RLS of tasks).
+    // Claim the reminder: of two runs at the same time (two workers) only one sets the flag (Postgres re-checks the
+    // condition after the other's commit), the other skips — the reminder goes once.
     const claimed = kind === 'overdue' ? await ctx.repos.tasks.updateWhere({ id: task.id, overdueSent: { ne: true } }, { overdueSent: true }) : await ctx.repos.tasks.updateWhere({ id: task.id, dueSoonSent: { ne: true } }, { dueSoonSent: true });
     if (!claimed) continue;
     const text = msg(`next.notify.${kind}`, { what: whatOf(task), subject: task.subjectLabel });
@@ -300,7 +303,6 @@ export async function requestHr(ctx: AuthCtx, body: unknown): Promise<WorkTask> 
 /** The executor's requests; `status=open` — the ones still waiting (open or taken). */
 export async function listTasks(ctx: AuthCtx, status: string | null): Promise<WorkTask[]> {
   requirePermission(ctx.user, 'tasks.receive', { companyId: ctx.user.companyId });
-  await sweepDeadlines(ctx);
   const { user } = ctx;
   // The role's pool and the person's own requests (HR: the company's), the status filter and the first 100 in SQL.
   const mine: Where<TaskRow> | null =
@@ -312,7 +314,6 @@ export async function listTasks(ctx: AuthCtx, status: string | null): Promise<Wo
 
 /** «Мои запросы»: what the person asked for, all statuses, the newest first. */
 export async function myTasks(ctx: AuthCtx): Promise<WorkTask[]> {
-  await sweepDeadlines(ctx);
   return (await ctx.repos.tasks.list({ where: { createdById: ctx.user.id }, limit: 100 })).map((t) => taskView(t, ctx.user.id, ctx.now()));
 }
 
@@ -378,7 +379,6 @@ export async function remind(ctx: AuthCtx, id: string): Promise<WorkTask> {
 }
 
 export async function listNotifications(ctx: AuthCtx): Promise<UserNotification[]> {
-  await sweepDeadlines(ctx);
   return (await ctx.repos.notifications.list({ where: { userId: ctx.user.id }, limit: 50 })).map(({ userId: _u, ...n }) => n);
 }
 

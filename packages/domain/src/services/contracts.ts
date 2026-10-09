@@ -41,7 +41,6 @@ import type { Where } from '../store/query';
 import { allOf, byLegalForm, byLegalName, filterLegalForm, q as searchTerm, sortBy } from './list';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
-import { saveInvoiceStatus } from './system/clocks';
 import { assistanceName } from './assistance';
 import { personFor } from './family';
 import { afterSigning, checklistInput, clientRow, contractOf, createEndorsement, dealEvent, dealKp, dealOf, endorsementLines, endorsementSummary, latestQuote, moveDeal, pendingRequests, refreshContract, refreshInvoice, signatories, toChangeRequest } from './lifecycle';
@@ -118,14 +117,6 @@ function readable(user: SessionUser, ref: DocRef): void {
 
 const signerForClient = (c: Contract) => c.params.clientSignatory.name;
 
-/** The invoice's status by today; a changed status is saved (as a read of the invoice always did). */
-async function freshInvoice(ctx: BaseCtx, inv: Invoice): Promise<Invoice> {
-  const before = inv.status;
-  refreshInvoice(inv, todayIso(ctx));
-  if (inv.status !== before) await saveInvoiceStatus(ctx, inv.id, inv.status);
-  return inv;
-}
-
 async function contractView(ctx: BaseCtx, c: Contract): Promise<ContractView> {
   // The card of a contract the person may read (checked by the caller). The deal number, the quote summary and the
   // MIG signatory come as narrow facts (HR and some MIG roles read neither deals, quotes nor staff); invoices,
@@ -135,7 +126,7 @@ async function contractView(ctx: BaseCtx, c: Contract): Promise<ContractView> {
   const client = await clientRow(ctx, c.clientId);
   const { quote: q } = await r.facts.contractQuote(c.dealId, c.quoteId ?? null);
   const invoices: Invoice[] = [];
-  for (const i of await r.invoices.list({ where: { contractId: c.id } })) invoices.push(await freshInvoice(ctx, i));
+  for (const i of await r.invoices.list({ where: { contractId: c.id } })) invoices.push(i);
   return {
     ...c,
     client: await toClient(ctx, client),
@@ -602,17 +593,11 @@ async function changeRequestView(ctx: BaseCtx, r: ChangeRequestRow): Promise<Cha
   };
 }
 
-/** Runs the lazy server clock over every contract (EDO events, coming into force, expiry). */
-async function refreshAllContracts(ctx: BaseCtx): Promise<void> {
-  for (const c of await ctx.repos.contracts.list()) await refreshContract(ctx, c);
-}
-
 // ---------------------------------------------------------------- contracts
 
 export async function listContracts(ctx: AuthCtx, qs: URLSearchParams): Promise<ContractView[]> {
   const { user } = ctx;
   // The lazy clock first (it may change statuses), then the list with its filters in SQL.
-  await refreshAllContracts(ctx);
   if (user.role === 'hr') {
     if (!user.companyId) throw forbidden();
   } else if (!isStaffRole(user.role) || !can(user, 'contracts.read')) throw forbidden();
@@ -647,7 +632,6 @@ export async function getContract(ctx: AuthCtx, id: string): Promise<ContractVie
   readerRole(ctx.user);
   const ref = await refOf(ctx, 'contract', id);
   readable(ctx.user, ref);
-  await refreshContract(ctx, ref.contract);
   return forViewer(ctx.user, await contractView(ctx, ref.contract));
 }
 
@@ -832,7 +816,7 @@ export async function listInvoices(ctx: AuthCtx, qs: URLSearchParams): Promise<I
   requirePermission(user, 'invoices.read');
   if (user.role === 'hr') throw forbidden();
   let list: Invoice[] = [];
-  for (const i of await ctx.repos.invoices.list({ where: { contractId: { isNull: false } } })) list.push(await freshInvoice(ctx, i));
+  for (const i of await ctx.repos.invoices.list({ where: { contractId: { isNull: false } } })) list.push(i);
   const contractId = qs.get('contractId');
   if (contractId) list = list.filter((i) => i.contractId === contractId);
   const status = qs.get('status');
@@ -1043,7 +1027,6 @@ export async function createChangeRequest(ctx: AuthCtx, body: unknown): Promise<
 export async function listEndorsements(ctx: AuthCtx, qs: URLSearchParams): Promise<EndorsementView[]> {
   const { user } = ctx;
   // The lazy clock first (it may sign endorsements into force), then the list with its filters in SQL.
-  await refreshAllContracts(ctx);
   let own: Where<Endorsement> | null = null;
   if (user.role === 'hr') {
     const ids = (await ctx.repos.contracts.select(['id', 'clientId'])).filter((c) => c.clientId === user.companyId).map((c) => c.id);
@@ -1068,7 +1051,6 @@ export async function getEndorsement(ctx: AuthCtx, id: string): Promise<Endorsem
   readerRole(ctx.user);
   const ref = await refOf(ctx, 'endorsement', id);
   readable(ctx.user, ref);
-  await refreshContract(ctx, ref.contract);
   return forViewer(ctx.user, await endorsementViewOf(ctx, ref.id));
 }
 

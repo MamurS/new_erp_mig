@@ -498,6 +498,8 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'contract_original',
     'contract_activated',
     'contract_terminated',
+    'contract_expired',
+    'policy_expired',
     'payment_recorded',
     'payments_imported',
     'payment_allocated',

@@ -9,7 +9,10 @@ import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { JOBS } from '@mig/domain/services/jobs';
-import { API_JOBS } from '@mig/domain/services/jobRunner';
+import { msg } from '@mig/i18n';
+import { API_JOBS, type JobSummary } from '@mig/domain/services/jobRunner';
+import { SYSTEM_ACTOR, type BaseCtx } from '@mig/domain/services/kernel';
+import { isoDay, tzIso } from '@mig/domain/lib/time';
 import type { Db } from '@mig/domain/store/db';
 import { devAesPiiCrypto } from '@mig/domain/store/piiAes';
 import { DEMO_STAFF } from '@mig/seed/credentials';
@@ -17,6 +20,7 @@ import { createSeed } from '@mig/seed/seed';
 import { buildApp } from './app';
 import { SESSION_COOKIE } from './auth/cookies';
 import { createWorker, type Worker } from './jobs/worker';
+import { withSystemDb } from './systemDb';
 import { hasSupabase, testBff, testStack, type TestStack } from './test/supabase';
 import {
   fastifyClient,
@@ -205,5 +209,246 @@ describe.skipIf(!hasDb || !hasSupabase)('background jobs', () => {
         [admins],
       ),
     ).toBe(admins.length);
+  });
+
+  // ---- each job's action happens once (stage 1.5): two runs of the worker, the rows of one ----
+
+  /** A worker on the test clock (the services' `now`; SQL `now()` stays real). */
+  let clock = T;
+  const timed = () => createWorker({ pool, crypto, now: () => clock });
+  const sys = <R>(fn: (ctx: BaseCtx) => Promise<R>) => withSystemDb(pool, { crypto, now: () => clock }, fn);
+  const twice = async (name: string) => {
+    const w = timed();
+    return [(await w.runJob(name)) as JobSummary, (await w.runJob(name)) as JobSummary] as const;
+  };
+  const notesOf = (text: string) =>
+    n(`select count(*)::int as n from public.notifications where text = $1`, [text]);
+  const activeStaff = (role: string) => d.staff.filter((s) => s.role === role && s.active).length;
+
+  it('job marks are the system’s alone: a signed-in role cannot read or write them', async () => {
+    const c = await pool.connect();
+    try {
+      await c.query('begin');
+      await c.query('set local role authenticated');
+      await expect(c.query('select count(*) from app.job_marks')).rejects.toThrow(/permission denied/);
+    } finally {
+      await c.query('rollback');
+      c.release();
+    }
+  });
+
+  it('sla-reminders: an overdue claim and a case notify their queues once; a new breach again', async () => {
+    clock = T;
+    const claim = d.claims.find((c) => c.status === 'new' && c.handledBy !== 'assistance' && !c.opinion)!;
+    const kase = d.cases[0]!;
+    await sys(async (ctx) => {
+      await ctx.repos.claims.update(claim.id, { slaDueAt: tzIso(T - 3600_000) });
+      await ctx.repos.cases.update(kase.id, { status: 'open', slaDueAt: tzIso(T - 3600_000) });
+    });
+    const claimText = msg('next.notify.slaClaim', { number: claim.number });
+    const caseText = msg('next.notify.slaCase', { number: kase.number });
+    const [first, second] = await twice('sla-reminders');
+    expect(first.claims).toBeGreaterThan(0);
+    expect(Object.values(second).every((v) => v === 0)).toBe(true);
+    expect(await notesOf(claimText)).toBe(activeStaff('claims_officer'));
+    const caseTo =
+      d.assistUsers.filter(
+        (u) =>
+          u.assistanceId === kase.assistanceId &&
+          u.active &&
+          (u.role === 'asst_operator' || u.role === 'asst_doctor'),
+      ).length + activeStaff('operator');
+    expect(await notesOf(caseText)).toBe(caseTo);
+    expect(
+      await n(`select count(*)::int as n from app.job_marks where job = 'sla-reminders' and subject = $1`, [
+        `claim:${claim.id}`,
+      ]),
+    ).toBe(1);
+    // A new deadline that passes too: notified again, once.
+    await sys((ctx) => ctx.repos.claims.update(claim.id, { slaDueAt: tzIso(T + 3600_000) }));
+    clock = T + 2 * 3600_000;
+    await twice('sla-reminders');
+    expect(await notesOf(claimText)).toBe(2 * activeStaff('claims_officer'));
+  });
+
+  it('sales-reminders: an idle lead and an unanswered offer notify the manager once', async () => {
+    clock = T;
+    const deal = d.deals.find((x) => x.stage === 'lead')!;
+    const kp = d.kp.find((k) => k.status === 'sent')!;
+    await pool.query(`delete from public.deal_events where deal_id = $1`, [deal.id]);
+    await sys(async (ctx) => {
+      await ctx.repos.deals.update(deal.id, { updatedAt: tzIso(T - 10 * 86_400_000) });
+      await ctx.repos.kp.update(kp.id, { sentAt: tzIso(T - 6 * 86_400_000) });
+    });
+    const client = d.clients.find((c) => c.id === deal.clientId)!;
+    const leadText = msg('next.notify.leadIdle', { days: 7, subject: `${deal.number} · ${client.name}` });
+    // The run of every job above may have told about the seed's state already: a changed state is told once more.
+    const kpText = msg('next.notify.kpNoAnswer', { number: kp.number, days: 5, client: kp.clientName });
+    const kpBefore = await notesOf(kpText);
+    const leadBefore = await notesOf(leadText);
+    const [first, second] = await twice('sales-reminders');
+    expect(first.idleLeads).toBeGreaterThan(0);
+    expect(first.offersWithoutAnswer).toBeGreaterThan(0);
+    expect(second).toEqual({ idleLeads: 0, offersWithoutAnswer: 0 });
+    expect(
+      await n(`select count(*)::int as n from public.notifications where text = $1 and user_id = $2`, [
+        leadText,
+        deal.ownerId,
+      ]),
+    ).toBe(leadBefore + 1);
+    expect(await notesOf(kpText)).toBe(kpBefore + 1);
+  });
+
+  it('renewal-deals: one renewal deal per expiring policy', async () => {
+    clock = T;
+    const client = d.clients.find(
+      (c) => c.activePolicyId && !d.deals.some((x) => x.clientId === c.id && x.type === 'renewal'),
+    )!;
+    await sys((ctx) =>
+      ctx.repos.policies.update(client.activePolicyId!, {
+        status: 'active',
+        endDate: isoDay(T + 20 * 86_400_000),
+      }),
+    );
+    const [first, second] = await twice('renewal-deals');
+    expect(first.renewalDeals).toBeGreaterThan(0);
+    expect(second).toEqual({ renewalDeals: 0 });
+    const { rows } = await pool.query(
+      `select type, stage, owner_id from public.deals where previous_policy_id = $1`,
+      [client.activePolicyId],
+    );
+    expect(rows).toEqual([{ type: 'renewal', stage: 'lead', owner_id: expect.any(String) }]);
+    expect(
+      await n(
+        `select count(*)::int as n from public.notifications where user_id = $1 and text like 'next.notify.renewalDeal%'`,
+        [rows[0].owner_id],
+      ),
+    ).toBeGreaterThan(0);
+  });
+
+  it('contract-lifecycle: coming into force and expiry once, audited as the system', async () => {
+    const c = d.contracts.find((x) => x.status === 'signing')!;
+    await sys((ctx) =>
+      ctx.repos.contracts.update(c.id, {
+        status: 'signed',
+        params: {
+          ...c.params,
+          activationRule: 'on_start_date',
+          startDate: isoDay(T + 86_400_000),
+          endDate: isoDay(T + 30 * 86_400_000),
+        },
+      }),
+    );
+    clock = T + 2 * 86_400_000;
+    const [first, second] = await twice('contract-lifecycle');
+    expect(first.activated).toBe(1);
+    expect(second).toEqual({ activated: 0, contractsExpired: 0, policiesExpired: 0, guaranteesExpired: 0, invoicesUpdated: 0 });
+    expect(await n(`select count(*)::int as n from public.policies where contract_id = $1`, [c.id])).toBe(1);
+    expect(
+      await n(
+        `select count(*)::int as n from public.audit_log where action = 'contract_activated' and target_id = $1 and actor_id = $2`,
+        [c.id, SYSTEM_ACTOR.id],
+      ),
+    ).toBe(1);
+    clock = T + 45 * 86_400_000;
+    const [later, again] = await twice('contract-lifecycle');
+    expect(later.contractsExpired).toBe(1);
+    expect(later.policiesExpired).toBeGreaterThan(0);
+    expect(again).toEqual({ activated: 0, contractsExpired: 0, policiesExpired: 0, guaranteesExpired: 0, invoicesUpdated: 0 });
+    expect(
+      (await pool.query(`select status from public.contracts where id = $1`, [c.id])).rows[0].status,
+    ).toBe('expired');
+    expect(
+      await n(
+        `select count(*)::int as n from public.audit_log where action = 'contract_expired' and target_id = $1`,
+        [c.id],
+      ),
+    ).toBe(1);
+    expect(
+      await n(
+        `select count(*)::int as n from public.audit_log a join public.policies p on p.id::text = a.target_id where a.action = 'policy_expired' and p.contract_id = $1`,
+        [c.id],
+      ),
+    ).toBe(1);
+  });
+
+  it('child-age-limit: one request to the underwriter per child and limit', async () => {
+    clock = T;
+    const child = d.insured.find((i) => i.relation === 'child')!;
+    await pool.query(`delete from public.policy_changes where insured_id = $1`, [child.id]);
+    await sys((ctx) =>
+      ctx.repos.insured.update(child.id, { status: 'active', isStudent: false, birthDate: '2000-03-01' }),
+    );
+    const [first, second] = await twice('child-age-limit');
+    expect(first.ageLimitRequests).toBeGreaterThan(0);
+    expect(second).toEqual({ ageLimitRequests: 0 });
+    const { rows } = await pool.query(
+      `select to_role, status, created_by_id from public.tasks where link = $1`,
+      [`/staff/insured/${child.id}`],
+    );
+    expect(rows).toEqual([{ to_role: 'underwriter', status: 'open', created_by_id: SYSTEM_ACTOR.id }]);
+    expect(
+      (await pool.query(`select status from public.insured where id = $1`, [child.id])).rows[0].status,
+    ).toBe('active');
+    expect(
+      await n(`select count(*)::int as n from public.notifications where user_id = $1`, [SYSTEM_ACTOR.id]),
+    ).toBe(0);
+  });
+
+  it('cleanup: test SMS codes after five minutes and job marks after their keeping period', async () => {
+    await pool.query(
+      `insert into app.test_phone_codes (phone, code, "at") values ('998907779901', '123456', now() - interval '6 minutes'), ('998907779902', '123456', now())`,
+    );
+    await pool.query(
+      `insert into app.job_marks (job, subject, occurrence, "at") values ('t', 'old', '1', now() - interval '401 days'), ('t', 'new', '1', now())`,
+    );
+    const out = (await worker.runJob('cleanup-expired')) as { job_cleanup_expired: Record<string, number> };
+    expect(out.job_cleanup_expired.test_phone_codes).toBeGreaterThanOrEqual(1);
+    expect(out.job_cleanup_expired.job_marks).toBe(1);
+    expect(
+      await n(`select count(*)::int as n from app.test_phone_codes where phone like '99890777990%'`),
+    ).toBe(1);
+    expect(await n(`select count(*)::int as n from app.job_marks where job = 't'`)).toBe(1);
+    await pool.query(`delete from app.test_phone_codes where phone like '99890777990%'`);
+  });
+  it('reads show the stored state: lists and cards write nothing; the date clocks job applies what is due', async () => {
+    const yesterday = isoDay(Date.now() - 86_400_000);
+    const g = (await pool.query(`update public.guarantees set status = 'approved', valid_until = $1 where id = (select id from public.guarantees where status in ('approved', 'requested') order by id limit 1) returning id`, [yesterday])).rows[0].id as string;
+    const inv = (await pool.query(`update public.invoices set status = 'unpaid', paid = 0, due_date = $1 where id = (select id from public.invoices where contract_id is not null order by id limit 1) returning id`, [yesterday])).rows[0].id as string;
+    const snapshot = async () =>
+      (
+        await pool.query(
+          `select (select md5(string_agg(t::text, ',' order by t.id)) from public.contracts t) as contracts,
+                  (select md5(string_agg(t::text, ',' order by t.id)) from public.invoices t) as invoices,
+                  (select md5(string_agg(t::text, ',' order by t.id)) from public.guarantees t) as guarantees,
+                  (select md5(string_agg(t::text, ',' order by t.id)) from public.policies t) as policies,
+                  (select count(*) from public.audit_log) as audit`,
+        )
+      ).rows[0] as Record<string, string>;
+    const sales = await signInAs(api, { email: DEMO_STAFF.find((x) => x.role === 'sales_manager')!.email }, SESSION_COOKIE);
+    const accountant = await signInAs(api, { email: DEMO_STAFF.find((x) => x.role === 'accountant')!.email }, SESSION_COOKIE);
+    const doctor = await signInAs(api, { email: DEMO_STAFF.find((x) => x.role === 'doctor_expert')!.email }, SESSION_COOKIE);
+    // After the sign-ins (they are audited): the reads below must not write anything.
+    const before = await snapshot();
+    const deals = (await api.call('GET', '/deals', { session: sales })).body as { id: string }[];
+    const contracts = (await api.call('GET', '/contracts', { session: sales })).body as { id: string }[];
+    expect(deals.length).toBeGreaterThan(0);
+    expect(contracts.length).toBeGreaterThan(0);
+    for (const x of deals) expect((await api.call('GET', `/deals/${x.id}`, { session: sales })).status).toBe(200);
+    for (const x of contracts) expect((await api.call('GET', `/contracts/${x.id}`, { session: sales })).status).toBe(200);
+    expect((await api.call('GET', '/invoices', { session: accountant })).status).toBe(200);
+    expect((await api.call('GET', '/guarantees', { session: doctor })).status).toBe(200);
+    expect(await snapshot()).toEqual(before);
+    expect((await pool.query(`select status from public.guarantees where id = $1`, [g])).rows[0].status).toBe('approved');
+    expect((await pool.query(`select status from public.invoices where id = $1`, [inv])).rows[0].status).toBe('unpaid');
+
+    const out = (await worker.runJob('contract-lifecycle')) as JobSummary;
+    expect(out.guaranteesExpired).toBeGreaterThanOrEqual(1);
+    expect(out.invoicesUpdated).toBeGreaterThanOrEqual(1);
+    expect((await pool.query(`select status from public.guarantees where id = $1`, [g])).rows[0].status).toBe('expired');
+    expect((await pool.query(`select status from public.invoices where id = $1`, [inv])).rows[0].status).toBe('overdue');
+    const again = (await worker.runJob('contract-lifecycle')) as JobSummary;
+    expect(again.guaranteesExpired).toBe(0);
+    expect(again.invoicesUpdated).toBe(0);
   });
 });

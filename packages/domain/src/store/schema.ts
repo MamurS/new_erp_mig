@@ -516,7 +516,7 @@ export const TABLES: readonly TableSpec[] = [
         'dms_param_changed', 'dms_param_rejected', 'authority_proposed', 'authority_changed', 'authority_rejected', 'lead_created', 'deal_stage_changed', 'deal_lost',
         'census_uploaded', 'quote_saved', 'quote_submitted', 'quote_approved', 'quote_rejected', 'kp_accepted', 'kp_declined', 'contract_created', 'contract_updated',
         'contract_legal_submitted', 'contract_legal_approved', 'contract_legal_returned', 'contract_finance_approved', 'contract_sent', 'contract_signed', 'contract_scan_uploaded',
-        'contract_scan_verified', 'contract_original', 'contract_activated', 'contract_terminated', 'payment_recorded', 'payments_imported', 'payment_allocated',
+        'contract_scan_verified', 'contract_original', 'contract_activated', 'contract_terminated', 'contract_expired', 'policy_expired', 'payment_recorded', 'payments_imported', 'payment_allocated',
         'change_request_created', 'endorsement_created', 'endorsement_signed', 'claim_opinion_requested', 'claim_opinion_given', 'claim_decided', 'claim_decision_escalated',
         'claim_decision_rejected', 'claim_reserve_changed', 'claim_created', 'claim_flag_dismissed', 'claim_appealed', 'claim_appeal_resolved', 'ai_settings_proposed',
         'ai_settings_changed', 'ai_settings_rejected', 'ai_kill_switch', 'ai_feedback', 'migration_validated', 'migration_submitted', 'migration_applied', 'migration_rejected',
@@ -1715,8 +1715,25 @@ export const REVEAL: Readonly<Record<string, { actions: readonly Action[]; self:
   familyRequests: { actions: ['insured.reveal_pii'], self: "app.role() = 'insured' and employee_id = app.insured_id()" },
 };
 
-/** Collections of Db that are not tables: Postgres sequences and objects split into the tables above. */
-export const NON_TABLE_COLLECTIONS = ['kpSeq', 'guaranteeSeq', 'caseSeq', 'dealSeq', 'contractSeq', 'integrationsSeed', 'statementKeys', 'dmsParams', 'ai', 'help'] as const satisfies readonly (keyof Db)[];
+/**
+ * Enum values added after their table was created: the table's own migration keeps the CHECK it was created with,
+ * the named later migration widens it (migrations only go forward).
+ */
+export const LATER_ENUM_VALUES: readonly { collection: string; field: string; migration: string; values: readonly string[] }[] = [
+  { collection: 'audit', field: 'action', migration: '20261013000100_job_actions.sql', values: ['contract_expired', 'policy_expired'] },
+];
+
+/** Values of an enum field its table was created with (LATER_ENUM_VALUES left out). */
+export function initialEnumValues(collection: string, field: string, values: readonly string[]): readonly string[] {
+  const later = new Set(LATER_ENUM_VALUES.filter((x) => x.collection === collection && x.field === field).flatMap((x) => x.values));
+  return values.filter((v) => !later.has(v));
+}
+
+/**
+ * Collections of Db that are not tables: Postgres sequences and objects split into the tables above; `jobMarks` is
+ * `app.job_marks` of a later migration (system-only, store/sql/migrationsJobs.ts).
+ */
+export const NON_TABLE_COLLECTIONS = ['kpSeq', 'guaranteeSeq', 'caseSeq', 'dealSeq', 'contractSeq', 'integrationsSeed', 'statementKeys', 'dmsParams', 'ai', 'help', 'jobMarks'] as const satisfies readonly (keyof Db)[];
 // Every collection of Db is stored somewhere: a keyed table, a log table, or one of the above.
 type Stored = KeyedName | LogName | (typeof NON_TABLE_COLLECTIONS)[number];
 export const _allCollectionsStored: [Exclude<keyof Db, Stored>] extends [never] ? true : { unmapped: Exclude<keyof Db, Stored> } = true;

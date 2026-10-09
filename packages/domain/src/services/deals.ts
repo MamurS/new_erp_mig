@@ -20,7 +20,7 @@ import {
 import { can } from '../auth/permissions';
 import { CENSUS_MAX_BYTES, parseCensusCsv, type CensusParseResult } from '../census';
 import { DEMO_PASSWORD } from '../auth/demo';
-import { dealNumber, defaultStartDate, originalReminderDue } from '../contracts';
+import { addDays, dealNumber, defaultStartDate, originalReminderDue } from '../contracts';
 import { KP_TEMPLATE_VERSION, kpNumber, kpTotalPremium } from '../kp';
 import { isStaffRole } from '../labels';
 import { countsOf, groupSize, legalFormProblem } from '../minGroup';
@@ -32,10 +32,10 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, tzIso } from '../lib/time';
 import type { StaffRow } from '../store/db';
 import { allOf, byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
-import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, SYSTEM_ACTOR, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView } from './lifecycle';
-import { completeTasks } from './tasks';
+import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, staffName, toContractSummary, toDealView } from './lifecycle';
+import { completeTasks, notify } from './tasks';
 import { toClient } from './views';
 import { openRenewalDeal } from './system/consequences';
 
@@ -189,6 +189,56 @@ export async function ensureRenewalDeal(ctx: BaseCtx, kp: KpDocument, actor: Ses
   await dealEvent(ctx, deal.id, actor.displayName, `Сделка на продление создана из КП ${kp.number}`);
 }
 
+/** The manager of a renewal: the client's manager while an active sales manager, else the first active one. */
+async function renewalOwner(ctx: BaseCtx, client: { managerId?: string }): Promise<StaffRow | null> {
+  const manager = client.managerId ? await ctx.repos.staff.get(client.managerId) : null;
+  if (manager?.active && manager.role === 'sales_manager') return manager;
+  return ctx.repos.staff.first({ where: { role: 'sales_manager', active: true } });
+}
+
+/**
+ * The background job `renewal-deals`: `renewalLeadDays` before the client's current policy ends, its renewal deal
+ * (type `renewal`, stage `lead`) is opened for the client's manager — once per policy. A renewal offer sent later
+ * joins that deal (ensureRenewalDeal finds the open renewal deal of the client), and a policy whose renewal deal was
+ * already opened from an offer gets no second one. Returns how many deals were opened.
+ */
+export async function openRenewalDeals(ctx: BaseCtx): Promise<number> {
+  const P = await loadParams(ctx);
+  const today = todayIso(ctx);
+  const until = addDays(today, P.dmsParam('renewalLeadDays'));
+  let opened = 0;
+  for (const policy of await ctx.repos.policies.list({ where: { status: 'active', endDate: { gte: today, lte: until } } })) {
+    const client = await ctx.repos.clients.get(policy.clientId);
+    // Only the client's current policy is renewed (an older one was replaced by a renewal already).
+    if (!client || client.activePolicyId !== policy.id) continue;
+    if (await ctx.repos.deals.exists({ previousPolicyId: policy.id })) continue;
+    if (await ctx.repos.deals.exists({ clientId: client.id, type: 'renewal', stage: { notIn: ['lost', 'active'] } })) continue;
+    const owner = await renewalOwner(ctx, client);
+    if (!owner || !(await ctx.repos.jobMarks.claim('renewal-deals', policy.id, policy.endDate))) continue;
+    const seq = await ctx.repos.seq.next('deal');
+    const now = tzIso(ctx.now());
+    const deal: Deal = {
+      id: randomId(),
+      number: dealNumber(new Date(ctx.now()).getFullYear(), seq, P.numbering()),
+      clientId: client.id,
+      type: 'renewal',
+      stage: 'lead',
+      ownerId: owner.id,
+      expectedStart: addDays(policy.endDate, 1),
+      previousPolicyId: policy.id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await ctx.repos.deals.insert(deal, { at: 'start' });
+    const ends = policy.endDate.split('-').reverse().join('.');
+    await dealEvent(ctx, deal.id, SYSTEM_ACTOR.displayName, `Сделка на продление открыта автоматически: полис ${policy.number} действует до ${ends}`);
+    await audit(ctx, SYSTEM_ACTOR, 'lead_created', { targetType: 'deal', targetId: deal.id, targetLabel: `${deal.number}: ${client.name} (продление)` });
+    await notify(ctx, owner.id, msg('next.notify.renewalDeal', { number: deal.number, client: client.name, date: ends }), `/staff/deals/${deal.id}`);
+    opened += 1;
+  }
+  return opened;
+}
+
 // ---------------------------------------------------------------- staff directory and authority (§2)
 
 export async function staffDirectory(ctx: AuthCtx): Promise<StaffDirectoryItem[]> {
@@ -324,7 +374,6 @@ export async function createLead(ctx: AuthCtx, body: unknown): Promise<DealView>
 export async function listDeals(ctx: AuthCtx, qs: URLSearchParams): Promise<DealView[]> {
   const user = requireMig(ctx);
   readDeals(user);
-  for (const c of await ctx.repos.contracts.list()) await refreshContract(ctx, c);
   const owner = qs.get('ownerId');
   const type = qs.get('type');
   const list = await ctx.repos.deals.list({ where: allOf<Deal>(owner && { ownerId: owner }, (type === 'new' || type === 'renewal') && { type }) });
@@ -348,8 +397,6 @@ export async function getDeal(ctx: AuthCtx, id: string): Promise<DealCard> {
   const user = requireMig(ctx);
   readDeals(user);
   const deal = await dealOf(ctx, id);
-  const c = await dealContract(ctx, deal.id);
-  if (c) await refreshContract(ctx, c);
   return dealCard(ctx, deal.id);
 }
 

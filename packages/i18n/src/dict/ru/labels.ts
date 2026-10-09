@@ -117,6 +117,8 @@ export const labels = {
   'labels.audit.contract_original': 'Отметка об оригинале',
   'labels.audit.contract_activated': 'Договор вступил в силу',
   'labels.audit.contract_terminated': 'Договор расторгнут',
+  'labels.audit.contract_expired': 'Срок договора истёк',
+  'labels.audit.policy_expired': 'Срок полиса истёк',
   'labels.audit.payment_recorded': 'Оплата отмечена',
   'labels.audit.payments_imported': 'Выписка из 1С загружена',
   'labels.audit.payment_allocated': 'Платёж разнесён вручную',

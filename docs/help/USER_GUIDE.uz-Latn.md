@@ -83,6 +83,8 @@ Agar roʻyxat filtrlar yoki qidiruv sababli boʻsh boʻlsa, avvalgidek «Hech na
 Yuqori paneldagi qoʻngʻiroqcha barcha portallarda bor. Undagi raqam — siz hali oʻqimagan bildirishnomalar soni.
 
 - **Nima keladi:** sizga yangi soʻrov («{Muallif} soʻraydi: {nima} — {obyekt}»), soʻrovingizga javob (ishga olindi, bajarildi, rad etildi — ijrochi izohi bilan), «Ertaga soʻrov muddati», «Soʻrov muddati oʻtdi» va muallif eslatmalari.
+- **Buzilgan muddatlar** (oʻzi keladi, har bir buzilish uchun bir marta; yangi muddatdan keyingina qayta): «… zarar boʻyicha koʻrib chiqish muddati oʻtdi» va «… zarar boʻyicha eʼtirozni koʻrib chiqish kechikdi» — zararlar boʻyicha mutaxassislarga, «… zarar boʻyicha shifokor xulosasi kechikdi» — ekspert shifokorlarga; «… kafolat xati boʻyicha qaror kechikdi» — MIG ekspert shifokorlariga yoki xatni hal qiladigan assistans shifokorlariga; «… klinikasi qabulga yozilish arizasiga oʻz vaqtida javob bermadi» — MIG operatorlariga yoki shaxsga xizmat koʻrsatadigan assistans operatorlariga; «… murojaat boʻyicha SLA muddati buzildi» — assistans operatorlari va shifokorlariga hamda MIG operatorlariga. <!-- audience: staff assist -->
+- **Sotuv** (bitim menejeriga, hech narsa oʻzgarmaguncha bir marta): «Bitim boʻyicha N kun faollik yoʻq», «… TT ga N kun javob yoʻq», «Uzaytirish bitimi … ochildi». <!-- audience: staff -->
 - **Bildirishnomani bosish** obyektni — bitim, shartnoma, mijoz kartasi yoki amal kerak boʻlgan shaklni — ochadi va shu bildirishnomani oʻqilgan deb belgilaydi.
 - **«Hammasini oʻqilgan deb belgilash»** roʻyxat tepasida hisoblagichni nolga tushiradi.
 
@@ -390,7 +392,7 @@ Muhim:
 
 <!-- audience: staff hr -->
 
-Shartnoma oʻz qoidasiga koʻra amalga kiradi: «boshlanish sanasidan» yoki «boshlanish sanasidan, lekin birinchi badal toʻlanishidan oldin emas» (sukut boʻyicha — ikkinchisi). U bilan birga bitim «Faol» holatiga, mijoz esa «Faol mijoz» holatiga oʻtadi.
+Shartnoma oʻz qoidasiga koʻra amalga kiradi: «boshlanish sanasidan» yoki «boshlanish sanasidan, lekin birinchi badal toʻlanishidan oldin emas» (sukut boʻyicha — ikkinchisi). U bilan birga bitim «Faol» holatiga, mijoz esa «Faol mijoz» holatiga oʻtadi. Oʻtishni tungi vazifa (00:05) yoki sana kelganidan keyin shartnomaning birinchi ochilishi bajaradi — bir marta; audit jurnalida «Shartnoma kuchga kirdi» paydo boʻladi.
 
 ### Polis va sertifikatlarni chiqarish {#policy-issue}
 
@@ -437,7 +439,7 @@ Oila aʼzolari — oʻz sertifikati, QR kodi, limitlari, zararlari va qabullarig
 
 - **HR qoʻshadi:** «Oila» → «Oila aʼzosini qoʻshish» (F.I.Sh. lotin yozuvida, tugʻilgan sana, JShShIR, qarindoshlik: turmush oʻrtogʻi, farzandi, ota-onasi, boshqa; qaysi xodimga).
 - **Xodim soʻraydi:** ilovada «Mening oilam» → «Qoʻshish» rozilik bilan. Ariza HR ga «Ilovadan arizalar» boʻlimiga boradi. HR maʼqullaydi (bu oʻzgartirish arizasini yaratadi) yoki sabab bilan rad etadi.
-- **Bolaning chegaraviy yoshi** — 18 yosh, talabalar uchun — 23 yosh («ITS parametrlari» dagi demo qiymatlar). Bola unga yetganda anderrayter vazifa oladi; hech kim avtomatik chiqarilmaydi.
+- **Bolaning chegaraviy yoshi** — 18 yosh, talabalar uchun — 23 yosh («ITS parametrlari» dagi demo qiymatlar). Bola unga yetganda anderrayter «Tizim»dan «Farzand yosh chegarasiga yetdi: {mijoz}» soʻrovini oladi — yosh, sana va sugʻurtalangan shaxs kartasiga havola bilan, har bir bola uchun bir marta (talabaga talabalar chegarasida yana bir marta); hech kim avtomatik chiqarilmaydi.
 - **Oila ichidagi maxfiylik:** xodim oʻz farzandlari boʻyicha hamma narsani koʻradi. Voyaga yetgan oila aʼzosi boʻyicha — faqat sugʻurta faktini, sertifikat va QR ni, toki u oʻz ilovasida «… mening murojaatlarimni koʻrishiga ruxsat berish» ni yoqmaguncha. Ruxsatni qaytarib olish mumkin.
 - **Limitlar** har kimning oʻziniki (sukut boʻyicha rejim) yoki oila uchun umumiy — sozlama «ITS parametrlari» da.
 
@@ -460,10 +462,10 @@ Oila aʼzolari — oʻz sertifikati, QR kodi, limitlari, zararlari va qabullarig
 
 <!-- audience: staff -->
 
-1. Polis tugashidan 60 kun oldin (parametr) tizim **uzaytirish bitimini** yaratadi va anderrayterga «TTsiz uzaytirish» vazifasini qoʻyadi.
+1. Polis tugashidan 60 kun oldin (parametr) tizim **uzaytirish bitimini** yaratadi («Lid» bosqichi, polisga bitta) va mijoz menejeriga xabar beradi; anderrayter navbatida uzaytirish «TTsiz uzaytirish» sifatida koʻrinadi. Agar uzaytirish TT oldinroq yuborilgan boʻlsa, bitim undan yaratiladi, ikkinchisi boʻlmaydi.
 2. Anderrayter mijozning umumlashgan zararlilik darajasini koʻradi («Zararlilik darajasi» sahifasi — faqat agregatlar), yangi kotirovka va tijorat taklifini tayyorlaydi.
 3. Keyin — yangi mijozdagidek: tijorat taklifi → shartnoma → imzolash → toʻlov → yangi polis.
-4. Agar uzaytirish rasmiylashtirilmasa, tugash kunida polis «Muddati tugagan» holatiga oʻtadi.
+4. Agar uzaytirish rasmiylashtirilmasa, tugash sanasidan keyingi kuni shartnoma va polis «Muddati tugagan» holatiga oʻtadi (tungi vazifa; audit jurnalida «Tizim» nomidan «Shartnoma muddati tugadi», «Polis muddati tugadi»).
 
 ### Muddatidan oldin bekor qilish {#termination}
 
@@ -742,7 +744,7 @@ Har bir rolning oʻz ish stoli bor: yuqorida koʻrsatkichlar, turlar boʻyicha v
 
 <!-- audience: staff -->
 
-- **Navbat:** faolliksiz lidlar, 5 kundan ortiq javobsiz tijorat takliflari, imzolanayotgan shartnomalar, olinmagan asl nusxalar, muddati oʻtgan badallar.
+- **Navbat:** faolliksiz lidlar, 5 kundan ortiq javobsiz tijorat takliflari, imzolanayotgan shartnomalar, olinmagan asl nusxalar, muddati oʻtgan badallar. 7 kun faolliksiz lid, javobsiz TT va yangi uzaytirish bitimi haqida qoʻngʻiroqchaga bildirishnoma ham keladi.
 - **Har kuni:** «Bitimlar» doskasi boʻyicha bitimlarni yuritish; baholash uchun maʼlumotlarni yuklash; tasdiqlangan kotirovkalar boʻyicha tijorat takliflarini yuborish; qabul qilingan takliflardan shartnomalar tayyorlash; imzolash va toʻlovni kuzatish; oyiga bir marta toʻplangan arizalardan qoʻshimcha kelishuv shakllantirish.
 - **Yaratadi:** mijoz (lid), bitim, tarkibdagi oʻzgarish.
 - **Mumkin emas:** narxni tasdiqlash; imzolash huquqisiz MIG nomidan imzolash.
@@ -909,7 +911,7 @@ MIG administratori hamkorning integratsiyasini uning kartasida koʻradi (maxfiy 
 
 <!-- audience: staff -->
 
-«Maʼmuriyat» → «Audit jurnali»: harakat, xodim, assistans va sanalar boʻyicha filtrlar. Bu yerda barcha kirishlar, shaxsga doir maʼlumotlar va tibbiy kartalarning ochilishi, qarorlar, parametrlar va vakolatlarning oʻzgarishlari, yuklab olishlar, hamkorlar harakatlari koʻrinadi.
+«Maʼmuriyat» → «Audit jurnali»: harakat, xodim, assistans va sanalar boʻyicha filtrlar. Bu yerda barcha kirishlar, shaxsga doir maʼlumotlar va tibbiy kartalarning ochilishi, qarorlar, parametrlar va vakolatlarning oʻzgarishlari, yuklab olishlar, hamkorlar harakatlari koʻrinadi. Fon vazifalarining harakatlari (shartnomalarning kuchga kirishi, shartnoma va polislar muddatining tugashi, uzaytirish bitimlari) «Tizim» nomidan yoziladi.
 
 ### Tillar {#admin-languages}
 

@@ -70,7 +70,6 @@ import {
   priceListOf,
   pushEvent,
   recomputeRegistry,
-  refreshStoredGuarantee,
   respondToAppointment,
   toGuaranteeView,
 } from './clinic';
@@ -729,12 +728,12 @@ function requireGuaranteeReader(user: SessionUser): void {
   if (!can(user, 'assist.guarantees.decide') && user.role !== 'asst_operator') throw forbidden();
 }
 
-/** Letters of the assistance within its scope, expiry refreshed, in storage order (or `orderBy`). */
+/** Letters of the assistance within its scope, in storage order (or `orderBy`); expiry is the clocks job's. */
 export async function lettersOf(ctx: BaseCtx, assistanceId: UUID, order: Pick<Query<GuaranteeRow>, 'orderBy' | 'ties'> = {}): Promise<GuaranteeRow[]> {
   const scopeOn = await scopeChecker(ctx, assistanceId);
   const out: GuaranteeRow[] = [];
   for (const g of await ctx.repos.guarantees.list({ where: { assistanceId }, ...order })) {
-    if (g.policyId && scopeOn(g.policyId, g.createdAt) !== 'none') out.push(await refreshStoredGuarantee(ctx, g));
+    if (g.policyId && scopeOn(g.policyId, g.createdAt) !== 'none') out.push(g);
   }
   return out;
 }

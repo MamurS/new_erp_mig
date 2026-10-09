@@ -13,7 +13,7 @@ import { DAY, isoDay, tzIso } from '../lib/time';
 import type { ClinicUserRow, GuaranteeRow } from '../store/db';
 import { allOf } from './list';
 import { linesOf, settleRegistry, subStatus, subTotals } from './assistance';
-import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, expireDueGuarantees, toGuaranteeView, toRegistrySummary, toRegistryView } from './clinic';
+import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, toGuaranteeView, toRegistrySummary, toRegistryView } from './clinic';
 import { audit, conflict, DomainError, forbidden, notFound, requirePermission, requireStaff, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { toUserView } from './clinicPortal';
 import { loadParams } from './params';
@@ -119,7 +119,6 @@ export async function listGuarantees(ctx: AuthCtx, qs: URLSearchParams): Promise
   const clinicId = qs.get('clinicId');
   const all = qs.get('scope') === 'all';
   // The lazy expiry first (only letters it changes), then the list with its filters and order in SQL.
-  await expireDueGuarantees(ctx);
   const list = await ctx.repos.guarantees.list({
     where: allOf<GuaranteeRow>(
       !all && { $or: [{ assistanceId: { isNull: true } }, { escalated: true }] },

@@ -71,7 +71,7 @@ export async function loadSeed(pool: pg.Pool, db: Db, o: LoadSeedOptions = {}): 
     await c.query(`select pg_advisory_lock(hashtext('mig-api-test-seed'))`);
     // The API's own tables go too (`delete` under the replica role does not cascade): BFF sessions, sign-in steps, queues.
     const sessions = o.keepSessions ? [] : ['public.app_sessions'];
-    const tables = [...sessions, ...TABLES.filter((t) => !(o.keepSessions && t.table === 'sessions')).map((t) => `public.${t.table}`), 'public.app_auth_challenges', 'app.identity_sync', 'app.job_queue'];
+    const tables = [...sessions, ...TABLES.filter((t) => !(o.keepSessions && t.table === 'sessions')).map((t) => `public.${t.table}`), 'public.app_auth_challenges', 'app.identity_sync', 'app.job_queue', 'app.job_marks'];
     await emptyTables(c, tables);
     const sql = o.sql ?? buildSeedSql(db);
     const fp = o.authUsers === 'when-changed' ? await authFingerprint(c) : null;

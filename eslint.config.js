@@ -157,6 +157,8 @@ export default tseslint.config(
       'packages/domain/src/lib/receipts.ts',
       // The services: server-side texts that are data (audit labels, chat replies, activity), as in the mock.
       'packages/domain/src/services/**',
+      // The frozen job catalog of a released migration (its descriptions are data, as in services/jobs.ts).
+      'packages/domain/src/store/sql/jobsStep3.ts',
       'apps/web/src/test/**',
       '**/*.test.{ts,tsx}',
       // Documents keep their own language (the approved KP template, contracts, endorsements, certificates).

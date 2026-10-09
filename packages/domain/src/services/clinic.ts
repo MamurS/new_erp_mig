@@ -40,11 +40,8 @@ import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { signWebhook } from '../lib/webhook';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, GuaranteeRow, InsuredRow, WebhookDeliveryRow, WebhookEndpointRow } from '../store/db';
-import type { Where } from '../store/query';
-import { allOf } from './list';
 import { audit, conflict, DomainError, insuredLabel, notFound, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { saveGuaranteeExpiry } from './system/clocks';
 import { coverageBriefOf, limitsFor } from './limits';
 import { insuredOfVisit, payerName, payerOfLine, routingOf } from './assistance';
 import { emitWebhook } from './system/outbox';
@@ -292,25 +289,7 @@ export function refreshGuarantee(g: GuaranteeRow, now = Date.now()): GuaranteeRo
   return g;
 }
 
-/** refreshGuarantee of a stored letter: the expiry is saved. */
-export async function refreshStoredGuarantee(ctx: BaseCtx, g: GuaranteeRow): Promise<GuaranteeRow> {
-  const before = g.status;
-  refreshGuarantee(g, ctx.now());
-  if (g.status !== before) await saveGuaranteeExpiry(ctx, g.id);
-  return g;
-}
-
-/**
- * The lazy expiry of the letters it changes — approved ones past their validity (refreshGuarantee) — as reading each
- * letter would do; lists then filter by the stored status in SQL.
- */
-export async function expireDueGuarantees(ctx: BaseCtx, where?: Where<GuaranteeRow>): Promise<void> {
-  const due = await ctx.repos.guarantees.list({ where: allOf<GuaranteeRow>(where, { status: 'approved', validUntil: { lt: isoDay(ctx.now()) } }) });
-  for (const g of due) await refreshStoredGuarantee(ctx, g);
-}
-
 export async function toGuaranteeView(ctx: BaseCtx, g: GuaranteeRow, P?: ParamsView): Promise<GuaranteeView> {
-  await refreshStoredGuarantee(ctx, g);
   const { insuredId: _i, ...rest } = g;
   const amount = g.approvedAmount ?? g.estimatedCost;
   const required = needsSecondApproval(amount, (P ?? (await loadParams(ctx))).dmsParam('guaranteeDualApprovalThreshold')) ? 2 : 1;
@@ -323,8 +302,7 @@ export async function toGuaranteeView(ctx: BaseCtx, g: GuaranteeRow, P?: ParamsV
   };
 }
 
-export async function toGuaranteeLetter(ctx: BaseCtx, g: GuaranteeRow): Promise<GuaranteeLetter> {
-  await refreshStoredGuarantee(ctx, g);
+export async function toGuaranteeLetter(_ctx: BaseCtx, g: GuaranteeRow): Promise<GuaranteeLetter> {
   const { insuredId: _i, infoComment: _c, ...rest } = g;
   return rest;
 }
@@ -380,7 +358,8 @@ export async function lineProblems(ctx: BaseCtx, clinicId: UUID, line: RegistryL
   const g = line.guaranteeNumber ? await r.guarantees.first({ where: { number: line.guaranteeNumber, clinicId } }) : null;
   const problems = registryLineProblems(line, {
     priceItem: (await priceListOf(ctx, clinicId, line.payer ?? (await payerOfLine(ctx, line)))).find((p) => p.code === line.serviceCode),
-    guarantee: g ? await refreshStoredGuarantee(ctx, g) : null,
+    // The check needs the validity as of now, not as of the last run of the clocks job: computed, not saved.
+    guarantee: g ? refreshGuarantee({ ...g }, ctx.now()) : null,
     policyFrom: policy?.startDate,
     policyTo: policy?.endDate,
     visitFrom: v ? isoDay(parseIso(v.openedAt)) : undefined,

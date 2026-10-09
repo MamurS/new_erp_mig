@@ -67,6 +67,15 @@ export interface SetStore {
   add(key: string): Promise<void>;
 }
 
+/**
+ * Marks of the background jobs (services/jobRunner.ts): an action of a job is done once per subject and occurrence
+ * (the reminder of one SLA breach, the renewal deal of one policy). System-only: `app.job_marks` in Postgres.
+ */
+export interface JobMarks {
+  /** Marks the occurrence: true when it was not marked yet (the caller acts), false when it already was. */
+  claim(job: string, subject: string, occurrence: string): Promise<boolean>;
+}
+
 /** Document number sequences: `next` returns the incremented value. */
 export type SeqName = 'kp' | 'guarantee' | 'case' | 'deal' | 'contract';
 export interface Seqs {
@@ -163,6 +172,7 @@ export type Repos = { [N in KeyedName]: Table<RowOf<N>, (typeof TABLE_KEYS)[N], 
   /** AI precheck flags of registry lines: line id → reason. */
   aiRebillFlags: MapStore<string>;
   statementKeys: SetStore;
+  jobMarks: JobMarks;
   seq: Seqs;
   one: Singletons;
   /** Narrow facts about rows the person's row-level security hides (store/facts.ts). */

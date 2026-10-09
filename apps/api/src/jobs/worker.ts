@@ -11,6 +11,7 @@
 import type pg from 'pg';
 import { JOBS } from '@mig/domain/services/jobs';
 import { runApiJob, type JobSummary } from '@mig/domain/services/jobRunner';
+import { edoEvents } from '@mig/domain/services/lifecycle';
 import type { BlobStore } from '@mig/domain/store/blob';
 import type { PiiCrypto } from '@mig/domain/store/pii';
 import { storageGc, type StorageGc } from '../files/gc';
@@ -34,6 +35,8 @@ export interface Worker {
   tick(): Promise<{
     jobs: { name: string; ok: boolean; summary?: JobSummary }[];
     identities: { synced: number; failed: number };
+    /** Contracts that got a client signature from the EDO operator this pass. */
+    edo: number;
     storage?: { removed: number; failed: number; orphans?: { removed: number; failed: number } };
   }>;
   /** The Storage collector (with `storage`). */
@@ -100,7 +103,10 @@ export function createWorker(o: WorkerOptions): Worker {
         storage.orphans = await gc.sweepOrphans();
       }
     }
-    return { jobs, identities, ...(storage ? { storage } : {}) };
+    // The EDO operator is polled every pass (signatures arrive seconds after the send, not on a schedule).
+    const edo = await withSystemDb(o.pool, { crypto: o.crypto, now: o.now }, (ctx) => edoEvents(ctx));
+    if (edo) log('edo signatures', { contracts: edo });
+    return { jobs, identities, edo, ...(storage ? { storage } : {}) };
   }
 
   return {

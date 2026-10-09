@@ -1,23 +1,26 @@
 /*
  * The `api` jobs of jobs.ts (BACKEND_SPEC §10) as service calls with the system context. The API's worker
- * takes the rows pg_cron puts into `app.job_queue` and runs them here (apps/api/src/jobs/worker.ts); the mock
- * calls the same service functions (on read, as before: these are the sweeps the screens trigger).
+ * takes the rows pg_cron puts into `app.job_queue` and runs them here (apps/api/src/jobs/worker.ts), in one
+ * transaction per job.
+ *
+ * Every job does its action once: a second run, or a later one while nothing changed, does nothing. Reminders,
+ * renewal deals and age-limit requests are guarded by `jobMarks` (app.job_marks: job + subject + occurrence, written
+ * in the job's transaction); request deadlines by the flags of the request; lifecycle transitions by the status
+ * they change (a conditional update).
+ *
+ * The mock does not schedule jobs: the screens keep their sweeps on read (request deadlines, the contract clock) and
+ * show the rest in the work queues (docs/DECISIONS.md, stage 1.5).
  *
  * Every job returns a small summary (counts only, no personal data) for the worker's log.
  */
-import { reachedAgeLimit } from '../family';
-import { ageLimits } from './family';
-import { isoDay } from '../lib/time';
-import { isOverdue, renewalsWithoutOffer } from './dashboard';
+import { openRenewalDeals } from './deals';
 import type { BaseCtx } from './kernel';
-import { refreshContract } from './lifecycle';
-import { loadParams } from './params';
+import { timeClocks } from './lifecycle';
+import { ageLimitTasks, salesReminders, slaReminders } from './reminders';
 import { sweepDeadlines } from './tasks';
 import { JOBS } from './jobs';
 
 export type JobSummary = Record<string, number>;
-
-const DAY = 86_400_000;
 
 /** The services of the `api` jobs, by job name. */
 export const API_JOBS: Readonly<Record<string, (ctx: BaseCtx) => Promise<JobSummary>>> = {
@@ -27,47 +30,16 @@ export const API_JOBS: Readonly<Record<string, (ctx: BaseCtx) => Promise<JobSumm
     await sweepDeadlines(ctx);
     return { notifications: (await ctx.repos.notifications.count()) - before };
   },
-  /** SLA of claims: the work queues show overdue items on read; the job counts them for monitoring. */
-  'sla-reminders': async (ctx) => {
-    const now = ctx.now();
-    const open = await ctx.repos.claims.list({
-      where: { status: { in: ['new', 'review', 'medical_review'] } },
-    });
-    return { overdueClaims: open.filter((c) => isOverdue(c, now)).length };
-  },
-  /** Offers without an answer and idle leads: the sales queues show them on read; the job counts them. */
-  'sales-reminders': async (ctx) => {
-    const P = await loadParams(ctx);
-    const now = ctx.now();
-    const idle = P.dmsParam('leadIdleDays') * DAY;
-    const noAnswer = P.dmsParam('kpNoAnswerDays') * DAY;
-    const leads = (await ctx.repos.deals.list({ where: { stage: 'lead' } })).filter(
-      (d) => now - Date.parse(d.updatedAt) >= idle,
-    ).length;
-    const offers = (await ctx.repos.kp.list({ where: { status: 'sent' } })).filter(
-      (k) => k.sentAt && now - Date.parse(k.sentAt) >= noAnswer,
-    ).length;
-    return { idleLeads: leads, offersWithoutAnswer: offers };
-  },
-  /** Renewals within 30 days without an offer (the dashboard's «renewal» items; the offer opens the renewal deal). */
-  'renewal-deals': async (ctx) => ({
-    renewalsWithoutOffer: (await renewalsWithoutOffer(ctx, ctx.now())).length,
-  }),
-  /** Contracts entering into force and policies expiring: the same refresh the screens run on read. */
-  'contract-lifecycle': async (ctx) => {
-    const list = await ctx.repos.contracts.list();
-    for (const c of list) await refreshContract(ctx, c);
-    return { contracts: list.length };
-  },
-  /** Children at the age limit: a task for MIG's manager is shown on read (no automatic exclusion). */
-  'child-age-limit': async (ctx) => {
-    const limits = ageLimits(await loadParams(ctx));
-    const today = isoDay(ctx.now());
-    const children = await ctx.repos.insured.list({
-      where: { relation: 'child', status: { ne: 'excluded' } },
-    });
-    return { atAgeLimit: children.filter((p) => reachedAgeLimit(p, today, limits)).length };
-  },
+  /** Claims, guarantee letters, appointments awaiting the clinic, assistance cases past their SLA: once per breach. */
+  'sla-reminders': async (ctx) => slaReminders(ctx),
+  /** Idle leads and offers without an answer: the deal's manager, once per state. */
+  'sales-reminders': async (ctx) => salesReminders(ctx),
+  /** The renewal deal `renewalLeadDays` before the client's policy ends, once per policy. */
+  'renewal-deals': async (ctx) => ({ renewalDeals: await openRenewalDeals(ctx) }),
+  /** Every state that changes with the date: contracts, policies, guarantee letters, invoices (once each). */
+  'contract-lifecycle': async (ctx) => timeClocks(ctx),
+  /** A request to the underwriter per child at the age limit (no automatic exclusion), once per child and limit. */
+  'child-age-limit': async (ctx) => ({ ageLimitRequests: await ageLimitTasks(ctx) }),
 };
 
 /** Runs an `api` job by name (unknown names are an error: the catalog and this map must agree). */

@@ -119,6 +119,8 @@ export const labels: Translation<typeof Ru> = {
   'labels.audit.contract_original': 'Asl nusxa belgisi',
   'labels.audit.contract_activated': 'Shartnoma kuchga kirdi',
   'labels.audit.contract_terminated': 'Shartnoma bekor qilindi',
+  'labels.audit.contract_expired': 'Shartnoma muddati tugadi',
+  'labels.audit.policy_expired': 'Polis muddati tugadi',
   'labels.audit.payment_recorded': 'Toʻlov belgilandi',
   'labels.audit.payments_imported': '1C koʻchirmasi yuklandi',
   'labels.audit.payment_allocated': 'Toʻlov qoʻlda taqsimlandi',

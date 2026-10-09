@@ -11,6 +11,7 @@ import {
   NESTED_KEYS,
   TABLE_KEYS,
   type InsertOptions,
+  type JobMarks,
   type LogTable,
   type MapStore,
   type NestedRows,
@@ -202,10 +203,19 @@ export function memoryRepos(db: () => Db): Repos {
       if (!db().statementKeys.includes(k)) db().statementKeys.push(k);
     },
   };
+  const jobMarks: JobMarks = {
+    async claim(job, subject, occurrence) {
+      const marks = db().jobMarks;
+      if (marks.some((m) => m.job === job && m.subject === subject && m.occurrence === occurrence)) return false;
+      marks.push({ job, subject, occurrence, at: new Date().toISOString() });
+      return true;
+    },
+  };
   const base: Omit<Repos, 'facts'> = {
-    ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one' | 'facts'>),
+    ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'jobMarks' | 'seq' | 'one' | 'facts'>),
     aiRebillFlags: flags,
     statementKeys,
+    jobMarks,
     seq: {
       async next(name) {
         const d = db();

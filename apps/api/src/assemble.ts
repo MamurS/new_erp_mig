@@ -69,6 +69,8 @@ export async function assemble(
   // The test mode of phone sign-in (ALLOW_TEST_TOTP only): `000000` stands for the last code sent to the phone.
   const testCodes = env.testTotp ? testPhoneCodes(pool) : null;
   await storage.ensureBuckets();
+  // The worker's job runner (started below when WORKER=inline); the demo clock runs the date clocks with it.
+  const jobs = createWorker({ pool, crypto: env.crypto, identity, storage, log, now, ...(env.workerIntervalMs ? { intervalMs: env.workerIntervalMs } : {}) });
   const app = await buildApp({
     pool,
     crypto: env.crypto,
@@ -93,12 +95,13 @@ export async function assemble(
     smsHook: { secret: env.smsHookSecret, sender: sms, testCodes },
     demoRoutes: env.demo ? demoOptions : null,
     demo,
+    ...(demo ? { runClocks: async () => { await jobs.runJob('contract-lifecycle'); await jobs.runJob('task-deadlines'); } } : {}),
     now,
     logger: o.logger ?? false,
   });
   app.addHook('onClose', async () => {
     await side.end();
   });
-  const worker = env.worker === 'inline' ? createWorker({ pool, crypto: env.crypto, identity, storage, log, now }) : null;
+  const worker = env.worker === 'inline' ? jobs : null;
   return { app, pool, storage, identity, sms, worker, demo };
 }

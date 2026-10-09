@@ -47,6 +47,8 @@ export interface AppOptions {
   demo?: DemoControls | null;
   /** Re-encoding of uploaded images (files/imageCodec.ts); without it their metadata is only stripped. */
   images?: ImageCodec;
+  /** With the demo knobs: runs the date clocks job (a jump of the test clock; the worker's runJob). */
+  runClocks?: () => Promise<unknown>;
   /** The clock of the services (tests pin it). */
   now?: () => number;
   /** Fastify's request log: off, on (info), or a level (LOG_LEVEL). */
@@ -197,7 +199,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
 
   for (const r of ROUTES) register(r);
   if (o.demoRoutes) for (const r of demoRoutes(o.demoRoutes)) register(r);
-  if (o.demoRoutes && o.demo) registerDemoControls(app, { pool: o.pool, controls: o.demo, log: (msg, data) => app.log.info(data ?? {}, msg) });
+  if (o.demoRoutes && o.demo) registerDemoControls(app, { pool: o.pool, controls: o.demo, ...(o.runClocks ? { runClocks: o.runClocks } : {}), log: (msg, data) => app.log.info(data ?? {}, msg) });
 
   // ---------------------------------------------------------------- API-only routes
 

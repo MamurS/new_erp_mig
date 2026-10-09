@@ -33,7 +33,7 @@ import { loadParams, type ParamsView } from './params';
 import { createInsured, createListedInsured, nextPolicyNumber, refreshPolicyTotals } from './policy';
 import { notifyAssistance, syncAssistance } from './assistance';
 import { afterSigning } from './system/consequences';
-import { refreshContract } from './system/clocks';
+import { contractLifecycle, edoEvents, refreshContract, timeClocks } from './system/clocks';
 
 
 export async function staffName(ctx: BaseCtx, id: UUID | undefined): Promise<string | undefined> {
@@ -478,4 +478,4 @@ export async function checklistInput(ctx: BaseCtx, deal: Deal): Promise<Checklis
   };
 }
 
-export { afterSigning, refreshContract };
+export { afterSigning, contractLifecycle, edoEvents, refreshContract, timeClocks };
