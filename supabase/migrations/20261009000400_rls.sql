@@ -47,14 +47,14 @@ create policy clients_update on public.clients for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['clients.write', 'leads.manage', 'deals.manage', 'contracts.draft', 'assistance.assign', 'migration.manage']::text[]))));
 grant select, insert, update on public.clients to authenticated;
 
--- policies: HR — policies of the own company; the insured — the own policy; an assistance company — policies assigned to it today.
+-- policies: HR — policies of the own company; the insured — the own policy; an assistance company — policies assigned to it today, read-only for 12 months after (ASSISTANCE_SPEC §3).
 alter table public.policies enable row level security;
 create policy policies_select on public.policies for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])))
       or ((select app.role()) = 'hr' and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (client_id = (select app.company_id())))
       or ((select app.role()) = 'insured' and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (id = (select app.my_policy_id())))
-      or ((select app.is_assist()) and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (app.assist_covers(id, current_date)))
+      or ((select app.is_assist()) and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (app.assist_access(id) <> 'none'))
     ));
 create policy policies_insert on public.policies for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['policies.write', 'assistance.assign', 'contracts.draft', 'policy_changes.decide']::text[]))));
@@ -63,7 +63,7 @@ create policy policies_update on public.policies for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['policies.write', 'assistance.assign', 'contracts.draft', 'policy_changes.decide']::text[]))));
 grant select, insert, update on public.policies to authenticated;
 
--- insured: HR — employees of the own company; the insured — self and the own family (names); a clinic — patients with an open visit; an assistance company — persons of policies assigned to it today. Ciphertexts of PINFL and phone are not readable by `authenticated` (column privileges); lists use the view `insured_masked`.
+-- insured: HR — employees of the own company; the insured — self and the own family (names); a clinic — patients with an open visit; an assistance company — persons of policies assigned to it today, read-only for 12 months after. Ciphertexts of PINFL and phone are not readable by `authenticated` (column privileges); lists use the view `insured_masked`.
 alter table public.insured enable row level security;
 create policy insured_select on public.insured for select to authenticated
   using ((select app.active()) and (
@@ -71,7 +71,7 @@ create policy insured_select on public.insured for select to authenticated
       or ((select app.role()) = 'hr' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (client_id = (select app.company_id())))
       or ((select app.role()) = 'insured' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.my_family_ids())::uuid[])))
       or ((select app.is_clinic()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.clinic_patient_ids())::uuid[])))
-      or ((select app.is_assist()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (app.assist_covers(policy_id, current_date)))
+      or ((select app.is_assist()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (app.assist_access(policy_id) <> 'none'))
     ));
 create policy insured_insert on public.insured for insert to authenticated
   with check ((select app.active()) and (
@@ -119,14 +119,14 @@ create policy claims_update on public.claims for update to authenticated
     ));
 grant select, insert, update on public.claims to authenticated;
 
--- appointments: The insured books for self and the family; a clinic — appointments of the own clinic; an assistance company — of persons assigned to it on the visit date.
+-- appointments: The insured books for self and the family; a clinic — appointments of the own clinic; an assistance company — reads requests of persons assigned to it on the date of the request (read-only for 12 months after), writes those of persons assigned on the visit date.
 alter table public.appointments enable row level security;
 create policy appointments_select on public.appointments for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])))
-      or ((select app.role()) = 'insured' and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])) and (insured_id = any((select app.my_person_ids())::uuid[])))
-      or ((select app.is_clinic()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])) and (clinic_id = (select app.clinic_id())))
-      or ((select app.is_assist()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])) and (app.assist_covers_insured(insured_id, (starts_at at time zone (select app.tz()))::date)))
+      ((select app.is_staff()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])))
+      or ((select app.role()) = 'insured' and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])) and (insured_id = any((select app.my_person_ids())::uuid[])))
+      or ((select app.is_clinic()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])) and (clinic_id = (select app.clinic_id())))
+      or ((select app.is_assist()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])) and (app.assist_scope(app.policy_of_insured(insured_id), (created_at at time zone (select app.tz()))::date) <> 'none'))
     ));
 create policy appointments_insert on public.appointments for insert to authenticated
   with check ((select app.active()) and (
@@ -207,12 +207,12 @@ create policy invoices_update on public.invoices for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record', 'contracts.draft', 'contracts.sign_mig', 'endorsements.manage']::text[]))));
 grant select, insert, update on public.invoices to authenticated;
 
--- documents: Documents of a client: MIG staff and the own company’s HR.
+-- documents: Documents of a client: MIG staff (also the policy card of policies.read) and the own company’s HR.
 alter table public.documents enable row level security;
 create policy documents_select on public.documents for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read']::text[])) and (client_id = (select app.company_id())))
+      ((select app.is_staff()) and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read', 'policies.read']::text[])))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read', 'policies.read']::text[])) and (client_id = (select app.company_id())))
     ));
 create policy documents_insert on public.documents for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['kp.create', 'kp.send', 'contracts.draft', 'contracts.sign_mig', 'migration.manage', 'clients.write']::text[]))));
@@ -302,7 +302,7 @@ grant select, insert, update on public.kp to authenticated;
 alter table public.clinic_users enable row level security;
 create policy clinic_users_select on public.clinic_users for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'clinic.users.manage']::text[])))
+      ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'clinic.users.manage', 'clinics.read']::text[])))
       or ((select app.is_clinic()) and (clinic_id = (select app.clinic_id())))
     ));
 create policy clinic_users_insert on public.clinic_users for insert to authenticated
@@ -321,13 +321,13 @@ create policy clinic_users_update on public.clinic_users for update to authentic
     ));
 grant select, insert, update on public.clinic_users to authenticated;
 
--- price_lists: Price lists: the own clinic, MIG and assistance reviewers.
+-- price_lists: Price lists: the own clinic, MIG and every assistance company (the network list is the reference of its referrals and contracts).
 alter table public.price_lists enable row level security;
 create policy price_lists_select on public.price_lists for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['clinics.read', 'clinics.manage', 'registries.review', 'guarantees.decide', 'assist.registries.review', 'assist.guarantees.decide', 'ai.coverage.mig', 'ai.coverage.assist']::text[])))
       or ((select app.is_clinic()) and (clinic_id = (select app.clinic_id())))
-      or ((select app.is_assist()) and (select app.can_any(array['clinics.read', 'clinics.manage', 'registries.review', 'guarantees.decide', 'assist.registries.review', 'assist.guarantees.decide', 'ai.coverage.mig', 'ai.coverage.assist']::text[])))
+      or ((select app.is_assist()))
     ));
 create policy price_lists_insert on public.price_lists for insert to authenticated
   with check ((select app.active()) and (
@@ -345,14 +345,14 @@ create policy price_lists_update on public.price_lists for update to authenticat
     ));
 grant select, insert, update on public.price_lists to authenticated;
 
--- card_tokens: The insured issues QR/short-code tokens of the own card; a clinic redeems a token through the API (system), not by reading the table.
+-- card_tokens: The insured issues QR/short-code tokens of the own card and of the active family under them (FAMILY_SPEC: card); a clinic redeems a token through app.fact_redeem_card_token, not by reading the table.
 alter table public.card_tokens enable row level security;
 create policy card_tokens_select on public.card_tokens for select to authenticated
-  using ((select app.active()) and ((select app.role()) = 'insured' and (insured_id = (select app.insured_id()))));
+  using ((select app.active()) and ((select app.role()) = 'insured' and (insured_id = any((select app.my_card_ids())::uuid[]))));
 create policy card_tokens_insert on public.card_tokens for insert to authenticated
-  with check ((select app.active()) and ((select app.role()) = 'insured' and (insured_id = (select app.insured_id()))));
+  with check ((select app.active()) and ((select app.role()) = 'insured' and (insured_id = any((select app.my_card_ids())::uuid[]))));
 create policy card_tokens_delete on public.card_tokens for delete to authenticated
-  using ((select app.active()) and ((select app.role()) = 'insured' and (insured_id = (select app.insured_id()))));
+  using ((select app.active()) and ((select app.role()) = 'insured' and (insured_id = any((select app.my_card_ids())::uuid[]))));
 grant select, insert, delete on public.card_tokens to authenticated;
 
 -- visits: Visits open access of a clinic to a patient: the own clinic; an assistance company opens a visit for a person assigned to it.
@@ -373,7 +373,7 @@ grant select, insert on public.visits to authenticated;
 -- check_locks: System only (service role in the API): no policy for `authenticated`.
 alter table public.check_locks enable row level security;
 
--- guarantees: Guarantee letters: the requesting clinic; the deciding assistance company; MIG doctors (escalations and clients without an assistance company).
+-- guarantees: Guarantee letters: the requesting clinic (also on a referral of the assistance company, which writes the letter of its own current client); the deciding assistance company; MIG doctors (escalations and clients without an assistance company).
 alter table public.guarantees enable row level security;
 create policy guarantees_select on public.guarantees for select to authenticated
   using ((select app.active()) and (
@@ -382,7 +382,10 @@ create policy guarantees_select on public.guarantees for select to authenticated
       or ((select app.is_assist()) and (select app.can_any(array['guarantees.read', 'guarantees.decide', 'assist.guarantees.decide', 'qa.review', 'guarantees.request', 'assist.cases.manage']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy guarantees_insert on public.guarantees for insert to authenticated
-  with check ((select app.active()) and ((select app.is_clinic()) and (select app.can_any(array['guarantees.request']::text[])) and (clinic_id = (select app.clinic_id()))));
+  with check ((select app.active()) and (
+      ((select app.is_clinic()) and (select app.can_any(array['guarantees.request', 'assist.cases.manage']::text[])) and (clinic_id = (select app.clinic_id())))
+      or ((select app.is_assist()) and (select app.can_any(array['guarantees.request', 'assist.cases.manage']::text[])) and (assistance_id = (select app.assistance_id()) and app.assist_scope(policy_id, (created_at at time zone (select app.tz()))::date) = 'full'))
+    ));
 create policy guarantees_update on public.guarantees for update to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['guarantees.decide', 'assist.guarantees.decide', 'guarantees.request']::text[])))
@@ -423,7 +426,7 @@ grant select, insert, update on public.registries to authenticated;
 alter table public.integration_clients enable row level security;
 create policy integration_clients_select on public.integration_clients for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])))
+      ((select app.is_staff()))
       or ((select app.is_clinic()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.clinic_id())))
       or ((select app.is_assist()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.assistance_id())))
     ));
@@ -478,7 +481,7 @@ create policy webhooks_update on public.webhooks for update to authenticated
 grant select (id, clinic_id, partner_type, url, events, secret_last4, active, created_at, _pos, _created_at, _updated_at, _created_by) on public.webhooks to authenticated;
 grant insert, update on public.webhooks to authenticated;
 
--- webhook_deliveries: Delivery log of webhooks: read by the partner; written by the API outbox (system).
+-- webhook_deliveries: Delivery log of webhooks: read by the partner, whose integration admin records a manual retry; written by the API outbox (system).
 alter table public.webhook_deliveries enable row level security;
 create policy webhook_deliveries_select on public.webhook_deliveries for select to authenticated
   using ((select app.active()) and (
@@ -486,7 +489,16 @@ create policy webhook_deliveries_select on public.webhook_deliveries for select 
       or ((select app.is_clinic()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.clinic_id())))
       or ((select app.is_assist()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.assistance_id())))
     ));
-grant select on public.webhook_deliveries to authenticated;
+create policy webhook_deliveries_update on public.webhook_deliveries for update to authenticated
+  using ((select app.active()) and (
+      ((select app.is_clinic()) and (select app.can_any(array['clinic.integration.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.clinic_id())))
+      or ((select app.is_assist()) and (select app.can_any(array['clinic.integration.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.assistance_id())))
+    ))
+  with check ((select app.active()) and (
+      ((select app.is_clinic()) and (select app.can_any(array['clinic.integration.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.clinic_id())))
+      or ((select app.is_assist()) and (select app.can_any(array['clinic.integration.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.assistance_id())))
+    ));
+grant select, update on public.webhook_deliveries to authenticated;
 
 -- idempotency: System only (service role in the API): no policy for `authenticated`.
 alter table public.idempotency enable row level security;
@@ -551,7 +563,7 @@ grant select, insert, update on public.assistances to authenticated;
 alter table public.assist_users enable row level security;
 create policy assist_users_select on public.assist_users for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['assistance.manage', 'assist.users.manage']::text[])))
+      ((select app.is_staff()))
       or ((select app.is_assist()) and (assistance_id = (select app.assistance_id())))
     ));
 create policy assist_users_insert on public.assist_users for insert to authenticated
@@ -575,6 +587,7 @@ alter table public.cases enable row level security;
 create policy cases_select on public.cases for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['assist.cases.manage', 'qa.review', 'assistance.manage']::text[])))
+      or ((select app.is_staff()) and (status <> 'resolved' and (type = 'complaint' or sla_due_at < now())))
       or ((select app.is_assist()) and (select app.can_any(array['assist.cases.manage', 'qa.review', 'assistance.manage']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy cases_insert on public.cases for insert to authenticated
@@ -598,6 +611,7 @@ alter table public.rebills enable row level security;
 create policy rebills_select on public.rebills for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review']::text[])))
+      or ((select app.is_staff()) and (status <> 'draft'))
       or ((select app.is_assist()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy rebills_insert on public.rebills for insert to authenticated
@@ -620,7 +634,7 @@ grant select, insert, update on public.rebills to authenticated;
 alter table public.qa_samples enable row level security;
 create policy qa_samples_select on public.qa_samples for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage']::text[])))
+      ((select app.is_staff()))
       or ((select app.is_assist()) and (select app.can_any(array['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy qa_samples_update on public.qa_samples for update to authenticated
@@ -650,12 +664,15 @@ create policy deals_update on public.deals for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.sign_mig', 'payments.record']::text[]))));
 grant select, insert, update on public.deals to authenticated;
 
--- deal_events: Deal activity feed: MIG staff only.
+-- deal_events: Deal activity feed: MIG staff read it; HR writes the events of its own actions (an offer answered, a signature, a request) into the feed of the own company’s deal.
 alter table public.deal_events enable row level security;
 create policy deal_events_select on public.deal_events for select to authenticated
   using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['deals.manage', 'leads.manage', 'contracts.read', 'quotes.calculate', 'census.upload', 'kp.send', 'kp.create']::text[]))));
 create policy deal_events_insert on public.deal_events for insert to authenticated
-  with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'payments.record', 'tasks.ask']::text[]))));
+  with check ((select app.active()) and (
+      ((select app.is_staff()) and (select app.can_any(array['deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'payments.record', 'tasks.ask']::text[])))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'payments.record', 'tasks.ask']::text[])) and (app.client_of_deal(deal_id) = (select app.company_id())))
+    ));
 grant select, insert on public.deal_events to authenticated;
 
 -- censuses: Anonymous census (gender, birth year): MIG sales and underwriting.
@@ -677,23 +694,23 @@ create policy quotes_update on public.quotes for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['quotes.calculate', 'quotes.approve']::text[]))));
 grant select, insert, update on public.quotes to authenticated;
 
--- contracts: Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list).
+-- contracts: Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list), and a draft while MIG asks HR for its appendix 2 (an open request).
 alter table public.contracts enable row level security;
 create policy contracts_select on public.contracts for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and status <> 'draft' and status <> 'legal_review'))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and ((status <> 'draft' and status <> 'legal_review') or app.hr_asked_contract(id))))
     ));
 create policy contracts_insert on public.contracts for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['contracts.draft']::text[]))));
 create policy contracts_update on public.contracts for update to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and status in ('sent', 'signing', 'signed', 'active')))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and (status in ('sent', 'signing', 'signed', 'active') or app.hr_asked_contract(id))))
     ))
   with check ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and status in ('sent', 'signing', 'signed', 'active')))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and (status in ('sent', 'signing', 'signed', 'active') or app.hr_asked_contract(id))))
     ));
 grant select, insert, update on public.contracts to authenticated;
 
@@ -720,10 +737,10 @@ create policy contract_insured_update on public.contract_insured for update to a
     ));
 grant select, insert, update on public.contract_insured to authenticated;
 
--- payments: Payments: MIG accounting.
+-- payments: Payments: MIG accounting and the readers of the contract card.
 alter table public.payments enable row level security;
 create policy payments_select on public.payments for select to authenticated
-  using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record', 'invoices.read']::text[]))));
+  using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record', 'invoices.read', 'contracts.read']::text[]))));
 create policy payments_insert on public.payments for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record']::text[]))));
 grant select, insert on public.payments to authenticated;
@@ -901,13 +918,13 @@ create policy assignments_update on public.assignments for update to authenticat
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['assistance.assign']::text[]))));
 grant select, insert, update on public.assignments to authenticated;
 
--- clinic_contracts: Clinic contracts with a payer (MIG or an assistance company): the clinic, the payer and MIG.
+-- clinic_contracts: Clinic contracts with a payer (MIG or an assistance company): the clinic, the payer (every user of the assistance company: its network page) and MIG.
 alter table public.clinic_contracts enable row level security;
 create policy clinic_contracts_select on public.clinic_contracts for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'registries.review', 'assistance.manage', 'assist.registries.review', 'clinic.check_patient']::text[])))
       or ((select app.is_clinic()) and (clinic_id = (select app.clinic_id())))
-      or ((select app.is_assist()) and (select app.can_any(array['clinics.manage', 'registries.review', 'assistance.manage', 'assist.registries.review', 'clinic.check_patient']::text[])) and (payer = (select app.assistance_id())::text))
+      or ((select app.is_assist()) and (payer = (select app.assistance_id())::text))
     ));
 create policy clinic_contracts_insert on public.clinic_contracts for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'assistance.manage']::text[]))));
@@ -1000,11 +1017,18 @@ create policy integrations_seed_select on public.integrations_seed for select to
   using ((select app.active()) and true);
 grant select on public.integrations_seed to authenticated;
 
--- ai_rebill_flags: AI precheck flags of rebill lines: MIG reviewers; written by the API (system).
+-- ai_rebill_flags: AI precheck flags of rebill lines: MIG reviewers read them; the reviewer of rebills sets and clears them (the AI precheck).
 alter table public.ai_rebill_flags enable row level security;
 create policy ai_rebill_flags_select on public.ai_rebill_flags for select to authenticated
   using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit']::text[]))));
-grant select on public.ai_rebill_flags to authenticated;
+create policy ai_rebill_flags_insert on public.ai_rebill_flags for insert to authenticated
+  with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['rebills.review']::text[]))));
+create policy ai_rebill_flags_update on public.ai_rebill_flags for update to authenticated
+  using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['rebills.review']::text[]))))
+  with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['rebills.review']::text[]))));
+create policy ai_rebill_flags_delete on public.ai_rebill_flags for delete to authenticated
+  using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['rebills.review']::text[]))));
+grant select, insert, update, delete on public.ai_rebill_flags to authenticated;
 
 -- statement_keys: Keys of imported bank statement lines: MIG accounting.
 alter table public.statement_keys enable row level security;

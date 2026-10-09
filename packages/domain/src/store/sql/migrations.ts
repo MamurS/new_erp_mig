@@ -10,7 +10,8 @@ import { REVEAL, SEQUENCES, TABLES, sequenceName, type TableSpec } from '../sche
 import { META_COLUMNS, LOG_ID, hasSecrets, indexColumn, keyColumn, lit, physicalColumns, readableColumns } from './physical';
 import { ALL_ROLES, ASSIST_ROLES, CLINIC_ROLES, OPS, STAFF_ROLES, cached, grantExpression } from './rls';
 import { CLEANUP_STATEMENTS, cleanupFunction } from './cleanup';
-import { authMigrations } from './migrationsAuth';
+import { authMigrations, storageGcMigration } from './migrationsAuth';
+import { factsMigration } from './facts';
 
 export interface SqlFile {
   name: string;
@@ -245,6 +246,71 @@ ${def(
   'The person’s policy is assigned to the user’s assistance company on the date.',
 )}
 ${def('client_of_contract(p_contract uuid)', 'uuid', 'select c.client_id from public.contracts c where c.id = p_contract', 'Client of a contract (HR scope of appendices, change requests, endorsements).')}
+${def(
+  'hr_asked_contract(p_contract uuid)',
+  'boolean',
+  `select exists (select 1 from public.tasks t where t.contract_id = p_contract and t.status = 'open' and t.to_role = 'hr'
+    and t.action = 'insured_list' and t.client_id = app.company_id())`,
+  'MIG asked the HR of the own company for appendix 2 of this contract (an open request): HR may read and fill the draft.',
+)}
+${def('today()', 'date', 'select (now() at time zone app.tz())::date', 'Today in Tashkent (business dates).')}
+${def(
+  'add_months(p_date date, p_months integer)',
+  'date',
+  `select make_date(
+    extract(year from p_date)::int + ((extract(month from p_date)::int - 1 + p_months) / 12),
+    ((extract(month from p_date)::int - 1 + p_months) % 12) + 1, 1) + (extract(day from p_date)::int - 1)`,
+  'A date plus months with the overflow of JavaScript dates (Jan 31 + 1 month = Mar 3), as addMonths() of the domain.',
+  'immutable',
+)}
+${def('policy_of_insured(p_insured uuid)', 'uuid', 'select i.policy_id from public.insured i where i.id = p_insured', 'Policy of an insured person (assistance scope of appointments).')}
+${def(
+  'assistance_on(p_policy uuid, p_day date)',
+  'uuid',
+  `select a.assistance_id from public.assignments a
+    where a.policy_id = p_policy and a."from" <= p_day and (a."to" is null or p_day <= a."to")
+    order by a."from" desc, a._pos desc limit 1`,
+  'The assistance company serving a policy on a date (null: MIG), as assistanceOn() of the domain: the latest assignment covering the date.',
+)}
+${def(
+  'assist_scope_of(p_assistance uuid, p_policy uuid, p_day date)',
+  'text',
+  `select case
+      when a.policy_id is null then 'none'
+      when a."to" is null or a."to" >= app.today() then 'full'
+      when app.add_months(a."to", 12) >= app.today() then 'read'
+      else 'none' end
+    from (select 1) x left join lateral (select * from public.assignments s
+      where s.policy_id = p_policy and s.assistance_id = p_assistance and s."from" <= p_day and (s."to" is null or p_day <= s."to")
+      order by s._pos limit 1) a on true`,
+  'Access of an assistance company to a record of a policy dated p_day, as assistanceScope() of the domain: full, read (a former company, 12 months) or none.',
+)}
+${def(
+  'assist_scope(p_policy uuid, p_day date)',
+  'text',
+  'select app.assist_scope_of(app.assistance_id(), p_policy, p_day)',
+  'Access of the user’s assistance company to a record of a policy dated p_day (full, read or none).',
+)}
+${def(
+  'assist_access(p_policy uuid)',
+  'text',
+  `select case
+      when app.assist_scope_of(app.assistance_id(), p_policy, app.today()) <> 'none' then app.assist_scope_of(app.assistance_id(), p_policy, app.today())
+      when exists (select 1 from public.assignments a where a.policy_id = p_policy and a.assistance_id = app.assistance_id() and a."to" is not null
+        and app.assist_scope_of(app.assistance_id(), p_policy, a."to") <> 'none') then 'read'
+      else 'none' end`,
+  'Access of the user’s assistance company to a person of a policy, as insuredAccess(): the current assignment, or read-only for a former company within 12 months.',
+)}
+${def('client_of_deal(p_deal uuid)', 'uuid', 'select d.client_id from public.deals d where d.id = p_deal', 'Client of a deal (HR writes events of the own company’s deal into its feed).')}
+${def(
+  'my_card_ids()',
+  'uuid[]',
+  `select coalesce(array_agg(distinct x), '{}') from (
+    select app.insured_id() as x
+    union all select i.id from public.insured i where i.principal_id = app.insured_id() and i.status <> 'excluded'
+  ) s where x is not null`,
+  'Persons whose card the insured person may show at a clinic desk: self and the active family under them (FAMILY_SPEC: card).',
+)}
 ${def(
   'registry_has_payer(p_lines jsonb, p_payer uuid)',
   'boolean',
@@ -541,6 +607,8 @@ export function buildMigrations(): SqlFile[] {
     { name: '20261009000500_audit.sql', sql: audit() },
     { name: '20261009000600_jobs.sql', sql: jobs() },
     ...authMigrations(),
+    { name: '20261011000100_app_facts.sql', sql: factsMigration() },
+    { name: '20261011000200_storage_gc.sql', sql: storageGcMigration() },
   ];
 }
 

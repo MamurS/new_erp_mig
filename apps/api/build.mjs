@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * Builds the API into dist/server.js, the background worker into dist/worker.js and the demo-account provisioning
- * (dev/ci/staging) into dist/provision-demo.js with esbuild (ESM bundles; fastify and pg stay in node_modules).
+ * (dev/ci/staging) into dist/provision-demo.js with esbuild (ESM bundles; fastify, pg and sharp — native — stay in node_modules).
  * `--watch`: rebuilds on change and restarts the server (`node --watch` on the bundle).
  */
 import { build, context } from 'esbuild';
@@ -20,7 +20,7 @@ const options = {
   sourcemap: true,
   // The help engine is imported from the web app by its `@/` alias (tsconfig paths).
   tsconfig: resolve(here, 'tsconfig.json'),
-  external: ['fastify', 'pg', 'pg-native'],
+  external: ['fastify', 'pg', 'pg-native', 'sharp'],
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
   logLevel: 'info',
 };

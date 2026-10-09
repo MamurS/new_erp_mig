@@ -5,7 +5,7 @@
  */
 import type { Role } from '@mig/contracts';
 import { PERMISSIONS, ruleFor, type Action } from '../../auth/permissions';
-import { ROLE_GROUPS, type Access, type Grant, type RoleGroup, type Scope, type ScopeLike } from '../schema';
+import { ROLE_GROUPS, type Access, type Grant, type GroupScope, type RoleGroup, type Scope, type ScopeLike } from '../schema';
 
 export const STAFF_ROLES = ['operator', 'underwriter', 'doctor_expert', 'accountant', 'admin', 'sales_manager', 'legal', 'claims_officer'] as const satisfies readonly Role[];
 export const CLINIC_ROLES = ['clinic_registrar', 'clinic_admin'] as const satisfies readonly Role[];
@@ -35,19 +35,24 @@ export function cached(sql: string): string {
 }
 
 const scope = (s: ScopeLike): Scope => (typeof s === 'string' ? { pred: s } : s);
+const scopes = (g: GroupScope): Scope[] => (Array.isArray(g) ? (g as readonly ScopeLike[]).map(scope) : [scope(g as ScopeLike)]);
+const actionsOf = (g: Grant, s: Scope): readonly Action[] => s.actions ?? g.actions ?? [];
 
 export type Op = 'select' | 'insert' | 'update' | 'delete';
 export const OPS: readonly Op[] = ['select', 'insert', 'update', 'delete'];
 
 function checkActions(g: Grant): void {
-  for (const a of g.actions ?? []) if (!(a in PERMISSIONS)) throw new Error(`Unknown action ${a}`);
+  const all = [...(g.actions ?? [])];
+  for (const group of ROLE_GROUPS) for (const s of g[group] === undefined ? [] : scopes(g[group]!)) all.push(...(s.actions ?? []));
+  for (const a of all) if (!(a in PERMISSIONS)) throw new Error(`Unknown action ${a}`);
 }
 
 /** The role passes the action gate of the group's scope. */
 function gateOpen(role: Role, g: Grant, s: Scope): boolean {
   if (s.always) return true;
-  if (!g.actions?.length) throw new Error(`A gated scope without actions: ${JSON.stringify(g)}`);
-  return g.actions.some((a: Action) => ruleFor(role, a) !== false);
+  const actions = actionsOf(g, s);
+  if (!actions.length) throw new Error(`A gated scope without actions: ${JSON.stringify(g)}`);
+  return actions.some((a: Action) => ruleFor(role, a) !== false);
 }
 
 /** Row predicate that applies to the role under a grant: 'false' when the role may not do it at all. */
@@ -55,8 +60,8 @@ export function rolePredicate(role: Role, g: Grant | undefined): string {
   if (!g) return 'false';
   checkActions(g);
   const parts: string[] = [];
-  const s = g[groupOf(role)];
-  if (s !== undefined && gateOpen(role, g, scope(s))) parts.push(scope(s).pred);
+  const gs = g[groupOf(role)];
+  for (const s of gs === undefined ? [] : scopes(gs)) if (gateOpen(role, g, s)) parts.push(s.pred);
   if (g.anyone !== undefined) parts.push(g.anyone);
   if (!parts.length) return 'false';
   if (parts.includes('true')) return 'true';
@@ -77,13 +82,14 @@ export function grantExpression(g: Grant | undefined): string | null {
   for (const group of ROLE_GROUPS) {
     const sl = g[group];
     if (sl === undefined) continue;
-    const s = scope(sl);
-    const roles = rolesOf(group).filter((r) => gateOpen(r, g, s));
-    if (!roles.length) continue;
-    const conds = [GROUP_SQL[group]];
-    if (!s.always) conds.push(`(select app.can_any(${arr(g.actions ?? [])}))`);
-    if (s.pred !== 'true') conds.push(`(${s.pred})`);
-    branches.push(`(${conds.join(' and ')})`);
+    for (const s of scopes(sl)) {
+      const roles = rolesOf(group).filter((r) => gateOpen(r, g, s));
+      if (!roles.length) continue;
+      const conds = [GROUP_SQL[group]];
+      if (!s.always) conds.push(`(select app.can_any(${arr(actionsOf(g, s))}))`);
+      if (s.pred !== 'true') conds.push(`(${s.pred})`);
+      branches.push(`(${conds.join(' and ')})`);
+    }
   }
   if (g.anyone !== undefined) branches.push(g.anyone === 'true' ? 'true' : `(${g.anyone})`);
   if (!branches.length) return null;

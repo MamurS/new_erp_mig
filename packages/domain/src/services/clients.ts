@@ -15,7 +15,8 @@ import { parseIso, tzIso } from '../lib/time';
 import { legalFormProblem } from '../minGroup';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, ClientRow } from '../store/db';
-import { DomainError, notFound, requirePermission, systemRepos, validate, type AuthCtx, type BaseCtx } from './kernel';
+import type { ClaimFigure } from '../store/facts';
+import { DomainError, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { byLegalForm, byLegalName, filterLegalForm, paginate, q, sortBy } from './list';
 import { loadParams } from './params';
 import { clientLegalFormOf, toClient, toInsuredListItem } from './views';
@@ -39,7 +40,7 @@ function lastMonths(now: number): string[] {
   return out;
 }
 
-function byCategory(claims: readonly ClaimRow[], amountOf: (x: ClaimRow) => number): { category: string; count: number; amount: number }[] {
+function byCategory<C extends Pick<ClaimRow, 'category'>>(claims: readonly C[], amountOf: (x: C) => number): { category: string; count: number; amount: number }[] {
   const byCat = new Map<string, { count: number; amount: number }>();
   for (const x of claims) {
     const e = byCat.get(x.category) ?? { count: 0, amount: 0 };
@@ -128,8 +129,9 @@ export async function lossStats(ctx: AuthCtx, id: string): Promise<ClientLossSta
   requirePermission(ctx.user, 'clients.read');
   const c = await findClient(ctx, id);
   const P = await loadParams(ctx);
-  const claims = await systemRepos(ctx, 'loss statistics of a client: counts and sums only').claims.list({ where: { clientId: c.id, status: { ne: 'rejected' } } });
-  const amountOf = (x: ClaimRow) => x.amountApproved ?? x.amountClaimed;
+  // Only the anonymous figures of the client's claims (app.fact_client_claim_figures): the reader may not read claims.
+  const claims = (await ctx.repos.facts.clientClaimFigures(c.id)).filter((x) => x.status !== 'rejected');
+  const amountOf = (x: ClaimFigure) => x.amountApproved ?? x.amountClaimed;
   const byMonth: ClientLossStats['byMonth'] = lastMonths(ctx.now()).map((key) => {
     const inMonth = claims.filter((x) => x.serviceDate.startsWith(key));
     return { month: key, count: inMonth.length, amount: inMonth.reduce((sum, x) => sum + amountOf(x), 0) };
@@ -154,23 +156,26 @@ export async function clientDetail(ctx: AuthCtx, id: string): Promise<ClientDeta
   requirePermission(user, 'clients.read');
   const r = ctx.repos;
   const c = await findClient(ctx, id);
-  const sys = systemRepos(ctx, 'client card: claims by month and category, the last invoice (aggregates; a claim number only with claims.read)');
-  const claims = await sys.claims.list({ where: { clientId: c.id } });
-  const amountOf = (x: ClaimRow) => x.amountApproved ?? x.amountClaimed;
+  // Figures of the claims, the last invoice and the policy come as narrow facts (store/facts.ts); a claim number
+  // only for a role that reads claims, from its own query.
+  const claims = await r.facts.clientClaimFigures(c.id);
+  const amountOf = (x: ClaimFigure) => x.amountApproved ?? x.amountClaimed;
   const months: ClientDetail['claimsByMonth'] = lastMonths(ctx.now()).map((key) => {
     const inMonth = claims.filter((x) => x.createdAt.startsWith(key));
     return { month: key, count: inMonth.length, amount: inMonth.reduce((s, x) => s + amountOf(x), 0) };
   });
   const activity: ClientDetail['activity'] = [];
-  const policy = c.activePolicyId ? await sys.policies.get(c.activePolicyId) : null;
+  const policy = c.activePolicyId ? await r.facts.policyBrief(c.activePolicyId) : null;
   for (const k of await r.kp.list({ where: { clientId: c.id } })) {
     activity.push({ at: k.createdAt, text: `Подготовлено ${k.number}` });
     if (k.sentAt) activity.push({ at: k.sentAt, text: `${k.number} отправлено клиенту` });
   }
-  const lastClaim = [...claims].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
   // A claim number is a single claim: only roles that read claims see it.
-  if (lastClaim && can(user, 'claims.read')) activity.push({ at: lastClaim.createdAt, text: `Новый убыток ${lastClaim.number}` });
-  const lastInv = (await sys.invoices.list({ where: { clientId: c.id } })).sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1))[0];
+  if (claims.length && can(user, 'claims.read')) {
+    const lastClaim = [...(await r.claims.list({ where: { clientId: c.id } }))].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+    if (lastClaim) activity.push({ at: lastClaim.createdAt, text: `Новый убыток ${lastClaim.number}` });
+  }
+  const lastInv = [...(await r.facts.clientInvoiceFigures(c.id))].sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1))[0];
   if (lastInv) activity.push({ at: tzIso(parseIso(lastInv.issuedAt)), text: `Выставлен счёт ${lastInv.number} на ${formatMoney(lastInv.amount)}` });
   if (policy) activity.push({ at: tzIso(parseIso(policy.startDate)), text: `Начало действия полиса ${policy.number}` });
   for (const e of c.log ?? []) activity.push(e);
@@ -214,16 +219,9 @@ export async function clientDocuments(ctx: AuthCtx, id: string): Promise<ClientD
 /** Audit of the client, its policies, claims and offers, without personal-data and medical openings. */
 export async function clientHistory(ctx: AuthCtx, id: string): Promise<AuditEntry[]> {
   requirePermission(ctx.user, 'clients.read');
-  const r = systemRepos(ctx, 'client history: audit entries about the client, its policies, claims and offers (without personal-data and medical openings)');
   const c = await findClient(ctx, id);
-  const ids = [
-    c.id,
-    ...(await r.policies.list({ where: { clientId: c.id } })).map((p) => p.id),
-    ...(await r.claims.list({ where: { clientId: c.id } })).map((x) => x.id),
-    ...(await r.kp.list({ where: { clientId: c.id } })).map((x) => x.id),
-  ];
-  const list = await r.audit.list({ where: { targetId: { in: ids }, action: { notIn: ['reveal_pii', 'open_medical'] } }, limit: 50 });
-  return list.map(({ reason: _r, ...e }) => e);
+  // The reader may not read the audit log: the entries about the client come from app.fact_client_history.
+  return ctx.repos.facts.clientHistory(c.id, 50);
 }
 
 /** «Письмо HR» (imitation): the text is not stored. */
@@ -282,6 +280,6 @@ export async function policyDetail(ctx: AuthCtx, id: string): Promise<PolicyDeta
     ...p,
     clientLegalForm: await clientLegalFormOf(ctx, p.clientId),
     programInfo: PROGRAMS[p.program],
-    documents: (await systemRepos(ctx, 'policy card: documents of the policy\'s client').documents.list({ where: { clientId: p.clientId } })).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    documents: (await ctx.repos.documents.list({ where: { clientId: p.clientId } })).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
   };
 }

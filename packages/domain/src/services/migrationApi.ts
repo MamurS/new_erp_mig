@@ -263,7 +263,7 @@ export async function attachMigratedScan(ctx: AuthCtx, contractId: UUID, form: S
   const c = await ctx.repos.contracts.get(contractId);
   if (!c) throw notFound();
   if (!c.migration) throw conflict('srv.migration.notMigrated');
-  const { bytes, mime } = checkScan(form);
+  const { bytes, mime } = await checkScan(ctx, form);
   const fileId = randomId();
   if (c.migratedScan) await ctx.repos.files.remove(c.migratedScan.fileId);
   await ctx.repos.files.insert({ id: fileId, mime, bytes, clientId: c.clientId, contractId: c.id, fileName: `contract-scan.${mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg'}` });

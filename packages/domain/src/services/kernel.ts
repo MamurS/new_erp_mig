@@ -8,6 +8,7 @@ import type { ApiError, AuditAction, AuditEntry, SessionUser } from '@mig/contra
 import { hasKey, unpack, type I18nKey, type Params } from '@mig/i18n';
 import { can, type Action, type PermissionContext } from '../auth/permissions';
 import { isStaffRole } from '../labels';
+import type { ImageCodec } from '../lib/imageMeta';
 import { randomId } from '../lib/random';
 import { isoDay, tzIso } from '../lib/time';
 import type { SessionRow } from '../store/db';
@@ -103,6 +104,8 @@ export function asSystem<C extends BaseCtx>(ctx: C, why: string): C {
 export interface ServiceEnv {
   /** Demo deployment (demo accounts, demo endpoints). */
   demo: boolean;
+  /** Server-side re-encoding of uploaded images (the API); without it (the mock) their metadata is stripped. */
+  images?: ImageCodec;
 }
 
 /** A signed-in person: resolved by the adapter from the session before the service runs. */

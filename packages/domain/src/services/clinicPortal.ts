@@ -32,7 +32,7 @@ import { guaranteeNumber, REGISTRY_CSV_MAX_BYTES, REGISTRY_CSV_MAX_ROWS } from '
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClinicUserRow, GuaranteeRow } from '../store/db';
-import { assignmentsOf, assistanceName, notifyAssistance, payerOfLine } from './assistance';
+import { assistanceName, notifyAssistance, payerOfLine, routingOf } from './assistance';
 import {
   actorOf,
   appointmentOfClinic,
@@ -84,7 +84,7 @@ export async function attachGuaranteeFiles(ctx: BaseCtx, g: GuaranteeRow, files:
   const before = g.attachments.length;
   try {
     for (const file of files) {
-      const { bytes, mime } = checkAttachment(file);
+      const { bytes, mime } = await checkAttachment(ctx, file);
       const id = randomId();
       const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
       const fileName = `document-${g.attachments.length + 1}.${ext}`;
@@ -112,7 +112,7 @@ export async function createGuarantee(
   if (!svc) throw new DomainError(422, 'validation', 'srv.registry.serviceNotInPrice', { fields: { serviceCode: msg('srv.registry.chooseService') } });
   const who = (await r.insured.get(v.insuredId))!;
   // The letter goes to the assistance of the insured person on the date of the request (ASSISTANCE_SPEC §5.2).
-  const assistanceId = assistanceOn(await assignmentsOf(ctx, who.policyId), who.policyId, isoDay(ctx.now()));
+  const assistanceId = assistanceOn(await routingOf(ctx, who.policyId), who.policyId, isoDay(ctx.now()));
   const seq = await r.seq.next('guarantee');
   const P = await loadParams(ctx);
   const g: GuaranteeRow = {
@@ -229,7 +229,7 @@ export async function slots(ctx: AuthCtx, qs: URLSearchParams): Promise<Slot[]> 
   const clinic = await clinicOf(ctx, actor.clinicId);
   const date = qs.get('date') ?? isoDay(ctx.now());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
-  const taken = new Set((await ctx.repos.appointments.list({ where: { clinicId: clinic.id, status: { notIn: ['cancelled', 'declined'] } } })).map((a) => a.startsAt));
+  const taken = new Set(await ctx.repos.facts.takenSlots(clinic.id));
   return clinicSlots(clinic, date, ctx.now()).filter((s) => !taken.has(s.startsAt));
 }
 

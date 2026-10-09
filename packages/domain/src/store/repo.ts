@@ -5,6 +5,7 @@
  * `update`/`insert`, as it would be in a database.
  */
 import type { Db } from './db';
+import type { Facts } from './facts';
 import type { Query, Where } from './query';
 
 /** Row type of a collection of the database. */
@@ -156,6 +157,8 @@ export type Repos = { [N in KeyedName]: Table<RowOf<N>, (typeof TABLE_KEYS)[N]> 
   statementKeys: SetStore;
   seq: Seqs;
   one: Singletons;
+  /** Narrow facts about rows the person's row-level security hides (store/facts.ts). */
+  facts: Facts;
 };
 
 // Names used in the specification and in the services.

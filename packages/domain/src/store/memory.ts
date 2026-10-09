@@ -18,6 +18,7 @@ import {
   type SetStore,
   type Table,
 } from './repo';
+import { genericFacts } from './facts';
 
 const copy = <T>(v: T): T => structuredClone(v);
 
@@ -172,8 +173,8 @@ export function memoryRepos(db: () => Db): Repos {
       if (!db().statementKeys.includes(k)) db().statementKeys.push(k);
     },
   };
-  return {
-    ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one'>),
+  const base: Omit<Repos, 'facts'> = {
+    ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one' | 'facts'>),
     aiRebillFlags: flags,
     statementKeys,
     seq: {
@@ -201,4 +202,5 @@ export function memoryRepos(db: () => Db): Repos {
       },
     },
   };
+  return { ...base, facts: genericFacts(base) };
 }

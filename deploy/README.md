@@ -97,8 +97,9 @@ node deploy/scripts/smoke-check.mjs https://dms.mig.uz --expect production
 ### Staging
 
 `APP_ENV=staging`: на пустой базе `deploy.sh` загружает демо-данные (тот же seed, что в CI, через демо-сброс API),
-работают «Войти как…», демо-коды `000000` и демо-маршруты; `DEMO_PASSWORD=Demo-2026!` — пароль новых учётных
-записей вместо письма. **Ключи ПДн на staging не задаются** (`PII_KEYS`, `PII_HMAC_KEY`, `SESSION_SECRET` пустые):
+работают демо-маршруты; `DEMO_PASSWORD=Demo-2026!` — пароль новых учётных записей вместо письма. «Войти как…» и
+тестовый код `000000` — только с `ALLOW_TEST_TOTP=true` и `NODE_ENV=staging` в `.env` (по умолчанию выключено; при
+`APP_ENV=production` или `NODE_ENV=production` API с этим флагом не запускается). **Ключи ПДн на staging не задаются** (`PII_KEYS`, `PII_HMAC_KEY`, `SESSION_SECRET` пустые):
 демо-данные зашифрованы опубликованным dev-ключом, поэтому на staging никогда не загружаются настоящие данные.
 Сайт staging закройте доступом по VPN или по IP (как Cloudflare Access у демо-сайта). Пересоздать демо-данные:
 `RESEED=1 deploy/scripts/deploy.sh`.

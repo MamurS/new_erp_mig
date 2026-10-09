@@ -188,6 +188,36 @@ revoke execute on function app.job_cleanup_expired() from public, authenticated;
 `;
 }
 
+export function storageGcMigration(): string {
+  return `${HEADER('Storage objects of removed file rows: a queue the API worker drains (apps/api/src/files/gc.ts), so an object never outlives its row by more than a worker pass; orphans (an upload whose row never committed) are swept daily.')}
+create table app.storage_gc (
+  id bigint generated always as identity primary key,
+  bucket text not null,
+  object_name uuid not null,
+  queued_at timestamptz not null default now(),
+  attempts integer not null default 0,
+  last_error text
+);
+create index storage_gc_queued_idx on app.storage_gc (queued_at);
+comment on table app.storage_gc is 'Objects of removed or replaced file rows waiting to be deleted from Storage by the API worker.';
+revoke all on app.storage_gc from public, authenticated;
+
+-- Every way a row goes (a delete, a cascade, a rollback of a portfolio transfer) or its object is replaced.
+create function app.queue_storage_gc() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if old.object_name is not null and (tg_op = 'DELETE' or old.object_name is distinct from new.object_name) then
+    insert into app.storage_gc (bucket, object_name) values (old.bucket, old.object_name);
+  end if;
+  return null;
+end
+$$;
+revoke all on function app.queue_storage_gc() from public;
+create trigger files_storage_gc after delete or update of object_name on public.files
+  for each row execute function app.queue_storage_gc();
+`;
+}
+
 function filesMigration(): string {
   const buckets = BUCKETS.map(
     (b) => `      (${lit(b.id)}, ${lit(b.id)}, false, ${b.maxBytes}, array[${b.mimes.map(lit).join(', ')}])`,

@@ -16,6 +16,7 @@ import { smsSender, testPhoneCodes, type SmsSender } from './auth/sms';
 import { createPool } from './db';
 import { serverDeps } from './deps';
 import type { ApiEnv } from './env';
+import { sharpImageCodec } from './files/imageCodec';
 import { supabaseStorage, type SupabaseStorage } from './files/storage';
 import { identitySync, type IdentitySync } from './jobs/identity';
 import { createWorker, type Worker } from './jobs/worker';
@@ -60,13 +61,13 @@ export async function assemble(
     crypto: env.crypto,
     gotrue,
     demoPassword: env.demoPassword,
-    testMfa: env.demo,
+    testMfa: env.testTotp,
     inviteRedirectTo: env.inviteRedirectTo,
     log,
   });
   const sms = smsSender(env.smsProvider, { revealCodes: env.demo, log });
-  // The test mode of phone sign-in (never production): `000000` stands for the last code sent to the phone.
-  const testCodes = env.demo ? testPhoneCodes() : null;
+  // The test mode of phone sign-in (ALLOW_TEST_TOTP only): `000000` stands for the last code sent to the phone.
+  const testCodes = env.testTotp ? testPhoneCodes() : null;
   await storage.ensureBuckets();
   const app = await buildApp({
     pool,
@@ -79,15 +80,16 @@ export async function assemble(
       crypto: env.crypto,
       sessionSecret: env.sessionSecret,
       cookie: cookiePolicy(env.insecureDevCookie),
-      // The demo code 000000 and demo factors: development, ci and staging only.
-      testMfa: env.demo,
+      // The test code 000000 and demo factors: ALLOW_TEST_TOTP=true only (never production, see env.ts).
+      testMfa: env.testTotp,
       syncIdentity: identity.syncOne,
-      ...(env.demo ? { ensureDemoFactor: identity.ensureDemoFactor } : {}),
+      ...(env.testTotp ? { ensureDemoFactor: identity.ensureDemoFactor } : {}),
       now,
       log,
       ...(env.demo ? { demoAccounts: demoOptions, testPhoneCodes: testCodes } : {}),
     }),
     storage,
+    images: sharpImageCodec(),
     smsHook: { secret: env.smsHookSecret, sender: sms, testCodes },
     demoRoutes: env.demo ? demoOptions : null,
     demo,
@@ -97,6 +99,6 @@ export async function assemble(
   app.addHook('onClose', async () => {
     await side.end();
   });
-  const worker = env.worker === 'inline' ? createWorker({ pool, crypto: env.crypto, identity, log, now }) : null;
+  const worker = env.worker === 'inline' ? createWorker({ pool, crypto: env.crypto, identity, storage, log, now }) : null;
   return { app, pool, storage, identity, sms, worker, demo };
 }

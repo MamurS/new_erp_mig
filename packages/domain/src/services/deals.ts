@@ -32,11 +32,12 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, tzIso } from '../lib/time';
 import type { StaffRow } from '../store/db';
 import { byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
-import { asSystem, audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView } from './lifecycle';
 import { completeTasks } from './tasks';
 import { toClient } from './views';
+import { openRenewalDeal } from './system/consequences';
 
 /** MIG staff only. */
 function requireMig(ctx: AuthCtx): SessionUser {
@@ -607,7 +608,7 @@ export async function respondKp(ctx: AuthCtx, id: string, kind: 'accept' | 'decl
   kp.status = kind === 'accept' ? 'accepted' : 'declined';
   kp.response = { at: tzIso(ctx.now()), byName: user.displayName, via: user.role === 'hr' ? 'hr' : 'manager', ...(reason ? { reason } : {}) };
   await ctx.repos.kp.update(kp.id, { status: kp.status, response: kp.response });
-  await ensureRenewalDeal(asSystem(ctx, 'the client\'s answer to a renewal offer opens its renewal deal'), kp, user);
+  await openRenewalDeal(ctx, kp, user);
   if (kind === 'accept' && kp.dealId) await completeTasks(ctx, 'kp_respond', { dealId: kp.dealId, clientId: kp.clientId }, user.displayName);
   if (kind === 'accept') await moveDeal(ctx, kp.dealId, 'kp_accepted', user.displayName, `КП ${kp.number} принято клиентом${user.role === 'hr' ? ' в кабинете' : ' (отметка менеджера)'}`);
   else if (kp.dealId) await dealEvent(ctx, kp.dealId, user.displayName, `КП ${kp.number} отклонено: ${reason}`);

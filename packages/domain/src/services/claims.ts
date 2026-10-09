@@ -16,8 +16,8 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { ATTACHMENT_MAX_FILES, type UploadedFile } from '../lib/uploads';
 import type { ClaimRow, FileRow } from '../store/db';
-import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, systemRepos, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { paginate, q, sortBy } from './list';
+import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { isUuid, paginate, q, sortBy } from './list';
 import { loadParams } from './params';
 import { findInsured } from './insured';
 import { toClaimDetail, toClaimListItem } from './views';
@@ -144,7 +144,7 @@ export async function createClaim(ctx: AuthCtx, form: StaffClaimForm, files: rea
   const claimId = randomId();
   const attachments: ClaimRow['attachments'] = [];
   for (const [idx, f] of files.entries()) {
-    const { bytes, mime } = checkAttachment(f);
+    const { bytes, mime } = await checkAttachment(ctx, f);
     const fileId = randomId();
     const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
     // Neutral names without personal data; the insured person never gets these files (no insuredId).
@@ -204,14 +204,14 @@ export async function fileAccess(ctx: AuthCtx, id: string): Promise<FileRow> {
   const { user } = ctx;
   const own = await ctx.repos.files.get(id);
   // A file the person's RLS hides still answers like the mock (403 for a role that may not read files of its
-  // kind, 404 otherwise): the system's copy decides only that, and a hidden file is never returned.
-  const f = own ?? (await systemRepos(ctx, 'files: 403 or 404 for a file hidden by RLS, as the mock answers').files.get(id));
-  if (!f) throw notFound();
-  if (f.guaranteeId) {
+  // kind, 404 otherwise): only its kind is asked (app.fact_file_kind), a hidden file is never returned.
+  const kind = own ? (own.guaranteeId ? 'guarantee' : 'other') : isUuid(id) ? await ctx.repos.facts.fileKind(id) : null;
+  if (!kind) throw notFound();
+  if (kind === 'guarantee') {
     // Guarantee-letter attachments: the clinic that uploaded them and MIG staff with guarantees.read.
-    if (!can(user, 'guarantees.read', { clinicId: f.clinicId })) throw notFound();
+    if (!own || !can(user, 'guarantees.read', { clinicId: own.clinicId })) throw notFound();
   } else if (user.role === 'insured') {
-    if (!f.insuredId || f.insuredId !== user.insuredId) throw notFound();
+    if (!own?.insuredId || own.insuredId !== user.insuredId) throw notFound();
   } else if (!can(user, 'claims.read') || !isStaffRole(user.role)) {
     throw forbidden();
   }

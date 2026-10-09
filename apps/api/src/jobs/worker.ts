@@ -2,7 +2,8 @@
  * The background worker (BACKEND_SPEC §10): pg_cron schedules every job of packages/domain/src/services/jobs.ts;
  * `db` jobs run inside Postgres, `api` jobs become rows of `app.job_queue` that this worker takes and runs with
  * the system context through the same service code as the mock (services/jobRunner.ts). It also drains the
- * identity sync queue (jobs/identity.ts).
+ * identity sync queue (jobs/identity.ts) and, with Storage, deletes the objects of removed file rows every pass and
+ * sweeps orphan objects once a day (files/gc.ts).
  *
  * Runs inside the API process (WORKER=inline, the default) or as its own process (`node apps/api/dist/worker.js`,
  * WORKER=off on the API servers). Several workers may run: rows are taken with `for update skip locked`.
@@ -10,7 +11,9 @@
 import type pg from 'pg';
 import { JOBS } from '@mig/domain/services/jobs';
 import { runApiJob, type JobSummary } from '@mig/domain/services/jobRunner';
+import type { BlobStore } from '@mig/domain/store/blob';
 import type { PiiCrypto } from '@mig/domain/store/pii';
+import { storageGc, type StorageGc } from '../files/gc';
 import { withSystemDb } from '../systemDb';
 import type { IdentitySync } from './identity';
 
@@ -18,6 +21,8 @@ export interface WorkerOptions {
   pool: pg.Pool;
   crypto: PiiCrypto;
   identity?: IdentitySync;
+  /** Storage: objects of removed file rows are deleted, orphans swept daily. */
+  storage?: Pick<BlobStore, 'remove'>;
   /** The services' clock (tests pin it). */
   now?: () => number;
   intervalMs?: number;
@@ -29,7 +34,10 @@ export interface Worker {
   tick(): Promise<{
     jobs: { name: string; ok: boolean; summary?: JobSummary }[];
     identities: { synced: number; failed: number };
+    storage?: { removed: number; failed: number; orphans?: { removed: number; failed: number } };
   }>;
+  /** The Storage collector (with `storage`). */
+  gc: StorageGc | null;
   /** Runs a job now with the system context (also what a queued row runs). */
   runJob(name: string): Promise<unknown>;
   start(): void;
@@ -40,6 +48,8 @@ export function createWorker(o: WorkerOptions): Worker {
   const log = o.log ?? (() => undefined);
   let timer: ReturnType<typeof setInterval> | null = null;
   let running: Promise<unknown> | null = null;
+  const gc = o.storage ? storageGc({ pool: o.pool, storage: o.storage, log }) : null;
+  let lastSweep = 0;
 
   async function runJob(name: string): Promise<unknown> {
     const job = JOBS.find((j) => j.name === name);
@@ -81,12 +91,22 @@ export function createWorker(o: WorkerOptions): Worker {
         log('job failed', { job: job.name });
       }
     }
-    return { jobs, identities };
+    let storage: Awaited<ReturnType<Worker['tick']>>['storage'];
+    if (gc) {
+      storage = await gc.drain();
+      const now = Date.now();
+      if (now - lastSweep >= 24 * 3600_000) {
+        lastSweep = now;
+        storage.orphans = await gc.sweepOrphans();
+      }
+    }
+    return { jobs, identities, ...(storage ? { storage } : {}) };
   }
 
   return {
     tick,
     runJob,
+    gc,
     start() {
       if (timer) return;
       timer = setInterval(() => {
