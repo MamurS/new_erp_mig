@@ -54,7 +54,7 @@ import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { AssistUserRow, AssistanceCaseRow, GuaranteeRow, InsuredRow } from '../store/db';
-import { asSystem, audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
 import { q, type Qs } from './list';
 import { loadParams, type ParamsView } from './params';
 import { assignmentsOf, assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
@@ -726,8 +726,9 @@ export async function requestGuaranteeOnCall(ctx: AuthCtx, body: unknown): Promi
   const visit: Visit = { id: randomId(), clinicId: clinic.id, insuredId: i.id, openedById: user.id, method: 'policy', openedAt: tzIso(now), expiresAt: tzIso(now + VISIT_TTL_MS) };
   await r.visits.insert(visit);
   const actor = { id: user.id, clinicId: clinic.id, displayName: user.displayName, role: user.role, assistanceId };
-  // The letter belongs to the clinic of the referral (its row is the clinic's): the system writes it for the assistance.
-  const g = await createGuarantee(asSystem(ctx, 'assistance referral: the guarantee letter in the clinic of the referral'), actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
+  // The letter belongs to the clinic of the referral; the assistance company writes it for its own current client
+  // (RLS of guarantees: the company's letters of a policy it serves today).
+  const g = await createGuarantee(ctx, actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
   if (c) await r.cases.update(c.id, { links: { ...c.links, guaranteeId: g.id }, ...(c.status === 'open' ? { status: 'in_progress' as const } : {}) });
   return toGuaranteeView(ctx, g);
 }

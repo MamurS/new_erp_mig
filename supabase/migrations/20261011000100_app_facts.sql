@@ -635,3 +635,27 @@ end $$;
 comment on function app.fact_assist_desktop_counters(uuid, bigint, date, integer) is 'Counters of the desktop of an assistance company, the same for every role of it (open cases, past the SLA, overdue requests, letters, lines, rebills): its users.';
 revoke execute on function app.fact_assist_desktop_counters(uuid, bigint, date, integer) from public;
 grant execute on function app.fact_assist_desktop_counters(uuid, bigint, date, integer) to authenticated, service_role;
+
+create or replace function app.fact_receipt_twins(p_claim uuid) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((exists (select 1 from public.claims v where v.id = p_claim and ((select app.active()) and ( ((select app.is_staff()) and (select app.can_any(array['claims.read', 'claims.decide', 'claims.medical_opinion', 'claims.reserves', 'assist.registries.review', 'assist.cases.manage']::text[]))) or ((select app.role()) = 'insured' and (select app.can_any(array['claims.read', 'claims.decide', 'claims.medical_opinion', 'claims.reserves', 'assist.registries.review', 'assist.cases.manage']::text[])) and (insured_id = any((select app.my_person_ids())::uuid[]))) or ((select app.is_assist()) and (select app.can_any(array['claims.read', 'claims.decide', 'claims.medical_opinion', 'claims.reserves', 'assist.registries.review', 'assist.cases.manage']::text[])) and (app.assist_covers_insured(insured_id, service_date))) )))), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('id', o.id, 'insuredId', case when o.insured_id = c.insured_id then c.insured_id::text else 'other' end,
+        'number', o.number, 'amountClaimed', o.amount_claimed, 'serviceDate', o.service_date::text, 'providerName', o.provider_name)
+        || case when o.source is null then '{}'::jsonb else jsonb_build_object('source', o.source) end
+        || case when o.receipt_hash is null then '{}'::jsonb else jsonb_build_object('receiptHash', o.receipt_hash) end
+        || case when o.receipt_fiscal is null then '{}'::jsonb else jsonb_build_object('receiptFiscal', o.receipt_fiscal) end
+        order by o._pos), '[]'::jsonb)
+      from public.claims c join public.claims o on o.id <> c.id
+      where c.id = p_claim and (
+        (o.receipt_fiscal ->> 'fiscalNumber' is not null and o.receipt_fiscal ->> 'fiscalNumber' <> '' and o.receipt_fiscal ->> 'fiscalNumber' = c.receipt_fiscal ->> 'fiscalNumber')
+        or (o.receipt_hash is not null and o.receipt_hash <> '' and o.receipt_hash = c.receipt_hash)
+        or (coalesce((o.receipt_fiscal ->> 'amount')::numeric, o.amount_claimed) = coalesce((c.receipt_fiscal ->> 'amount')::numeric, c.amount_claimed)
+          and coalesce(left(o.receipt_fiscal ->> 'issuedAt', 10), o.service_date::text) = coalesce(left(c.receipt_fiscal ->> 'issuedAt', 10), c.service_date::text))));
+end $$;
+comment on function app.fact_receipt_twins(uuid) is 'Other claims that may be the same receipt as a claim the caller sees (fiscal sign, image, amount and date), without the person: the duplicate check of a new claim.';
+revoke execute on function app.fact_receipt_twins(uuid) from public;
+grant execute on function app.fact_receipt_twins(uuid) to authenticated, service_role;

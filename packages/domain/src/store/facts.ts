@@ -10,7 +10,7 @@
 import type { AssistanceAssignment, AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, LimitCategory, PolicyStatus, PriceListItem, ProgramCode, Quote, UUID } from '@mig/contracts';
 import type { ClientPipeline, SignatoryOption } from '@mig/contracts/dto';
 import type { LegalFormCode } from '../config/legalForms';
-import type { InsuredRow } from './db';
+import type { ClaimRow, InsuredRow } from './db';
 import { assistanceOn, assistanceScope, GUARANTEE_DECISION_HOURS, LIMIT_OF_SERVICE } from '../assistance';
 import { CLAIM_TO_LIMIT } from '../claims';
 import type { LimitMode } from '../config/dmsParameters';
@@ -121,6 +121,24 @@ export interface Facts {
    * appointment requests, letters to decide, registry lines to review, rebills in review.
    */
   assistDesktopCounters(assistanceId: UUID, nowMs: number, today: string, defaultResponseMinutes: number): Promise<AssistDesktopCounters>;
+  /**
+   * Other claims that may be the same receipt as the stored claim `claimId` (the same fiscal sign, the same image, or
+   * the same amount and date), in storage order; a person other than the claim's is `insuredId: 'other'`.
+   */
+  receiptTwins(claimId: UUID): Promise<ReceiptTwin[]>;
+}
+
+/** A claim that may be the same receipt (the fields of the duplicate check, no person). */
+export interface ReceiptTwin {
+  id: UUID;
+  insuredId: string;
+  number?: string;
+  amountClaimed: number;
+  serviceDate: string;
+  providerName: string;
+  source?: ClaimRow['source'];
+  receiptHash?: string;
+  receiptFiscal?: ClaimRow['receiptFiscal'];
 }
 
 export interface KpiFigures {
@@ -467,6 +485,30 @@ export function genericFacts(r: Base): Facts {
         linesPending: regs.reduce((x, ls) => x + ls.filter((l) => l.status === 'pending' || l.status === 'disputed').length, 0),
         rebillsInReview: (await r.rebills.list({ where: { assistanceId } })).filter((b) => b.status === 'submitted' || b.status === 'in_review').length,
       };
+    },
+    async receiptTwins(claimId) {
+      const c = await r.claims.get(claimId);
+      if (!c) return [];
+      const amount = (x: ClaimRow) => x.receiptFiscal?.amount ?? x.amountClaimed;
+      const date = (x: ClaimRow) => x.receiptFiscal?.issuedAt.slice(0, 10) ?? x.serviceDate;
+      return (await r.claims.list({ where: { id: { ne: c.id } } }))
+        .filter(
+          (o) =>
+            (!!o.receiptFiscal?.fiscalNumber && o.receiptFiscal.fiscalNumber === c.receiptFiscal?.fiscalNumber) ||
+            (!!o.receiptHash && o.receiptHash === c.receiptHash) ||
+            (amount(o) === amount(c) && date(o) === date(c)),
+        )
+        .map((o) => ({
+          id: o.id,
+          insuredId: o.insuredId === c.insuredId ? c.insuredId : 'other',
+          number: o.number,
+          amountClaimed: o.amountClaimed,
+          serviceDate: o.serviceDate,
+          providerName: o.providerName,
+          ...(o.source ? { source: o.source } : {}),
+          ...(o.receiptHash ? { receiptHash: o.receiptHash } : {}),
+          ...(o.receiptFiscal ? { receiptFiscal: o.receiptFiscal } : {}),
+        }));
     },
   };
 }

@@ -373,7 +373,7 @@ grant select, insert on public.visits to authenticated;
 -- check_locks: System only (service role in the API): no policy for `authenticated`.
 alter table public.check_locks enable row level security;
 
--- guarantees: Guarantee letters: the requesting clinic; the deciding assistance company; MIG doctors (escalations and clients without an assistance company).
+-- guarantees: Guarantee letters: the requesting clinic (also on a referral of the assistance company, which writes the letter of its own current client); the deciding assistance company; MIG doctors (escalations and clients without an assistance company).
 alter table public.guarantees enable row level security;
 create policy guarantees_select on public.guarantees for select to authenticated
   using ((select app.active()) and (
@@ -382,7 +382,10 @@ create policy guarantees_select on public.guarantees for select to authenticated
       or ((select app.is_assist()) and (select app.can_any(array['guarantees.read', 'guarantees.decide', 'assist.guarantees.decide', 'qa.review', 'guarantees.request', 'assist.cases.manage']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy guarantees_insert on public.guarantees for insert to authenticated
-  with check ((select app.active()) and ((select app.is_clinic()) and (select app.can_any(array['guarantees.request']::text[])) and (clinic_id = (select app.clinic_id()))));
+  with check ((select app.active()) and (
+      ((select app.is_clinic()) and (select app.can_any(array['guarantees.request', 'assist.cases.manage']::text[])) and (clinic_id = (select app.clinic_id())))
+      or ((select app.is_assist()) and (select app.can_any(array['guarantees.request', 'assist.cases.manage']::text[])) and (assistance_id = (select app.assistance_id()) and app.assist_scope(policy_id, (created_at at time zone (select app.tz()))::date) = 'full'))
+    ));
 create policy guarantees_update on public.guarantees for update to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['guarantees.decide', 'assist.guarantees.decide', 'guarantees.request']::text[])))

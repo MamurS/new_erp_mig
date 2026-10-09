@@ -115,7 +115,7 @@ begin
   return v;
 end $$;
 
-select plan(130);
+select plan(138);
 
 -- app.fact_client_insured_count: whoever sees the client
 select is(tests.value_as('{"sub":"dcd5cca6-2ed6-4901-b4de-1ad4b8a72e1f","role":"authenticated","aal":"aal2","app_metadata":{"role":"underwriter"}}'::jsonb, 'select app.fact_client_insured_count(''0682c280-96fa-4961-a98b-5a4e1f53e2e1'')'), (select count(*)::text from public.insured where client_id = '0682c280-96fa-4961-a98b-5a4e1f53e2e1' and status = 'active'), 'insured count: the underwriter of any client');
@@ -308,6 +308,23 @@ select ok((tests.as_user('{"sub":"63e6a77c-6970-4fc6-8839-87e3f7ed5d36","role":"
 select is((tests.as_user('{"sub":"63e6a77c-6970-4fc6-8839-87e3f7ed5d36","role":"authenticated","aal":"aal2","app_metadata":{"role":"asst_operator","assistance_id":"a121b4af-f33d-4698-aa49-81543ec9c8af"}}'::jsonb, 'select 1 from public.insured where policy_id = ''51c498ed-052f-45e0-a4d8-1e6edd7fae57''')).n, 0, 'former access: never a policy the company did not serve');
 update public.assignments set "from" = current_date - 600, "to" = current_date - 400 where policy_id = '7e2e38e1-9a33-49c5-b971-4baf8e291136' and assistance_id = 'a121b4af-f33d-4698-aa49-81543ec9c8af' and "to" = current_date - 30;
 select is((tests.as_user('{"sub":"63e6a77c-6970-4fc6-8839-87e3f7ed5d36","role":"authenticated","aal":"aal2","app_metadata":{"role":"asst_operator","assistance_id":"a121b4af-f33d-4698-aa49-81543ec9c8af"}}'::jsonb, 'select 1 from public.insured where policy_id = ''7e2e38e1-9a33-49c5-b971-4baf8e291136''')).n, 0, 'former access: ends 12 months after the assignment');
+
+-- guarantees: an assistance company writes the referral letter of its own current client only
+create temp table sc_letter as select * from public.guarantees limit 1;
+update sc_letter set id = '00000000-0000-4000-8000-000000002201', number = number || '#r', assistance_id = 'a121b4af-f33d-4698-aa49-81543ec9c8af', policy_id = '37c1a764-fb1e-49c1-bccc-71f79d27235f', created_at = now();
+grant select on sc_letter to authenticated;
+select is((tests.as_user('{"sub":"63e6a77c-6970-4fc6-8839-87e3f7ed5d36","role":"authenticated","aal":"aal2","app_metadata":{"role":"asst_operator","assistance_id":"a121b4af-f33d-4698-aa49-81543ec9c8af"}}'::jsonb, 'insert into public.guarantees select * from sc_letter')).n, 1, 'guarantees: a referral letter of a policy the company serves today');
+update sc_letter set id = '00000000-0000-4000-8000-000000002202', number = number || '#s', policy_id = '51c498ed-052f-45e0-a4d8-1e6edd7fae57';
+select is((tests.as_user('{"sub":"63e6a77c-6970-4fc6-8839-87e3f7ed5d36","role":"authenticated","aal":"aal2","app_metadata":{"role":"asst_operator","assistance_id":"a121b4af-f33d-4698-aa49-81543ec9c8af"}}'::jsonb, 'insert into public.guarantees select * from sc_letter')).n, -1, 'guarantees: not of a policy the company does not serve');
+update sc_letter set id = '00000000-0000-4000-8000-000000002203', number = number || '#u', policy_id = '37c1a764-fb1e-49c1-bccc-71f79d27235f', assistance_id = '86fd7333-f6b4-45ff-a506-d6dfd75e5cd5';
+select is((tests.as_user('{"sub":"63e6a77c-6970-4fc6-8839-87e3f7ed5d36","role":"authenticated","aal":"aal2","app_metadata":{"role":"asst_operator","assistance_id":"a121b4af-f33d-4698-aa49-81543ec9c8af"}}'::jsonb, 'insert into public.guarantees select * from sc_letter')).n, -1, 'guarantees: not on behalf of another company');
+select is((tests.as_user('{"sub":"187b3697-ce17-4cf7-857c-8294b14383a0","role":"authenticated","aal":"aal2","app_metadata":{"role":"asst_billing","assistance_id":"a121b4af-f33d-4698-aa49-81543ec9c8af"}}'::jsonb, 'insert into public.guarantees select * from sc_letter')).n, -1, 'guarantees: the billing of a company writes no letters');
+
+-- app.fact_receipt_twins: possible duplicates of a claim the caller sees, without the person
+select is(tests.value_as('{"sub":"59f577ba-4115-4ea2-ba60-f2454cb8ffc1","role":"authenticated","aal":"aal1","app_metadata":{"role":"insured","insured_id":"3bbd3ada-60b7-451a-9ad3-30daa667beb1"}}'::jsonb, 'select coalesce(bool_and(x ->> ''insuredId'' in (''other'', ''3bbd3ada-60b7-451a-9ad3-30daa667beb1'')), true)::text from jsonb_array_elements(app.fact_receipt_twins(''fa16ad9b-e0ef-4c91-ba8c-e6b77a1c5b3c'')) x'), 'true', 'receipt twins: another person is only «other»');
+select is(tests.value_as('{"sub":"59f577ba-4115-4ea2-ba60-f2454cb8ffc1","role":"authenticated","aal":"aal1","app_metadata":{"role":"insured","insured_id":"3bbd3ada-60b7-451a-9ad3-30daa667beb1"}}'::jsonb, 'select coalesce(bool_and(not (x ? ''insuredName'') and not (x ? ''clientId'')), true)::text from jsonb_array_elements(app.fact_receipt_twins(''fa16ad9b-e0ef-4c91-ba8c-e6b77a1c5b3c'')) x'), 'true', 'receipt twins: no name or client');
+select is(tests.value_as('{"sub":"59f577ba-4115-4ea2-ba60-f2454cb8ffc1","role":"authenticated","aal":"aal1","app_metadata":{"role":"insured","insured_id":"3bbd3ada-60b7-451a-9ad3-30daa667beb1"}}'::jsonb, 'select app.fact_receipt_twins(''fd9886e3-2030-4269-9053-7fa832688bde'')::text'), 'denied', 'receipt twins: not of a claim the caller does not see');
+select is(tests.value_as('{"sub":"024b89fe-e0d0-4550-b796-5353f86b3486","role":"authenticated","aal":"aal1","app_metadata":{"role":"hr","company_id":"20c1d1ef-6ac4-48b2-87ea-7e9728d9d5f2"}}'::jsonb, 'select app.fact_receipt_twins(''fa16ad9b-e0ef-4c91-ba8c-e6b77a1c5b3c'')::text'), 'denied', 'receipt twins: HR is refused');
 select is(tests.value_as('{}'::jsonb, 'select app.fact_client_legal_form(''0682c280-96fa-4961-a98b-5a4e1f53e2e1'')'), 'denied', 'no claims: every fact is refused');
 select * from finish();
 rollback;

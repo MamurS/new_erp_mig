@@ -497,6 +497,23 @@ export const FACT_FUNCTIONS: readonly FactFn[] = [
         where reg.status <> 'draft' and coalesce(l.e ->> 'payer', 'mig') = p_assistance::text and l.e ->> 'status' in ('pending', 'disputed')),
       'rebillsInReview', (select count(*) from public.rebills b where b.assistance_id = p_assistance and b.status in ('submitted', 'in_review')));`,
     comment: 'Counters of the desktop of an assistance company, the same for every role of it (open cases, past the SLA, overdue requests, letters, lines, rebills): its users.',
+  },  {
+    sig: 'fact_receipt_twins(p_claim uuid)',
+    returns: 'jsonb',
+    gate: visible('claims', 'id', 'p_claim'),
+    body: `return (select coalesce(jsonb_agg(jsonb_build_object('id', o.id, 'insuredId', case when o.insured_id = c.insured_id then c.insured_id::text else 'other' end,
+        'number', o.number, 'amountClaimed', o.amount_claimed, 'serviceDate', o.service_date::text, 'providerName', o.provider_name)
+        || case when o.source is null then '{}'::jsonb else jsonb_build_object('source', o.source) end
+        || case when o.receipt_hash is null then '{}'::jsonb else jsonb_build_object('receiptHash', o.receipt_hash) end
+        || case when o.receipt_fiscal is null then '{}'::jsonb else jsonb_build_object('receiptFiscal', o.receipt_fiscal) end
+        order by o._pos), '[]'::jsonb)
+      from public.claims c join public.claims o on o.id <> c.id
+      where c.id = p_claim and (
+        (o.receipt_fiscal ->> 'fiscalNumber' is not null and o.receipt_fiscal ->> 'fiscalNumber' <> '' and o.receipt_fiscal ->> 'fiscalNumber' = c.receipt_fiscal ->> 'fiscalNumber')
+        or (o.receipt_hash is not null and o.receipt_hash <> '' and o.receipt_hash = c.receipt_hash)
+        or (coalesce((o.receipt_fiscal ->> 'amount')::numeric, o.amount_claimed) = coalesce((c.receipt_fiscal ->> 'amount')::numeric, c.amount_claimed)
+          and coalesce(left(o.receipt_fiscal ->> 'issuedAt', 10), o.service_date::text) = coalesce(left(c.receipt_fiscal ->> 'issuedAt', 10), c.service_date::text))));`,
+    comment: 'Other claims that may be the same receipt as a claim the caller sees (fiscal sign, image, amount and date), without the person: the duplicate check of a new claim.',
   },
 ];
 

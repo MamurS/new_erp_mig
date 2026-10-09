@@ -122,6 +122,9 @@ export function pgFacts(sql: Sql, crypto: PiiCrypto): Facts {
     async assistDesktopCounters(assistanceId, nowMs, today, defaultResponseMinutes) {
       return numbers(await one('app.fact_assist_desktop_counters($1::uuid, $2::bigint, $3::date, $4::integer)', [assistanceId, nowMs, today, defaultResponseMinutes]));
     },
+    async receiptTwins(claimId) {
+      return one('app.fact_receipt_twins($1::uuid)', [claimId]);
+    },
   };
 }
 

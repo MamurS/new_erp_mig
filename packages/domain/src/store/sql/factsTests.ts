@@ -70,6 +70,9 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
   const otherAssistance = db.assistances.find((x) => x.id !== asstId)!.id;
   const formerPolicy = db.policies.find((p) => !db.assignments.some((x) => x.policyId === p.id && x.assistanceId === asstId) && db.insured.some((i) => i.policyId === p.id))!;
   const neverPolicy = db.policies.find((p) => p.id !== formerPolicy.id && !db.assignments.some((x) => x.policyId === p.id && x.assistanceId === asstId) && db.insured.some((i) => i.policyId === p.id))!;
+  const servedPolicyToday = db.assignments.find((x) => x.assistanceId === asstId && !x.to)?.policyId ?? servedPolicy;
+  const myClaim = db.claims.find((x) => x.insuredId === me.id)!;
+  const strangerClaim = db.claims.find((x) => !db.insured.some((i) => i.id === x.insuredId && (i.id === me.id || i.principalId === me.id)))!;
   const MAPS = `${lit(JSON.stringify({ medicines: 'medicines', doctor_visit: 'outpatient', diagnostics: 'outpatient', dental: 'dental', inpatient: 'inpatient' }))}, ${lit(JSON.stringify({ outpatient: 'outpatient', diagnostics_advanced: 'outpatient', dental: 'dental', medicines: 'medicines', inpatient: 'inpatient' }))}`;
   const order = `array['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active']`;
   const lines: string[] = [
@@ -241,6 +244,21 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
     `select is((tests.as_user(${c(asstOp)}, 'select 1 from public.insured where policy_id = ''${neverPolicy.id}''')).n, 0, 'former access: never a policy the company did not serve');`,
     `update public.assignments set "from" = current_date - 600, "to" = current_date - 400 where policy_id = '${formerPolicy.id}' and assistance_id = '${asstId}' and "to" = current_date - 30;`,
     `select is((tests.as_user(${c(asstOp)}, 'select 1 from public.insured where policy_id = ''${formerPolicy.id}''')).n, 0, 'former access: ends 12 months after the assignment');`,
+    '-- guarantees: an assistance company writes the referral letter of its own current client only',
+    `create temp table sc_letter as select * from public.guarantees limit 1;`,
+    `update sc_letter set id = '${FIX_ID(2201)}', number = number || '#r', assistance_id = '${asstId}', policy_id = '${servedPolicyToday}', created_at = now();`,
+    `grant select on sc_letter to authenticated;`,
+    `select is((tests.as_user(${c(asstOp)}, 'insert into public.guarantees select * from sc_letter')).n, 1, 'guarantees: a referral letter of a policy the company serves today');`,
+    `update sc_letter set id = '${FIX_ID(2202)}', number = number || '#s', policy_id = '${neverPolicy.id}';`,
+    `select is((tests.as_user(${c(asstOp)}, 'insert into public.guarantees select * from sc_letter')).n, -1, 'guarantees: not of a policy the company does not serve');`,
+    `update sc_letter set id = '${FIX_ID(2203)}', number = number || '#u', policy_id = '${servedPolicyToday}', assistance_id = '${otherAssistance}';`,
+    `select is((tests.as_user(${c(asstOp)}, 'insert into public.guarantees select * from sc_letter')).n, -1, 'guarantees: not on behalf of another company');`,
+    `select is((tests.as_user(${c(who('asst_billing'))}, 'insert into public.guarantees select * from sc_letter')).n, -1, 'guarantees: the billing of a company writes no letters');`,
+    '-- app.fact_receipt_twins: possible duplicates of a claim the caller sees, without the person',
+    `select is(${valueAs(who('insured'), `select coalesce(bool_and(x ->> 'insuredId' in ('other', '${myClaim.insuredId}')), true)::text from jsonb_array_elements(app.fact_receipt_twins('${myClaim.id}')) x`)}, 'true', 'receipt twins: another person is only «other»');`,
+    `select is(${valueAs(who('insured'), `select coalesce(bool_and(not (x ? 'insuredName') and not (x ? 'clientId')), true)::text from jsonb_array_elements(app.fact_receipt_twins('${myClaim.id}')) x`)}, 'true', 'receipt twins: no name or client');`,
+    `select is(${valueAs(who('insured'), `select app.fact_receipt_twins('${strangerClaim.id}')::text`)}, 'denied', 'receipt twins: not of a claim the caller does not see');`,
+    `select is(${valueAs(hr, `select app.fact_receipt_twins('${myClaim.id}')::text`)}, 'denied', 'receipt twins: HR is refused');`,
     `select is(tests.value_as('{}'::jsonb, 'select app.fact_client_legal_form(''${otherClient.id}'')'), 'denied', 'no claims: every fact is refused');`,
   ];
   const asserts = lines.filter((l) => /^select (is|ok|throws_ok)\(/.test(l));
