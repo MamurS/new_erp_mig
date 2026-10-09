@@ -249,7 +249,7 @@ export const clinic = {
   'clinic.gp.empty': 'Писем пока нет',
   'clinic.users.invited': 'Приглашение отправлено',
   'clinic.users.inviteTitle': 'Пригласить пользователя',
-  'clinic.users.inviteDescription': 'Пользователь получит письмо со ссылкой. Вход — с паролем и кодом подтверждения',
+  'clinic.users.inviteDescription': 'Пользователь получит письмо со ссылкой, задаст пароль и при первом входе подключит приложение-аутентификатор',
   'clinic.users.invite': 'Пригласить',
   'clinic.users.workEmail': 'Рабочий email',
   'clinic.users.caption': 'Пользователи клиники',

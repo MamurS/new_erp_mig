@@ -1,4 +1,5 @@
 /* Clinic users (CLINIC_SPEC §4.7, clinic_admin): invite, change role, deactivate (not oneself). */
+import { InvitationStatus, ResendInvitation } from '@/features/auth/InvitationStatus';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -113,7 +114,7 @@ export default function UsersPage() {
         ),
     },
     { key: 'login', header: t('clinic.users.lastLogin'), cell: (u) => <span className="num text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
-    { key: 'status', header: t('common.status'), cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('clinic.users.active') : t('clinic.users.inactive')}</Chip> },
+    { key: 'status', header: t('common.status'), cell: (u) => (u.active && u.invitation ? <InvitationStatus invitation={u.invitation} /> : <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('clinic.users.active') : t('clinic.users.inactive')}</Chip>) },
     {
       key: 'actions',
       header: '',
@@ -122,9 +123,12 @@ export default function UsersPage() {
         u.id === me?.id ? (
           <span className="text-[12px] text-muted">{t('clinic.users.you')}</span>
         ) : u.active ? (
-          <Button size="sm" variant="secondary" onClick={() => setDeactivate(u)}>
-            {t('clinic.users.deactivate')}
-          </Button>
+          <span className="flex justify-end gap-2">
+            {u.invitation && <ResendInvitation userId={u.id} name={u.fullName} />}
+            <Button size="sm" variant="secondary" onClick={() => setDeactivate(u)}>
+              {t('clinic.users.deactivate')}
+            </Button>
+          </span>
         ) : (
           <Button size="sm" variant="secondary" onClick={() => void change(u, { active: true })}>
             {t('clinic.users.restore')}

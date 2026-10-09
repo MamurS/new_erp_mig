@@ -252,7 +252,7 @@ export const clinic: Translation<typeof Ru> = {
   'clinic.gp.empty': 'No letters yet',
   'clinic.users.invited': 'Invitation sent',
   'clinic.users.inviteTitle': 'Invite a user',
-  'clinic.users.inviteDescription': 'The user will receive an email with a link. Sign-in is with a password and a verification code',
+  'clinic.users.inviteDescription': 'The user gets an e-mail with a link, sets a password and connects an authenticator app at the first sign-in',
   'clinic.users.invite': 'Invite',
   'clinic.users.workEmail': 'Work email',
   'clinic.users.caption': 'Clinic users',

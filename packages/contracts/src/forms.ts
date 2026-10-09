@@ -69,6 +69,23 @@ export const otpSchema = z.object({ challengeId: z.string().trim().min(1).max(12
 export const phoneLoginSchema = z.object({ phone: phoneInput });
 export const phoneVerifySchema = otpSchema;
 
+// ---- invitations (stage 1.5): the single-use token of the e-mail link and the first password ----
+const invitationToken = z.string().trim().min(32).max(128).regex(/^[A-Za-z0-9_-]+$/);
+export const invitationCheckSchema = z.object({ token: invitationToken });
+/** The password an invited person sets: 12–128 characters with letters and digits. */
+export const newPassword = z
+  .string()
+  .min(12, msg('v.passwordMin'))
+  .max(128, msg('v.passwordMax'))
+  .refine((p) => /\p{L}/u.test(p) && /\d/.test(p), msg('v.passwordWeak'));
+/** The form of the invitation page (the token is added when it is sent). */
+export const invitationPasswordSchema = z
+  .object({ password: newPassword, confirm: z.string().max(128) })
+  .refine((v) => v.password === v.confirm, { path: ['confirm'], message: msg('v.passwordMismatch') });
+export const invitationAcceptSchema = z
+  .object({ token: invitationToken, password: newPassword, confirm: z.string().max(128) })
+  .refine((v) => v.password === v.confirm, { path: ['confirm'], message: msg('v.passwordMismatch') });
+
 // ---- staff ----
 export const piiField = z.enum(['pinfl', 'phone', 'birthDate', 'email']);
 export const revealSchema = z.object({

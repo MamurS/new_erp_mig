@@ -1,6 +1,6 @@
 /*
- * Demo-only endpoints, registered only with VITE_DEMO_MODE: reset data and failure simulation (mock-only: they
- * touch the in-memory database and the mock's switches) and the demo routes of the shared table.
+ * Demo-only endpoints, registered only with VITE_DEMO_MODE: reset data, failure simulation and the mail outbox
+ * (mock-only: they touch the in-memory database and the mock's switches) and the demo routes of the shared table.
  */
 import { http } from 'msw';
 import { db, resetDb } from '../db';
@@ -10,6 +10,7 @@ import { clearSnapshot } from '../persist';
 import { DEMO_INSURED_PHONE, DEMO_LOGIN_AS } from '@mig/seed/credentials';
 import { demoFailuresSchema, demoRoutes } from '@mig/domain/http/demoRoutes';
 import { toMsw } from './index';
+import { outbox } from '../outbox';
 
 const DEMO = { noFailures: true };
 const DEMO_POST = { noFailures: true, csrf: true };
@@ -35,6 +36,11 @@ export const demoHandlers = [
   ),
   // Demo routes of the shared table (the MIS simulator's card code).
   ...demoRoutes({ insuredPhone: DEMO_INSURED_PHONE, accounts: DEMO_LOGIN_AS }).map((r) => toMsw(r, DEMO)),
+  // The mock's mail (invitations): the API of ci has Mailpit instead.
+  http.get(
+    `${API}/__demo/outbox`,
+    route(() => outbox.slice().reverse(), DEMO),
+  ),
   http.get(
     `${API}/__demo/failures`,
     route(() => ({ ok: true as const, enabled: mockConfig.failures }), DEMO),

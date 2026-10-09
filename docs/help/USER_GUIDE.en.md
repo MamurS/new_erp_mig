@@ -40,6 +40,17 @@ MIG staff, HR, clinics and assistance companies sign in with an email, a passwor
 3. **Adult family members** (spouse, parents) sign in with their own phone number. Children under the age limit are visible in a parent's app and do not have a separate sign-in.
 4. After 5 wrong attempts within 10 minutes, sign-in is blocked for 5 minutes. The error message does not say what exactly is wrong — this protects against guessing.
 
+### First sign-in by invitation {#invitation}
+
+<!-- audience: staff hr clinic assist -->
+
+A new account with an e-mail (a MIG employee, a client's HR, a clinic or assistance user) is created by an administrator — the system itself sends the e-mail “Invitation to the Mosaic Insurance Group DMS system”.
+
+1. Open the link from the e-mail in full. The “Invitation to MIG DMS” screen shows which account it is for (the address is partly hidden) and until when it is valid.
+2. Enter a new password — at least 12 characters, with letters and digits — and repeat it → “Set password”.
+3. “Password set” → “Go to sign-in”: sign in with the e-mail and the new password. At the first sign-in, connect an authenticator app (the “Sign-in” section above).
+4. The link works once and is valid for 3 days (the “Invitation validity” parameter). If you see “The link does not work”, the password is already set, the link is out of date or was replaced with a new one: ask the administrator to press “Send again”. The previous link then stops working.
+
 ### The portal screen {#portal-screen}
 
 <!-- audience: all -->
@@ -836,7 +847,7 @@ This section can be given to partners and clients separately: it contains only w
 <!-- audience: staff clinic -->
 
 - **Registrar:** “Check a patient” → visit; “Appointments” — confirm, offer a time, reject; “Guarantee letters” — a request from the visit, uploading more documents on request.
-- **Clinic administrator:** the same, plus “Registers” (section 9), “Documents” (contract, price list, reconciliation statements), “Users” (invite, change role, deactivate — you cannot deactivate yourself), “Integration” (section 15).
+- **Clinic administrator:** the same, plus “Registers” (section 9), “Documents” (contract, price list, reconciliation statements), “Users” (invite, send the invitation again, change role, deactivate — you cannot deactivate yourself), “Integration” (section 15).
 - **Remember:** without a policy check, patient data are unavailable; the QR code is single-use.
 
 ### Assistance company {#guide-assistance}
@@ -846,7 +857,7 @@ This section can be given to partners and clients separately: it contains only w
 - **Operator:** “Cases” — create from a call, find an insured person; “Appointments” — escalations from clinics; “Chats” — messages from the app.
 - **Doctor:** “Guarantee letters” — a decision within the authority or an escalation to MIG; review of sub-register lines; medical records of its own insured persons for a reason.
 - **Finance officer:** “Clinic registers” — review and recording payments to clinics; “MIG invoices” — prepare for the month, send, answer rejections.
-- **Administrator:** “Users”, “Integration”.
+- **Administrator:** “Users” (invite, send the invitation again, disable), “Integration”.
 - **Remember:** you see only the insured persons of your clients as of the event date; all queues have deadlines, overdue items are highlighted.
 
 ## 15. Administration {#administration}
@@ -860,7 +871,9 @@ The MIG administrator manages users, authority limits, parameters, partners and 
 
 <!-- audience: staff -->
 
-1. “+ Create” → “User” → email, full name, role → “Invite”. The employee gets an invitation, sets a password and sets up the second factor.
+1. “+ Create” → “User” → email, full name, role → “Invite”. The employee gets an e-mail with a link, sets a password and connects an authenticator app at the first sign-in (the “First sign-in by invitation” section).
+   Until the password is set, the “Status” column shows “Invitation sent” (and until when the link is valid), “Invitation queued for sending” or “Invitation expired”. The “Send again” button sends a new link — the previous one stops working.
+   Below the table, the “Invitations” block lists the accounts of client HR, clinics and assistance companies that have not set a password yet. The invitation can be sent again there too.
 2. “Administration” → “Users and roles”: role change (with confirmation), deactivation of a dismissed employee. You cannot remove the administrator role from yourself.
 3. **Authority limits and signing authority** — in the employee's profile: the maximum discount from the rate and the quote premium without approval (underwriter), the maximum claim decision amount (claims officer), signing authority with its basis (“Power of attorney No. … of …”). A change applies only after confirmation by a **second administrator**; the employee cannot confirm it.
 
@@ -875,7 +888,7 @@ The MIG administrator manages users, authority limits, parameters, partners and 
 - **rate:** base rates of plans, age group coefficients, group size discounts;
 - **servicing:** endorsement frequency, refund rule on exclusion, from which date a new employee is covered, blocking when overdue;
 - **family members:** limit mode, age limit for children and students;
-- **security:** limits on sign-in attempts and PINFL checks;
+- **security:** limits on sign-in attempts and PINFL checks, invitation validity;
 - **numbering:** document number templates (Latin letters, digits, “-” and “/” only).
 
 A change: “Propose a new value” → a second administrator or an underwriter confirms → the value takes effect, with an audit log entry “was — became, who, when”.

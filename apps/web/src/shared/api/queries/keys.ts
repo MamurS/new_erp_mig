@@ -31,6 +31,7 @@ export const qk = {
   report: (name: string, p?: Params) => ['reports', name, p ?? {}] as const,
   audit: (p: Params) => ['audit', p] as const,
   adminUsers: ['admin', 'users'] as const,
+  invitations: ['invitations'] as const,
   hrOverview: ['hr', 'overview'] as const,
   hrEmployees: (p: Params) => ['hr', 'employees', p] as const,
   hrDocuments: ['hr', 'documents'] as const,

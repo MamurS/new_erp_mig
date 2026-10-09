@@ -141,7 +141,7 @@ export const rebillView: z.ZodType<D.RebillView> = rebillBase;
 export const rebillSummaries: z.ZodType<D.RebillSummary[]> = z.array(rebillBase.omit({ lines: true }).extend({ lineCount: z.number(), flaggedCount: z.number() }));
 
 export const assistClinics: z.ZodType<D.AssistClinic[]> = z.array(z.object({ clinicId: uuid, clinicName: z.string(), clinicLegalForm: z.enum(LEGAL_FORMS), city: z.string(), specialties: z.array(S.specialty), ownPrices: z.boolean(), priceList: C.priceList }));
-const assistUser = z.object({ id: uuid, email: z.string(), fullName: z.string(), role: assistRole, active: z.boolean(), lastLoginAt: isoDateTime.optional() });
+const assistUser = z.object({ id: uuid, email: z.string(), fullName: z.string(), role: assistRole, active: z.boolean(), lastLoginAt: isoDateTime.optional(), invitation: S.invitationBrief.optional() });
 export const assistUserView: z.ZodType<D.AssistUserView> = assistUser;
 export const assistUsers = z.array(assistUser);
 

@@ -3,6 +3,7 @@
  * never from the request; objects of other clinics answer 404 (CLINIC_SPEC §9.9). The rules shared with
  * the integration API and the staff portal are in ./clinic.
  */
+import { issueInvitation, withInvitations } from './invitations';
 import Papa from 'papaparse';
 import type { z } from 'zod';
 import { msg, tm } from '@mig/i18n';
@@ -510,7 +511,7 @@ export async function documents(ctx: AuthCtx): Promise<ClinicDocuments> {
 
 export async function listUsers(ctx: AuthCtx): Promise<ClinicUserView[]> {
   const actor = requireClinic(ctx, 'clinic.users.manage');
-  return (await ctx.repos.clinicUsers.list({ where: { clinicId: actor.clinicId } })).map(toUserView);
+  return withInvitations(ctx, (await ctx.repos.clinicUsers.list({ where: { clinicId: actor.clinicId } })).map(toUserView));
 }
 
 /** An e-mail is unique across all accounts that sign in with it. */
@@ -525,7 +526,8 @@ export async function inviteUser(ctx: AuthCtx, body: unknown, initialPassword: s
   const row: ClinicUserRow = { id: randomId(), ...input, password: initialPassword, clinicId: actor.clinicId, active: true, createdAt: tzIso(ctx.now()) };
   await r.clinicUsers.insert(row);
   await audit(ctx, actor, 'role_change', { targetType: 'user', targetId: row.id, targetLabel: row.fullName });
-  return toUserView(row);
+  await issueInvitation(ctx, row, actor);
+  return (await withInvitations(ctx, [toUserView(row)]))[0]!;
 }
 
 export async function patchUser(ctx: AuthCtx, id: UUID, body: unknown): Promise<ClinicUserView> {

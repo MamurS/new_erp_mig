@@ -205,6 +205,7 @@ export const routes: RouteObject[] = [
       { path: '/', element: <RootRedirect /> },
       { path: '/login', lazy: lazy(() => import('@/features/auth/LoginPage')) },
       { path: '/login/otp', lazy: lazy(() => import('@/features/auth/OtpPage')) },
+      { path: '/invite', lazy: lazy(() => import('@/features/auth/InvitePage')) },
       {
         path: '/app',
         lazy: lazy(() => import('@/features/insured/InsuredRoot')),

@@ -2,6 +2,7 @@
  * MIG staff side of clinics (CLINIC_SPEC §5): clinic card, clinic management by the admin,
  * guarantee-letter queue for doctor experts, registry review (operator) and payment (accountant).
  */
+import { issueInvitation, withInvitations } from './invitations';
 import { msg, t } from '@mig/i18n';
 import type { Clinic, IntegrationClient, Registry, SessionUser, UUID } from '@mig/contracts';
 import type { ClinicCard, ClinicUserView, GuaranteeView, RegistrySummary, RegistryView } from '@mig/contracts/dto';
@@ -42,7 +43,7 @@ async function clinicCard(ctx: BaseCtx, clinic: Clinic): Promise<ClinicCard> {
       rejectedLineShare: f.reviewedLines ? f.rejectedLines / f.reviewedLines : null,
       amountToPay: f.amountToPay,
     },
-    users: (await r.clinicUsers.list({ where: { clinicId: clinic.id } })).map(toUserView),
+    users: await withInvitations(ctx, (await r.clinicUsers.list({ where: { clinicId: clinic.id } })).map(toUserView)),
     keys: (await r.integrationClients.list({ where: { clinicId: clinic.id } })).map(toClientView),
     webhooks: { endpoints: hooks.endpoints, retrying: hooks.retrying, failed24h: hooks.failed },
     apiErrors24h: hooks.apiErrors,
@@ -98,7 +99,8 @@ export async function inviteAdmin(ctx: AuthCtx, id: UUID, body: unknown, initial
   const row: ClinicUserRow = { id: randomId(), ...input, role: 'clinic_admin', password: initialPassword, clinicId: clinic.id, active: true, createdAt: tzIso(ctx.now()) };
   await ctx.repos.clinicUsers.insert(row);
   await audit(ctx, user, 'role_change', { targetType: 'user', targetId: row.id, targetLabel: row.fullName });
-  return toUserView(row);
+  await issueInvitation(ctx, row, user);
+  return (await withInvitations(ctx, [toUserView(row)]))[0]!;
 }
 
 export async function revokeClinicKey(ctx: AuthCtx, id: UUID, keyId: UUID): Promise<IntegrationClient> {

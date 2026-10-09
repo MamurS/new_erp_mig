@@ -68,7 +68,10 @@ export function enumWidening(migration: string): string[] {
       throw new Error(`${x.collection}.${x.field} is not an enum`);
     const c = snake(x.field);
     const name = `${t.table}_${c}_check`;
-    return `alter table public.${t.table} drop constraint ${name};\nalter table public.${t.table} add constraint ${name} check (${c} in (${col.values.map(lit).join(', ')}));`;
+    // The values known at this migration: the later ones of newer migrations are left to them.
+    const newer = new Set(LATER_ENUM_VALUES.filter((y) => y.collection === x.collection && y.field === x.field && y.migration > migration).flatMap((y) => y.values));
+    const values = col.values.filter((v) => !newer.has(v));
+    return `alter table public.${t.table} drop constraint ${name};\nalter table public.${t.table} add constraint ${name} check (${c} in (${values.map(lit).join(', ')}));`;
   });
 }
 

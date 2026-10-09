@@ -2,6 +2,7 @@
  * Sales pipeline (LIFECYCLE_SPEC §2–6): the staff directory and four-eyes changes of authority, leads,
  * deals, census, quotes, the offer of an approved quote and the client's answer to an offer.
  */
+import { issueInvitation } from './invitations';
 import { msg } from '@mig/i18n';
 import type { AuthorityChange, Deal, KpDocument, KpParams, Quote, SessionUser, StaffAuthority } from '@mig/contracts';
 import type { DealCard, DealView, QuoteView, StaffDirectoryItem } from '@mig/contracts/dto';
@@ -632,7 +633,9 @@ export async function sendDealKp(ctx: AuthCtx, id: string): Promise<KpDocument> 
   if (client.status === 'lead') await ctx.repos.clients.update(client.id, { status: 'negotiation' });
   // The client's contact gets the HR cabinet to answer the offer and sign the contract (demo password).
   if (!(await ctx.repos.hrUsers.exists({ companyId: client.id }))) {
-    await ctx.repos.hrUsers.insert({ id: randomId(), email: client.hrContact.email, password: DEMO_PASSWORD, fullName: client.hrContact.name, companyId: client.id });
+    const hr = { id: randomId(), email: client.hrContact.email, password: DEMO_PASSWORD, fullName: client.hrContact.name, companyId: client.id };
+    await ctx.repos.hrUsers.insert(hr);
+    await issueInvitation(ctx, hr, user);
     await dealEvent(ctx, deal.id, user.displayName, `Контакту клиента открыт кабинет HR (${client.hrContact.email})`);
   }
   await moveDeal(ctx, deal.id, 'kp_sent', user.displayName, `КП ${kp.number} отправлено клиенту`);

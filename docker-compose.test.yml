@@ -1,0 +1,22 @@
+# Test services of ci and local runs — not a deployment (deploy/docker-compose.yml is).
+#
+#   docker compose -f docker-compose.test.yml up -d --wait
+#
+# Mailpit catches the invitation e-mails of the API (SMTP 127.0.0.1:1025, no TLS, no auth; API and web UI
+# http://127.0.0.1:8025): the API tests and the e2e against the backend read the links from its API. The image is
+# the ECR mirror the Supabase CLI uses (no Docker Hub rate limits in ci).
+services:
+  mailpit:
+    image: public.ecr.aws/supabase/mailpit:v1.31.3
+    ports:
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
+    environment:
+      MP_MAX_MESSAGES: '500'
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+      MP_SMTP_AUTH_ALLOW_INSECURE: 'true'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 2s
+      timeout: 2s
+      retries: 30

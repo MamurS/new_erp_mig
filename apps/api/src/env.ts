@@ -14,6 +14,7 @@
  */
 import { DEV_PII_KEY, DEV_PII_KEY_VERSION, aesPiiCrypto, parsePiiKeys, sameKey, type AesPiiCrypto } from '@mig/domain/store/piiAes';
 import { DEV_HMAC_KEY } from '@mig/domain/store/devKeys';
+import type { SmtpConfig } from './mail/smtp';
 
 export type AppEnv = 'production' | 'staging' | 'ci' | 'development';
 
@@ -45,6 +46,8 @@ export interface ApiEnv {
   /** `mig_session` without `Secure` (local http only). */
   insecureDevCookie: boolean;
   inviteRedirectTo?: string;
+  /** The SMTP of MIG for invitation e-mails (required in production). */
+  smtp?: SmtpConfig;
   /** `inline` (the worker runs in the API process) or `off` (a separate `dist/worker.js`). */
   worker: 'inline' | 'off';
   /** WORKER_INTERVAL_MS: the pause between the worker's passes (default 10 s; e2e use a shorter one). */
@@ -68,6 +71,28 @@ function piiCrypto(env: NodeJS.ProcessEnv, prod: boolean): AesPiiCrypto {
   return aesPiiCrypto({ keys, current, hmacKey: hmacKey || DEV_HMAC_KEY, allowPlaintextV0: !prod });
 }
 
+/** SMTP_* of the deployment: required in production (with TLS and a public https link of the invitations). */
+function smtpConfig(env: NodeJS.ProcessEnv, prod: boolean): SmtpConfig | undefined {
+  const host = env.SMTP_HOST?.trim();
+  if (!host) {
+    if (prod) throw new Error('SMTP_HOST is required in production (invitation e-mails)');
+    return undefined;
+  }
+  const tls = (env.SMTP_TLS || 'starttls') as SmtpConfig['tls'];
+  if (!['starttls', 'tls', 'none'].includes(tls)) throw new Error(`SMTP_TLS: unknown value ${tls}`);
+  if (prod && tls === 'none') throw new Error('SMTP_TLS=none is not allowed in production');
+  const from = env.SMTP_FROM?.trim();
+  if (!from) throw new Error('SMTP_FROM is required with SMTP_HOST');
+  if (prod && !/^https:\/\//.test(env.INVITE_REDIRECT_URL ?? '')) throw new Error('INVITE_REDIRECT_URL: the https address of the portal is required in production');
+  return {
+    host,
+    port: env.SMTP_PORT ? Number(env.SMTP_PORT) : tls === 'tls' ? 465 : 587,
+    tls,
+    from,
+    ...(env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS ?? '' } : {}),
+  };
+}
+
 export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
   const appEnv = (env.APP_ENV ?? 'development') as AppEnv;
   if (!['production', 'staging', 'ci', 'development'].includes(appEnv)) throw new Error(`APP_ENV: unknown value ${appEnv}`);
@@ -89,6 +114,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
   const testTotp = env.ALLOW_TEST_TOTP === 'true';
   if (testTotp && (prod || env.NODE_ENV === 'production')) throw new Error('ALLOW_TEST_TOTP must not be set when APP_ENV or NODE_ENV is production');
   if (env.INSECURE_DEV_COOKIE === '1' && appEnv !== 'development') throw new Error('INSECURE_DEV_COOKIE is for local development only');
+  const smtp = smtpConfig(env, prod);
   return {
     appEnv,
     databaseUrl,
@@ -108,6 +134,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     ...(env.DEMO_PASSWORD && !prod ? { demoPassword: env.DEMO_PASSWORD } : {}),
     insecureDevCookie: env.INSECURE_DEV_COOKIE === '1',
     ...(env.INVITE_REDIRECT_URL ? { inviteRedirectTo: env.INVITE_REDIRECT_URL } : {}),
+    ...(smtp ? { smtp } : {}),
     worker: env.WORKER === 'off' ? 'off' : 'inline',
     ...(Number(env.WORKER_INTERVAL_MS) >= 500 ? { workerIntervalMs: Number(env.WORKER_INTERVAL_MS) } : {}),
   };

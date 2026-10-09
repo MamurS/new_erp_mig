@@ -1,5 +1,6 @@
 import { useUser } from '@/shared/auth/session';
 /* Card of an assistance company for MIG (ASSISTANCE_SPEC §7): KPI, contract, clients, users, integration, rebills, QA, audit. */
+import { InvitationStatus, ResendInvitation } from '@/features/auth/InvitationStatus';
 import { canOpenRoute } from '@/features/help/routeMap';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -297,6 +298,7 @@ export default function AssistanceCardPage() {
   const q = useAssistanceCard(assistanceId);
   const navigate = useNavigate();
   const role = useUser()?.role;
+  const canResend = useCan('users.manage');
   // The assistance card is open to every MIG role, its rows lead to sections that are not: no link without access.
   const may = (route: string) => !!role && canOpenRoute(role, route);
   useDocumentTitle(t('staffOps.rebills.col.assistance'));
@@ -389,7 +391,8 @@ export default function AssistanceCardPage() {
                     { key: 'email', header: t('common.email'), cell: (u) => u.email },
                     { key: 'role', header: t('common.role'), cell: (u) => ROLE_LABEL[u.role] },
                     { key: 'login', header: t('staffOps.clinicCard.lastLogin'), cell: (u) => (u.lastLoginAt ? <span className="num">{formatDateTime(u.lastLoginAt)}</span> : '—') },
-                    { key: 'active', header: t('common.status'), cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('staffOps.clinicCard.active') : t('staffOps.assistCard.disabled')}</Chip> },
+                    { key: 'active', header: t('common.status'), cell: (u) => (u.active && u.invitation ? <InvitationStatus invitation={u.invitation} /> : <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('staffOps.clinicCard.active') : t('staffOps.assistCard.disabled')}</Chip>) },
+                    { key: 'invite', header: '', align: 'right', cell: (u) => (u.active && u.invitation && canResend ? <ResendInvitation userId={u.id} name={u.fullName} /> : null) },
                   ]}
                   rows={c.users}
                   rowKey={(u) => u.id}

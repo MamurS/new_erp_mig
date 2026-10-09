@@ -252,7 +252,7 @@ export const clinic: Translation<typeof Ru> = {
   'clinic.gp.empty': 'Hali xatlar yoʻq',
   'clinic.users.invited': 'Taklifnoma yuborildi',
   'clinic.users.inviteTitle': 'Foydalanuvchini taklif qilish',
-  'clinic.users.inviteDescription': 'Foydalanuvchi havolali xat oladi. Kirish parol va tasdiqlash kodi bilan',
+  'clinic.users.inviteDescription': 'Foydalanuvchi havolali xat oladi, parol oʻrnatadi va birinchi kirishda autentifikator ilovasini ulaydi',
   'clinic.users.invite': 'Taklif qilish',
   'clinic.users.workEmail': 'Ish email manzili',
   'clinic.users.caption': 'Klinika foydalanuvchilari',

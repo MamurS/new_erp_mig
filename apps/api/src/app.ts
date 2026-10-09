@@ -20,7 +20,7 @@ import { demoRoutes, type DemoRouteOptions } from '@mig/domain/http/demoRoutes';
 import { ROUTES, routeKey, signedInBody, type RawResult, type RouteDef, type RouteDeps } from '@mig/domain/http/routes';
 import { fileAccess } from '@mig/domain/services/claims';
 import { runApiCall, TEST_IP_HEADER } from '@mig/domain/services/integrationKit';
-import { DomainError, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
+import { DomainError, type AuthCtx, type BaseCtx, type ServiceEnv } from '@mig/domain/services/kernel';
 import type { BlobStore } from '@mig/domain/store/blob';
 import { postgresRepos } from '@mig/domain/store/postgres';
 import type { ImageCodec } from '@mig/domain/lib/imageMeta';
@@ -47,6 +47,8 @@ export interface AppOptions {
   demo?: DemoControls | null;
   /** Re-encoding of uploaded images (files/imageCodec.ts); without it their metadata is only stripped. */
   images?: ImageCodec;
+  /** The credentials of e-mail accounts (an accepted invitation sets the password): Supabase Auth. */
+  credentials?: ServiceEnv['credentials'];
   /** With the demo knobs: runs the date clocks job (a jump of the test clock; the worker's runJob). */
   runClocks?: () => Promise<unknown>;
   /** The clock of the services (tests pin it). */
@@ -102,7 +104,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   async function inTx<T>(fn: (tx: RequestTx, base: BaseCtx) => Promise<T>): Promise<T> {
     const tx = await RequestTx.begin(o.pool);
     const system = postgresRepos(tx.system(), { ...repoOptions, privileged: true });
-    const base: BaseCtx = { repos: system, now, env: { demo: !!o.demoRoutes, ...(o.images ? { images: o.images } : {}) }, system: { repos: system } };
+    const base: BaseCtx = { repos: system, now, env: { demo: !!o.demoRoutes, ...(o.images ? { images: o.images } : {}), ...(o.credentials ? { credentials: o.credentials } : {}) }, system: { repos: system } };
     try {
       const out = await fn(tx, base);
       await tx.commit();

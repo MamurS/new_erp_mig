@@ -3,6 +3,7 @@
  * of an assistance to a policy from a date, review (curator) and payment (accountant) of rebills with
  * four-eyes, the quality-control queue of doctor experts and the report by assistance.
  */
+import { issueInvitation, withInvitations } from './invitations';
 import { msg, t } from '@mig/i18n';
 import type { AssistanceCase, AssistanceCompany, IntegrationClient, QaSample, Rebill, SessionUser, UUID } from '@mig/contracts';
 import type { AssignmentView, AssistanceCardView, AssistanceListItem, AssistanceReportRow, QaSampleView, RebillSummary, RebillView } from '@mig/contracts/dto';
@@ -116,7 +117,9 @@ export async function createAssistance(ctx: AuthCtx, body: unknown, opts: { init
     contract: { number: input.contractNumber, validFrom: todayIso(ctx), validTo: isoDay(ctx.now() + 365 * DAY), ...input.contract },
   };
   await r.assistances.insert(a);
-  await r.assistUsers.insert({ id: randomId(), ...input.admin, role: 'asst_admin', password: opts.initialPassword, assistanceId: a.id, active: true, createdAt: tzIso(ctx.now()) });
+  const admin = { id: randomId(), ...input.admin, role: 'asst_admin' as const, password: opts.initialPassword, assistanceId: a.id, active: true, createdAt: tzIso(ctx.now()) };
+  await r.assistUsers.insert(admin);
+  await issueInvitation(ctx, admin, user);
   await audit(ctx, user, 'role_change', { targetType: 'assistance', targetId: a.id, targetLabel: a.name, assistanceId: a.id });
   return listItem(ctx, a, ctx.now());
 }
@@ -147,7 +150,7 @@ export async function card(ctx: AuthCtx, id: UUID): Promise<AssistanceCardView> 
     kpi: await kpiOf(ctx, a, now),
     insuredCount,
     clients: [...clients.values()].sort((x, y) => legalNameCollator.compare(x.name, y.name)),
-    users: (await r.assistUsers.list({ where: { assistanceId: a.id } })).map((u) => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt })),
+    users: await withInvitations(ctx, (await r.assistUsers.list({ where: { assistanceId: a.id } })).map((u) => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt }))),
     keys: (await r.integrationClients.list({ where: { clinicId: a.id } })).map(({ secretHash: _h, ...k }): IntegrationClient => k),
     webhooks: { endpoints: hooks.endpoints, retrying: hooks.retrying, failed24h: hooks.failed },
     apiErrors24h: hooks.apiErrors,

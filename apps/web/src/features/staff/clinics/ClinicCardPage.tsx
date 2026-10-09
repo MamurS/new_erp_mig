@@ -1,4 +1,5 @@
 /* Clinic card for MIG staff (CLINIC_SPEC §5): overview, users, integration health, guarantee letters, registries. */
+import { InvitationStatus, ResendInvitation } from '@/features/auth/InvitationStatus';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -85,6 +86,7 @@ export default function ClinicCardPage() {
   const tab = ['overview', 'users', 'integration', 'guarantees', 'registries'].includes(f.tab) ? f.tab : 'overview';
   const canManage = useCan('clinics.manage');
   const canInvite = useCan('clinic.users.manage', { sub: 'first_admin' });
+  const canResend = useCan('users.manage');
   const canRevoke = useCan('clinic.integration.manage', { sub: 'revoke_keys' });
   const canGuarantees = useCan('guarantees.read');
   const canReview = useCan('registries.review');
@@ -129,8 +131,9 @@ export default function ClinicCardPage() {
     { key: 'name', header: t('common.fullName'), cell: (u) => <span className="font-medium">{u.fullName}</span> },
     { key: 'email', header: t('common.email'), cell: (u) => <span className="text-muted">{u.email}</span> },
     { key: 'role', header: t('common.role'), cell: (u) => ROLE_LABEL[u.role] },
-    { key: 'active', header: t('common.status'), cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('staffOps.clinicCard.active') : t('staffOps.clinicCard.blocked')}</Chip> },
+    { key: 'active', header: t('common.status'), cell: (u) => (u.active && u.invitation ? <InvitationStatus invitation={u.invitation} /> : <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('staffOps.clinicCard.active') : t('staffOps.clinicCard.blocked')}</Chip>) },
     { key: 'login', header: t('staffOps.clinicCard.lastLogin'), cell: (u) => <span className="num text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
+    { key: 'invite', header: '', align: 'right', cell: (u) => (u.active && u.invitation && canResend ? <ResendInvitation userId={u.id} name={u.fullName} /> : null) },
   ];
   const keyCols: Column<IntegrationClient>[] = [
     { key: 'name', header: t('common.name'), cell: (k) => <span className="font-medium">{k.name}</span> },

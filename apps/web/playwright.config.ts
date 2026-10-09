@@ -66,6 +66,12 @@ const apiServer = (port: number): WebServer => ({
       PORT: String(port),
       DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
       DEMO_PASSWORD: 'Demo-2026!',
+      // Invitation e-mails go to Mailpit (docker-compose.test.yml); their links lead to this app.
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: '1025',
+      SMTP_TLS: 'none',
+      SMTP_FROM: 'MIG DMS <noreply@mig.test>',
+      INVITE_REDIRECT_URL: `http://localhost:${PORT}/`,
       LOG_LEVEL: 'warn',
       ...supabaseEnv(),
     },

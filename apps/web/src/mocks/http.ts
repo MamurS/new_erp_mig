@@ -12,6 +12,8 @@ import { DomainError as HttpError, type AuthCtx, type BaseCtx } from '@mig/domai
 import { resolveSession } from '@mig/domain/services/session';
 import { edoEvents, timeClocks } from '@mig/domain/services/lifecycle';
 import { sweepDeadlines } from '@mig/domain/services/tasks';
+import { sendInvitations } from '@mig/domain/services/system/invitations';
+import { mailBaseUrl, mockMailer } from './outbox';
 import { memoryRepos } from '@mig/domain/store/memory';
 import { routeRequest } from '@mig/domain/http/request';
 import { hasCsrfHeader, readCookie } from '@mig/domain/http/csrf';
@@ -101,9 +103,9 @@ function isMutation(method: string): boolean {
 /*
  * The date clocks (contracts coming into force and expiring, policies, guarantee letters, invoice statuses; deadlines
  * of requests) are background jobs in the API (services/jobs.ts `contract-lifecycle`, `task-deadlines`); reads show
- * the stored state. The mock has no
- * scheduler: it runs the same job before a request once the clock moved by a minute or more — also after a jump of
- * the page's clock (e2e `fastForward`), as the API's demo clock runs the job on a jump.
+ * the stored state. The mock has no scheduler: before a request it polls EDO, sweeps deadlines and sends invitation
+ * e-mails (the API's worker does on every pass), and runs the date clocks once the clock moved by a minute or more —
+ * also after a jump of the page's clock (e2e `fastForward`), as the API's demo clock runs the job on a jump.
  */
 let clocksAt: number | null = null;
 async function runDueClocks(): Promise<boolean> {
@@ -112,8 +114,10 @@ async function runDueClocks(): Promise<boolean> {
   // deadline moved by a test is noticed at once.
   const signed = (await edoEvents(baseCtx())) > 0;
   await sweepDeadlines(baseCtx());
+  // Invitation e-mails (the API's worker sends them on every pass) go to the mock's outbox.
+  const mailed = (await sendInvitations(baseCtx(), mockMailer, mailBaseUrl())).sent > 0;
   const now = Date.now();
-  if (clocksAt !== null && now >= clocksAt && now - clocksAt < 60_000) return signed;
+  if (clocksAt !== null && now >= clocksAt && now - clocksAt < 60_000) return signed || mailed;
   clocksAt = now;
   await timeClocks(baseCtx());
   return true;

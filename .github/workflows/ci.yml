@@ -83,6 +83,10 @@ jobs:
       # Postgres, Auth, Storage and Kong (the services the API uses); the rest of the stack is not needed.
       - run: npx supabase start -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,realtime,mailpit,postgres-meta
       - run: npx supabase db reset
+      # Mailpit catches the invitation e-mails (docker-compose.test.yml). The pull is retried: the public registry
+      # answers «toomanyrequests» to bursts of parallel jobs.
+      - run: for i in 1 2 3 4 5; do docker compose -f docker-compose.test.yml pull --quiet && break; sleep $((i * 15)); done
+      - run: docker compose -f docker-compose.test.yml up -d --wait
       - run: npm run api:build
       - name: Supabase URL and service role key for the tests
         run: npx supabase status -o env --override-name api.url=SUPABASE_URL --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY)=' | tr -d '"' >> "$GITHUB_ENV"
@@ -90,6 +94,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
           APP_ENV: ci
+          MAILPIT_URL: http://127.0.0.1:8025
 
   # The whole e2e suite against the real backend (BACKEND_SPEC §12.3; required to merge): the local Supabase stack
   # with the seed, the API (APP_ENV=ci: demo reset, failure simulation, test clock, «Войти как…», test MFA codes) and
@@ -113,6 +118,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx supabase start -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,realtime,mailpit,postgres-meta
       - run: npx supabase db reset
+      # Mailpit catches the invitation e-mails the API sends (docker-compose.test.yml; e2e/invitations.spec.ts); the
+      # pull is retried (the public registry answers «toomanyrequests» to eight shards at once).
+      - run: for i in 1 2 3 4 5; do docker compose -f docker-compose.test.yml pull --quiet && break; sleep $((i * 15)); done
+      - run: docker compose -f docker-compose.test.yml up -d --wait
       - run: npm run api:build
       - name: Supabase URL and service role key for the API
         run: npx supabase status -o env --override-name api.url=SUPABASE_URL --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY | grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY)=' | tr -d '"' >> "$GITHUB_ENV"
@@ -122,6 +131,7 @@ jobs:
           # Two API processes behind a round-robin balancer: nothing of a request may live in one process.
           E2E_API_REPLICAS: '2'
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          MAILPIT_URL: http://127.0.0.1:8025
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

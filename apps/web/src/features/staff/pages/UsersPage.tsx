@@ -22,6 +22,8 @@ import { toast } from '@/shared/ui/toast';
 import { Tooltip } from '@/shared/ui/tooltip';
 import { useTopbar } from '../topbar';
 import { AuthorityChangesCard, AuthorityDialog, authoritySummary } from '../admin/Authority';
+import { InvitationsCard } from '../admin/InvitationsCard';
+import { InvitationStatus, ResendInvitation } from '@/features/auth/InvitationStatus';
 
 type Pending = { kind: 'role'; user: StaffUser; role: StaffRole } | { kind: 'active'; user: StaffUser; active: boolean };
 type Invite = z.input<typeof staffUserInviteSchema>;
@@ -153,7 +155,16 @@ export default function UsersPage() {
           </span>
         ) : null,
     },
-    { key: 'status', header: t('common.status'), cell: (u) => <StatusDot tone={u.active ? 'success' : 'muted'}>{u.active ? t('staff.clientCard.insuredActive') : t('staff.users.deactivated')}</StatusDot> },
+    {
+      key: 'status',
+      header: t('common.status'),
+      cell: (u) =>
+        u.active && u.invitation ? (
+          <InvitationStatus invitation={u.invitation} />
+        ) : (
+          <StatusDot tone={u.active ? 'success' : 'muted'}>{u.active ? t('staff.clientCard.insuredActive') : t('staff.users.deactivated')}</StatusDot>
+        ),
+    },
     { key: 'last', header: t('staff.users.lastLogin'), cell: (u) => <span className="text-muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</span> },
     {
       key: 'actions',
@@ -161,9 +172,12 @@ export default function UsersPage() {
       align: 'right',
       cell: (u) =>
         u.id === me.id ? null : u.active ? (
-          <Button size="sm" variant="secondary" className="text-danger-text" onClick={() => setPending({ kind: 'active', user: u, active: false })}>
-            {t('staff.users.deactivate')}
-          </Button>
+          <span className="flex justify-end gap-2">
+            {u.invitation && <ResendInvitation userId={u.id} name={u.fullName} />}
+            <Button size="sm" variant="secondary" className="text-danger-text" onClick={() => setPending({ kind: 'active', user: u, active: false })}>
+              {t('staff.users.deactivate')}
+            </Button>
+          </span>
         ) : (
           <Button size="sm" variant="secondary" onClick={() => setPending({ kind: 'active', user: u, active: true })}>
             {t('staff.users.activate')}
@@ -207,6 +221,7 @@ export default function UsersPage() {
       <div className="rounded-card border border-border bg-surface">
         <DataTable caption={t('staff.users.caption')} columns={cols} rows={list.data} rowKey={(u) => u.id} loading={list.isLoading} error={list.error} onRetry={() => void list.refetch()} rowHeight={52} />
       </div>
+      <InvitationsCard />
       {inviting && <InviteDialog onClose={() => setInviting(false)} />}
       {authorityOf && <AuthorityDialog user={authorityOf} onClose={() => setAuthorityOf(null)} />}
       <ConfirmDialog

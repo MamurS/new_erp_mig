@@ -4,6 +4,7 @@
  * records of a former client are read-only. The actions shared with the integration API (letter decisions,
  * sub-registry lines, clinic payments, rebills) are exported for ./integrationAssistance.ts.
  */
+import { issueInvitation, withInvitations } from './invitations';
 import { z } from 'zod';
 import { msg } from '@mig/i18n';
 import type { Appointment, AssistanceAssignment, MedicalRecordEntry, Policy, Rebill, Registry, SessionUser, UUID, Visit } from '@mig/contracts';
@@ -889,7 +890,7 @@ export async function clinics(ctx: AuthCtx): Promise<AssistClinic[]> {
 
 export async function listUsers(ctx: AuthCtx): Promise<AssistUserView[]> {
   const { assistanceId } = requireAssist(ctx, 'assist.users.manage');
-  return (await ctx.repos.assistUsers.list({ where: { assistanceId } })).map(userView);
+  return withInvitations(ctx, (await ctx.repos.assistUsers.list({ where: { assistanceId } })).map(userView));
 }
 
 /** `initialPassword`: the demo password of invited users (the mock signs in with it). */
@@ -903,7 +904,8 @@ export async function inviteUser(ctx: AuthCtx, body: unknown, opts: { initialPas
   const row: AssistUserRow = { id: randomId(), ...input, password: opts.initialPassword, assistanceId, active: true, createdAt: tzIso(ctx.now()) };
   await r.assistUsers.insert(row);
   await audit(ctx, user, 'role_change', { targetType: 'user', targetId: row.id, targetLabel: row.fullName });
-  return userView(row);
+  await issueInvitation(ctx, row, user);
+  return (await withInvitations(ctx, [userView(row)]))[0]!;
 }
 
 export async function patchUser(ctx: AuthCtx, id: UUID, body: unknown): Promise<AssistUserView> {

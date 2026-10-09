@@ -28,6 +28,8 @@ export const params: Translation<typeof Ru> = {
   'params.loginWindowMinutes.description': 'The period over which failed sign-in attempts are counted.',
   'params.loginLockMinutes.label': 'Sign-in lockout',
   'params.loginLockMinutes.description': 'How many minutes sign-in is locked after too many attempts.',
+  'params.inviteValidityDays.label': 'Invitation validity',
+  'params.inviteValidityDays.description': 'How many days the link in the invitation e-mail stays valid for setting a password.',
   'params.pinflChecksPerHour.label': 'PINFL checks per hour',
   'params.pinflChecksPerHour.description': 'How many patient checks by PINFL one clinic user can make per hour.',
   'params.pinflFailsBeforeLock.label': 'Failed PINFL checks before lockout',

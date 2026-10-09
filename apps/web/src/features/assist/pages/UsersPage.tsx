@@ -1,4 +1,5 @@
 /* Users of the assistance company (asst_admin): invite, change role, deactivate (not oneself). */
+import { InvitationStatus, ResendInvitation } from '@/features/auth/InvitationStatus';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -117,16 +118,19 @@ export default function UsersPage() {
         ),
     },
     { key: 'login', header: t('assist.users.lastLogin'), cell: (u) => (u.lastLoginAt ? <span className="num">{formatDateTime(u.lastLoginAt)}</span> : '—') },
-    { key: 'status', header: t('common.status'), cell: (u) => <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('assist.users.active') : t('assist.users.disabled')}</Chip> },
+    { key: 'status', header: t('common.status'), cell: (u) => (u.active && u.invitation ? <InvitationStatus invitation={u.invitation} /> : <Chip kind={u.active ? 'success' : 'neutral'}>{u.active ? t('assist.users.active') : t('assist.users.disabled')}</Chip>) },
     {
       key: 'actions',
       header: '',
       align: 'right',
       cell: (u) =>
         u.id === me?.id ? null : (
-          <Button size="sm" variant="ghost" onClick={() => void change(u, { active: !u.active })}>
-            {u.active ? t('assist.users.disable') : t('assist.users.enable')}
-          </Button>
+          <span className="flex justify-end gap-2">
+            {u.active && u.invitation && <ResendInvitation userId={u.id} name={u.fullName} />}
+            <Button size="sm" variant="ghost" onClick={() => void change(u, { active: !u.active })}>
+              {u.active ? t('assist.users.disable') : t('assist.users.enable')}
+            </Button>
+          </span>
         ),
     },
   ];

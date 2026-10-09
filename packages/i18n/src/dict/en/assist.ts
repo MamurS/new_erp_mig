@@ -248,7 +248,7 @@ export const assist: Translation<typeof Ru> = {
   'assist.card.noGuarantees': 'No letters',
   'assist.users.invited': 'User invited',
   'assist.users.inviteTitle': 'Invite a user',
-  'assist.users.inviteDescription': 'Sign in with email, password and a verification code (MFA)',
+  'assist.users.inviteDescription': 'The user gets an e-mail with a link, sets a password and connects an authenticator app at the first sign-in (MFA)',
   'assist.users.invite': 'Invite',
   'assist.users.title': 'Users',
   'assist.users.saved': 'Saved',

@@ -164,6 +164,15 @@ const SPECS: Record<DmsParamKey, DmsParamSpec> = {
     integer: true,
     audience: 'staff',
   },
+  inviteValidityDays: {
+    group: 'security',
+    unit: 'days',
+    defaultValue: 3,
+    min: 1,
+    max: 14,
+    integer: true,
+    audience: 'staff',
+  },
   pinflChecksPerHour: {
     group: 'security',
     unit: 'count',
