@@ -167,3 +167,17 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The one check for the branch protection rule: green only when every required job passed — check, gitleaks and
+  # every shard of e2e and e2e-backend (a failed, cancelled or skipped job fails it). `always()` keeps it from being
+  # skipped when a dependency fails: a skipped required check would count as passed.
+  ci-required:
+    if: always()
+    needs: [check, gitleaks, e2e, e2e-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' >/dev/null
