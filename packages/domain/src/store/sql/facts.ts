@@ -28,6 +28,16 @@ export function visible(collection: string, keyColumn: string, value: string): s
   return `exists (select 1 from public.${t.table} v where v.${keyColumn} = ${value} and (${e.replace(/\n\s*/g, ' ')}))`;
 }
 
+/** The SELECT policy of a table as a condition on the row alias `a` (evaluated by the definer). */
+export function visibleExpr(collection: string, a: string): string {
+  const t = TABLES.find((x) => x.collection === collection);
+  if (!t) throw new Error(`No table ${collection}`);
+  const e = grantExpression(t.access.select);
+  if (!e) return 'false';
+  return `exists (select 1 from public.${t.table} v where v.${t.key === null ? '_id' : snakeKey(t.key)} = ${a}.${t.key === null ? '_id' : snakeKey(t.key)} and (${e.replace(/\n\s*/g, ' ')}))`;
+}
+const snakeKey = (k: string) => k.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+
 interface FactFn {
   /** Signature inside schema `app`, e.g. `fact_client_insured_count(p_client uuid)`. */
   sig: string;
@@ -318,6 +328,88 @@ export const FACT_FUNCTIONS: readonly FactFn[] = [
     body: `return (select coalesce(jsonb_agg(${tsText('a.starts_at')} order by a._pos), '[]'::jsonb)
       from public.appointments a where a.clinic_id = p_clinic and a.status not in ('cancelled', 'declined'));`,
     comment: 'Start times of the live appointments of a clinic, whoever booked them (no person): free slots for every signed-in role; a clinic only its own.',
+  },  {
+    sig: 'fact_client_pipeline(p_client uuid)',
+    returns: 'jsonb',
+    gate: CLIENT_READER('p_client'),
+    body: `declare
+    v_deal public.deals;
+    v_contract public.contracts;
+    v_invoice public.invoices;
+    v_out jsonb;
+  begin
+    v_out := jsonb_build_object(
+      'hasPolicy', exists (select 1 from public.clients c where c.id = p_client and c.active_policy_id is not null) or exists (select 1 from public.insured i where i.client_id = p_client),
+      'hasHr', exists (select 1 from public.hr_users h where h.company_id = p_client));
+    select * into v_deal from public.deals d where d.client_id = p_client and d.stage not in ('lost', 'active') order by d.updated_at desc nulls last, d._pos limit 1;
+    if v_deal.id is null then
+      select * into v_deal from public.deals d where d.client_id = p_client order by d.updated_at desc nulls last, d._pos limit 1;
+    end if;
+    if v_deal.id is null then
+      return v_out;
+    end if;
+    v_out := v_out || jsonb_build_object('dealId', v_deal.id, 'dealNumber', v_deal.number, 'stage', v_deal.stage);
+    select * into v_contract from public.contracts c where c.deal_id = v_deal.id order by c.version desc, c._pos desc limit 1;
+    if v_contract.id is not null then
+      v_out := v_out || jsonb_build_object('contractId', v_contract.id, 'contractNumber', v_contract.number, 'contractStatus', v_contract.status);
+      select * into v_invoice from public.invoices i where i.contract_id = v_contract.id and i.status is distinct from 'paid' order by i.due_date asc nulls last, i._pos limit 1;
+      if v_invoice.id is not null then
+        v_out := v_out || jsonb_build_object('invoiceId', v_invoice.id, 'invoiceNumber', v_invoice.number);
+      end if;
+    end if;
+    return v_out;
+  end;`,
+    comment: 'Where a client is in the sales pipeline (deal number and stage, contract number and status, the first unpaid invoice): clients.read.',
+  },
+  {
+    sig: 'fact_certificate_data(p_policy uuid, p_insured uuid)',
+    returns: 'jsonb',
+    gate: `(app.is_staff() and (select app.can('contracts.read')))
+      or (app.role() = 'hr' and exists (select 1 from public.policies p where p.id = p_policy and p.client_id = app.company_id()))
+      or (app.role() = 'insured' and p_policy = app.my_policy_id() and p_insured = any(app.my_card_ids()))`,
+    body: `return (select jsonb_build_object(
+        'contractNumber', (select c.number from public.contracts c where c.id = p.contract_id),
+        'clientName', cl.name,
+        'rows', (select coalesce(jsonb_agg(jsonb_build_object('insuredId', i.id, 'fullName', i.full_name, 'certificateNumber', i.certificate_number, 'insuredFrom', i.insured_from::text) order by i._pos), '[]'::jsonb)
+          from public.insured i where i.policy_id = p.id and i.status = 'active' and coalesce(i.certificate_number, '') <> '' and (p_insured is null or i.id = p_insured)))
+        || case when cl.legal_form is null then '{}'::jsonb else jsonb_build_object('clientLegalForm', cl.legal_form) end
+      from public.policies p left join public.clients cl on cl.id = p.client_id where p.id = p_policy);`,
+    comment: 'Document data of the certificates of a policy (contract number, client, active persons with a number): MIG contract readers, HR of the own company, the insured person for a card of the own family.',
+  },
+  {
+    sig: 'fact_mig_signatory(p_staff uuid)',
+    returns: 'jsonb',
+    gate: `app.is_staff() or app.role() = 'hr'`,
+    body: `return (select case when coalesce((s.signatory ->> 'canSign')::boolean, false)
+        then jsonb_build_object('id', s.id, 'fullName', s.full_name, 'role', s.role, 'basis', s.signatory ->> 'basis') end
+      from public.staff s where s.id = p_staff);`,
+    comment: 'A MIG signatory as a contract shows it (name, role, basis): MIG staff and HR (the other party of the contract).',
+  },
+  {
+    sig: 'fact_deal_number(p_deal uuid)',
+    returns: 'text',
+    gate: `app.is_staff() or (app.role() = 'hr' and app.client_of_deal(p_deal) = app.company_id())`,
+    body: `return (select d.number from public.deals d where d.id = p_deal);`,
+    comment: 'The number of a deal shown on its contract: MIG staff, HR of the own company.',
+  },
+  {
+    sig: 'fact_contract_quote(p_deal uuid, p_quote uuid)',
+    returns: 'jsonb',
+    gate: `exists (select 1 from public.contracts c where c.deal_id = p_deal and (p_quote is null or c.quote_id = p_quote) and ${visibleExpr('contracts', 'c')})`,
+    body: `declare
+    q public.quotes;
+    v_below boolean := false;
+  begin
+    if p_quote is not null then
+      select * into q from public.quotes x where x.id = p_quote;
+      v_below := q.id is not null and q.below_min_exception is not null and q.below_min_exception <> 'null'::jsonb;
+    else
+      select * into q from public.quotes x where x.deal_id = p_deal order by x._pos desc limit 1;
+    end if;
+    return jsonb_build_object('quote', case when q.id is null then null else jsonb_build_object('id', q.id, 'premiumEmployee', q.premium_employee,
+      'premiumFamily', q.premium_family, 'total', q.total, 'program', q.program) end, 'belowMinException', v_below);
+  end;`,
+    comment: 'The quote summary (premiums, total, program) of a contract the caller reads — its own quote or the deal’s latest — and whether its own quote allows a group below the minimum.',
   },
 ];
 

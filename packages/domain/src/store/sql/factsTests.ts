@@ -64,6 +64,9 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
   const unservedPerson = db.insured.find((i) => i.policyId === unservedPolicy.id && !db.visits.some((v) => v.insuredId === i.id && v.clinicId === regClinic))!;
   const anyFile = db.files.find((f) => !f.guaranteeId)!;
   const pinflHmacHex = Buffer.from(devAesPiiCrypto({ deterministic: true }).hmacSync(me.pinfl)).toString('hex');
+  const anyContract = db.contracts.find((x) => x.quoteId) ?? db.contracts[0]!;
+  const signatoryId = anyContract.params.migSignatoryId;
+  const signatoryCanSign = !!db.staff.find((x) => x.id === signatoryId)?.signatory?.canSign;
   const MAPS = `${lit(JSON.stringify({ medicines: 'medicines', doctor_visit: 'outpatient', diagnostics: 'outpatient', dental: 'dental', inpatient: 'inpatient' }))}, ${lit(JSON.stringify({ outpatient: 'outpatient', diagnostics_advanced: 'outpatient', dental: 'dental', medicines: 'medicines', inpatient: 'inpatient' }))}`;
   const order = `array['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active']`;
   const lines: string[] = [
@@ -180,6 +183,40 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
     `select is(${valueAs(who('insured'), `select jsonb_array_length(app.fact_taken_slots('${regClinic}'))`)}, (select count(*)::text from public.appointments where clinic_id = '${regClinic}' and status not in ('cancelled', 'declined')), 'taken slots: the insured person sees every taken time of a clinic');`,
     `select is(${valueAs(who('insured'), `select coalesce(bool_and(jsonb_typeof(x) = 'string'), true)::text from jsonb_array_elements(app.fact_taken_slots('${regClinic}')) x`)}, 'true', 'taken slots: only the times');`,
     `select is(${valueAs(reg, `select app.fact_taken_slots('${otherClinic.id === regClinic ? adminClinic : otherClinic.id}')::text`)}, ${otherClinic.id === regClinic && adminClinic === regClinic ? `(select 'x')` : `'denied'`}, 'taken slots: a clinic only of its own');`,
+    '-- app.fact_client_pipeline: clients.read',
+    `select is(${valueAs(who('sales_manager'), `select (app.fact_client_pipeline('${otherClient.id}') ? 'hasHr')::text`)}, 'true', 'pipeline: the sales manager of any client');`,
+    `select is(${valueAs(who('admin'), `select (app.fact_client_pipeline('${otherClient.id}') ->> 'hasPolicy')`)}, 'true', 'pipeline: the admin (no deals or contracts) gets the stage');`,
+    `select is(${valueAs(who('doctor_expert'), `select app.fact_client_pipeline('${otherClient.id}')::text`)}, 'denied', 'pipeline: a role without clients.read is refused');`,
+    `select is(${valueAs(hr, `select app.fact_client_pipeline('${hrCompany}')::text`)}, 'denied', 'pipeline: HR is refused');`,
+    '-- app.fact_certificate_data: contract readers, HR of the own company, the insured person for the own card',
+    `select is(${valueAs(who('insured'), `select jsonb_array_length(app.fact_certificate_data('${me.policyId}', '${me.id}') -> 'rows')`)}, (select count(*)::text from public.insured where id = '${me.id}' and status = 'active' and coalesce(certificate_number, '') <> ''), 'certificates: the insured person of the own card');`,
+    `select is(${valueAs(who('insured'), `select app.fact_certificate_data('${me.policyId}', null)::text`)}, 'denied', 'certificates: the insured person not of the whole policy');`,
+    `select is(${valueAs(who('insured'), `select app.fact_certificate_data('${stranger.policyId}', '${stranger.id}')::text`)}, ${stranger.policyId === me.policyId ? `'denied'` : `'denied'`}, 'certificates: not of a person of another family');`,
+    `select is(${valueAs(hr, `select app.fact_certificate_data('${otherClient.activePolicyId}', null)::text`)}, 'denied', 'certificates: HR of another company is refused');`,
+    `select is(${valueAs(who('legal'), `select (app.fact_certificate_data('${otherClient.activePolicyId}', null) ? 'rows')::text`)}, 'true', 'certificates: a contract reader of MIG');`,
+    '-- app.fact_mig_signatory / app.fact_deal_number',
+    `select is(${valueAs(hr, `select coalesce(app.fact_mig_signatory('${signatoryId}') ->> 'fullName', '')`)}, (select coalesce(case when (signatory ->> 'canSign')::boolean then full_name end, '') from public.staff where id = '${signatoryId}'), 'signatory: HR sees the MIG signatory of its contract');`,
+    `select is(${valueAs(hr, `select (app.fact_mig_signatory('${signatoryId}') ? 'email')::text`)}, ${signatoryCanSign ? `'false'` : `null`}, 'signatory: no e-mail or authority');`,
+    `select is(${valueAs(who('insured'), `select app.fact_mig_signatory('${signatoryId}')::text`)}, 'denied', 'signatory: the insured person is refused');`,
+    ...(ownDeal ? [`select is(${valueAs(hr, `select app.fact_deal_number('${ownDeal.id}')`)}, ${lit(ownDeal.number)}, 'deal number: HR of the own company’s deal');`] : []),
+    `select is(${valueAs(hr, `select app.fact_deal_number('${foreignDeal.id}')`)}, 'denied', 'deal number: not of another company’s deal');`,
+    '-- app.fact_contract_quote: whoever reads the contract',
+    `select is(${valueAs(who('operator'), `select (app.fact_contract_quote('${anyContract.dealId}', ${anyContract.quoteId ? `'${anyContract.quoteId}'` : 'null'}) ? 'quote')::text`)}, 'true', 'contract quote: the operator (no quotes) reads the summary of a contract');`,
+    `select is(${valueAs(who('insured'), `select app.fact_contract_quote('${anyContract.dealId}', null)::text`)}, 'denied', 'contract quote: the insured person is refused');`,
+    `select is(${valueAs(who('clinic_admin'), `select app.fact_contract_quote('${anyContract.dealId}', null)::text`)}, 'denied', 'contract quote: a clinic is refused');`,
+    '-- contracts: HR reads and fills a draft of the own company only while MIG asks for its appendix 2',
+    `create temp table sc_contract as select * from public.contracts where id = '${anyContract.id}';`,
+    `update sc_contract set id = '${FIX_ID(2101)}', number = number || '#t', client_id = '${hrCompany}', status = 'draft';`,
+    `insert into public.contracts select * from sc_contract;`,
+    `select is((tests.as_user(${c(hr)}, 'select 1 from public.contracts where id = ''${FIX_ID(2101)}''')).n, 0, 'contracts: a draft is hidden from HR');`,
+    `insert into public.tasks (id, action, to_role, subject_type, subject_id, client_id, client_name, title, comment, link, created_by_name, created_at, due_at, due_date, status, subject_label, subject_link, history, created_by_id, contract_id) values ('${FIX_ID(2102)}', 'insured_list', 'hr', 'contract', '${FIX_ID(2101)}', '${hrCompany}', 'C', 'srv.test', '', '/hr', 'T', now(), now() + interval '1 day', current_date + 1, 'open', 'C', '/hr', '[]'::jsonb, '${String(who('sales_manager').claims.sub)}', '${FIX_ID(2101)}');`,
+    `select is((tests.as_user(${c(hr)}, 'select 1 from public.contracts where id = ''${FIX_ID(2101)}''')).n, 1, 'contracts: HR reads the draft while the request is open');`,
+    `select is((tests.as_user(${c(hr)}, 'update public.contracts set insured_count = 1 where id = ''${FIX_ID(2101)}''')).n, 1, 'contracts: HR fills the asked draft');`,
+    `update public.tasks set status = 'done' where id = '${FIX_ID(2102)}';`,
+    `select is((tests.as_user(${c(hr)}, 'select 1 from public.contracts where id = ''${FIX_ID(2101)}''')).n, 0, 'contracts: hidden again once the request is done');`,
+    `select is((tests.as_user(${c(hr)}, 'update public.contracts set insured_count = 1 where id = ''${FIX_ID(2101)}''')).n, 0, 'contracts: and no longer writable');`,
+    `select is(tests.count_as(${c(who('operator'))}, 'payments'), (select count(*) from public.payments), 'payments: the operator reads the payments of the contract card');`,
+    `select is(tests.count_as(${c(hr)}, 'payments'), 0::bigint, 'payments: HR reads none');`,
     `select is(tests.value_as('{}'::jsonb, 'select app.fact_client_legal_form(''${otherClient.id}'')'), 'denied', 'no claims: every fact is refused');`,
   ];
   const asserts = lines.filter((l) => /^select (is|ok|throws_ok)\(/.test(l));

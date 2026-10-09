@@ -689,23 +689,23 @@ create policy quotes_update on public.quotes for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['quotes.calculate', 'quotes.approve']::text[]))));
 grant select, insert, update on public.quotes to authenticated;
 
--- contracts: Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list).
+-- contracts: Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list), and a draft while MIG asks HR for its appendix 2 (an open request).
 alter table public.contracts enable row level security;
 create policy contracts_select on public.contracts for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and status <> 'draft' and status <> 'legal_review'))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and ((status <> 'draft' and status <> 'legal_review') or app.hr_asked_contract(id))))
     ));
 create policy contracts_insert on public.contracts for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['contracts.draft']::text[]))));
 create policy contracts_update on public.contracts for update to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and status in ('sent', 'signing', 'signed', 'active')))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and (status in ('sent', 'signing', 'signed', 'active') or app.hr_asked_contract(id))))
     ))
   with check ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and status in ('sent', 'signing', 'signed', 'active')))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client']::text[])) and (client_id = (select app.company_id()) and (status in ('sent', 'signing', 'signed', 'active') or app.hr_asked_contract(id))))
     ));
 grant select, insert, update on public.contracts to authenticated;
 
@@ -732,10 +732,10 @@ create policy contract_insured_update on public.contract_insured for update to a
     ));
 grant select, insert, update on public.contract_insured to authenticated;
 
--- payments: Payments: MIG accounting.
+-- payments: Payments: MIG accounting and the readers of the contract card.
 alter table public.payments enable row level security;
 create policy payments_select on public.payments for select to authenticated
-  using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record', 'invoices.read']::text[]))));
+  using ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record', 'invoices.read', 'contracts.read']::text[]))));
 create policy payments_insert on public.payments for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record']::text[]))));
 grant select, insert on public.payments to authenticated;

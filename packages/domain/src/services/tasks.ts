@@ -23,7 +23,7 @@ import { addWorkdays, canRemind, isActiveRequest, isDueSoon, isOverdue } from '.
 import { randomId } from '../lib/random';
 import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
-import { asSystem, audit, conflict, forbidden, notFound, requirePermission, systemRepos, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { asSystem, audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { dealContract } from './lifecycle';
 
@@ -416,29 +416,9 @@ export async function readNotification(ctx: AuthCtx, id: string): Promise<void> 
 }
 
 /** The client's way to a policy: the open (or last) deal, its contract and the first unpaid invoice. */
-export async function clientPipeline(ctx: BaseCtx, clientId: string): Promise<ClientPipeline> {
-  const r = ctx.repos;
-  const client = await r.clients.get(clientId);
-  const hasPolicy = !!client?.activePolicyId || (await r.insured.exists({ clientId }));
-  const hasHr = await r.hrUsers.exists({ companyId: clientId });
-  const deals = await r.deals.list({ where: { clientId }, orderBy: [['updatedAt', 'desc']] });
-  const deal = deals.find((x) => x.stage !== 'lost' && x.stage !== 'active') ?? deals[0];
-  if (!deal) return { hasPolicy, hasHr };
-  const c = await dealContract(ctx, deal.id);
-  const invoice = c ? await r.invoices.first({ where: { contractId: c.id, status: { ne: 'paid' } }, orderBy: [['dueDate', 'asc']] }) : null;
-  return {
-    hasPolicy,
-    hasHr,
-    dealId: deal.id,
-    dealNumber: deal.number,
-    stage: deal.stage,
-    ...(c ? { contractId: c.id, contractNumber: c.number, contractStatus: c.status } : {}),
-    ...(invoice ? { invoiceId: invoice.id, invoiceNumber: invoice.number } : {}),
-  };
-}
-
 export async function pipeline(ctx: AuthCtx, clientId: string): Promise<ClientPipeline> {
   requirePermission(ctx.user, 'clients.read');
   if (!(await ctx.repos.clients.get(clientId))) throw notFound();
-  return clientPipeline({ ...ctx, repos: systemRepos(ctx, 'client pipeline: deal stage, contract and invoice numbers of a client the person may read') }, clientId);
+  // The deal, the contract and the invoice of a client the person reads (app.fact_client_pipeline).
+  return ctx.repos.facts.clientPipeline(clientId);
 }

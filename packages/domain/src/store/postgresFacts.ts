@@ -92,5 +92,20 @@ export function pgFacts(sql: Sql, crypto: PiiCrypto): Facts {
     async coverageBrief(insuredId) {
       return (await one('app.fact_coverage_brief($1::uuid)', [insuredId])) ?? null;
     },
+    async clientPipeline(clientId) {
+      return one('app.fact_client_pipeline($1::uuid)', [clientId]);
+    },
+    async certificateData(policyId, insuredId) {
+      return (await one('app.fact_certificate_data($1::uuid, $2::uuid)', [policyId, insuredId])) ?? null;
+    },
+    async migSignatory(staffId) {
+      return (await one('app.fact_mig_signatory($1::uuid)', [staffId])) ?? null;
+    },
+    async dealNumber(dealId) {
+      return (await one<string | null>('app.fact_deal_number($1::uuid)', [dealId])) ?? null;
+    },
+    async contractQuote(dealId, quoteId) {
+      return one('app.fact_contract_quote($1::uuid, $2::uuid)', [dealId, quoteId]);
+    },
   };
 }

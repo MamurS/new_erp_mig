@@ -246,6 +246,13 @@ ${def(
   'The person’s policy is assigned to the user’s assistance company on the date.',
 )}
 ${def('client_of_contract(p_contract uuid)', 'uuid', 'select c.client_id from public.contracts c where c.id = p_contract', 'Client of a contract (HR scope of appendices, change requests, endorsements).')}
+${def(
+  'hr_asked_contract(p_contract uuid)',
+  'boolean',
+  `select exists (select 1 from public.tasks t where t.contract_id = p_contract and t.status = 'open' and t.to_role = 'hr'
+    and t.action = 'insured_list' and t.client_id = app.company_id())`,
+  'MIG asked the HR of the own company for appendix 2 of this contract (an open request): HR may read and fill the draft.',
+)}
 ${def('client_of_deal(p_deal uuid)', 'uuid', 'select d.client_id from public.deals d where d.id = p_deal', 'Client of a deal (HR writes events of the own company’s deal into its feed).')}
 ${def(
   'my_card_ids()',

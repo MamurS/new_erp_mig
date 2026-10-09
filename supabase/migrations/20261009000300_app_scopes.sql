@@ -70,6 +70,14 @@ as $$
 $$;
 comment on function app.client_of_contract is 'Client of a contract (HR scope of appendices, change requests, endorsements).';
 
+create or replace function app.hr_asked_contract(p_contract uuid) returns boolean
+  language sql stable security definer set search_path = ''
+as $$
+  select exists (select 1 from public.tasks t where t.contract_id = p_contract and t.status = 'open' and t.to_role = 'hr'
+    and t.action = 'insured_list' and t.client_id = app.company_id())
+$$;
+comment on function app.hr_asked_contract is 'MIG asked the HR of the own company for appendix 2 of this contract (an open request): HR may read and fill the draft.';
+
 create or replace function app.client_of_deal(p_deal uuid) returns uuid
   language sql stable security definer set search_path = ''
 as $$

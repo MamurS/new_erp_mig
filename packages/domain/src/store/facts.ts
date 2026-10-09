@@ -7,13 +7,14 @@
  * in the system repositories of the API (`genericFacts`). The services keep their logic: a fact returns the
  * minimal rows in storage order and the service picks, sorts and sums exactly as before.
  */
-import type { AssistanceAssignment, AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, LimitCategory, PolicyStatus, PriceListItem, ProgramCode, UUID } from '@mig/contracts';
+import type { AssistanceAssignment, AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, LimitCategory, PolicyStatus, PriceListItem, ProgramCode, Quote, UUID } from '@mig/contracts';
+import type { ClientPipeline, SignatoryOption } from '@mig/contracts/dto';
+import type { LegalFormCode } from '../config/legalForms';
 import type { InsuredRow } from './db';
 import { LIMIT_OF_SERVICE } from '../assistance';
 import { CLAIM_TO_LIMIT } from '../claims';
 import type { LimitMode } from '../config/dmsParameters';
 import { limitPoolOf } from '../family';
-import type { LegalFormCode } from '../config/legalForms';
 import { DAY, parseIso } from '../lib/time';
 import type { Repos } from './repo';
 
@@ -94,7 +95,29 @@ export interface Facts {
   coverageBrief(insuredId: UUID): Promise<CoverageBrief | null>;
   /** Start times of the live appointments of a clinic (booked by anyone): a free slot is one not taken. */
   takenSlots(clinicId: UUID): Promise<string[]>;
+  /** Where a client is in the sales pipeline: the open (or last) deal, its contract and the first unpaid invoice. */
+  clientPipeline(clientId: UUID): Promise<ClientPipeline>;
+  /** Certificates of a policy (one person's when `insuredId` is given): document data of active persons with a number. */
+  certificateData(policyId: UUID, insuredId: UUID | null): Promise<CertificateData | null>;
+  /** A MIG signatory of a contract as the documents show it (name, role, basis); null when not a signatory. */
+  migSignatory(staffId: UUID): Promise<SignatoryOption | null>;
+  /** The number of a deal (shown on its contract). */
+  dealNumber(dealId: UUID): Promise<string | null>;
+  /**
+   * The quote of a contract of the deal as its card shows it (`quoteId`, otherwise the deal's latest) and whether the
+   * quote `quoteId` allows a group below the minimum.
+   */
+  contractQuote(dealId: UUID, quoteId: UUID | null): Promise<{ quote: ContractQuote | null; belowMinException: boolean }>;
 }
+
+export interface CertificateData {
+  contractNumber: string | null;
+  clientName: string | null;
+  clientLegalForm?: LegalFormCode;
+  rows: { insuredId: UUID; fullName: string; certificateNumber: string; insuredFrom: string }[];
+}
+
+export type ContractQuote = Pick<Quote, 'id' | 'premiumEmployee' | 'premiumFamily' | 'total' | 'program'>;
 
 export interface LimitSums {
   program: ProgramCode | null;
@@ -273,6 +296,50 @@ export function genericFacts(r: Base): Facts {
       return {
         person: { id: i.id, status: i.status, insuredFrom: i.insuredFrom, ...(i.excludedFrom ? { excludedFrom: i.excludedFrom } : {}) },
         policy: p ? { id: p.id, number: p.number, program: p.program, startDate: p.startDate, endDate: p.endDate, status: p.status } : null,
+      };
+    },
+    async clientPipeline(clientId) {
+      const client = await r.clients.get(clientId);
+      const hasPolicy = !!client?.activePolicyId || (await r.insured.exists({ clientId }));
+      const hasHr = await r.hrUsers.exists({ companyId: clientId });
+      const deals = await r.deals.list({ where: { clientId }, orderBy: [['updatedAt', 'desc']] });
+      const deal = deals.find((x) => x.stage !== 'lost' && x.stage !== 'active') ?? deals[0];
+      if (!deal) return { hasPolicy, hasHr };
+      const c = (await r.contracts.list({ where: { dealId: deal.id } })).sort((a, b) => a.version - b.version).at(-1);
+      const invoice = c ? await r.invoices.first({ where: { contractId: c.id, status: { ne: 'paid' } }, orderBy: [['dueDate', 'asc']] }) : null;
+      return {
+        hasPolicy,
+        hasHr,
+        dealId: deal.id,
+        dealNumber: deal.number,
+        stage: deal.stage,
+        ...(c ? { contractId: c.id, contractNumber: c.number, contractStatus: c.status } : {}),
+        ...(invoice ? { invoiceId: invoice.id, invoiceNumber: invoice.number } : {}),
+      };
+    },
+    async certificateData(policyId, insuredId) {
+      const p = await r.policies.get(policyId);
+      if (!p) return null;
+      const c = p.contractId ? await r.contracts.get(p.contractId) : null;
+      const client = await r.clients.get(p.clientId);
+      const rows = (await r.insured.list({ where: { policyId: p.id, status: 'active', ...(insuredId ? { id: insuredId } : {}) } }))
+        .filter((i) => i.certificateNumber)
+        .map((i) => ({ insuredId: i.id, fullName: i.fullName, certificateNumber: i.certificateNumber!, insuredFrom: i.insuredFrom }));
+      return { contractNumber: c?.number ?? null, clientName: client?.name ?? null, ...(client?.legalForm ? { clientLegalForm: client.legalForm } : {}), rows };
+    },
+    async migSignatory(staffId) {
+      const s = await r.staff.get(staffId);
+      return s?.signatory?.canSign ? { id: s.id, fullName: s.fullName, role: s.role, basis: s.signatory.basis } : null;
+    },
+    async dealNumber(dealId) {
+      return (await r.deals.get(dealId))?.number ?? null;
+    },
+    async contractQuote(dealId, quoteId) {
+      const own = quoteId ? await r.quotes.get(quoteId) : null;
+      const q = quoteId ? own : (await r.quotes.list({ where: { dealId } })).at(-1);
+      return {
+        quote: q ? { id: q.id, premiumEmployee: q.premiumEmployee, premiumFamily: q.premiumFamily, total: q.total, program: q.program } : null,
+        belowMinException: !!own?.belowMinException,
       };
     },
   };

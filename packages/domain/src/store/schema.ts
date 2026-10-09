@@ -1259,14 +1259,14 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clientId', 'dealId', 'status'],
       access: {
-        select: { actions: ['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client'], staff: ALL, hr: `${HR_CLIENT} and status <> 'draft' and status <> 'legal_review'` },
+        select: { actions: ['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client'], staff: ALL, hr: `${HR_CLIENT} and ((status <> 'draft' and status <> 'legal_review') or app.hr_asked_contract(id))` },
         insert: STAFF_READ('contracts.draft'),
         update: {
           actions: ['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client'],
           staff: ALL,
-          hr: `${HR_CLIENT} and status in ('sent', 'signing', 'signed', 'active')`,
+          hr: `${HR_CLIENT} and (status in ('sent', 'signing', 'signed', 'active') or app.hr_asked_contract(id))`,
         },
-        note: 'Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list).',
+        note: 'Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list), and a draft while MIG asks HR for its appendix 2 (an open request).',
       },
     },
   ),
@@ -1298,7 +1298,7 @@ export const TABLES: readonly TableSpec[] = [
       docNumber: opt(text()),
       comment: opt(text()),
     },
-    { indexes: ['invoiceId', 'contractId'], access: { select: STAFF_READ('payments.record', 'invoices.read'), insert: STAFF_READ('payments.record'), note: 'Payments: MIG accounting.' } },
+    { indexes: ['invoiceId', 'contractId'], access: { select: STAFF_READ('payments.record', 'invoices.read', 'contracts.read'), insert: STAFF_READ('payments.record'), note: 'Payments: MIG accounting and the readers of the contract card.' } },
   ),
   keyed(
     'bankPayments',
