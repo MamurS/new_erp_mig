@@ -77,6 +77,79 @@ GoTrue < 1 % (вход — только в начале), ~15 МБ; PostgREST ~2
 
 Остальные роли не изменились (андеррайтер ~170 мс, продажи ~180 мс, остальные 30–90 мс).
 
+## Списки в SQL
+
+Было: сервисы списков читали таблицу целиком (`repos.X.list()`, под RLS и с расшифровкой ПДн каждой строки), а
+фильтр, сортировку и страницу считали в JS; ростер ассистанса проверял доступ `app.assist_access` в политике RLS на
+каждую строку. Стало: страница, итог, фильтры, поиск и сортировка — в SQL (`docs/backend/DATABASE.md`, «Списки в SQL»),
+карточки строятся только для строк страницы и читаются пачкой, доступ ассистанса — один массив полисов на запрос.
+Ответы прежние (тест соответствия память ↔ Postgres и сверка с кодом `main`).
+
+Как мерили: `scripts/listbench.mjs` — вход через `POST /api/__demo/login-as`, затем каждый запрос по одному (без
+параллельных пользователей: это цена одного ответа, а не очереди), 5 прогревочных и 30 замеров; API
+(`apps/api/dist/server.js`, `APP_ENV=ci`, `ALLOW_TEST_TOTP=true`) — локально, без Caddy, к локальному стеку Supabase CLI
+(Postgres 15.19) со свежим `supabase db reset` (seed: 1 547 застрахованных, 626 убытков, 333 записи, 49 клиентов,
+34 полиса). «До» — код `main` (b7dfebd) на своих миграциях, «после» — эта ветка; та же машина (4 vCPU, 15 ГБ),
+разброс между прогонами ±10–15 мс.
+
+```
+node scripts/listbench.mjs --base http://127.0.0.1:8787 --runs 30 --warmup 5
+```
+
+| Запрос | Роль | Строк | до: p50 / p95, мс | после: p50 / p95, мс |
+| --- | --- | --- | --- | --- |
+| `GET /hr/employees` | hr | 25/49 | 305 / 346 | 41 / 51 |
+| `GET /hr/employees?q=ali` | hr | 13/13 | 326 / 370 | 34 / 50 |
+| `GET /hr/employees?sort=family:desc&page=2` | hr | 24/49 | 289 / 344 | 36 / 68 |
+| `GET /clients` | underwriter | 25/49 | 94 / 110 | 60 / 79 |
+| `GET /clients?q=tosh` | underwriter | 6/6 | 30 / 42 | 31 / 38 |
+| `GET /clients?sort=insuredCount:desc` | underwriter | 25/49 | 89 / 106 | 72 / 87 |
+| `GET /policies` | underwriter | 25/34 | 44 / 50 | 35 / 56 |
+| `GET /policies?q=tosh` | underwriter | 4/4 | 20 / 26 | 24 / 30 |
+| `GET /insured` | operator | 25/1547 | 97 / 113 | 24 / 33 |
+| `GET /insured?q=ali` | operator | 25/206 | 94 / 116 | 27 / 33 |
+| `GET /insured?sort=clientName:desc&page=3` | operator | 25/1547 | 84 / 116 | 32 / 41 |
+| `GET /appointments` | operator | 25/333 | 21 / 27 | 19 / 22 |
+| `GET /appointments?q=ali` | operator | 25/41 | 22 / 30 | 23 / 31 |
+| `GET /clinics` | operator | 30 | 16 / 21 | 16 / 20 |
+| `GET /clinics?q=med` | operator | 9 | 19 / 24 | 14 / 20 |
+| `GET /claims` | claims | 25/626 | 40 / 54 | 20 / 27 |
+| `GET /claims?q=ali` | claims | 25/72 | 43 / 58 | 23 / 27 |
+| `GET /claims?sort=reserve:desc&page=2` | claims | 25/626 | 45 / 53 | 37 / 52 |
+| `GET /deals` | sales | 11 | 101 / 136 | 100 / 134 |
+| `GET /contracts` | sales | 3 | 66 / 79 | 83 / 98 |
+| `GET /invoices` | accountant | 4 | 29 / 46 | 33 / 39 |
+| `GET /payments/queue` | accountant | 2 | 31 / 43 | 34 / 45 |
+| `GET /registries` | accountant | 3 | 19 / 21 | 24 / 33 |
+| `GET /endorsements` | legal | 3 | 50 / 58 | 51 / 64 |
+| `GET /change-requests` | legal | 6 | 41 / 49 | 39 / 49 |
+| `GET /guarantees` | doctor | 6 | 25 / 32 | 23 / 33 |
+| `GET /audit` | admin | 25/509 | 19 / 29 | 17 / 22 |
+| `GET /audit?page=5` | admin | 25/509 | 19 / 22 | 20 / 22 |
+| `GET /assistance` | admin | 3 | 51 / 67 | 50 / 58 |
+| `GET /rebills` | claims | 2 | 27 / 31 | 24 / 33 |
+| `GET /policy-changes` | underwriter | 7 | 17 / 20 | 15 / 20 |
+| `GET /assist/cases` | asst-operator | 9 | 17 / 22 | 19 / 22 |
+| `GET /assist/insured` | asst-operator | 50 | 539 / 672 | 62 / 81 |
+| `GET /assist/insured?q=ali` | asst-operator | 50 | 603 / 721 | 64 / 81 |
+| `GET /assist/appointments` | asst-operator | 35 | 793 / 1005 | 42 / 68 |
+| `GET /assist/guarantees` | asst-operator | 12 | 47 / 59 | 39 / 50 |
+| `GET /assist/chat` | asst-operator | 1 | 387 / 477 | 49 / 63 |
+| `GET /clinic/visits` | registrar | 5 | 26 / 35 | 19 / 23 |
+| `GET /clinic/appointments` | registrar | 5 | 29 / 38 | 27 / 35 |
+| `GET /clinic/guarantees` | registrar | 17 | 45 / 59 | 48 / 59 |
+
+Что видно:
+
+1. Самые тяжёлые списки — те, что читали всю таблицу застрахованных: HR «Сотрудники» 305 → 41 мс, `/insured`
+   97 → 24 мс, ростер ассистанса (`/assist/insured`, `/assist/appointments`, `/assist/chat`) 0,4–0,8 с → 40–65 мс
+   (главное — политика RLS ассистанса без функции на каждую строку).
+2. Списки небольших таблиц (клиники, аудит, записи, реестры) почти не изменились: на объёмах seed их и раньше
+   читали за 15–30 мс; выигрыш у них появится с ростом данных (индексы `(фильтр, сортировка, _pos)`).
+3. Сделки, договоры, доп. соглашения, счета и очередь платежей не изменились: время уходит на «ленивые часы» договоров
+   и счетов и на сборку карточки каждой строки (клиент, котировка, счета) — строк в этих списках единицы, сортировка
+   по полям карточки осталась в JS (DECISIONS, «Списки в SQL»).
+
 ## Оценка пользователей
 
 Человек в портале делает в среднем один запрос в 5–10 с (открытие экрана — 3–6 запросов, затем чтение и ввод

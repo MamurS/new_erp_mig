@@ -589,7 +589,7 @@ An assistance company serves the insured persons of the clients assigned to it, 
 
 <!-- audience: staff assist -->
 
-- **Cases (call centre):** the operator finds the insured person by search (full name, policy, phone), creates a case of the required type — appointment, consultation, guarantee letter, complaint, emergency — and handles it until resolved with deadline control.
+- **Cases (call centre):** the operator finds the insured person by search (full name, policy number or the whole phone number — a part of the number does not find anyone: phones are stored encrypted), creates a case of the required type — appointment, consultation, guarantee letter, complaint, emergency — and handles it until resolved with deadline control.
 - **Appointments and escalations** from clinics that did not answer in time.
 - **Guarantee letters:** the assistance doctor decides within the authority from the contract; above it — “Escalate to MIG” with their own opinion.
 - **Clinic sub-registers:** reviewing lines, answering disputes, recording payments to clinics.
