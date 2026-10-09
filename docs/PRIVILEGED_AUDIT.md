@@ -8,16 +8,16 @@
 
 | | До | После |
 |---|---|---|
-| Вызовы `systemRepos`/`asSystem` в `packages/domain/src` (без тестов и `kernel.ts`) | 63 | 15 |
+| Вызовы `systemRepos`/`asSystem` в `packages/domain/src` (без тестов и `kernel.ts`) | 63 | 16 |
 | …из них в обработчиках запросов и сервисах вне разрешённых модулей | 63 | 0 |
 | Места `privileged()`/`system()`/`privileged: true` в API и хранилище | 8 | 7 |
 | Всего строк аудита (места до начала работы) | 71 | 22 осталось системными |
 
 Из 71 места 49 переведены на работу от имени пользователя, ещё одно (№ 3) — частично: пересчёт счёта идёт от имени читателя, а системным осталось только сохранение пересчитанного результата (задача при чтении). Так получились 50 переведённых строк. Механизмов перевода три: новые политики RLS, узкие функции SQL (`app.fact_*`) и проверки под RLS самого пользователя.
 
-Оставшиеся 15 вызовов в домене лежат только в разрешённых модулях:
+Оставшиеся 16 вызовов в домене лежат только в разрешённых модулях:
 
-- `services/system/clocks.ts` — 5 «ленивых часов» (задачи при чтении);
+- `services/system/clocks.ts` — 5 «ленивых часов» (задачи при чтении) и фоновая задача жизненного цикла договоров `contractLifecycle` (этап 1.5: вступление в силу и истечение по расписанию, те же переходы, что при чтении);
 - `services/system/consequences.ts` — 3 последствия действия, затрагивающие другие роли;
 - `services/system/outbox.ts` — исходящие вебхуки;
 - `services/migration.ts` — перенос портфеля, 5 вызовов;
@@ -185,7 +185,7 @@ ESLint (`no-restricted-syntax` в `eslint.config.js`) запрещает `system
 | 67 | `apps/api/src/db.ts:114` | `RequestTx.system()` / `privileged()` | определение возможности | инфраструктура | — | **оставлено** (определение) | `apps/api/src/db.ts` (allowlist) |
 | 68 | `apps/api/src/auth/bff.ts` (11 вызовов `tx.system()`) | вход, BFF-сессии, синхронизация ролей и привязок с Supabase Auth | таблицы сессий и вызовов без политик | Вход (выдача ролей) | нет | **оставлено системным** | `apps/api/src/auth/bff.ts` (allowlist) |
 | 69 | `apps/api/src/systemDb.ts:22` | `systemDb` | задачи и обслуживание | Задача | нет | **оставлено системным** | `apps/api/src/systemDb.ts` (allowlist) |
-| 70 | `store/postgres.ts:174` | `run(…, privileged)` | операции с таблицами без политик (`sessions`, `challenges`, `grants`, `lockouts`, `login_failures`, `check_attempts`, `check_locks`, `access_tokens`, `idempotency`, `api_calls`) и вставки в журналы, куда не пишет ни одна роль (`sms_outbox`, `api_logs`, `webhook_deliveries`, `clinic_events`, `qa_samples`) | служебное состояние API: счётчики, токены, журналы | Вход, Партнёр, Задача, Часы | нет | **оставлено**, сужено: `ai_rebill_flags` теперь под RLS (политики для `rebills.review`); `clinic_events` из запросов пишутся только через `app.fact_push_clinic_event`; из запросов людей привилегированно остаются только счётчики попыток проверки пациента (`check_attempts`, `check_locks`) и отзыв токенов ключа (`access_tokens`) | `store/postgres.ts:176` (allowlist) |
+| 70 | `store/postgres.ts:174` | `run(…, privileged)` | операции с таблицами без политик (`sessions`, `challenges`, `grants`, `lockouts`, `login_failures`, `check_attempts`, `check_locks`, `access_tokens`, `idempotency`, `api_calls`) и вставки в журналы, куда не пишет ни одна роль (`sms_outbox`, `api_logs`, `webhook_deliveries`, `clinic_events`, `qa_samples`); отметки фоновых задач `app.job_marks` (репозиторий `jobMarks`, этап 1.5: пишет только воркер) | служебное состояние API: счётчики, токены, журналы | Вход, Партнёр, Задача, Часы | нет | **оставлено**, сужено: `ai_rebill_flags` теперь под RLS (политики для `rebills.review`); `clinic_events` из запросов пишутся только через `app.fact_push_clinic_event`; из запросов людей привилегированно остаются только счётчики попыток проверки пациента (`check_attempts`, `check_locks`) и отзыв токенов ключа (`access_tokens`) | `store/postgres.ts:176` (allowlist) |
 | 71 | `store/postgres.ts:343` | чтение секретных колонок | шифротексты ПДн и секреты партнёров у строк, которые RLS уже вернул | расшифровка в API | нет: колонки закрыты привилегиями | **оставлено**: расшифровывает API, сервисы маскируют | `store/postgres.ts:345` (allowlist) |
 
 ## Почему оставшиеся места не переведены

@@ -83,6 +83,8 @@ If the list is empty because of filters or search, “Nothing found” is shown 
 The bell in the top bar is in every portal. The number on it is how many notifications you have not read yet.
 
 - **What comes:** a new request to you (“{Author} asks: {what} — {object}”), an answer to your request (taken, done, rejected — with the executor’s comment), “The request is due tomorrow”, “The request is overdue” and the author’s reminders.
+- **Missed deadlines** (they come by themselves, once per breach; again only after a new deadline): “Claim …: the review deadline has passed” and “Claim …: the appeal review is overdue” — to claims officers, “Claim …: the doctor’s opinion is overdue” — to medical experts; “Guarantee letter …: the decision is overdue” — to MIG medical experts or to the doctors of the assistance company that decides the letter; “Clinic … did not answer an appointment request in time” — to MIG operators or to the operators of the assistance company serving the person; “Case …: the SLA is breached” — to the assistance company’s operators and doctors and to MIG operators. <!-- audience: staff assist -->
+- **Sales** (to the deal manager, once while nothing changes): “No activity on the deal for N days”, “No answer to offer … for N days”, “Renewal deal … opened”. <!-- audience: staff -->
 - **A click on a notification** opens the object — the deal, contract, client card or the form where an action is needed — and marks that notification read.
 - **“Mark all as read”** at the top of the list clears the counter.
 
@@ -390,7 +392,7 @@ Important:
 
 <!-- audience: staff hr -->
 
-The contract becomes active according to its rule: “from the start date” or “from the start date, but not before the first instalment is paid” (the second is the default). At the same time the deal moves to the “Active” status and the client to “Active client”.
+The contract becomes active according to its rule: “from the start date” or “from the start date, but not before the first instalment is paid” (the second is the default). At the same time the deal moves to the “Active” status and the client to “Active client”. The transition is made by the night job (00:05) or by the first opening of the contract after the date — once; the audit log gets “Contract took effect”.
 
 ### Issue of the policy and certificates {#policy-issue}
 
@@ -437,7 +439,7 @@ Family members are insured persons just like employees, with their own certifica
 
 - **Added by HR:** “Family” → “Add a family member” (full name in Latin script, date of birth, PINFL, relationship: spouse, child, parent, other; to which employee).
 - **Requested by the employee:** in the app, “My family” → “Add” with consent. The request goes to HR into the “App requests” section. HR approves it (this creates a change request) or rejects it with a reason.
-- **The child age limit** is 18 years, for students 23 years (demo values in “VHI parameters”). When a child reaches it, the underwriter gets a task; nobody is excluded automatically.
+- **The child age limit** is 18 years, for students 23 years (demo values in “VHI parameters”). When a child reaches it, the underwriter gets the request “A child has reached the age limit: {client}” from “System” — with the age, the date and a link to the insured person’s card, once per child (for a student once more at the student limit); nobody is excluded automatically.
 - **Privacy within the family:** an employee sees everything about their children. About an adult family member — only the fact of insurance, the certificate and the QR code, until that person turns on “Allow … to see my claims” in their own app. The permission can be withdrawn.
 - **Limits** are individual for each person (the default mode) or shared by the family — a setting in “VHI parameters”.
 
@@ -460,10 +462,10 @@ Family members are insured persons just like employees, with their own certifica
 
 <!-- audience: staff -->
 
-1. 60 days before the policy expires (a parameter), the system creates a **renewal deal** and sets the underwriter the task “Renewal without proposal”.
+1. 60 days before the policy expires (a parameter), the system creates a **renewal deal** (the “Lead” stage, one per policy) and notifies the client’s manager; the underwriter sees the renewal in the queue as “Renewal without proposal”. If a renewal proposal was sent earlier, the deal is created from it and there will be no second one.
 2. The underwriter looks at the client's aggregate loss ratio (the “Loss ratio” page — aggregates only) and prepares a new quote and commercial proposal.
 3. Then it is the same as for a new client: commercial proposal → contract → signing → payment → new policy.
-4. If the renewal is not completed, on the expiry date the policy moves to the “Expired” status.
+4. If the renewal is not completed, the day after the end date the contract and the policy move to the “Expired” status (the night job; the audit log gets “Contract expired” and “Policy expired” by “System”).
 
 ### Early termination {#termination}
 
@@ -742,7 +744,7 @@ Each role has its own dashboard: indicators at the top, a task queue with tabs b
 
 <!-- audience: staff -->
 
-- **Queue:** leads without activity, commercial proposals without an answer for more than 5 days, contracts being signed, originals not received, overdue instalments.
+- **Queue:** leads without activity, commercial proposals without an answer for more than 5 days, contracts being signed, originals not received, overdue instalments. A lead without activity for 7 days, a proposal without an answer and a new renewal deal also bring a notification to the bell.
 - **Every day:** run deals on the “Deals” board; upload census data; send commercial proposals for approved quotes; prepare contracts from accepted proposals; monitor signing and payment; once a month prepare an endorsement from the accumulated change requests.
 - **Creates:** a client (lead), a deal, a member list change.
 - **Cannot:** approve the price; sign for MIG without signing authority.
@@ -909,7 +911,7 @@ The MIG administrator sees the partner's integration in its card (keys without s
 
 <!-- audience: staff -->
 
-“Administration” → “Audit log”: filters by action, employee, assistance company and dates. It shows all sign-ins, reveals of personal data and medical records, decisions, changes of parameters and authority limits, downloads, partner actions.
+“Administration” → “Audit log”: filters by action, employee, assistance company and dates. It shows all sign-ins, reveals of personal data and medical records, decisions, changes of parameters and authority limits, downloads, partner actions. Actions of background jobs (contracts taking effect, contracts and policies expiring, renewal deals) are recorded by “System”.
 
 ### Languages {#admin-languages}
 
