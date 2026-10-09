@@ -797,9 +797,11 @@ export async function uploadInsuredList(ctx: AuthCtx, id: string, text: string):
   c.insuredCount = rows.length;
   c.versions.push({ version: c.version, at: tzIso(ctx.now()), byName: user.displayName, changes: `Загружено приложение 2: ${rows.length} застрахованных` });
   await ctx.repos.contracts.update(c.id, { insuredListId: c.insuredListId, insuredCount: c.insuredCount, versions: c.versions });
+  // The answer is read before the request closes: HR sees a draft only while MIG's request is open (RLS).
+  const view = forViewer(user, await contractView(ctx, c));
   await completeTasks(ctx, 'insured_list', { contractId: c.id, dealId: c.dealId, clientId: c.clientId }, user.displayName);
   if (c.dealId) await dealEvent(ctx, c.dealId, user.displayName, `Приложение 2 к договору ${c.number}: ${rows.length} застрахованных${user.role === 'hr' ? ' (загрузил HR клиента)' : ''}`);
-  return forViewer(user, await contractView(ctx, c));
+  return view;
 }
 
 export async function terminate(ctx: AuthCtx, id: string, body: unknown): Promise<EndorsementView> {
