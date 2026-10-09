@@ -1,0 +1,97 @@
+# The only service of the deployment reachable from outside (BACKEND_SPEC §2, §11): TLS, the web app built with
+# VITE_USE_MOCKS=false VITE_DEMO_MODE=false (/srv/web, baked into the image by deploy/Dockerfile) and /api → the
+# API. Supabase (Kong, Auth, Storage, PostgREST, Studio) and Postgres are not proxied: they stay on the internal
+# Docker network. deploy/README.md «TLS» describes the certificate modes.
+#
+# Environment (docker-compose.yml passes it from deploy/.env):
+#   DOMAIN        the site name, e.g. dms.mig.uz
+#   CADDY_TLS     the arguments of the `tls` directive:
+#                   admin@mig.uz                          automatic certificates (ACME, Let's Encrypt/ZeroSSL),
+#                                                         the address receives expiry notices
+#                   /certs/fullchain.pem /certs/privkey.pem  certificates provided by MIG (mounted to /certs)
+#                   internal                              Caddy's own CA (local smoke tests only)
+#   API_UPSTREAM  the API service name (default `api`); every container of the service gets requests
+#
+# The security headers are generated from apps/web/public/_headers (scripts/caddy-headers.mjs; the test
+# scripts/caddy-headers.test.ts fails when they differ). Do not edit the generated blocks by hand.
+{
+	# No admin endpoint: the configuration changes only with a redeploy.
+	admin off
+	# Clients reach Caddy directly (no trusted_proxies): incoming X-Forwarded-* headers are dropped and Caddy sets
+	# its own, so the API sees the real client IP (logs, Supabase Auth rate limits through X-Mig-Client-Ip).
+}
+
+{$DOMAIN} {
+	tls {$CADDY_TLS}
+
+	encode zstd gzip
+
+	# BEGIN generated: site headers (scripts/caddy-headers.mjs from apps/web/public/_headers)
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; manifest-src 'self'; upgrade-insecure-requests"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=(), usb=(), interest-cohort=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	# END generated: site headers
+
+	# Access log as JSON on stdout (docker logs). Query strings are dropped: a search term may be a name; cookies
+	# and Authorization are never logged by Caddy.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp [?].*$ ?-
+			}
+		}
+	}
+
+	# The API. Request size ceilings match the API (packages/domain/src/http/request.ts, apps/api/src/app.ts):
+	# JSON bodies 1 MiB, everything else (multipart uploads, CSV) 30 MiB — the per-kind limits (10 MB a receipt or
+	# attachment, 20 MB a contract scan, 5 MB a CSV, the number of files) are checked by the API itself.
+	handle /api/* {
+		@json header Content-Type *json*
+		request_body @json {
+			max_size 1MiB
+		}
+		request_body {
+			max_size 30MiB
+		}
+		reverse_proxy {
+			dynamic a {
+				name {$API_UPSTREAM:api}
+				port 8787
+				refresh 10s
+			}
+			lb_policy least_conn
+			lb_try_duration 5s
+			header_down -Server
+		}
+	}
+
+	# The web app: static files with the SPA fallback (deep links answer index.html); a missing asset is a 404,
+	# not an HTML page under a .js name.
+	handle {
+		root * /srv/web
+		@missingAsset {
+			path /assets/*
+			not file
+		}
+		route {
+			respond @missingAsset 404
+			try_files {path} /index.html
+			# BEGIN generated: path headers (scripts/caddy-headers.mjs from apps/web/public/_headers)
+			header /assets/* Cache-Control "public, max-age=31536000, immutable"
+			header /index.html Cache-Control "no-store"
+			# END generated: path headers
+			file_server
+		}
+	}
+}

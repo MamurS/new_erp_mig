@@ -279,6 +279,12 @@ export async function isOverdueRequest(ctx: BaseCtx, a: Appointment, now = ctx.n
   return now - parseIso(a.createdAt) > (await clinicResponseMinutes(ctx, a.clinicId, P)) * 60_000;
 }
 
+/** isOverdueRequest over clinics read beforehand (a list of requests: one read of the clinics, not one per request). */
+export function isOverdueRequestOf(a: Appointment, clinic: { responseSlaMinutes?: number } | undefined, now: number, P: ParamsView): boolean {
+  if (a.status !== 'requested' || a.proposedStartsAt) return false;
+  return now - parseIso(a.createdAt) > (clinic?.responseSlaMinutes ?? P.dmsParam('clinicResponseMinutes')) * 60_000;
+}
+
 // ---------------------------------------------------------------- guarantees
 
 /** An approved letter past its validity is expired (lazy clock); changes `g` in place. */

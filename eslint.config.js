@@ -144,7 +144,7 @@ export default tseslint.config(
   },
   // Packages are shared with the server: no app aliases, no reaching into the web app (rule below, with systemDb).
   {
-    files: ['scripts/**/*.mjs', 'apps/api/*.mjs'],
+    files: ['scripts/**/*.mjs', 'apps/api/*.mjs', 'deploy/**/*.mjs'],
     languageOptions: { globals: { ...globals.node } },
   },
   {

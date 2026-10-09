@@ -138,6 +138,26 @@ jobs:
     steps:
       - run: test "${{ needs.e2e-backend.result }}" = success
 
+  # Deployment (BACKEND_SPEC §11): the backup round trip of the local Supabase stack (dump → restore into a fresh
+  # stack of deploy/docker-compose.yml → row counts and the audit hash chain) and the whole production stack on this
+  # machine: images of deploy/Dockerfile, migrations, Caddy with the headers of _headers, no demo routes, the first
+  # administrator signing in with TOTP, a backup of it restored again (deploy/README.md).
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node scripts/caddy-headers.mjs
+      - run: npx supabase start -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,realtime,mailpit,postgres-meta
+      - run: npx supabase db reset
+      - run: sh deploy/backup/test-local.sh
+      - run: sh deploy/scripts/smoke-test.sh
+
   gitleaks:
     runs-on: ubuntu-latest
     steps:

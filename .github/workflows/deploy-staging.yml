@@ -1,0 +1,45 @@
+# Staging: deployed automatically after CI is green on a push to main (BACKEND_SPEC §11). Runs on MIG's staging
+# server through a self-hosted runner (outbound connection to GitHub only; no inbound ports). Nothing runs on pull
+# requests, and nothing runs at all until the repository variable STAGING_ENABLED is 'true' (deploy/README.md
+# «GitHub Actions: self-hosted runner»): a repository without the runner or the server stays green.
+name: Deploy staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.STAGING_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    runs-on: [self-hosted, mig-staging]
+    environment:
+      name: staging
+      url: https://${{ vars.STAGING_DOMAIN }}
+    timeout-minutes: 40
+    env:
+      # deploy/.env of the server, kept outside the checkout (the runner cleans its workspace).
+      ENV_FILE: ${{ vars.STAGING_ENV_FILE || '/opt/mig-dms/staging.env' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      # Builds the images for this commit, migrations, start, demo data on an empty database, API checks.
+      - run: deploy/scripts/deploy.sh
+      - name: Checks through Caddy (staging)
+        run: node deploy/scripts/smoke-check.mjs "https://${{ vars.STAGING_DOMAIN }}" --expect staging

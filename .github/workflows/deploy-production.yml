@@ -1,0 +1,52 @@
+# Production: only by hand (Actions → Deploy production → Run workflow), through the GitHub Environment
+# `production` whose required reviewers (set by the repository admin) approve every run. A backup is taken BEFORE
+# the migrations (the run stops if it fails). Runs on MIG's production server through a self-hosted runner
+# (outbound only). Does nothing until the repository variable PRODUCTION_ENABLED is 'true' (deploy/README.md).
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag or branch to deploy (what CI and staging have verified)
+        required: true
+        default: main
+      rollback_to:
+        description: 'Rollback only: the short commit (12 characters) of earlier images on the server; no migrations'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.PRODUCTION_ENABLED == 'true'
+    runs-on: [self-hosted, mig-production]
+    environment:
+      name: production
+      url: https://${{ vars.PRODUCTION_DOMAIN }}
+    timeout-minutes: 60
+    env:
+      ENV_FILE: ${{ vars.PRODUCTION_ENV_FILE || '/opt/mig-dms/production.env' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Deploy (backup → migrations → start)
+        if: inputs.rollback_to == ''
+        run: deploy/scripts/deploy.sh --backup
+      - name: Rollback to earlier images
+        if: inputs.rollback_to != ''
+        run: deploy/scripts/deploy.sh --rollback "$ROLLBACK_TO"
+        env:
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+      - name: Checks through Caddy (production)
+        run: node deploy/scripts/smoke-check.mjs "https://${{ vars.PRODUCTION_DOMAIN }}" --expect production

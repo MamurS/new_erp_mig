@@ -1,0 +1,18 @@
+# Build context of deploy/Dockerfile (the repository root): sources only — no secrets, no local builds.
+**/node_modules
+**/dist
+**/dist-*
+.git
+.github
+.env
+.env.*
+**/.env
+**/.env.*
+deploy/backups
+deploy/volumes
+**/playwright-report
+**/test-results*
+coverage
+apps/*/coverage
+**/*.log
+.wrangler

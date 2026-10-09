@@ -162,8 +162,12 @@ test('narrow screen: the dashboard blocks go under the queue and scroll with the
   const s = await box(side);
   expect(s.y).toBeGreaterThanOrEqual(q.y + q.height);
   const attention = page.getByTestId('dashboard-attention');
-  await attention.scrollIntoViewIfNeeded();
-  await settle(page);
-  expect(await scrollTop(area(page))).toBeGreaterThan(0);
-  await expect(attention).toBeInViewport();
+  // Every block loaded first: a KPI row or a card filled in after the scroll shifts the layout under it.
+  await expect(page.getByRole('status', { name: 'Загрузка' })).toHaveCount(0);
+  await expect(async () => {
+    await attention.scrollIntoViewIfNeeded();
+    await settle(page);
+    expect(await scrollTop(area(page))).toBeGreaterThan(0);
+    await expect(attention).toBeInViewport({ timeout: 1000 });
+  }).toPass();
 });

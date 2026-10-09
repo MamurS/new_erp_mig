@@ -429,7 +429,7 @@ AES-256-GCM с версиями ключей (`PII_KEYS`, `PII_KEY_CURRENT`), п
 
 ### Фоновые задачи (§10)
 
-Расписания — `packages/domain/src/services/jobs.ts`; pg_cron выполняет `db`-задачи и ставит `api`-задачи в `app.job_queue`, их берёт воркер (`apps/api/src/jobs/worker.ts`) и выполняет тем же сервисным кодом, что и мок (`packages/domain/src/services/jobRunner.ts`). Воркер работает в процессе API (`WORKER=inline`) или отдельно: `node apps/api/dist/worker.js` (`npm run worker -w @mig/api`, тогда у API `WORKER=off`).
+Расписания — `packages/domain/src/services/jobs.ts`; pg_cron выполняет `db`-задачи и ставит `api`-задачи в `app.job_queue`, их берёт воркер (`apps/api/src/jobs/worker.ts`) и выполняет тем же сервисным кодом, что и мок (`packages/domain/src/services/jobRunner.ts`). Воркер работает в процессе API (`WORKER=inline`) или отдельно: `node apps/api/dist/worker.js` (`npm run worker -w @mig/api`, тогда у API `WORKER=off`; так в `deploy/docker-compose.yml`).
 
 ### Переменные окружения
 
@@ -453,7 +453,7 @@ AES-256-GCM с версиями ключей (`PII_KEYS`, `PII_KEY_CURRENT`), п
 | `LOG_LEVEL` | нет (`info`) | журнал запросов Fastify и диагностика API; `warn` — только сбои (так запускает e2e-backend) |
 | `INSECURE_DEV_COOKIE` | только development | `1` — cookie `mig_session` без `Secure` для http://localhost |
 
-Production не запускается без обязательных секретов, с опубликованными dev-значениями (ключ ПДн, HMAC-ключ, секрет сессий, секрет hook), с `DEMO_PASSWORD` или `INSECURE_DEV_COOKIE` (переменная `AUTH_BEARER_COMPAT` шага 4 удалена: с ней API не запускается нигде); в нём нет демо-маршрутов и кода `000000` (проверяют `apps/api/src/crypto.test.ts` и `production.test.ts`). Supabase Auth в рабочем развёртывании: `GOTRUE_JWT_EXP=600`, MFA TOTP включена, hooks как в `supabase/config.toml` (URI hook — адрес API во внутренней сети, свой секрет), `GOTRUE_RATE_LIMIT_HEADER=X-Mig-Client-Ip` (API передаёт IP клиента), без `[auth.sms.test_otp]`, SMTP МИГ; полный `deploy/.env.example` — шаг 6.
+Production не запускается без обязательных секретов, с опубликованными dev-значениями (ключ ПДн, HMAC-ключ, секрет сессий, секрет hook), с `DEMO_PASSWORD` или `INSECURE_DEV_COOKIE` (переменная `AUTH_BEARER_COMPAT` шага 4 удалена: с ней API не запускается нигде); в нём нет демо-маршрутов и кода `000000` (проверяют `apps/api/src/crypto.test.ts` и `production.test.ts`). Supabase Auth в рабочем развёртывании: `GOTRUE_JWT_EXP=600`, MFA TOTP включена, hooks как в `supabase/config.toml` (URI hook — адрес API во внутренней сети, свой секрет), `GOTRUE_RATE_LIMIT_HEADER=X-Mig-Client-Ip` (API передаёт IP клиента), без `[auth.sms.test_otp]`, SMTP МИГ; всё это — в `deploy/docker-compose.yml`, переменные — `deploy/.env.example`.
 
 ### Запуск локально
 
@@ -523,6 +523,28 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run api
 ## Безопасность
 
 Коротко (подробно — SPEC §9 и CLAUDE.md): строгая CSP и заголовки в `apps/web/public/_headers`, нет inline-скриптов; ESLint запрещает `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `localStorage` вне `storage.ts`, `sessionStorage` вне `session.ts`, `console` вне `logger.ts`; все URL из данных проходят через `safeUrl()`; сессия только в памяти и `sessionStorage`; выход синхронизируется между вкладками; тайм-аут неактивности 15/30 минут; CSV экранируется от формул; фото чеков перекодируются через canvas (EXIF и GPS удаляются); демо-кода нет в сборке без `VITE_DEMO_MODE` (проверяется тестом).
+
+## Развёртывание (staging и production)
+
+Рабочая система — на сервере МИГ (BACKEND_SPEC §11, шаг 6). Пошаговая инструкция для администратора — **`deploy/README.md`**:
+сервер, DNS, межсетевой экран, секреты, первый администратор, доставка (GitHub Actions с self-hosted runner или
+Coolify), резервные копии, восстановление и ежемесячная проверка, ротация секретов, журналы, обновление и откат.
+
+- `deploy/docker-compose.yml` — self-hosted Supabase с закреплёнными версиями (Postgres 15 с pg_cron, Auth, PostgREST,
+  Storage, Kong; Studio по профилю), разовый `migrate`, `api`, `worker`, `caddy`. Порты публикует **только Caddy**
+  (443 и 80 → HTTPS); остальное — во внутренней сети Docker без выхода в интернет.
+- `deploy/Dockerfile` — образ API (Node 20, без root) и образ Caddy с фронтендом, собранным с
+  `VITE_USE_MOCKS=false VITE_DEMO_MODE=false`; `deploy/Caddyfile` — TLS, SPA, `/api` → API, лимиты тела (JSON 1 МиБ,
+  остальное 30 МиБ, как в API), заголовки и CSP из `apps/web/public/_headers` (генерирует и сверяет
+  `node scripts/caddy-headers.mjs [--write]`; тест `scripts/caddy-headers.test.ts`).
+- Окружения: `staging` — автоматически после зелёного CI на `main` (`.github/workflows/deploy-staging.yml`), демо-данные;
+  `production` — только вручную через GitHub Environment `production` с подтверждением, резервная копия перед
+  миграциями (`deploy-production.yml`); ежемесячная проверка восстановления — `restore-check.yml`. Пока переменные
+  репозитория `STAGING_ENABLED`/`PRODUCTION_ENABLED`/`RESTORE_CHECK_ENABLED` не равны `true`, они ничего не делают.
+- Резервные копии — `deploy/backup/` (pg_dump + файлы Storage, 30 дневных и 12 месячных, копия в S3 или по rsync).
+- Проверки: задача CI `deploy` — `deploy/backup/test-local.sh` (дамп локального стека → восстановление в чистый
+  стек → сверка строк и цепочки аудита) и `deploy/scripts/smoke-test.sh` (весь стек в режиме production через Caddy).
+- Нагрузка и рекомендуемый сервер — `docs/backend/LOAD.md` (`node scripts/loadtest.mjs`).
 
 ## Деплой (Cloudflare Pages)
 
