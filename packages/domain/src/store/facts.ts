@@ -7,7 +7,7 @@
  * in the system repositories of the API (`genericFacts`). The services keep their logic: a fact returns the
  * minimal rows in storage order and the service picks, sorts and sums exactly as before.
  */
-import type { AuditEntry, ClaimCategory, ClaimStatus, UUID } from '@mig/contracts';
+import type { AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, UUID } from '@mig/contracts';
 import type { LegalFormCode } from '../config/legalForms';
 import { parseIso } from '../lib/time';
 import type { Repos } from './repo';
@@ -51,9 +51,25 @@ export interface Facts {
   clientHistory(clientId: UUID, limit: number): Promise<AuditEntry[]>;
   /** Claims of the active employees (and their families) of a company created since `sinceMs` (HR statistics). */
   companyClaimCount(clientId: UUID, sinceMs: number): Promise<number>;
+  /** Openings of a person's personal and medical data (the access log of the card), as stored. */
+  personAccessLog(insuredId: UUID): Promise<AuditEntry[]>;
+  /** The actor's own audit entries of the given actions, as stored (at most `limit`). */
+  ownAuditEntries(actorId: UUID, actions: readonly AuditAction[], limit?: number): Promise<AuditEntry[]>;
+  /**
+   * Moves a deal forward along `order` (never back, never out of `lost`); true when the deal exists and the step is
+   * not backwards (the caller then writes the event).
+   */
+  advanceDeal(dealId: UUID, stage: DealStage, order: readonly DealStage[], at: string): Promise<boolean>;
+  /** An event in the feed of a clinic cabinet (newest first, the newest 500 kept). */
+  pushClinicEvent(row: { id: UUID; clinicId: UUID; at: string; text: string }): Promise<void>;
+  /** A line at the top of a client's activity log (a request acted on). */
+  appendClientLog(clientId: UUID, entry: { at: string; text: string }): Promise<void>;
 }
 
 type Base = Omit<Repos, 'facts'>;
+
+/** Events a clinic cabinet keeps (the mock kept its arrays short). */
+export const CLINIC_EVENTS_KEPT = 500;
 
 
 /** The facts over repositories without row-level security (the mock, the API's system repositories). */
@@ -95,6 +111,28 @@ export function genericFacts(r: Base): Facts {
     async companyClaimCount(clientId, sinceMs) {
       const ids = (await r.insured.list({ where: { clientId, status: 'active' } })).map((e) => e.id);
       return (await r.claims.list({ where: { insuredId: { in: ids } } })).filter((c) => parseIso(c.createdAt) >= sinceMs).length;
+    },
+    async personAccessLog(insuredId) {
+      return r.audit.list({ where: { targetId: insuredId, action: { in: ['reveal_pii', 'open_medical'] } } });
+    },
+    async ownAuditEntries(actorId, actions, limit) {
+      return r.audit.list({ where: { actorId, action: { in: [...actions] } }, ...(limit !== undefined ? { limit } : {}) });
+    },
+    async advanceDeal(dealId, stage, order, at) {
+      const deal = await r.deals.get(dealId);
+      if (!deal || deal.stage === 'lost') return false;
+      if (order.indexOf(stage) <= order.indexOf(deal.stage) && stage !== deal.stage) return false;
+      if (stage !== deal.stage) await r.deals.update(deal.id, { stage, updatedAt: at });
+      return true;
+    },
+    async pushClinicEvent(row) {
+      await r.clinicEvents.insert(row, { at: 'start' });
+      const extra = await r.clinicEvents.list({ offset: CLINIC_EVENTS_KEPT });
+      if (extra.length) await r.clinicEvents.removeWhere({ id: { in: extra.map((x) => x.id) } });
+    },
+    async appendClientLog(clientId, entry) {
+      const client = await r.clients.get(clientId);
+      if (client) await r.clients.update(client.id, { log: [entry, ...(client.log ?? [])] });
     },
   };
 }

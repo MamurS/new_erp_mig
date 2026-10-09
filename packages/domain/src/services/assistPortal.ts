@@ -834,7 +834,7 @@ export async function clinics(ctx: AuthCtx): Promise<AssistClinic[]> {
       clinicLegalForm: c.legalForm,
       city: c.district,
       specialties: c.specialties,
-      ownPrices: await systemRepos(ctx, 'network clinics: whether the company has own prices with a clinic').clinicContracts.exists({ clinicId: c.id, payer: assistanceId }),
+      ownPrices: await ctx.repos.clinicContracts.exists({ clinicId: c.id, payer: assistanceId }),
       priceList: await priceListOf(ctx, c.id, assistanceId),
     });
   }

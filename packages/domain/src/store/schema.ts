@@ -126,6 +126,7 @@ const rw = (g: Grant): Pick<Access, 'insert' | 'update'> => ({ insert: g, update
 const HR_CLIENT = 'client_id = app.company_id()';
 const INS_PERSONS = 'insured_id = any(app.my_person_ids())';
 const INS_SELF = 'insured_id = app.insured_id()';
+const INS_CARDS = 'insured_id = any(app.my_card_ids())';
 const CLINIC_OWN = 'clinic_id = app.clinic_id()';
 const ASSIST_OWN = 'assistance_id = app.assistance_id()';
 const ASSIST_INSURED = (day: string) => `app.assist_covers_insured(insured_id, ${day})`;
@@ -745,10 +746,10 @@ export const TABLES: readonly TableSpec[] = [
           actions: ['clinics.read', 'clinics.manage', 'registries.review', 'guarantees.decide', 'assist.registries.review', 'assist.guarantees.decide', 'ai.coverage.mig', 'ai.coverage.assist'],
           staff: ALL,
           clinic: always(CLINIC_OWN),
-          assist: ALL,
+          assist: always(),
         },
         ...rw({ actions: ['clinics.manage', 'clinic.integration.manage'], staff: ALL, clinic: CLINIC_OWN }),
-        note: 'Price lists: the own clinic, MIG and assistance reviewers.',
+        note: 'Price lists: the own clinic, MIG and every assistance company (the network list is the reference of its referrals and contracts).',
       },
     },
   ),
@@ -758,10 +759,10 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['insuredId', 'shortCode', 'expiresAt'],
       access: {
-        select: { insured: always(INS_SELF) },
-        insert: { insured: always(INS_SELF) },
-        delete: { insured: always(INS_SELF) },
-        note: 'The insured issues QR/short-code tokens of the own card; a clinic redeems a token through the API (system), not by reading the table.',
+        select: { insured: always(INS_CARDS) },
+        insert: { insured: always(INS_CARDS) },
+        delete: { insured: always(INS_CARDS) },
+        note: 'The insured issues QR/short-code tokens of the own card and of the active family under them (FAMILY_SPEC: card); a clinic redeems a token through app.fact_redeem_card_token, not by reading the table.',
       },
     },
   ),
@@ -948,7 +949,8 @@ export const TABLES: readonly TableSpec[] = [
       indexes: ['endpointId', 'status', 'clinicId'],
       access: {
         select: { actions: ['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage'], staff: ALL, clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
-        note: 'Delivery log of webhooks: read by the partner; written by the API outbox (system).',
+        update: { actions: ['clinic.integration.manage', 'assist.integration.manage'], clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
+        note: 'Delivery log of webhooks: read by the partner, whose integration admin records a manual retry; written by the API outbox (system).',
       },
     },
   ),
@@ -1182,8 +1184,11 @@ export const TABLES: readonly TableSpec[] = [
       indexes: ['dealId', 'at'],
       access: {
         select: STAFF_READ('deals.manage', 'leads.manage', 'contracts.read', 'quotes.calculate', 'census.upload', 'kp.send', 'kp.create'),
-        insert: STAFF_READ('deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'payments.record', 'tasks.ask'),
-        note: 'Deal activity feed: MIG staff only.',
+        insert: {
+          ...STAFF_READ('deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'payments.record', 'tasks.ask'),
+          hr: 'app.client_of_deal(deal_id) = app.company_id()',
+        },
+        note: 'Deal activity feed: MIG staff read it; HR writes the events of its own actions (an offer answered, a signature, a request) into the feed of the own company’s deal.',
       },
     },
   ),
@@ -1549,9 +1554,9 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clinicId'],
       access: {
-        select: { actions: ['clinics.manage', 'registries.review', 'assistance.manage', 'assist.registries.review', 'clinic.check_patient'], staff: ALL, clinic: always(CLINIC_OWN), assist: 'payer = app.assistance_id()::text' },
+        select: { actions: ['clinics.manage', 'registries.review', 'assistance.manage', 'assist.registries.review', 'clinic.check_patient'], staff: ALL, clinic: always(CLINIC_OWN), assist: always('payer = app.assistance_id()::text') },
         ...rw(STAFF_READ('clinics.manage', 'assistance.manage')),
-        note: 'Clinic contracts with a payer (MIG or an assistance company): the clinic, the payer and MIG.',
+        note: 'Clinic contracts with a payer (MIG or an assistance company): the clinic, the payer (every user of the assistance company: its network page) and MIG.',
       },
     },
   ),

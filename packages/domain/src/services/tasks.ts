@@ -115,16 +115,15 @@ const executorLink = (task: TaskRow) => task.link;
  * A line in the request's history and in the activity of its object (the deal's events, the client's log).
  * Changes `task.history` in place: the caller saves the task.
  */
-async function record(person: BaseCtx, task: TaskRow, kind: TaskEvent['kind'], byName: string, comment?: string): Promise<void> {
-  // The activity of the request's deal and client is written whoever acts on the request (HR included).
-  const ctx = asSystem(person, 'activity of a request in the feed of its deal and the log of its client');
+async function record(ctx: BaseCtx, task: TaskRow, kind: TaskEvent['kind'], byName: string, comment?: string): Promise<void> {
+  // The activity of the request's deal and client is written whoever acts on the request (HR included): the deal
+  // feed under the RLS of deal_events, the client's log through app.fact_append_client_log.
   const at = tzIso(ctx.now());
   task.history.push({ at, kind, byName, ...(comment ? { comment } : {}) });
   const to = task.assigneeName ?? msg(`labels.role.${task.toRole}`);
   const text = msg(`next.activity.${kind}`, { what: whatOf(task), to, who: byName, ...(comment ? { comment } : { comment: '' }) });
   if (task.dealId) await ctx.repos.dealEvents.insert({ id: randomId(), dealId: task.dealId, at, actorName: byName, text }, { at: 'start' });
-  const client = await ctx.repos.clients.get(task.clientId);
-  if (client) await ctx.repos.clients.update(client.id, { log: [{ at, text }, ...(client.log ?? [])] });
+  await ctx.repos.facts.appendClientLog(task.clientId, { at, text });
 }
 
 const saveTask = (ctx: BaseCtx, t: TaskRow) => ctx.repos.tasks.put(t);
@@ -231,9 +230,9 @@ export async function sweepDeadlines(ctx: BaseCtx): Promise<void> {
     if (!kind) continue;
     if (kind === 'overdue' ? task.overdueSent : task.dueSoonSent || task.overdueSent) continue;
     // Claim the reminder: of requests reading at the same time only one sets the flag (Postgres re-checks the
-    // condition after the other's commit), the others skip — the reminder goes once.
-    const sys = systemRepos(ctx, 'deadline reminders: the flag of a task is claimed once by whoever reads first');
-    const claimed = kind === 'overdue' ? await sys.tasks.updateWhere({ id: task.id, overdueSent: { ne: true } }, { overdueSent: true }) : await sys.tasks.updateWhere({ id: task.id, dueSoonSent: { ne: true } }, { dueSoonSent: true });
+    // condition after the other's commit), the others skip — the reminder goes once. The reader may update every
+    // request it sees (RLS of tasks).
+    const claimed = kind === 'overdue' ? await ctx.repos.tasks.updateWhere({ id: task.id, overdueSent: { ne: true } }, { overdueSent: true }) : await ctx.repos.tasks.updateWhere({ id: task.id, dueSoonSent: { ne: true } }, { dueSoonSent: true });
     if (!claimed) continue;
     const text = msg(`next.notify.${kind}`, { what: whatOf(task), subject: task.subjectLabel });
     for (const id of await executorIds(ctx, task)) await notify(ctx, id, text, executorLink(task));

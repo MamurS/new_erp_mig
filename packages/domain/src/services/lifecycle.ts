@@ -57,21 +57,19 @@ export async function clientRow(ctx: BaseCtx, id: UUID): Promise<ClientRow> {
 }
 
 export async function dealEvent(ctx: BaseCtx, dealId: UUID, actorName: string, text: string): Promise<void> {
-  // The deal feed records events of any party (the client's HR, legal, signatures).
-  await systemRepos(ctx, 'the deal feed records events of any party').dealEvents.insert({ id: randomId(), dealId, at: tzIso(ctx.now()), actorName, text }, { at: 'start' });
+  // The deal feed records events of any party: MIG staff, the client's HR (its own company's deal, RLS of
+  // deal_events), the system clock (EDO).
+  await ctx.repos.dealEvents.insert({ id: randomId(), dealId, at: tzIso(ctx.now()), actorName, text }, { at: 'start' });
 }
 
 const STAGE_ORDER: DealStage[] = ['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active'];
 
 /** Moves a deal forward (never back, never out of `lost`), with an event in its feed. */
-export async function moveDeal(person: BaseCtx, dealId: UUID | undefined, stage: DealStage, actorName: string, text?: string): Promise<void> {
-  // The pipeline follows events of any party (the client's answer, signatures, payments).
-  const ctx = asSystem(person, 'the sales pipeline follows events of any party');
-  const deal = dealId ? await ctx.repos.deals.get(dealId) : null;
-  if (!deal || deal.stage === 'lost') return;
-  if (STAGE_ORDER.indexOf(stage) <= STAGE_ORDER.indexOf(deal.stage) && stage !== deal.stage) return;
-  if (stage !== deal.stage) await ctx.repos.deals.update(deal.id, { stage, updatedAt: tzIso(ctx.now()) });
-  if (text) await dealEvent(ctx, deal.id, actorName, text);
+export async function moveDeal(ctx: BaseCtx, dealId: UUID | undefined, stage: DealStage, actorName: string, text?: string): Promise<void> {
+  // The pipeline follows events of any party (the client's answer, signatures, payments): the step itself is the
+  // narrow app.fact_advance_deal (HR may not read or update deals).
+  if (!dealId || !(await ctx.repos.facts.advanceDeal(dealId, stage, STAGE_ORDER, tzIso(ctx.now())))) return;
+  if (text) await dealEvent(ctx, dealId, actorName, text);
 }
 
 export async function latestQuote(ctx: BaseCtx, dealId: UUID): Promise<Quote | undefined> {

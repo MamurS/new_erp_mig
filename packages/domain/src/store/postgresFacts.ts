@@ -31,5 +31,20 @@ export function pgFacts(sql: Sql, _crypto: PiiCrypto): Facts {
     async companyClaimCount(clientId, sinceMs) {
       return Number(await one('app.fact_company_claim_count($1::uuid, $2::bigint)', [clientId, Math.floor(sinceMs)]));
     },
+    async personAccessLog(insuredId) {
+      return one('app.fact_person_access_log($1::uuid)', [insuredId]);
+    },
+    async ownAuditEntries(actorId, actions, limit) {
+      return one('app.fact_own_audit_entries($1::uuid, $2::text[], $3::integer)', [actorId, [...actions], limit ?? null]);
+    },
+    async advanceDeal(dealId, stage, order, at) {
+      return !!(await one<boolean>('app.fact_advance_deal($1::uuid, $2::text, $3::text[], $4::timestamptz)', [dealId, stage, [...order], at]));
+    },
+    async pushClinicEvent(row) {
+      await one('app.fact_push_clinic_event($1::uuid, $2::uuid, $3::timestamptz, $4::text)', [row.id, row.clinicId, row.at, row.text]);
+    },
+    async appendClientLog(clientId, entry) {
+      await one('app.fact_append_client_log($1::uuid, $2::jsonb)', [clientId, JSON.stringify(entry)]);
+    },
   };
 }

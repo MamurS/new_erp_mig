@@ -79,9 +79,7 @@ begin
     raise exception 'not allowed' using errcode = '42501';
   end if;
   return (select coalesce(jsonb_agg(e.j order by e._pos), '[]'::jsonb) from (
-      select a._pos, jsonb_strip_nulls(jsonb_build_object('id', a.id, 'at', to_char(a."at" at time zone app.tz(), 'YYYY-MM-DD"T"HH24:MI:SS"+05:00"'), 'actorId', a.actor_id, 'actorName', a.actor_name,
-        'actorRole', a.actor_role, 'action', a.action, 'targetType', a.target_type, 'targetId', a.target_id, 'targetLabel', a.target_label,
-        'assistanceId', a.assistance_id)) as j
+      select a._pos, jsonb_strip_nulls(jsonb_build_object('id', a.id, 'at', to_char(a."at" at time zone app.tz(), 'YYYY-MM-DD"T"HH24:MI:SS"+05:00"'), 'actorId', a.actor_id, 'actorName', a.actor_name, 'actorRole', a.actor_role, 'action', a.action, 'targetType', a.target_type, 'targetId', a.target_id, 'targetLabel', a.target_label, 'assistanceId', a.assistance_id)) as j
       from public.audit_log a
       where a.action <> all(array['reveal_pii', 'open_medical']) and a.target_id = any(
         array[p_client::text]
@@ -107,3 +105,86 @@ end $$;
 comment on function app.fact_company_claim_count(uuid, bigint) is 'Number of claims of the active persons of the own company since a moment (HR statistics, shown k-anonymous): HR never reads claims.';
 revoke execute on function app.fact_company_claim_count(uuid, bigint) from public;
 grant execute on function app.fact_company_claim_count(uuid, bigint) to authenticated, service_role;
+
+create or replace function app.fact_person_access_log(p_insured uuid) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff() and app.role() <> 'accountant' and (select app.can('insured.read')) and exists (select 1 from public.insured v where v.id = p_insured and ((select app.active()) and ( ((select app.is_staff()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[]))) or ((select app.role()) = 'hr' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (client_id = (select app.company_id()))) or ((select app.role()) = 'insured' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.my_family_ids())::uuid[]))) or ((select app.is_clinic()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.clinic_patient_ids())::uuid[]))) or ((select app.is_assist()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (app.assist_covers(policy_id, current_date))) )))), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return (select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', a.id, 'at', to_char(a."at" at time zone app.tz(), 'YYYY-MM-DD"T"HH24:MI:SS"+05:00"'), 'actorId', a.actor_id, 'actorName', a.actor_name, 'actorRole', a.actor_role, 'action', a.action, 'targetType', a.target_type, 'targetId', a.target_id, 'targetLabel', a.target_label, 'reason', a.reason, 'assistanceId', a.assistance_id)) order by a._pos), '[]'::jsonb) from public.audit_log a
+      where a.target_id = p_insured::text and a.action in ('reveal_pii', 'open_medical'));
+end $$;
+comment on function app.fact_person_access_log(uuid) is 'Openings of personal and medical data of a person the caller reads (the access log of the card): MIG card readers.';
+revoke execute on function app.fact_person_access_log(uuid) from public;
+grant execute on function app.fact_person_access_log(uuid) to authenticated, service_role;
+
+create or replace function app.fact_own_audit_entries(p_actor uuid, p_actions text[], p_limit integer) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff() and p_actor = app.uid() and p_actions <@ array['reveal_pii', 'open_medical']), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return (select coalesce(jsonb_agg(e.j order by e._pos), '[]'::jsonb) from (
+      select a._pos, jsonb_strip_nulls(jsonb_build_object('id', a.id, 'at', to_char(a."at" at time zone app.tz(), 'YYYY-MM-DD"T"HH24:MI:SS"+05:00"'), 'actorId', a.actor_id, 'actorName', a.actor_name, 'actorRole', a.actor_role, 'action', a.action, 'targetType', a.target_type, 'targetId', a.target_id, 'targetLabel', a.target_label, 'reason', a.reason, 'assistanceId', a.assistance_id)) as j from public.audit_log a
+      where a.actor_id = p_actor and a.action = any(p_actions) order by a._pos limit p_limit) e);
+end $$;
+comment on function app.fact_own_audit_entries(uuid, text[], integer) is 'The caller’s own openings of personal and medical data (the doctor’s desktop): a MIG employee, own entries only.';
+revoke execute on function app.fact_own_audit_entries(uuid, text[], integer) from public;
+grant execute on function app.fact_own_audit_entries(uuid, text[], integer) to authenticated, service_role;
+
+create or replace function app.fact_advance_deal(p_deal uuid, p_stage text, p_order text[], p_at timestamptz) returns boolean
+  language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff() or (app.role() = 'hr' and app.client_of_deal(p_deal) = app.company_id())), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  declare
+    v text;
+  begin
+    select d.stage into v from public.deals d where d.id = p_deal for update;
+    if v is null or v = 'lost' then
+      return false;
+    end if;
+    if coalesce(array_position(p_order, p_stage), 0) <= coalesce(array_position(p_order, v), 0) and p_stage <> v then
+      return false;
+    end if;
+    if p_stage <> v then
+      update public.deals set stage = p_stage, updated_at = p_at where id = p_deal;
+    end if;
+    return true;
+  end;
+end $$;
+comment on function app.fact_advance_deal(uuid, text, text[], timestamptz) is 'Moves a deal forward along the pipeline order (never back, never out of lost) after an event of any party: MIG staff, HR of the own company.';
+revoke execute on function app.fact_advance_deal(uuid, text, text[], timestamptz) from public;
+grant execute on function app.fact_advance_deal(uuid, text, text[], timestamptz) to authenticated, service_role;
+
+create or replace function app.fact_push_clinic_event(p_id uuid, p_clinic uuid, p_at timestamptz, p_text text) returns void
+  language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((exists (select 1 from public.clinics c where c.id = p_clinic) and (not app.is_clinic() or p_clinic = app.clinic_id()) and length(p_text) <= 2000), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  insert into public.clinic_events (id, clinic_id, "at", "text", _pos) values (p_id, p_clinic, p_at, p_text, -nextval('app.pos_seq'));
+  delete from public.clinic_events where id in (select e.id from public.clinic_events e order by e._pos offset 500);
+end $$;
+comment on function app.fact_push_clinic_event(uuid, uuid, timestamptz, text) is 'An event in the feed of a clinic cabinet caused by any party (a booking, a referral, a decision); the newest ${CLINIC_EVENTS_KEPT} are kept. A clinic writes only into its own feed.';
+revoke execute on function app.fact_push_clinic_event(uuid, uuid, timestamptz, text) from public;
+grant execute on function app.fact_push_clinic_event(uuid, uuid, timestamptz, text) to authenticated, service_role;
+
+create or replace function app.fact_append_client_log(p_client uuid, p_entry jsonb) returns void
+  language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce(((app.is_staff() or (app.role() = 'hr' and p_client = app.company_id())) and jsonb_typeof(p_entry) = 'object' and length(p_entry::text) <= 4000), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  update public.clients set log = jsonb_build_array(jsonb_build_object('at', p_entry ->> 'at', 'text', p_entry ->> 'text')) || coalesce(log, '[]'::jsonb) where id = p_client;
+end $$;
+comment on function app.fact_append_client_log(uuid, jsonb) is 'A line at the top of the activity log of a client after an action on a request: MIG staff, HR of the own company (who may not update the client).';
+revoke execute on function app.fact_append_client_log(uuid, jsonb) from public;
+grant execute on function app.fact_append_client_log(uuid, jsonb) to authenticated, service_role;

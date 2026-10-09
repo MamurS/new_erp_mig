@@ -14,7 +14,7 @@ import { hashString, int, mulberry32, pick, uuidFrom } from '../lib/rng';
 import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, tzIso } from '../lib/time';
 import type { InsuredRow } from '../store/db';
-import { audit, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, DomainError, forbidden, insuredLabel, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { paginate, q, sortBy, type Qs } from './list';
 import { limitsFor, toInsuredDetail, toInsuredListItem } from './views';
 
@@ -127,7 +127,8 @@ export async function documents(ctx: AuthCtx, id: string): Promise<InsuredDocume
 export async function accessLog(ctx: AuthCtx, id: string): Promise<AuditEntry[]> {
   requireCardReader(ctx, { accountant: true });
   const i = await findInsured(ctx, id);
-  return systemRepos(ctx, 'the access log of a person: openings of their personal and medical data (audit)').audit.list({ where: { targetId: i.id, action: { in: ['reveal_pii', 'open_medical'] } } });
+  // The reader may not read the audit log: the openings of this person come from app.fact_person_access_log.
+  return ctx.repos.facts.personAccessLog(i.id);
 }
 
 /** POST /insured/:id/reveal: the full value for 30 seconds, with a reason, audited. */

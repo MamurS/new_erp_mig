@@ -12,7 +12,7 @@ import { DAY, parseIso, tzIso } from '../lib/time';
 import { sha256Hex } from '../lib/webhook';
 import type { IntegrationClientRow, WebhookDeliveryRow, WebhookEndpointRow } from '../store/db';
 import { attemptDelivery, emitWebhook, pushEvent } from './clinic';
-import { audit, conflict, DomainError, notFound, systemRepos, validate, type AuditActor, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, notFound, validate, type AuditActor, type BaseCtx } from './kernel';
 
 /** Whose integration settings: resolved by the adapter from the session (clinic or assistance admin). */
 export interface PartnerScope {
@@ -130,7 +130,7 @@ export async function retryDelivery(ctx: BaseCtx, p: PartnerScope, id: UUID): Pr
   if (!ep) throw notFound();
   if (delivery.status === 'failed') delivery.attempts = Math.min(delivery.attempts, 5); // manual retry gets one more attempt
   await attemptDelivery(delivery, ep, ctx.now());
-  await systemRepos(ctx, 'webhook outbox: a manual retry records the attempt in the delivery log').webhookDeliveries.put(delivery);
+  await ctx.repos.webhookDeliveries.put(delivery);
   return toDeliveryView(delivery);
 }
 

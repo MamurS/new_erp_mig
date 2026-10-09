@@ -17,7 +17,7 @@ import { recognizeReceipt } from '../lib/receipts';
 import { DAY, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, FamilyRequestRow, InsuredRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, systemRepos, todayIso, validate, type AuthCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, todayIso, validate, type AuthCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { accessOf, ageLimits, familyOf, hasConsent, isDependent, myAppointment, myClaimOf, payoutCardOf, personFor, principalOf } from './family';
 import { toFamilyRequest } from './familyRequests';
@@ -248,8 +248,8 @@ export async function cardToken(ctx: AuthCtx, personId: string | null): Promise<
   crypto.getRandomValues(bytes);
   const row = { token: randomToken(18), shortCode: shortCodeFrom(bytes), insuredId: me.id, expiresAt: now + CARD_TOKEN_TTL_MS };
   // One-time tokens: the previous ones of this person stop working as soon as a new one is issued.
-  // The token may be of a family member (a child): `personFor(…, 'card')` allowed it; the row is written by the system.
-  const tokens = systemRepos(ctx, 'card token of a family member the person may show at the desk').cardTokens;
+  // The token may be of a family member: `personFor(…, 'card')` allowed it, RLS too (app.my_card_ids()).
+  const tokens = ctx.repos.cardTokens;
   await tokens.removeWhere({ expiresAt: { lte: now } });
   await tokens.removeWhere({ insuredId: me.id });
   await tokens.insert(row);

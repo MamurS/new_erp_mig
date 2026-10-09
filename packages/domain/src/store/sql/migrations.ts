@@ -246,6 +246,16 @@ ${def(
   'The person’s policy is assigned to the user’s assistance company on the date.',
 )}
 ${def('client_of_contract(p_contract uuid)', 'uuid', 'select c.client_id from public.contracts c where c.id = p_contract', 'Client of a contract (HR scope of appendices, change requests, endorsements).')}
+${def('client_of_deal(p_deal uuid)', 'uuid', 'select d.client_id from public.deals d where d.id = p_deal', 'Client of a deal (HR writes events of the own company’s deal into its feed).')}
+${def(
+  'my_card_ids()',
+  'uuid[]',
+  `select coalesce(array_agg(distinct x), '{}') from (
+    select app.insured_id() as x
+    union all select i.id from public.insured i where i.principal_id = app.insured_id() and i.status <> 'excluded'
+  ) s where x is not null`,
+  'Persons whose card the insured person may show at a clinic desk: self and the active family under them (FAMILY_SPEC: card).',
+)}
 ${def(
   'registry_has_payer(p_lines jsonb, p_payer uuid)',
   'boolean',

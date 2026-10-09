@@ -70,6 +70,23 @@ as $$
 $$;
 comment on function app.client_of_contract is 'Client of a contract (HR scope of appendices, change requests, endorsements).';
 
+create or replace function app.client_of_deal(p_deal uuid) returns uuid
+  language sql stable security definer set search_path = ''
+as $$
+  select d.client_id from public.deals d where d.id = p_deal
+$$;
+comment on function app.client_of_deal is 'Client of a deal (HR writes events of the own company’s deal into its feed).';
+
+create or replace function app.my_card_ids() returns uuid[]
+  language sql stable security definer set search_path = ''
+as $$
+  select coalesce(array_agg(distinct x), '{}') from (
+    select app.insured_id() as x
+    union all select i.id from public.insured i where i.principal_id = app.insured_id() and i.status <> 'excluded'
+  ) s where x is not null
+$$;
+comment on function app.my_card_ids is 'Persons whose card the insured person may show at a clinic desk: self and the active family under them (FAMILY_SPEC: card).';
+
 create or replace function app.registry_has_payer(p_lines jsonb, p_payer uuid) returns boolean
   language sql immutable security definer set search_path = ''
 as $$

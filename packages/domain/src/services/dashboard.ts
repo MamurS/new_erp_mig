@@ -21,7 +21,7 @@ import { originalReminderDue } from '../contracts';
 import { ageLimitDate, childAgeLimit, reachedAgeLimit } from '../family';
 import { isActiveRequest, isOverdue as requestOverdue } from '../requests';
 import type { ClientRow } from '../store/db';
-import { forbidden, requireStaff, systemRepos, todayIso, type AuthCtx, type BaseCtx } from './kernel';
+import { forbidden, requireStaff, todayIso, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
 import { isOverdueRequestOf } from './clinic';
@@ -106,7 +106,7 @@ async function kpisFor(ctx: BaseCtx, P: ParamsView, user: SessionUser, now: numb
         { key: 'flags', label: msg('srv.dash.kpi.flags'), value: n('fraud_flag'), format: 'number', hint: msg('srv.dash.kpi.flagsHint', { count: queue.filter((i) => i.type === 'rebill').length }), tone: n('fraud_flag') ? 'warning' : 'default', to: '/staff/claims?flagged=1' },
       ];
     case 'doctor_expert': {
-      const grants = (await systemRepos(ctx, 'the doctor\'s own openings of medical data (audit)').audit.list({ where: { action: 'open_medical', actorId: user.id } })).filter((e) => now - parseIso(e.at) <= 7 * DAY);
+      const grants = (await ctx.repos.facts.ownAuditEntries(user.id, ['open_medical'])).filter((e) => now - parseIso(e.at) <= 7 * DAY);
       return [
         { key: 'escalations', label: msg('srv.dash.kpi.escalations'), value: n('escalation') + n('guarantee'), format: 'number', hint: msg('srv.dash.kpi.escalationsHint', { count: n('escalation') }), tone: n('escalation') ? 'warning' : 'default', to: '/staff/guarantees' },
         { key: 'opinions', label: msg('srv.dash.kpi.opinions'), value: n('opinion'), format: 'number', to: '/staff/claims?status=medical_review' },
@@ -690,10 +690,9 @@ export async function queue(ctx: AuthCtx, qs: URLSearchParams): Promise<QueueIte
 export async function medicalAccess(ctx: AuthCtx): Promise<AuditEntry[]> {
   const { user } = ctx;
   if (user.role !== 'admin' && user.role !== 'doctor_expert') throw forbidden();
-  return systemRepos(ctx, 'the last openings of personal and medical data: the admin\'s all, the doctor\'s own (audit)').audit.list({
-    where: { action: { in: ['reveal_pii', 'open_medical'] }, ...(user.role === 'admin' ? {} : { actorId: user.id }) },
-    limit: 5,
-  });
+  // The admin reads the audit log; the doctor gets only the own entries (app.fact_own_audit_entries).
+  if (user.role === 'admin') return ctx.repos.audit.list({ where: { action: { in: ['reveal_pii', 'open_medical'] } }, limit: 5 });
+  return ctx.repos.facts.ownAuditEntries(user.id, ['reveal_pii', 'open_medical'], 5);
 }
 
 export async function integrationsStatus(ctx: AuthCtx): Promise<IntegrationStatus[]> {

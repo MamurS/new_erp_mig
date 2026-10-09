@@ -72,17 +72,16 @@ async function trimNewest(table: { list(q: { offset: number }): Promise<{ id: UU
   if (extra.length) await table.removeWhere({ id: { in: extra.map((r) => r.id) } });
 }
 
-export async function pushEvent(person: BaseCtx, clinicId: UUID, text: string): Promise<void> {
-  // The event feed of a clinic cabinet is written by the system, whoever caused the event.
-  const ctx = asSystem(person, 'event feed of a clinic cabinet (written as a side effect)');
-  await ctx.repos.clinicEvents.insert({ id: randomId(), clinicId, at: tzIso(ctx.now()), text }, { at: 'start' });
-  await trimNewest(ctx.repos.clinicEvents, 500);
+export async function pushEvent(ctx: BaseCtx, clinicId: UUID, text: string): Promise<void> {
+  // The event feed of a clinic cabinet is written whoever caused the event (app.fact_push_clinic_event).
+  await ctx.repos.facts.pushClinicEvent({ id: randomId(), clinicId, at: tzIso(ctx.now()), text });
 }
 
 /** Price list of the pair «clinic + payer» (ASSISTANCE_SPEC §5.3). Without a separate contract the MIG list applies. */
 export async function priceListOf(ctx: BaseCtx, clinicId: UUID, payer: Payer = 'mig'): Promise<PriceListItem[]> {
-  // Prices are reference data of checks, registries and views for every party of the service.
-  const r = systemRepos(ctx, 'price list of a clinic for a payer (reference data)');
+  // Prices are reference data of checks, registries and views: the clinic, MIG and the assistance companies read
+  // them under their own RLS (price_lists, clinic_contracts).
+  const r = ctx.repos;
   if (payer !== 'mig') {
     const contract = await r.clinicContracts.first({ where: { clinicId, payer } });
     if (contract) return contract.priceList;

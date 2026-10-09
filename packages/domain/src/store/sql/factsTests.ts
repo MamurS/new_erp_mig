@@ -7,7 +7,7 @@
 import type { Role } from '@mig/contracts';
 import type { Db } from '../db';
 import { lit } from './physical';
-import { HELPERS, type Identity } from './rlsTests';
+import { FIX as FIX_ID, HELPERS, type Identity } from './rlsTests';
 
 const VALUE_AS = `-- The value of one statement run as the user ('denied' on 42501, 'error: <state>' on another error); rolled back.
 create or replace function tests.value_as(p_claims jsonb, p_sql text) returns text
@@ -38,6 +38,20 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
   const hrCompany = String((hr.claims.app_metadata as Record<string, string>).company_id);
   const otherClient = db.clients.find((x) => x.id !== hrCompany && db.claims.some((k) => k.clientId === x.id) && db.invoices.some((k) => k.clientId === x.id) && x.activePolicyId)!;
   const policy = otherClient.activePolicyId!;
+  const me = db.insured.find((i) => i.id === String((who('insured').claims.app_metadata as Record<string, string>).insured_id))!;
+  const clinicId = String((who('clinic_registrar').claims.app_metadata as Record<string, string>).clinic_id);
+  const notPatient = db.insured.find((i) => !db.visits.some((v) => v.insuredId === i.id && v.clinicId === clinicId))!;
+  const doctorId = String(who('doctor_expert').claims.sub);
+  const ownDeal = db.deals.find((d) => d.clientId === hrCompany);
+  const foreignDeal = db.deals.find((d) => d.clientId !== hrCompany && d.stage !== 'lost')!;
+  const child = db.insured.find((i) => i.principalId === me.id && i.status !== 'excluded')!;
+  const stranger = db.insured.find((i) => i.principalId !== me.id && i.id !== me.id && i.relation === 'employee')!;
+  const asstAdmin = who('asst_admin');
+  const assistanceId = String((asstAdmin.claims.app_metadata as Record<string, string>).assistance_id);
+  const clinicAdmin = who('clinic_admin');
+  const adminClinic = String((clinicAdmin.claims.app_metadata as Record<string, string>).clinic_id);
+  const otherClinic = db.clinics.find((x) => x.id !== adminClinic)!;
+  const order = `array['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active']`;
   const lines: string[] = [
     '-- app.fact_client_insured_count: whoever sees the client',
     `select is(${valueAs(who('underwriter'), `select app.fact_client_insured_count('${otherClient.id}')`)}, (select count(*)::text from public.insured where client_id = '${otherClient.id}' and status = 'active'), 'insured count: the underwriter of any client');`,
@@ -65,6 +79,51 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
     `select is(${valueAs(hr, `select app.fact_company_claim_count('${hrCompany}', 0)`)}, (select count(*)::text from public.claims c join public.insured i on i.id = c.insured_id where i.client_id = '${hrCompany}' and i.status = 'active'), 'company claim count: HR of the own company');`,
     `select is(${valueAs(hr, `select app.fact_company_claim_count('${otherClient.id}', 0)`)}, 'denied', 'company claim count: HR of another company is refused');`,
     `select is(${valueAs(who('operator'), `select app.fact_company_claim_count('${hrCompany}', 0)`)}, 'denied', 'company claim count: MIG staff use their own access');`,
+    '-- app.fact_person_access_log: MIG card readers, persons they read',
+    `select is(${valueAs(who('operator'), `select jsonb_array_length(app.fact_person_access_log('${me.id}'))`)}, (select count(*)::text from public.audit_log where target_id = '${me.id}' and action in ('reveal_pii', 'open_medical')), 'access log: the operator reads the openings of a person');`,
+    `select is(${valueAs(who('accountant'), `select app.fact_person_access_log('${me.id}')::text`)}, 'denied', 'access log: the accountant (names only) is refused');`,
+    `select is(${valueAs(hr, `select app.fact_person_access_log('${me.id}')::text`)}, 'denied', 'access log: HR is refused');`,
+    `select is(${valueAs(who('clinic_registrar'), `select app.fact_person_access_log('${notPatient.id}')::text`)}, 'denied', 'access log: a clinic is refused');`,
+    '-- app.fact_own_audit_entries: own openings only',
+    `select is(${valueAs(who('doctor_expert'), `select jsonb_array_length(app.fact_own_audit_entries('${doctorId}', array['reveal_pii', 'open_medical'], null))`)}, (select count(*)::text from public.audit_log where actor_id = '${doctorId}' and action in ('reveal_pii', 'open_medical')), 'own entries: the doctor reads the own openings');`,
+    `select is(${valueAs(who('doctor_expert'), `select app.fact_own_audit_entries('${String(who('operator').claims.sub)}', array['open_medical'], null)::text`)}, 'denied', 'own entries: another employee’s entries are refused');`,
+    `select is(${valueAs(who('doctor_expert'), `select app.fact_own_audit_entries('${doctorId}', array['login'], null)::text`)}, 'denied', 'own entries: only openings of data');`,
+    `select is(${valueAs(who('insured'), `select app.fact_own_audit_entries('${String(who('insured').claims.sub)}', array['open_medical'], null)::text`)}, 'denied', 'own entries: not for the insured person');`,
+    '-- card_tokens: the insured person issues tokens of self and the active family under them, nobody else',
+    `select is((tests.as_user(${c(who('insured'))}, 'insert into public.card_tokens (token, short_code, insured_id, expires_at) values (''t-child'', ''CCCC3333'', ''${child.id}'', 1)')).n, 1, 'card token: of a child of the family');`,
+    `select is((tests.as_user(${c(who('insured'))}, 'insert into public.card_tokens (token, short_code, insured_id, expires_at) values (''t-stranger'', ''DDDD4444'', ''${stranger.id}'', 1)')).n, -1, 'card token: not of a person of another family');`,
+    '-- deal_events: HR writes events of the own company’s deal only',
+    ...(ownDeal
+      ? [`select is((tests.as_user(${c(hr)}, 'insert into public.deal_events (id, deal_id, "at", actor_name, text) values (gen_random_uuid(), ''${ownDeal.id}'', now(), ''HR'', ''x'')')).n, 1, 'deal events: HR of the own company’s deal');`]
+      : []),
+    `select is((tests.as_user(${c(hr)}, 'insert into public.deal_events (id, deal_id, "at", actor_name, text) values (gen_random_uuid(), ''${foreignDeal.id}'', now(), ''HR'', ''x'')')).n, -1, 'deal events: not into another company’s deal');`,
+    `select is((tests.as_user(${c(hr)}, 'select 1 from public.deal_events')).n, 0, 'deal events: HR still reads nothing');`,
+    `select is((tests.as_user(${c(who('insured'))}, 'insert into public.deal_events (id, deal_id, "at", actor_name, text) values (gen_random_uuid(), ''${foreignDeal.id}'', now(), ''X'', ''x'')')).n, -1, 'deal events: the insured person writes nothing');`,
+    '-- webhook_deliveries: the partner’s integration admin records a retry of its own deliveries',
+    `insert into public.webhook_deliveries (id, endpoint_id, clinic_id, event, status, attempts, last_attempt_at, object_id, body, signature) select '${FIX_ID(2001)}', w.id, w.clinic_id, 'guarantee.decided', 'failed', 1, now(), gen_random_uuid(), '{}', '' from public.webhooks w where w.clinic_id = '${adminClinic}' limit 1;`,
+    `insert into public.webhook_deliveries (id, endpoint_id, clinic_id, event, status, attempts, last_attempt_at, object_id, body, signature) select '${FIX_ID(2002)}', w.id, w.clinic_id, 'guarantee.decided', 'failed', 1, now(), gen_random_uuid(), '{}', '' from public.webhooks w where w.clinic_id <> '${adminClinic}' limit 1;`,
+    `select ok((tests.as_user(${c(clinicAdmin)}, 'update public.webhook_deliveries set attempts = 2 where id = ''${FIX_ID(2001)}''')).n = (select count(*)::int from public.webhook_deliveries where id = '${FIX_ID(2001)}'), 'webhook deliveries: the clinic admin updates an own delivery');`,
+    `select is((tests.as_user(${c(clinicAdmin)}, 'update public.webhook_deliveries set attempts = 2 where id = ''${FIX_ID(2002)}''')).n, 0, 'webhook deliveries: not another partner’s delivery');`,
+    `select is((tests.as_user(${c(who('clinic_registrar'))}, 'update public.webhook_deliveries set attempts = 2')).n, 0, 'webhook deliveries: the registrar updates nothing');`,
+    `select is((tests.as_user(${c(clinicAdmin)}, 'insert into public.webhook_deliveries (id, endpoint_id, clinic_id, event, status, attempts, last_attempt_at, object_id, body, signature) select gen_random_uuid(), endpoint_id, clinic_id, event, status, attempts, last_attempt_at, object_id, body, signature from public.webhook_deliveries limit 1')).n, -1, 'webhook deliveries: the outbox itself stays the system’s');`,
+    '-- price_lists / clinic_contracts: every user of an assistance company, own contracts only',
+    `select ok(tests.count_as(${c(asstAdmin)}, 'price_lists') = (select count(*) from public.price_lists), 'price lists: the assistance admin reads the network list');`,
+    `select is(tests.count_as(${c(asstAdmin)}, 'clinic_contracts'), (select count(*) from public.clinic_contracts where payer = '${assistanceId}'), 'clinic contracts: the assistance admin reads only its own contracts');`,
+    `select is(tests.count_as(${c(who('insured'))}, 'price_lists'), 0::bigint, 'price lists: the insured person reads none');`,
+    '-- app.fact_advance_deal: forward only, HR of the own company',
+    `select is(${valueAs(who('legal'), `select app.fact_advance_deal('${foreignDeal.id}', 'lead', ${order}, now())::text`)}, (select (stage = 'lead')::text from public.deals where id = '${foreignDeal.id}'), 'advance deal: never backwards');`,
+    `select is(${valueAs(hr, `select app.fact_advance_deal('${foreignDeal.id}', 'active', ${order}, now())::text`)}, 'denied', 'advance deal: HR of another company is refused');`,
+    `select is(${valueAs(who('insured'), `select app.fact_advance_deal('${foreignDeal.id}', 'active', ${order}, now())::text`)}, 'denied', 'advance deal: the insured person is refused');`,
+    ...(ownDeal ? [`select is(${valueAs(hr, `select app.fact_advance_deal('${ownDeal.id}', 'active', ${order}, now())::text`)}, (select (stage <> 'lost')::text from public.deals where id = '${ownDeal.id}'), 'advance deal: HR of the own company');`] : []),
+    '-- app.fact_push_clinic_event: anyone signed in, a clinic only into its own feed',
+    `select is(${valueAs(who('insured'), `select app.fact_push_clinic_event(gen_random_uuid(), '${otherClinic.id}', now(), 'x')::text`)}, '', 'clinic event: written for a booking of the insured person');`,
+    `select is(${valueAs(clinicAdmin, `select app.fact_push_clinic_event(gen_random_uuid(), '${otherClinic.id}', now(), 'x')::text`)}, 'denied', 'clinic event: a clinic cannot write into another clinic’s feed');`,
+    `select is(${valueAs(who('insured'), `select app.fact_push_clinic_event(gen_random_uuid(), gen_random_uuid(), now(), 'x')::text`)}, 'denied', 'clinic event: only of an existing clinic');`,
+    `select is((tests.as_user(${c(who('insured'))}, 'insert into public.clinic_events (id, clinic_id, "at", text) values (gen_random_uuid(), ''${otherClinic.id}'', now(), ''x'')')).n, -1, 'clinic event: no direct insert');`,
+    '-- app.fact_append_client_log: MIG staff, HR of the own company',
+    `select is(${valueAs(hr, `select app.fact_append_client_log('${hrCompany}', '{"at": "2026-01-01T00:00:00+05:00", "text": "x"}')::text`)}, '', 'client log: HR of the own company');`,
+    `select is(${valueAs(hr, `select app.fact_append_client_log('${otherClient.id}', '{"at": "2026-01-01T00:00:00+05:00", "text": "x"}')::text`)}, 'denied', 'client log: HR of another company is refused');`,
+    `select is(${valueAs(who('clinic_admin'), `select app.fact_append_client_log('${otherClient.id}', '{"at": "2026-01-01T00:00:00+05:00", "text": "x"}')::text`)}, 'denied', 'client log: a clinic is refused');`,
     `select is(tests.value_as('{}'::jsonb, 'select app.fact_client_legal_form(''${otherClient.id}'')'), 'denied', 'no claims: every fact is refused');`,
   ];
   const asserts = lines.filter((l) => /^select (is|ok|throws_ok)\(/.test(l));
