@@ -19,7 +19,7 @@ import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { StaffRow } from '../store/db';
-import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, systemRepos, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { byLegalForm, byLegalName, filterLegalForm, paginate, q, sortBy, sp, type Qs } from './list';
 import { clinicSlots } from './clinic';
 import { toClient, toHrEmployee } from './views';
@@ -113,7 +113,9 @@ export async function slots(ctx: AuthCtx, id: string, dateParam: string | null):
   if (!clinic) throw notFound();
   const date = dateParam ?? isoDay(ctx.now());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
-  const taken = new Set((await ctx.repos.appointments.list({ where: { clinicId: clinic.id, status: { notIn: ['cancelled', 'declined'] } } })).map((a) => a.startsAt));
+  // Every booking of the clinic takes its slot, whoever made it (RLS shows the caller only some of them).
+  const sys = systemRepos(ctx, 'free slots: the clinic\'s bookings by anyone take their slots');
+  const taken = new Set((await sys.appointments.list({ where: { clinicId: clinic.id, status: { notIn: ['cancelled', 'declined'] } } })).map((a) => a.startsAt));
   // Slots passed by the clinic MIS (PUT /slots) win; API-mode clinics always count as «from the clinic system».
   const fromMis = (await ctx.repos.misSlots.list({ where: { clinicId: clinic.id } })).filter((s) => isoDay(parseIso(s.startsAt)) === date);
   const list: Slot[] = fromMis.length ? fromMis.map((s) => ({ clinicId: clinic.id, startsAt: s.startsAt, fromClinicSystem: true })) : clinicSlots(clinic, date, ctx.now());

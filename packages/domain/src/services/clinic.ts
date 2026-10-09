@@ -243,7 +243,8 @@ export async function createAppointment(ctx: BaseCtx, who: InsuredRow, input: { 
   const starts = parseIso(input.startsAt);
   if (Number.isNaN(starts) || starts < ctx.now()) throw conflict('srv.clinic.slotPast');
   const iso = tzIso(starts);
-  if (await r.appointments.exists({ clinicId: clinic.id, startsAt: iso, status: { notIn: ['cancelled', 'declined'] } })) {
+  // A slot booked by anyone is taken (RLS shows an insured only their own bookings).
+  if (await systemRepos(ctx, 'booking: a slot of the clinic taken by anyone').appointments.exists({ clinicId: clinic.id, startsAt: iso, status: { notIn: ['cancelled', 'declined'] } })) {
     throw conflict('srv.clinic.slotTaken');
   }
   const a: Appointment = {
