@@ -84,7 +84,7 @@ export async function attachGuaranteeFiles(ctx: BaseCtx, g: GuaranteeRow, files:
   const before = g.attachments.length;
   try {
     for (const file of files) {
-      const { bytes, mime } = checkAttachment(file);
+      const { bytes, mime } = await checkAttachment(ctx, file);
       const id = randomId();
       const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
       const fileName = `document-${g.attachments.length + 1}.${ext}`;

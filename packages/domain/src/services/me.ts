@@ -25,7 +25,7 @@ import { limitsFor, toMyClaim } from './views';
 import { createAppointment, emitWebhook, FILED_CLAIM_SEQ_FLOOR, nextClaimNumber, pushEvent } from './clinic';
 import { currentAssistance } from './assistance';
 import { handlerOf, refreshFlags, sha256Hex } from './settlement';
-import { stripImageMetadata } from '../lib/imageMeta';
+import { cleanFile } from './uploads';
 
 /** An uploaded file as the adapter read it from the form. */
 export interface Upload {
@@ -87,15 +87,15 @@ const REPLIES = [
 type ImageMime = 'image/jpeg' | 'image/png' | 'image/webp';
 
 /** A receipt photo: an image up to 10 MB, checked by its magic bytes. */
-function receiptImage(file: Upload): { bytes: Uint8Array; mime: ImageMime } {
+async function receiptImage(ctx: AuthCtx, file: Upload): Promise<{ bytes: Uint8Array; mime: ImageMime }> {
   const { bytes } = file;
   if (bytes.length === 0 || bytes.length > RECEIPT_LIMITS.maxBytes) throw new DomainError(422, 'validation', 'srv.file.tooLarge10mb', { fields: { files: msg('srv.file.tooLarge10mb') } });
   const mime = detectMime(bytes);
   if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'image/webp') {
     throw new DomainError(422, 'validation', 'srv.receipt.onlyImages', { fields: { files: msg('srv.file.unsupported') } });
   }
-  // Metadata (Exif with GPS, XMP) is removed on the server too: the stored bytes and the receipt hash are of the clean image.
-  return { bytes: stripImageMetadata(bytes), mime };
+  // Re-encoded on the server too (no Exif with GPS, XMP): the stored bytes and the receipt hash are of the clean image.
+  return cleanFile(ctx, bytes, mime);
 }
 
 const chatView = ({ insuredId: _i, visibleAt: _v, ...m }: { insuredId: string; visibleAt: string } & ChatMessage): ChatMessage => m;
@@ -282,7 +282,7 @@ export async function recognize(ctx: AuthCtx, readForm: ReadForm): Promise<Recog
   const form = await readForm();
   const file = form.files.file?.[0];
   if (!file) throw new DomainError(422, 'validation', 'srv.receipt.addPhoto', { fields: { file: msg('srv.receipt.addPhoto') } });
-  const { bytes } = receiptImage(file);
+  const { bytes } = await receiptImage(ctx, file);
   return recognizeReceipt(await sha256Hex(bytes), ctx.now());
 }
 
@@ -306,7 +306,7 @@ export async function submitClaim(ctx: AuthCtx, personId: string | null, readFor
   const attachments: ClaimRow['attachments'] = [];
   let receiptHash: string | undefined;
   for (const [idx, f] of files.entries()) {
-    const { bytes, mime } = receiptImage(f);
+    const { bytes, mime } = await receiptImage(ctx, f);
     if (idx === 0) receiptHash = await sha256Hex(bytes);
     const fileId = randomId();
     await r.files.insert({ id: fileId, mime, bytes, claimId, insuredId: me.id });

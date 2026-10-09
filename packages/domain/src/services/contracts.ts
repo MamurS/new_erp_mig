@@ -4,7 +4,7 @@
  * the queue of manual allocation; certificates; change requests of a contract in force.
  */
 import { msg, t, tm } from '@mig/i18n';
-import { stripImageMetadata } from '../lib/imageMeta';
+import { cleanFile } from './uploads';
 import Papa from 'papaparse';
 import type { BankPayment, ClauseOverride, Contract, Endorsement, Invoice, Payment, SessionUser, Signing } from '@mig/contracts';
 import type { BankPaymentView, CertificateView, ChangeRequestView, ContractView, EndorsementView, ImportPaymentsResult, InvoiceView } from '@mig/contracts/dto';
@@ -217,7 +217,7 @@ export interface Scan {
 }
 
 /** Checks an uploaded signature scan: the side, a PDF/JPEG/PNG file (by its bytes) of at most 20 MB. */
-export function checkScan(form: ScanForm | null): Scan {
+export async function checkScan(ctx: Pick<BaseCtx, 'env'>, form: ScanForm | null): Promise<Scan> {
   if (!form) throw new DomainError(400, 'validation', 'srv.form.invalid');
   const { side, file } = form;
   if (side !== 'mig' && side !== 'client') throw new DomainError(422, 'validation', 'srv.signing.sideRequired', { fields: { side: msg('srv.signing.sideHint') } });
@@ -225,7 +225,7 @@ export function checkScan(form: ScanForm | null): Scan {
   if (file.size === 0 || file.size > SCAN_MAX_BYTES) throw new DomainError(422, 'validation', 'srv.file.tooLarge20mb', { fields: { file: msg('srv.file.tooLarge20mb') } });
   const mime = detectMime(file.bytes);
   if (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'application/pdf') throw new DomainError(422, 'validation', 'srv.file.onlyPdfJpegPng', { fields: { file: msg('srv.file.unsupported') } });
-  return { side, bytes: stripImageMetadata(file.bytes), mime };
+  return { side, ...(await cleanFile(ctx, file.bytes, mime)) };
 }
 
 /** An `age_banded` contract without a usable band table cannot go further (legal review, signing). */
@@ -321,7 +321,7 @@ export async function sendToEdo(ctx: AuthCtx, kind: DocKind, id: string, body: u
 export async function uploadScan(ctx: AuthCtx, kind: DocKind, id: string, form: ScanForm | null): Promise<ContractView | EndorsementView> {
   const { user } = ctx;
   const ref = await loadDoc(ctx, kind, id);
-  const { side, bytes, mime } = checkScan(form);
+  const { side, bytes, mime } = await checkScan(ctx, form);
   // HR uploads the client's scan in its cabinet; MIG staff who handle documents upload either side.
   if (user.role === 'hr') {
     if (side !== 'client' || !can(user, 'contracts.sign_client', { companyId: ref.clientId })) throw forbidden();

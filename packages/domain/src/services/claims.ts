@@ -144,7 +144,7 @@ export async function createClaim(ctx: AuthCtx, form: StaffClaimForm, files: rea
   const claimId = randomId();
   const attachments: ClaimRow['attachments'] = [];
   for (const [idx, f] of files.entries()) {
-    const { bytes, mime } = checkAttachment(f);
+    const { bytes, mime } = await checkAttachment(ctx, f);
     const fileId = randomId();
     const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
     // Neutral names without personal data; the insured person never gets these files (no insuredId).

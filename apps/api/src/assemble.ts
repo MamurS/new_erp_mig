@@ -16,6 +16,7 @@ import { smsSender, testPhoneCodes, type SmsSender } from './auth/sms';
 import { createPool } from './db';
 import { serverDeps } from './deps';
 import type { ApiEnv } from './env';
+import { sharpImageCodec } from './files/imageCodec';
 import { supabaseStorage, type SupabaseStorage } from './files/storage';
 import { identitySync, type IdentitySync } from './jobs/identity';
 import { createWorker, type Worker } from './jobs/worker';
@@ -88,6 +89,7 @@ export async function assemble(
       ...(env.demo ? { demoAccounts: demoOptions, testPhoneCodes: testCodes } : {}),
     }),
     storage,
+    images: sharpImageCodec(),
     smsHook: { secret: env.smsHookSecret, sender: sms, testCodes },
     demoRoutes: env.demo ? demoOptions : null,
     demo,

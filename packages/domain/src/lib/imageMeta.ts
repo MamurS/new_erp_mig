@@ -119,6 +119,17 @@ function stripWebp(b: Uint8Array): Uint8Array {
   return concat([head, body]);
 }
 
+export type ImageMime = 'image/jpeg' | 'image/png' | 'image/webp';
+
+/**
+ * Re-encoding of an uploaded image on the server (BACKEND_SPEC §8: the second line after the browser's canvas):
+ * decoded and drawn again — JPEG and WebP as JPEG of quality 85, PNG as PNG, the long side at most 2 000 px, no
+ * metadata. The API provides it (apps/api/src/files/imageCodec.ts); the mock has none and strips metadata only.
+ */
+export interface ImageCodec {
+  reencode(bytes: Uint8Array, mime: ImageMime): Promise<{ bytes: Uint8Array; mime: ImageMime }>;
+}
+
 /** The image without its metadata (other files unchanged). */
 export function stripImageMetadata(bytes: Uint8Array): Uint8Array {
   const mime = detectMime(bytes);

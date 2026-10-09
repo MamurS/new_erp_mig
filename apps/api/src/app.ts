@@ -23,6 +23,7 @@ import { runApiCall, TEST_IP_HEADER } from '@mig/domain/services/integrationKit'
 import { DomainError, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import type { BlobStore } from '@mig/domain/store/blob';
 import { postgresRepos } from '@mig/domain/store/postgres';
+import type { ImageCodec } from '@mig/domain/lib/imageMeta';
 import type { PiiCrypto } from '@mig/domain/store/pii';
 import { HookSignatureError, handleSendSmsHook, verifyHook, type SmsSender, type TestPhoneCodes } from './auth/sms';
 import { RequestTx } from './db';
@@ -44,6 +45,8 @@ export interface AppOptions {
   demoRoutes?: DemoRouteOptions | null;
   /** With the demo routes: the server's demo knobs (reset, failure simulation, test clock; demo.ts). */
   demo?: DemoControls | null;
+  /** Re-encoding of uploaded images (files/imageCodec.ts); without it their metadata is only stripped. */
+  images?: ImageCodec;
   /** The clock of the services (tests pin it). */
   now?: () => number;
   /** Fastify's request log: off, on (info), or a level (LOG_LEVEL). */
@@ -97,7 +100,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   async function inTx<T>(fn: (tx: RequestTx, base: BaseCtx) => Promise<T>): Promise<T> {
     const tx = await RequestTx.begin(o.pool);
     const system = postgresRepos(tx.system(), { ...repoOptions, privileged: true });
-    const base: BaseCtx = { repos: system, now, env: { demo: !!o.demoRoutes }, system: { repos: system } };
+    const base: BaseCtx = { repos: system, now, env: { demo: !!o.demoRoutes, ...(o.images ? { images: o.images } : {}) }, system: { repos: system } };
     try {
       const out = await fn(tx, base);
       await tx.commit();

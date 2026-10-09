@@ -35,7 +35,7 @@ ENV VITE_USE_MOCKS=false VITE_DEMO_MODE=false
 RUN npm run api:build \
  && npm run build -w @mig/web \
  && rm -f apps/web/dist/mockServiceWorker.js apps/web/dist/_headers
-# Production dependencies of the API only (the bundle keeps fastify and pg external).
+# Production dependencies of the API only (the bundle keeps fastify, pg and sharp external).
 RUN --mount=type=secret,id=npm_ca,required=false \
     if [ -s /run/secrets/npm_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm_ca npm_config_cafile=/run/secrets/npm_ca; fi; \
     mkdir -p /out && cp package.json package-lock.json /out/ && mkdir -p /out/apps/api && cp apps/api/package.json /out/apps/api/ \
