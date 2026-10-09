@@ -63,6 +63,7 @@ declare
   v_id text;
   r record;
   v_sql text;
+  v_cols text;
 begin
   perform set_config('request.jwt.claims', p_claims::text, true);
   execute format('select %I::text from public.%I where coalesce((%s), false) = %L order by _pos limit 1', p_key, p_table, p_pred, p_own) into v_id;
@@ -72,7 +73,10 @@ begin
   end if;
   begin
     if p_op = 'insert' then
-      v_sql := format('insert into public.%I select * from pg_temp.tests_src', p_table);
+      -- Generated columns (search keys of the lists) are computed by the table, never inserted.
+      select string_agg(quote_ident(attname), ', ' order by attnum) into v_cols from pg_attribute
+        where attrelid = format('public.%I', p_table)::regclass and attnum > 0 and not attisdropped and attgenerated = '';
+      v_sql := format('insert into public.%I (%s) select %s from pg_temp.tests_src', p_table, v_cols, v_cols);
       execute format('create temp table tests_src as select * from public.%I where %I::text = %L', p_table, p_key, v_id);
       if p_sets = '' then
         execute format('delete from public.%I where %I::text = %L', p_table, p_key, v_id);
@@ -116,6 +120,10 @@ select is((tests.as_user('{"sub":"d87d459d-1000-4b7d-b5fd-369cf3032aaf","role":"
 -- Assistance company by the date of the event
 insert into public.assignments (policy_id, assistance_id, "from", set_by_id, set_at) values ('7e2e38e1-9a33-49c5-b971-4baf8e291136', 'a121b4af-f33d-4698-aa49-81543ec9c8af', current_date - 10, 'dcd5cca6-2ed6-4901-b4de-1ad4b8a72e1f', now());
 create temp table sc_claims as select * from public.claims where id = '44d2549c-dca7-40bf-86ac-66ba2e81a26a';
+alter table sc_claims drop column number_sk;
+alter table sc_claims drop column insured_name_sk;
+alter table sc_claims drop column client_name_sk;
+alter table sc_claims drop column external_number_sk;
 update sc_claims set id = '00000000-0000-4000-8000-000000001101', number = 'T-1', insured_id = '987935ee-ca40-423a-a5ff-efafef6023af', client_id = '5ebd5870-893c-4b58-8806-28d058120711', service_date = current_date - 20;
 insert into public.claims select * from sc_claims;
 update sc_claims set id = '00000000-0000-4000-8000-000000001102', number = 'T-2', service_date = current_date - 5;
@@ -126,6 +134,10 @@ select is((tests.as_user('{"sub":"63e6a77c-6970-4fc6-8839-87e3f7ed5d36","role":"
 
 -- Family: children always, adults only with consent
 create temp table fam_claims as select * from public.claims where id = '44d2549c-dca7-40bf-86ac-66ba2e81a26a';
+alter table fam_claims drop column number_sk;
+alter table fam_claims drop column insured_name_sk;
+alter table fam_claims drop column client_name_sk;
+alter table fam_claims drop column external_number_sk;
 update fam_claims set id = '00000000-0000-4000-8000-000000001201', number = 'T-3', insured_id = '8143b00f-1e67-48cc-bf18-3329a8133bbe', client_id = '20c1d1ef-6ac4-48b2-87ea-7e9728d9d5f2';
 insert into public.claims select * from fam_claims;
 update fam_claims set id = '00000000-0000-4000-8000-000000001202', number = 'T-4', insured_id = 'a5f54507-110d-4a86-9f75-e4790ed9c1a1', client_id = '20c1d1ef-6ac4-48b2-87ea-7e9728d9d5f2';

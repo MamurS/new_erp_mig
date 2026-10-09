@@ -14,7 +14,9 @@ import { API_TABLES, BUCKETS } from './migrationsAuth';
 import type { Role } from '@mig/contracts';
 import type { Db } from '../db';
 import { snake } from '../columns';
-import { TABLES, type TableSpec } from '../schema';
+import { TABLES, listQueriesOf, tableOf, type TableSpec } from '../schema';
+import { fieldMapping } from './physical';
+import { searchColumn } from './listQueries';
 import { keyColumn, lit, physicalColumns } from './physical';
 import { ALL_ROLES, OPS, cached, grantExpression, groupOf, roleAllowed, rolePredicate, type Op } from './rls';
 import type { SqlFile } from './migrations';
@@ -134,6 +136,7 @@ declare
   v_id text;
   r record;
   v_sql text;
+  v_cols text;
 begin
   perform set_config('request.jwt.claims', p_claims::text, true);
   execute format('select %I::text from public.%I where coalesce((%s), false) = %L order by _pos limit 1', p_key, p_table, p_pred, p_own) into v_id;
@@ -143,7 +146,10 @@ begin
   end if;
   begin
     if p_op = 'insert' then
-      v_sql := format('insert into public.%I select * from pg_temp.tests_src', p_table);
+      -- Generated columns (search keys of the lists) are computed by the table, never inserted.
+      select string_agg(quote_ident(attname), ', ' order by attnum) into v_cols from pg_attribute
+        where attrelid = format('public.%I', p_table)::regclass and attnum > 0 and not attisdropped and attgenerated = '';
+      v_sql := format('insert into public.%I (%s) select %s from pg_temp.tests_src', p_table, v_cols, v_cols);
       execute format('create temp table tests_src as select * from public.%I where %I::text = %L', p_table, p_key, v_id);
       if p_sets = '' then
         execute format('delete from public.%I where %I::text = %L', p_table, p_key, v_id);
@@ -342,6 +348,8 @@ function scenariosFile(db: Db, ids: Identity[]): { sql: string; count: number } 
     '-- Assistance company by the date of the event',
     `insert into public.assignments (policy_id, assistance_id, "from", set_by_id, set_at) values ('${unassignedPolicy.id}', '${assistanceId}', current_date - 10, '${String(uw.claims.sub)}', now());`,
     `create temp table sc_claims as select * from public.claims where id = '${anyClaim.id}';`,
+    // The generated search keys are computed by the table (and come last): the copy does not carry them.
+    ...generatedColumns('claims').map((c) => `alter table sc_claims drop column ${c};`),
     `update sc_claims set id = '${FIX(1101)}', number = 'T-1', insured_id = '${unassignedPerson.id}', client_id = '${unassignedPolicy.clientId}', service_date = current_date - 20;`,
     `insert into public.claims select * from sc_claims;`,
     `update sc_claims set id = '${FIX(1102)}', number = 'T-2', service_date = current_date - 5;`,
@@ -351,6 +359,7 @@ function scenariosFile(db: Db, ids: Identity[]): { sql: string; count: number } 
     `select is((tests.as_user(${c(asst)}, 'select 1 from public.insured where id = ''${unassignedPerson.id}''')).n, 1, 'assistance: persons of a policy assigned today');`,
     '-- Family: children always, adults only with consent',
     `create temp table fam_claims as select * from public.claims where id = '${anyClaim.id}';`,
+    ...generatedColumns('claims').map((c) => `alter table fam_claims drop column ${c};`),
     `update fam_claims set id = '${FIX(1201)}', number = 'T-3', insured_id = '${adult.id}', client_id = '${adult.clientId}';`,
     `insert into public.claims select * from fam_claims;`,
     `update fam_claims set id = '${FIX(1202)}', number = 'T-4', insured_id = '${child.id}', client_id = '${child.clientId}';`,
@@ -528,4 +537,10 @@ export function buildRlsTests(db: Db): (SqlFile & { count: number })[] {
   add('04_privileged_test.sql', privilegedFile(db, ids));
   for (const id of ids) add(`10_rls_${snake(id.role)}_test.sql`, matrixFile(db, ids, id));
   return files;
+}
+
+/** The generated columns of a collection's table (search keys of the lists), in the order they were added. */
+function generatedColumns(collection: string): string[] {
+  const t = tableOf(collection);
+  return (listQueriesOf(collection).search ?? []).map((f) => searchColumn(f, fieldMapping(f, t.columns[f]!).column!));
 }

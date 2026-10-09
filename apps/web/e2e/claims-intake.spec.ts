@@ -76,6 +76,8 @@ test('claims officer: «+ Создать → Убыток» → find the insured
 
   // The claim card: source of the request, attachments and the reserve equal to the claimed amount.
   await expect(page).toHaveURL(/\/staff\/claims\/[0-9a-f-]{36}$/);
+  // The card's heading is the claim number (it carries digits); until the card loads it is still «Убытки».
+  await expect(page.locator('h1')).toHaveText(/\d/);
   const number = (await page.locator('h1').innerText()).trim();
   await expect(page.locator('div', { has: page.getByText('Канал поступления', { exact: true }) }).last()).toContainText('Звонок');
   await expect(page.getByTestId('claim-reserve')).toHaveText(/1\s?234\s?500/);

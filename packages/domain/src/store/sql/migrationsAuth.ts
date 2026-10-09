@@ -188,6 +188,31 @@ revoke execute on function app.job_cleanup_expired() from public, authenticated;
 `;
 }
 
+export function sharedStateMigration(): string {
+  return `${HEADER('State the API containers share (several API replicas behind Caddy): the demo knobs of ci/staging and the codes the Send SMS hook received in the test MFA mode. Nothing of a request lives in one process.')}
+-- The demo deployment's switches (never production: the API has no demo routes there). One row.
+create table app.demo_state (
+  id boolean primary key default true check (id),
+  failures boolean not null default false,
+  offset_ms bigint not null default 0 check (offset_ms >= 0),
+  updated_at timestamptz not null default now()
+);
+insert into app.demo_state (id) values (true);
+comment on table app.demo_state is 'Demo knobs of ci/staging shared by the API replicas: the failure simulation and the test clock offset.';
+revoke all on app.demo_state from public, authenticated;
+
+-- ALLOW_TEST_TOTP only: the last code the Send SMS hook received per phone, taken once within five minutes by the
+-- replica that verifies the sign-in (\`000000\` of a phone that is not a demo phone stands for it).
+create table app.test_phone_codes (
+  phone text primary key check (phone ~ '^[0-9]{9,15}$'),
+  code text not null check (code ~ '^[0-9]{4,10}$'),
+  at timestamptz not null default now()
+);
+comment on table app.test_phone_codes is 'Test MFA mode only (ALLOW_TEST_TOTP): the last SMS code per phone for the replica that verifies it; five minutes, once.';
+revoke all on app.test_phone_codes from public, authenticated;
+`;
+}
+
 export function storageGcMigration(): string {
   return `${HEADER('Storage objects of removed file rows: a queue the API worker drains (apps/api/src/files/gc.ts), so an object never outlives its row by more than a worker pass; orphans (an upload whose row never committed) are swept daily.')}
 create table app.storage_gc (

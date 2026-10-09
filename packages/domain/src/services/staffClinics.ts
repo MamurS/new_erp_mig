@@ -10,9 +10,10 @@ import { can } from '../auth/permissions';
 import { approvalOutcome, registryStatusAfterReview } from '../clinics';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, tzIso } from '../lib/time';
-import type { ClinicUserRow } from '../store/db';
+import type { ClinicUserRow, GuaranteeRow } from '../store/db';
+import { allOf } from './list';
 import { linesOf, settleRegistry, subStatus, subTotals } from './assistance';
-import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, refreshStoredGuarantee, toGuaranteeView, toRegistrySummary, toRegistryView } from './clinic';
+import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, expireDueGuarantees, toGuaranteeView, toRegistrySummary, toRegistryView } from './clinic';
 import { audit, conflict, DomainError, forbidden, notFound, requirePermission, requireStaff, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { toUserView } from './clinicPortal';
 import { loadParams } from './params';
@@ -117,12 +118,17 @@ export async function listGuarantees(ctx: AuthCtx, qs: URLSearchParams): Promise
   const status = qs.get('status');
   const clinicId = qs.get('clinicId');
   const all = qs.get('scope') === 'all';
-  const rows = await ctx.repos.guarantees.list();
-  for (const g of rows) await refreshStoredGuarantee(ctx, g);
-  const list = rows
-    .filter((g) => all || !g.assistanceId || g.escalated)
-    .filter((g) => (!status || status.split(',').includes(g.status)) && (!clinicId || g.clinicId === clinicId))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  // The lazy expiry first (only letters it changes), then the list with its filters and order in SQL.
+  await expireDueGuarantees(ctx);
+  const list = await ctx.repos.guarantees.list({
+    where: allOf<GuaranteeRow>(
+      !all && { $or: [{ assistanceId: { isNull: true } }, { escalated: true }] },
+      status && { status: { in: status.split(',') as GuaranteeRow['status'][] } },
+      clinicId && { clinicId },
+    ),
+    orderBy: [['createdAt', 'desc']],
+    ties: 'desc',
+  });
   const P = await loadParams(ctx);
   const out: GuaranteeView[] = [];
   for (const g of list) out.push(await toGuaranteeView(ctx, g, P));
@@ -193,11 +199,11 @@ export async function listRegistries(ctx: AuthCtx, qs: URLSearchParams): Promise
   if (!canReadRegistries(requireStaff(ctx))) throw forbidden();
   const status = qs.get('status');
   const clinicId = qs.get('clinicId');
-  const list = (await ctx.repos.registries.list({ where: { status: { ne: 'draft' } } }))
+  // MIG's part of a registry (its status) depends on the payers of the lines: filtered here.
+  const list = (await ctx.repos.registries.list({ where: allOf<Registry>({ status: { ne: 'draft' } }, clinicId && { clinicId }), orderBy: [{ field: 'submittedAt', dir: 'desc', nulls: 'last' }], ties: 'desc' }))
     .filter((r) => linesOf(r, 'mig').length > 0)
     .map(migSubRegistry)
-    .filter((r) => (!status || status.split(',').includes(r.status)) && (!clinicId || r.clinicId === clinicId))
-    .sort((a, b) => ((a.submittedAt ?? '') < (b.submittedAt ?? '') ? 1 : -1));
+    .filter((r) => !status || status.split(',').includes(r.status));
   const out: RegistrySummary[] = [];
   for (const r of list) out.push(await toRegistrySummary(ctx, r));
   return out;

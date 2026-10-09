@@ -106,6 +106,8 @@ const migPlugin = { rules: { 'no-cyrillic-ui': noCyrillicUi } };
 export default tseslint.config(
   {
     ignores: [
+      // Worktrees of background agents (local only, never committed).
+      '.claude/**',
       '**/dist',
       '**/dist-*',
       '**/node_modules',

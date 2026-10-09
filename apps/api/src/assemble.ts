@@ -40,10 +40,10 @@ export async function assemble(
 ): Promise<Assembled> {
   const log = o.log ?? serverLog;
   // The demo routes and knobs (and the test clock behind the services' «now»): everything but production.
-  const demo = env.demo ? demoControls() : null;
+  const pool = o.pool ?? createPool(env.databaseUrl, env.poolSize);
+  const demo = env.demo ? demoControls(pool) : null;
   const now = demo ? demo.now : () => Date.now();
   const demoOptions = { insuredPhone: DEMO_INSURED_PHONE, accounts: DEMO_LOGIN_AS };
-  const pool = o.pool ?? createPool(env.databaseUrl, env.poolSize);
   /*
    * Writes made outside a request's transaction while it is open (the session's activity, refreshed tokens, the
    * identity of a just-created account) take their own small pool: on the request pool, ten requests holding all
@@ -67,7 +67,7 @@ export async function assemble(
   });
   const sms = smsSender(env.smsProvider, { revealCodes: env.demo, log });
   // The test mode of phone sign-in (ALLOW_TEST_TOTP only): `000000` stands for the last code sent to the phone.
-  const testCodes = env.testTotp ? testPhoneCodes() : null;
+  const testCodes = env.testTotp ? testPhoneCodes(pool) : null;
   await storage.ensureBuckets();
   const app = await buildApp({
     pool,

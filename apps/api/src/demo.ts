@@ -35,19 +35,43 @@ interface Prepared {
 /** How far the «now» of a prepared seed may be from the reset's (the mock's seed is as old as the page). */
 const PREPARED_FRESH_MS = 2 * 60_000;
 
-/** The switches of the demo deployment: the failure simulation and the test clock. */
+/**
+ * The switches of the demo deployment: the failure simulation and the test clock. They live in Postgres
+ * (`app.demo_state`, shared by the API replicas); each request reads them first (`sync`), so every replica answers
+ * with the same clock and the same failure switch.
+ */
 export interface DemoControls {
   failures: boolean;
   offsetMs: number;
   /** The services' clock: the real time plus the test clock's offset. */
   now(): number;
+  /** Reads the shared state (at the start of every request). */
+  sync(): Promise<void>;
+  /** Writes the shared state. */
+  set(patch: Partial<Pick<DemoControls, 'failures' | 'offsetMs'>>): Promise<void>;
 }
 
-export function demoControls(): DemoControls {
+export function demoControls(pool: Pick<pg.Pool, 'query'>): DemoControls {
   const c: DemoControls = {
     failures: false,
     offsetMs: 0,
     now: () => Date.now() + c.offsetMs,
+    async sync() {
+      const { rows } = await pool.query<{ failures: boolean; offset_ms: string }>(`select failures, offset_ms from app.demo_state`);
+      if (rows[0]) {
+        c.failures = rows[0].failures;
+        c.offsetMs = Number(rows[0].offset_ms);
+      }
+    },
+    async set(patch) {
+      if (patch.failures !== undefined) c.failures = patch.failures;
+      if (patch.offsetMs !== undefined) c.offsetMs = patch.offsetMs;
+      await pool.query(
+        `insert into app.demo_state (id, failures, offset_ms, updated_at) values (true, $1, $2, now())
+           on conflict (id) do update set failures = excluded.failures, offset_ms = excluded.offset_ms, updated_at = now()`,
+        [c.failures, c.offsetMs],
+      );
+    },
   };
   return c;
 }
@@ -76,6 +100,11 @@ export function registerDemoControls(app: FastifyInstance, o: { pool: pg.Pool; c
   const { controls } = o;
   const json = (reply: import('fastify').FastifyReply, status: number, body: unknown) => reply.code(status).type('application/json').send(JSON.stringify(body));
   const csrf = (h: Record<string, unknown>) => h[CSRF_HEADER] === CSRF_VALUE;
+
+  // These routes read and change the shared knobs: each starts from what the other replicas wrote.
+  app.addHook('onRequest', async (request) => {
+    if (request.url.startsWith('/api/__demo/')) await controls.sync();
+  });
 
   let prepared: Prepared | null = null;
   const build = (now: number, xss: boolean): Prepared => {
@@ -106,7 +135,7 @@ export function registerDemoControls(app: FastifyInstance, o: { pool: pg.Pool; c
     if (!csrf(request.headers)) return json(reply, 403, CSRF);
     const body = parse(demoFailuresSchema, request.body);
     if (!body) return json(reply, 400, BAD);
-    controls.failures = body.enabled;
+    await controls.set({ failures: body.enabled });
     return json(reply, 200, { ok: true, enabled: controls.failures });
   });
 
@@ -115,7 +144,7 @@ export function registerDemoControls(app: FastifyInstance, o: { pool: pg.Pool; c
     if (!csrf(request.headers)) return json(reply, 403, CSRF);
     const body = parse(demoClockSchema, request.body);
     if (!body) return json(reply, 400, BAD);
-    controls.offsetMs = 'offsetMs' in body ? body.offsetMs : Math.min(MAX_CLOCK_OFFSET, controls.offsetMs + body.advanceMs);
+    await controls.set({ offsetMs: 'offsetMs' in body ? body.offsetMs : Math.min(MAX_CLOCK_OFFSET, controls.offsetMs + body.advanceMs) });
     return json(reply, 200, { now: controls.now(), offsetMs: controls.offsetMs });
   });
 }

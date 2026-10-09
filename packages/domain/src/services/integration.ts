@@ -24,7 +24,8 @@ import {
   type ClinicActor,
 } from './clinic';
 import { attachGuaranteeFiles, createGuarantee, disputeLine, type UploadedFile } from './clinicPortal';
-import { ApiProblem, apiNotFound, page, ruText, toIntegrationAppointment, type ApiCallCtx } from './integrationKit';
+import { ApiProblem, apiNotFound, page, pageWindow, ruText, toIntegrationAppointment, windowPage, type ApiCallCtx } from './integrationKit';
+import { dayRange } from './list';
 import { validate } from './kernel';
 
 type ApiOutput = { status?: number; body: unknown };
@@ -50,13 +51,23 @@ export async function getVisit(ctx: ApiCallCtx): Promise<{ body: Visit }> {
 
 export async function listAppointments(ctx: ApiCallCtx): Promise<ApiOutput> {
   const q = validate(appointmentQuery, Object.fromEntries(ctx.query));
-  const list = (await ctx.repos.appointments.list({ where: { clinicId: ctx.client.clinicId } }))
-    .filter((a) => !q.status || a.status === q.status)
-    .filter((a) => !q.from || isoDay(parseIso(a.startsAt)) >= q.from)
-    .filter((a) => !q.to || isoDay(parseIso(a.startsAt)) <= q.to)
-    .sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1))
-    .map(toIntegrationAppointment);
-  return { body: page(list, q.cursor, q.limit) };
+  const from = q.from ? dayRange(q.from) : null;
+  const to = q.to ? dayRange(q.to) : null;
+  if ((q.from && !from) || (q.to && !to)) {
+    // A date that only looks like one (2026-02-30): compared as text, as the days of the appointments are.
+    const list = (await ctx.repos.appointments.list({ where: { clinicId: ctx.client.clinicId, ...(q.status ? { status: q.status } : {}) }, orderBy: [['startsAt', 'asc']] }))
+      .filter((a) => !q.from || isoDay(parseIso(a.startsAt)) >= q.from)
+      .filter((a) => !q.to || isoDay(parseIso(a.startsAt)) <= q.to)
+      .map(toIntegrationAppointment);
+    return { body: page(list, q.cursor, q.limit) };
+  }
+  // `isoDay(startsAt) >= from` and `<= to`: from the start of the first day to the end of the last one.
+  const rows = await ctx.repos.appointments.list({
+    where: { clinicId: ctx.client.clinicId, ...(q.status ? { status: q.status } : {}), startsAt: { ...(from ? { gte: from.gte } : {}), ...(to ? { lt: to.lt } : {}) } },
+    orderBy: [['startsAt', 'asc']],
+    ...pageWindow(q.cursor, q.limit),
+  });
+  return { body: windowPage(rows.map(toIntegrationAppointment), q.cursor, q.limit) };
 }
 
 /** confirm / reschedule / decline a request of a patient from the MIS. */
@@ -167,9 +178,13 @@ export async function disputeRegistryLine(ctx: ApiCallCtx): Promise<{ body: Regi
 export async function payments(ctx: ApiCallCtx): Promise<ApiOutput> {
   const qs = ctx.query;
   const period = qs.get('period');
-  const items = (await ctx.repos.registries.list({ where: { clinicId: ctx.client.clinicId, status: 'paid' } }))
-    .filter((r) => !period || r.period === period)
-    .sort((a, b) => (a.period < b.period ? 1 : -1))
-    .map((r) => ({ registryId: r.id, period: r.period, amount: r.totals.paid, paidAt: r.paidAt! }));
-  return { body: page(items, qs.get('cursor') ?? undefined, Math.min(100, Number(qs.get('limit')) || 50)) };
+  const cursor = qs.get('cursor') ?? undefined;
+  const limit = Math.min(100, Number(qs.get('limit')) || 50);
+  const rows = await ctx.repos.registries.list({
+    where: { clinicId: ctx.client.clinicId, status: 'paid', ...(period ? { period } : {}) },
+    orderBy: [['period', 'desc']],
+    ties: 'desc',
+    ...pageWindow(cursor, limit),
+  });
+  return { body: windowPage(rows.map((r) => ({ registryId: r.id, period: r.period, amount: r.totals.paid, paidAt: r.paidAt! })), cursor, limit) };
 }

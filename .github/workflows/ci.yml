@@ -119,6 +119,8 @@ jobs:
       - run: npm run test:e2e -w @mig/web -- --shard=${{ matrix.shard }}/8
         env:
           E2E_BACKEND: '1'
+          # Two API processes behind a round-robin balancer: nothing of a request may live in one process.
+          E2E_API_REPLICAS: '2'
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       - uses: actions/upload-artifact@v7
         if: failure()

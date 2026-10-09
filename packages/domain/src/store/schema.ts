@@ -1731,3 +1731,50 @@ export function tableOf(collection: string): TableSpec {
   return t;
 }
 
+// ------------------------------------------------------------------------------------------------
+// List queries (migration `list_queries`, docs/backend/DATABASE.md, section "List queries")
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * A key of a list index: a field (its column), optionally with the collation the lists sort it by (`fullName@ru`,
+ * `name@legal`; store/query.ts `Collation`), or a column of the table. Every list index ends with `_pos` (the unique
+ * last key of every order), so `(scope, sort, _pos)` serves «filter, order, page» without a sort step.
+ */
+export type ListIndexKey = string;
+
+export interface ListQuerySpec {
+  /**
+   * Text fields with a search key: a generated column `<column>_sk = app.search_key(<column>)` (lib/searchNormalize.ts
+   * `searchKey`, mirrored in SQL) with a trigram index — the `search` operator of the lists compares it with LIKE.
+   */
+  search?: readonly string[];
+  /** Composite indexes of the lists (filter columns, then the sort column; `_pos` is appended). */
+  indexes?: readonly (readonly ListIndexKey[])[];
+}
+
+/**
+ * Search keys and list indexes, by collection. They come in a later migration than the tables (migrations only go
+ * forward), so they are declared here and not in the table specs above.
+ */
+export const LIST_QUERIES: Readonly<Record<string, ListQuerySpec>> = {
+  clients: { search: ['name'], indexes: [['name@legal'], ['status', 'name@legal'], ['managerId', 'name@legal']] },
+  policies: { search: ['number', 'clientName'], indexes: [['endDate'], ['clientId', 'endDate'], ['status', 'endDate']] },
+  insured: {
+    search: ['fullName', 'position'],
+    indexes: [['fullName@ru'], ['clientId', 'fullName@ru'], ['clientId', 'relation', 'fullName@ru'], ['policyId', 'fullName@ru'], ['principalId', 'status']],
+  },
+  claims: {
+    search: ['number', 'insuredName', 'clientName', 'externalNumber'],
+    indexes: [['createdAt'], ['status', 'createdAt'], ['clientId', 'createdAt'], ['insuredId', 'createdAt']],
+  },
+  appointments: { search: ['insuredName', 'clinicName'], indexes: [['startsAt'], ['clinicId', 'startsAt'], ['insuredId', 'startsAt'], ['status', 'startsAt']] },
+  clinics: { search: ['name', 'district'], indexes: [['name@legal']] },
+  audit: { indexes: [['actorId'], ['assistanceId'], ['action']] },
+  policyChanges: { search: ['fullName', 'position'], indexes: [['clientId', 'kind', 'relation'], ['insuredId', 'kind', 'status']] },
+};
+
+/** The list-query spec of a collection (empty for most). */
+export function listQueriesOf(collection: string): ListQuerySpec {
+  return LIST_QUERIES[collection] ?? {};
+}
+

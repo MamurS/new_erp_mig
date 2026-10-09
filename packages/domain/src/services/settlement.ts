@@ -2,7 +2,7 @@
  * Claims settlement (LIFECYCLE_SPEC §13): the reserve timeline, fraud flags, decisions within authority,
  * and who handles reimbursements of the insured.
  */
-import type { ClaimDecision, FraudFlag, ReserveChange, SessionUser, UUID } from '@mig/contracts';
+import type { ClaimDecision, FraudFlag, SessionUser, UUID } from '@mig/contracts';
 import { detectFlags } from '../settlement';
 import { randomId } from '../lib/random';
 import { parseIso, tzIso } from '../lib/time';
@@ -10,36 +10,9 @@ import type { ClaimRow } from '../store/db';
 import { type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { currentAssistance } from './assistance';
+import { reserveTimeline } from './reserve';
 
-/**
- * Reserve history of a claim: derived from its status history (registered → claimed amount, decision →
- * approved amount, refusal or payment → 0) and merged with explicit changes by claims officers.
- */
-export function reserveTimeline(c: ClaimRow): ReserveChange[] {
-  const events: ReserveChange[] = [];
-  let value = 0;
-  for (const h of c.history) {
-    let next: number | null = null;
-    if (h.to === 'new' && !h.from) next = c.amountClaimed;
-    else if (h.to === 'approved') next = c.amountApproved ?? c.amountClaimed;
-    else if (h.to === 'rejected' || h.to === 'paid') next = 0;
-    if (next === null || next === value) continue;
-    events.push({ at: h.at, byName: h.actorName, from: value, to: next, reason: h.to === 'new' ? 'Регистрация: заявленная сумма' : h.to === 'approved' ? 'Решение: одобренная сумма' : h.to === 'rejected' ? 'Отказ' : 'Оплата' });
-    value = next;
-  }
-  const merged = [...events, ...(c.reserveHistory ?? [])].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  // Recompute `from` along the merged line so the history reads continuously.
-  let prev = 0;
-  return merged.map((e) => {
-    const out = { ...e, from: prev };
-    prev = e.to;
-    return out;
-  });
-}
-
-export function currentReserve(c: ClaimRow): number {
-  return reserveTimeline(c).at(-1)?.to ?? 0;
-}
+export { currentReserve, reserveTimeline } from './reserve';
 
 export function reserveOnDate(c: ClaimRow, date: string): number {
   const end = parseIso(`${date}T23:59:59+05:00`);
