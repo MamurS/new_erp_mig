@@ -31,6 +31,7 @@ import {
   assistAppointmentSchema,
   assistGuaranteeDecisionSchema,
   assistGuaranteeRequestSchema,
+  assistPhoneTailSchema,
   assistUserInviteSchema,
   assistUserPatchSchema,
   caseCreateSchema,
@@ -463,6 +464,39 @@ export async function searchInsured(ctx: AuthCtx, qs: Qs): Promise<AssistInsured
   }
   const list = await ctx.repos.insured.list({ where: allOf<InsuredRow>({ policyId: { in: policyIds } }, match), orderBy: [{ field: 'fullName', collate: 'ru' }], limit: 50 });
   // The policies and the employees of the page, read once.
+  const policyIdsOfPage = [...new Set(list.map((i) => i.policyId))];
+  const page = {
+    policies: new Map((policyIdsOfPage.length ? await ctx.repos.policies.select(['id', 'number', 'program'], { where: { id: { in: policyIdsOfPage } } }) : []).map((p) => [p.id, p])),
+    principals: await principalsOf(ctx, list),
+  };
+  const out: AssistInsuredItem[] = [];
+  for (const i of list) out.push(await toItem(ctx, i, 'full', page));
+  return out;
+}
+
+/**
+ * POST /assist/insured/phone-tail: the search by the last 4 digits of the phone — only together with a part of the
+ * name or the birth date, only among the assistance's own insured persons (its roster), at most 20 rows. The digits
+ * match the separate HMAC of the phone's tail (store/sql/physical.ts PII_TAILS), never the full phone. Every search is
+ * audited (what it was combined with and how many were found: no digits, no name, no date in the record).
+ */
+export async function searchByPhoneTail(ctx: AuthCtx, body: unknown): Promise<AssistInsuredItem[]> {
+  const { user, assistanceId } = requireAssist(ctx, 'assist.insured.search');
+  const input = validate(assistPhoneTailSchema, body);
+  const policyIds = await rosterPolicyIds(ctx, assistanceId);
+  const list = policyIds.length
+    ? await ctx.repos.insured.list({
+        where: allOf<InsuredRow>(
+          { policyId: { in: policyIds }, phone: { tail4: input.tail } } as Where<InsuredRow>,
+          input.name ? { fullName: { search: input.name } } : null,
+          input.birthDate ? { birthDate: input.birthDate } : null,
+        ),
+        orderBy: [{ field: 'fullName', collate: 'ru' }],
+        limit: 20,
+      })
+    : [];
+  const by = [input.name ? 'части ФИО' : null, input.birthDate ? 'дате рождения' : null].filter(Boolean).join(' и ');
+  await audit(ctx, user, 'insured_phone_tail_search', { targetType: 'insured', targetLabel: `Поиск по последним 4 цифрам телефона и ${by}: найдено ${list.length}`, assistanceId });
   const policyIdsOfPage = [...new Set(list.map((i) => i.policyId))];
   const page = {
     policies: new Map((policyIdsOfPage.length ? await ctx.repos.policies.select(['id', 'number', 'program'], { where: { id: { in: policyIdsOfPage } } }) : []).map((p) => [p.id, p])),

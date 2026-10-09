@@ -14,7 +14,7 @@ import type { Db } from '../db';
 import { maskCard, maskPhone, maskPinfl } from '../../lib/mask';
 import { SEQUENCES, TABLES, sequenceName, type TableSpec } from '../schema';
 import { qi, snake } from '../columns';
-import { fieldMapping, lit } from './physical';
+import { fieldMapping, lit, PII_TAILS, tailInput } from './physical';
 import { devAesPiiCrypto } from '../piiAes';
 import { buildAuthSeedSql } from './authSeed';
 import { DEV_HMAC_KEY } from '../devKeys';
@@ -95,6 +95,12 @@ export function rowValues(t: TableSpec, row: Rec): { columns: string[]; values: 
       const sealed = present ? seedCrypto.sealSync(plain, `${t.table}.${field}`) : null;
       values.push(sealed ? hex(sealed.enc) : 'null', sealed ? String(sealed.keyVer) : 'null');
       if (c.pii === 'encrypt+hmac') values.push(present ? hex(seedCrypto.hmacSync(plain)) : 'null', present ? lit(maskOf(field, plain)) : 'null');
+      const tailCol = PII_TAILS[`${t.collection}.${field}`];
+      if (tailCol) {
+        const tail = present ? tailInput(plain) : null;
+        columns.push(tailCol);
+        values.push(tail ? hex(seedCrypto.hmacSync(tail)) : 'null');
+      }
       continue;
     }
     if (c.card) {

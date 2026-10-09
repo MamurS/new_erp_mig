@@ -118,6 +118,7 @@ export const labels = {
   'labels.audit.contract_activated': 'Договор вступил в силу',
   'labels.audit.invitation_sent': 'Отправлено приглашение',
   'labels.audit.invitation_accepted': 'Пароль задан по приглашению',
+  'labels.audit.insured_phone_tail_search': 'Поиск по последним цифрам телефона',
   'labels.audit.contract_terminated': 'Договор расторгнут',
   'labels.audit.contract_expired': 'Срок договора истёк',
   'labels.audit.policy_expired': 'Срок полиса истёк',

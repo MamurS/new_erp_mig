@@ -120,6 +120,7 @@ export const labels: Translation<typeof Ru> = {
   'labels.audit.contract_activated': 'Contract took effect',
   'labels.audit.invitation_sent': 'Invitation sent',
   'labels.audit.invitation_accepted': 'Password set from an invitation',
+  'labels.audit.insured_phone_tail_search': 'Search by the last digits of the phone',
   'labels.audit.contract_terminated': 'Contract terminated',
   'labels.audit.contract_expired': 'Contract expired',
   'labels.audit.policy_expired': 'Policy expired',

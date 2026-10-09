@@ -36,9 +36,25 @@ export interface FieldMapping {
   /** SQL NULL reads back as `null` (not as a missing property). */
   nullAsNull: boolean;
   pii?: 'encrypt' | 'encrypt+hmac';
+  /** The column of the separate HMAC of the last digits (PII_TAILS); written with the value, never read. */
+  tail?: string;
   card?: boolean;
   ref?: string;
   values?: readonly string[];
+}
+
+/**
+ * Identity fields with a separate search HMAC of their last 4 digits (stage 1.5: an assistance operator finds an insured
+ * person by the end of the phone together with a part of the name or the birth date). The column comes with a later
+ * migration (store/sql/migrationsPhoneTail.ts): not in the table's physical columns; written with the value, never read
+ * back (selectable for the filter, like `<col>_hmac`).
+ */
+export const PII_TAILS: Readonly<Record<string, string>> = { 'insured.phone': 'phone_tail_hmac' };
+
+/** The input of the tail HMAC (`tail4:<4 digits>`, apart from the full value's HMAC), or null for fewer digits. */
+export function tailInput(value: string): string | null {
+  const d = value.replace(/\D/g, '');
+  return d.length >= 4 ? `tail4:${d.slice(-4)}` : null;
 }
 
 const SQL_TYPE: Record<Exclude<ColumnKind, 'virtual'>, string> = {

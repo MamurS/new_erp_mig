@@ -521,7 +521,7 @@ export const TABLES: readonly TableSpec[] = [
         'claim_decision_rejected', 'claim_reserve_changed', 'claim_created', 'claim_flag_dismissed', 'claim_appealed', 'claim_appeal_resolved', 'ai_settings_proposed',
         'ai_settings_changed', 'ai_settings_rejected', 'ai_kill_switch', 'ai_feedback', 'migration_validated', 'migration_submitted', 'migration_applied', 'migration_rejected',
         'migration_rolled_back', 'migration_scan_attached', 'family_consent_granted', 'family_consent_revoked', 'family_request_created', 'family_request_decided',
-        'payout_card_changed', 'task_created', 'task_done', 'task_taken', 'task_rejected', 'task_reminded', 'invitation_sent', 'invitation_accepted',
+        'payout_card_changed', 'task_created', 'task_done', 'task_taken', 'task_rejected', 'task_reminded', 'invitation_sent', 'invitation_accepted', 'insured_phone_tail_search',
       ),
       targetType: enumOf<AuditEntry['targetType']>()(
         'insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill',
@@ -1722,6 +1722,7 @@ export const REVEAL: Readonly<Record<string, { actions: readonly Action[]; self:
 export const LATER_ENUM_VALUES: readonly { collection: string; field: string; migration: string; values: readonly string[] }[] = [
   { collection: 'audit', field: 'action', migration: '20261013000100_job_actions.sql', values: ['contract_expired', 'policy_expired'] },
   { collection: 'audit', field: 'action', migration: '20261014000100_invitations.sql', values: ['invitation_sent', 'invitation_accepted'] },
+  { collection: 'audit', field: 'action', migration: '20261015000100_phone_tail.sql', values: ['insured_phone_tail_search'] },
 ];
 
 /** Values of an enum field its table was created with (LATER_ENUM_VALUES left out). */

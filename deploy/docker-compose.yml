@@ -170,11 +170,12 @@ services:
       # Rate limits per client: the API passes the client IP in X-Mig-Client-Ip (apps/api/src/auth/gotrue.ts).
       GOTRUE_RATE_LIMIT_HEADER: X-Mig-Client-Ip
       GOTRUE_RATE_LIMIT_EMAIL_SENT: ${AUTH_RATE_LIMIT_EMAIL_SENT:-60}
+      # Per IP, a whole office shares one: brute force is stopped per account by the API (deploy/.env.example).
       GOTRUE_RATE_LIMIT_SMS_SENT: ${AUTH_RATE_LIMIT_SMS_SENT:-300}
-      GOTRUE_RATE_LIMIT_VERIFY: ${AUTH_RATE_LIMIT_VERIFY:-60}
+      GOTRUE_RATE_LIMIT_VERIFY: ${AUTH_RATE_LIMIT_VERIFY:-300}
       GOTRUE_RATE_LIMIT_TOKEN_REFRESH: ${AUTH_RATE_LIMIT_TOKEN_REFRESH:-1800}
-      GOTRUE_RATE_LIMIT_OTP: ${AUTH_RATE_LIMIT_OTP:-60}
-      GOTRUE_MFA_RATE_LIMIT_CHALLENGE_AND_VERIFY: ${AUTH_RATE_LIMIT_MFA:-15}
+      GOTRUE_RATE_LIMIT_OTP: ${AUTH_RATE_LIMIT_OTP:-300}
+      GOTRUE_MFA_RATE_LIMIT_CHALLENGE_AND_VERIFY: ${AUTH_RATE_LIMIT_MFA:-120}
 
   rest:
     image: public.ecr.aws/supabase/postgrest:v16.4

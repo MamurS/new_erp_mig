@@ -505,6 +505,8 @@ export const ROUTES: readonly RouteDef[] = [
   // ---------------- the assistance company portal (services/assistPortal.ts) ----------------
   get('/assist/overview', (ctx) => assistPortal.overview(ctx)),
   get('/assist/insured', (ctx, req) => assistPortal.searchInsured(ctx, req.query)),
+  // The last 4 digits of the phone with a part of the name or the birth date: POST, nothing of it in a URL; audited.
+  send('POST', '/assist/insured/phone-tail', async (ctx, req) => assistPortal.searchByPhoneTail(ctx, await req.json())),
   get('/assist/insured/:id', (ctx, req) => assistPortal.insuredDetail(ctx, req.id('id'))),
   send('POST', '/assist/insured/:id/reveal', async (ctx, req) => assistPortal.revealPii(ctx, req.id('id'), await req.json())),
   send('POST', '/assist/insured/:id/reveal-copied', async (ctx, req) => assistPortal.revealCopied(ctx, req.id('id'), await req.json())),

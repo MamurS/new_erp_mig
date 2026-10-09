@@ -27,6 +27,11 @@ export interface Op<V> {
    * generated column `<column>_sk` (schema `search` fields, trigram index).
    */
   search?: string;
+  /**
+   * The last 4 digits of an identity field (the phone): Postgres compares the separate HMAC of the tail (PII_TAILS),
+   * the memory store the digits of the value.
+   */
+  tail4?: string;
 }
 
 /** Conditions on an array field (`text[]`). */
@@ -84,7 +89,7 @@ export interface Query<T, X = object> {
   fields?: readonly (keyof T & string)[];
 }
 
-const OP_KEYS = new Set(['eq', 'ne', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'isNull', 'contains', 'search', 'includes']);
+const OP_KEYS = new Set(['eq', 'ne', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'isNull', 'contains', 'search', 'includes', 'tail4']);
 
 export function isOp(v: unknown): v is Op<unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v) && Object.keys(v).every((k) => OP_KEYS.has(k));
@@ -140,6 +145,7 @@ function test(value: unknown, cond: unknown): boolean {
   if (op.notIn && !none(value) && op.notIn.includes(value)) return false;
   if (op.isNull !== undefined && none(value) !== op.isNull) return false;
   if (op.contains !== undefined && (typeof value !== 'string' || !value.toLowerCase().includes(op.contains.toLowerCase()))) return false;
+  if (op.tail4 !== undefined && (typeof value !== 'string' || value.replace(/\D/g, '').slice(-4) !== op.tail4)) return false;
   if ('includes' in op && !(Array.isArray(value) && value.includes((op as unknown as ArrayOp<unknown>).includes))) return false;
   if (op.search !== undefined) {
     const key = searchKey(op.search);

@@ -20,6 +20,8 @@ export const v = {
   'v.emailRequired': 'Укажите email',
   'v.emailInvalid': 'Некорректный email',
   'v.passwordRequired': 'Укажите пароль',
+  'v.phoneTail': 'Последние 4 цифры телефона',
+  'v.phoneTailMore': 'Добавьте часть ФИО (от 3 букв) или дату рождения',
   'v.passwordMin': 'Не короче 12 символов',
   'v.passwordMax': 'Не длиннее 128 символов',
   'v.passwordWeak': 'Нужны буквы и цифры',

@@ -32,7 +32,7 @@ import { COLLATION_SQL, searchColumn } from './sql/listQueries';
 import { searchKey } from '../lib/searchNormalize';
 import type { InsertOptions, InvitationRow, Invitations, JobMarks, LogTable, MapStore, Repos, SeqName, SetStore, Table } from './repo';
 import { TABLES, listQueriesOf, sequenceName, type TableSpec } from './schema';
-import { fieldMapping, keyColumn, physicalColumns, type FieldMapping } from './sql/physical';
+import { fieldMapping, keyColumn, physicalColumns, PII_TAILS, tailInput, type FieldMapping } from './sql/physical';
 import { qi } from './columns';
 import { maskCard } from '../lib/mask';
 import { genericFacts } from './facts';
@@ -128,7 +128,11 @@ class TableMap {
 
   constructor(readonly spec: TableSpec) {
     this.table = `public.${spec.table}`;
-    this.fields = Object.entries(spec.columns).map(([f, c]) => fieldMapping(f, c));
+    this.fields = Object.entries(spec.columns).map(([f, c]) => {
+      const m = fieldMapping(f, c);
+      const tail = PII_TAILS[`${spec.collection}.${f}`];
+      return tail ? { ...m, tail } : m;
+    });
     for (const m of this.fields) this.byField.set(m.field, m);
     this.key = spec.key === null ? null : keyColumn(spec);
     this.keyField = spec.key === null ? null : this.byField.get(spec.key)!;
@@ -234,6 +238,10 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
         out.push([hmacCol, p.add(plain === null ? null : await crypto.hmac(plain), 'bytea')]);
         out.push([maskCol, p.add(plain === null ? null : piiMask(m.field, plain), 'text')]);
       }
+      if (m.tail) {
+        const tail = plain === null ? null : tailInput(plain);
+        out.push([m.tail, p.add(tail === null ? null : await crypto.hmac(tail), 'bytea')]);
+      }
       return out;
     }
     if (m.card) {
@@ -329,6 +337,7 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
         else if (k === 'in') parts.push(`${h} = any(${p.add(await Promise.all((v as unknown[]).map(hash)), 'bytea[]')})`);
         else if (k === 'notIn') parts.push(`(${h} is null or ${h} <> all(${p.add(await Promise.all((v as unknown[]).map(hash)), 'bytea[]')}))`);
         else if (k === 'isNull') parts.push(v ? `${h} is null` : `${h} is not null`);
+        else if (k === 'tail4' && m.tail && /^\d{4}$/.test(String(v))) parts.push(`${qi(m.tail)} = ${p.add(await hash(`tail4:${String(v)}`), 'bytea')}`);
         else throw new Error(`${t.spec.collection}.${field}: ${k} on identity data`);
       }
       return parts.join(' and ') || 'true';

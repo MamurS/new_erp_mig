@@ -485,7 +485,8 @@ export type AuditAction =
   | 'task_rejected'
   | 'task_reminded'
   | 'invitation_sent'
-  | 'invitation_accepted';
+  | 'invitation_accepted'
+  | 'insured_phone_tail_search';
 
 export interface AuditEntry {
   id: UUID;

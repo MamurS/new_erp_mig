@@ -539,6 +539,7 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'task_reminded',
     'invitation_sent',
     'invitation_accepted',
+    'insured_phone_tail_search',
   ]),
   targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill', 'parameter', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'ai', 'migration']),
   targetId: uuid.optional(),

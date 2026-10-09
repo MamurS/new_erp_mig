@@ -36,6 +36,7 @@ export const srv: Translation<typeof Ru> = {
   'srv.auditChainBroken': 'Audit jurnali: yozuvlar zanjiri buzilgan, tekshirish kerak',
   'srv.auth.invalidCode': 'Kod notoʻgʻri yoki eskirgan',
   'srv.auth.invalidCreds': 'Email yoki parol notoʻgʻri',
+  'srv.auth.busy': 'Manzilingizdan juda koʻp kirish urinishlari. Bir daqiqa kutib, qayta urinib koʻring',
   'srv.auth.locked': 'Urinishlar juda koʻp. Kirish {minutes} daqiqaga bloklandi',
   'srv.auth.smsCode': 'MIG DMS: kirish kodi {code}. Uni hech kimga aytmang.',
   'srv.authority.alreadyPending': 'Bu xodim boʻyicha tasdiqlashni kutayotgan oʻzgarish allaqachon bor',

@@ -2,7 +2,8 @@
  * The background worker (BACKEND_SPEC §10): pg_cron schedules every job of packages/domain/src/services/jobs.ts;
  * `db` jobs run inside Postgres, `api` jobs become rows of `app.job_queue` that this worker takes and runs with
  * the system context through the same service code as the mock (services/jobRunner.ts). It also drains the
- * identity sync queue (jobs/identity.ts), sends invitation e-mails (services/system/invitations.ts) and, with Storage, deletes the objects of removed file rows every pass and
+ * identity sync queue (jobs/identity.ts), sends invitation e-mails (services/system/invitations.ts), fills the phone
+ * tails of older insured rows (jobs/phoneTail.ts) and, with Storage, deletes the objects of removed file rows every pass and
  * sweeps orphan objects once a day (files/gc.ts).
  *
  * Runs inside the API process (WORKER=inline, the default) or as its own process (`node apps/api/dist/worker.js`,
@@ -16,6 +17,7 @@ import { sendInvitations, type Mailer } from '@mig/domain/services/system/invita
 import type { BlobStore } from '@mig/domain/store/blob';
 import type { PiiCrypto } from '@mig/domain/store/pii';
 import { storageGc, type StorageGc } from '../files/gc';
+import { backfillPhoneTails } from './phoneTail';
 import { withSystemDb } from '../systemDb';
 import type { IdentitySync } from './identity';
 
@@ -42,6 +44,8 @@ export interface Worker {
     edo: number;
     /** Invitation e-mails sent (and failed, retried later) this pass. */
     invitations?: { sent: number; failed: number };
+    /** Insured rows that got the HMAC of their phone's tail (rows written before the column). */
+    phoneTails: number;
     storage?: { removed: number; failed: number; orphans?: { removed: number; failed: number } };
   }>;
   /** The Storage collector (with `storage`). */
@@ -118,7 +122,9 @@ export function createWorker(o: WorkerOptions): Worker {
       invitations = await withSystemDb(o.pool, { crypto: o.crypto, now: o.now }, (ctx) => sendInvitations(ctx, mailer, baseUrl));
       if (invitations.sent || invitations.failed) log('invitation e-mails', invitations);
     }
-    return { jobs, identities, edo, ...(invitations ? { invitations } : {}), ...(storage ? { storage } : {}) };
+    const phoneTails = await backfillPhoneTails(o.pool, o.crypto);
+    if (phoneTails) log('phone tails filled', { rows: phoneTails });
+    return { jobs, identities, edo, ...(invitations ? { invitations } : {}), phoneTails, ...(storage ? { storage } : {}) };
   }
 
   return {
