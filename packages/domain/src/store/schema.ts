@@ -86,12 +86,18 @@ import { NESTED_KEYS, TABLE_KEYS, type KeyedName, type LogName, type NestedRows,
 // Access rules (RLS)
 // ------------------------------------------------------------------------------------------------
 
-/** A row predicate (SQL over the table's columns). `always` — not gated by the grant's actions. */
+/**
+ * A row predicate (SQL over the table's columns). `always` — not gated by the grant's actions; `actions` — gated by
+ * these actions instead of the grant's (a second scope of the same group, docs/PRIVILEGED_AUDIT.md).
+ */
 export interface Scope {
   pred: string;
   always?: true;
+  actions?: readonly Action[];
 }
 export type ScopeLike = string | Scope;
+/** One scope, or several (the role passes when any of them applies). */
+export type GroupScope = ScopeLike | readonly ScopeLike[];
 export type RoleGroup = 'staff' | 'hr' | 'insured' | 'clinic' | 'assist';
 export const ROLE_GROUPS: readonly RoleGroup[] = ['staff', 'hr', 'insured', 'clinic', 'assist'];
 
@@ -103,11 +109,11 @@ export const ROLE_GROUPS: readonly RoleGroup[] = ['staff', 'hr', 'insured', 'cli
  */
 export interface Grant {
   actions?: readonly Action[];
-  staff?: ScopeLike;
-  hr?: ScopeLike;
-  insured?: ScopeLike;
-  clinic?: ScopeLike;
-  assist?: ScopeLike;
+  staff?: GroupScope;
+  hr?: GroupScope;
+  insured?: GroupScope;
+  clinic?: GroupScope;
+  assist?: GroupScope;
   anyone?: string;
 }
 export interface Access {
@@ -126,6 +132,7 @@ const rw = (g: Grant): Pick<Access, 'insert' | 'update'> => ({ insert: g, update
 const HR_CLIENT = 'client_id = app.company_id()';
 const INS_PERSONS = 'insured_id = any(app.my_person_ids())';
 const INS_SELF = 'insured_id = app.insured_id()';
+const INS_CARDS = 'insured_id = any(app.my_card_ids())';
 const CLINIC_OWN = 'clinic_id = app.clinic_id()';
 const ASSIST_OWN = 'assistance_id = app.assistance_id()';
 const ASSIST_INSURED = (day: string) => `app.assist_covers_insured(insured_id, ${day})`;
@@ -302,11 +309,11 @@ export const TABLES: readonly TableSpec[] = [
           ...STAFF_READ('policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read'),
           hr: HR_CLIENT,
           insured: 'id = app.my_policy_id()',
-          assist: 'app.assist_covers(id, current_date)',
+          assist: "app.assist_access(id) <> 'none'",
           actions: ['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search'],
         },
         ...rw({ actions: ['policies.write', 'assistance.assign', 'contracts.draft', 'policy_changes.decide'], staff: ALL }),
-        note: 'HR — policies of the own company; the insured — the own policy; an assistance company — policies assigned to it today.',
+        note: 'HR — policies of the own company; the insured — the own policy; an assistance company — policies assigned to it today, read-only for 12 months after (ASSISTANCE_SPEC §3).',
       },
     },
   ),
@@ -354,7 +361,7 @@ export const TABLES: readonly TableSpec[] = [
           hr: HR_CLIENT,
           insured: 'id = any(app.my_family_ids())',
           clinic: 'id = any(app.clinic_patient_ids())',
-          assist: 'app.assist_covers(policy_id, current_date)',
+          assist: "app.assist_access(policy_id) <> 'none'",
         },
         insert: { actions: ['policies.write', 'policy_changes.decide', 'hr.employees.manage'], staff: ALL, hr: HR_CLIENT },
         update: {
@@ -363,7 +370,7 @@ export const TABLES: readonly TableSpec[] = [
           hr: HR_CLIENT,
           insured: 'id = app.insured_id()',
         },
-        note: 'HR — employees of the own company; the insured — self and the own family (names); a clinic — patients with an open visit; an assistance company — persons of policies assigned to it today. Ciphertexts of PINFL and phone are not readable by `authenticated` (column privileges); lists use the view `insured_masked`.',
+        note: 'HR — employees of the own company; the insured — self and the own family (names); a clinic — patients with an open visit; an assistance company — persons of policies assigned to it today, read-only for 12 months after. Ciphertexts of PINFL and phone are not readable by `authenticated` (column privileges); lists use the view `insured_masked`.',
       },
     },
   ),
@@ -449,11 +456,11 @@ export const TABLES: readonly TableSpec[] = [
       indexes: ['insuredId', 'clinicId', 'status', 'startsAt'],
       access: {
         select: {
-          actions: ['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage'],
+          actions: ['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search'],
           staff: ALL,
           insured: INS_PERSONS,
           clinic: CLINIC_OWN,
-          assist: ASSIST_INSURED('(starts_at at time zone app.tz())::date'),
+          assist: "app.assist_scope(app.policy_of_insured(insured_id), (created_at at time zone app.tz())::date) <> 'none'",
         },
         ...rw({
           actions: ['appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage'],
@@ -462,7 +469,7 @@ export const TABLES: readonly TableSpec[] = [
           clinic: CLINIC_OWN,
           assist: ASSIST_INSURED('(starts_at at time zone app.tz())::date'),
         }),
-        note: 'The insured books for self and the family; a clinic — appointments of the own clinic; an assistance company — of persons assigned to it on the visit date.',
+        note: 'The insured books for self and the family; a clinic — appointments of the own clinic; an assistance company — reads requests of persons assigned to it on the date of the request (read-only for 12 months after), writes those of persons assigned on the visit date.',
       },
     },
   ),
@@ -599,9 +606,9 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clientId'],
       access: {
-        select: { actions: ['clients.read', 'contracts.read', 'kp.read', 'invoices.read'], staff: ALL, hr: HR_CLIENT },
+        select: { actions: ['clients.read', 'contracts.read', 'kp.read', 'invoices.read', 'policies.read'], staff: ALL, hr: HR_CLIENT },
         ...rw(STAFF_READ('kp.create', 'kp.send', 'contracts.draft', 'contracts.sign_mig', 'migration.manage', 'clients.write')),
-        note: 'Documents of a client: MIG staff and the own company’s HR.',
+        note: 'Documents of a client: MIG staff (also the policy card of policies.read) and the own company’s HR.',
       },
     },
   ),
@@ -730,7 +737,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clinicId'],
       access: {
-        select: { actions: ['clinics.manage', 'clinic.users.manage'], staff: ALL, clinic: always(CLINIC_OWN) },
+        select: { actions: ['clinics.manage', 'clinic.users.manage', 'clinics.read'], staff: ALL, clinic: always(CLINIC_OWN) },
         ...rw({ actions: ['clinic.users.manage'], staff: ALL, clinic: CLINIC_OWN }),
         note: 'Users of a clinic: colleagues of the own clinic; the clinic admin manages them (MIG admin — the first admin).',
       },
@@ -745,10 +752,10 @@ export const TABLES: readonly TableSpec[] = [
           actions: ['clinics.read', 'clinics.manage', 'registries.review', 'guarantees.decide', 'assist.registries.review', 'assist.guarantees.decide', 'ai.coverage.mig', 'ai.coverage.assist'],
           staff: ALL,
           clinic: always(CLINIC_OWN),
-          assist: ALL,
+          assist: always(),
         },
         ...rw({ actions: ['clinics.manage', 'clinic.integration.manage'], staff: ALL, clinic: CLINIC_OWN }),
-        note: 'Price lists: the own clinic, MIG and assistance reviewers.',
+        note: 'Price lists: the own clinic, MIG and every assistance company (the network list is the reference of its referrals and contracts).',
       },
     },
   ),
@@ -758,10 +765,10 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['insuredId', 'shortCode', 'expiresAt'],
       access: {
-        select: { insured: always(INS_SELF) },
-        insert: { insured: always(INS_SELF) },
-        delete: { insured: always(INS_SELF) },
-        note: 'The insured issues QR/short-code tokens of the own card; a clinic redeems a token through the API (system), not by reading the table.',
+        select: { insured: always(INS_CARDS) },
+        insert: { insured: always(INS_CARDS) },
+        delete: { insured: always(INS_CARDS) },
+        note: 'The insured issues QR/short-code tokens of the own card and of the active family under them (FAMILY_SPEC: card); a clinic redeems a token through app.fact_redeem_card_token, not by reading the table.',
       },
     },
   ),
@@ -834,9 +841,13 @@ export const TABLES: readonly TableSpec[] = [
           clinic: CLINIC_OWN,
           assist: ASSIST_OWN,
         },
-        insert: { actions: ['guarantees.request'], clinic: CLINIC_OWN },
+        insert: {
+          actions: ['guarantees.request', 'assist.cases.manage'],
+          clinic: CLINIC_OWN,
+          assist: "assistance_id = app.assistance_id() and app.assist_scope(policy_id, (created_at at time zone app.tz())::date) = 'full'",
+        },
         update: { actions: ['guarantees.decide', 'assist.guarantees.decide', 'guarantees.request'], staff: ALL, clinic: CLINIC_OWN, assist: ASSIST_OWN },
-        note: 'Guarantee letters: the requesting clinic; the deciding assistance company; MIG doctors (escalations and clients without an assistance company).',
+        note: 'Guarantee letters: the requesting clinic (also on a referral of the assistance company, which writes the letter of its own current client); the deciding assistance company; MIG doctors (escalations and clients without an assistance company).',
       },
     },
   ),
@@ -892,7 +903,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clinicId'],
       access: {
-        select: { actions: ['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage'], staff: ALL, clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
+        select: { actions: ['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage'], staff: always(), clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
         ...rw({ actions: ['clinic.integration.manage', 'assist.integration.manage'], staff: ALL, clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' }),
         note: 'API keys of a partner (`clinic_id` is the partner: a clinic or an assistance company); `secret_hash` is not readable by `authenticated`.',
       },
@@ -948,7 +959,8 @@ export const TABLES: readonly TableSpec[] = [
       indexes: ['endpointId', 'status', 'clinicId'],
       access: {
         select: { actions: ['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage'], staff: ALL, clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
-        note: 'Delivery log of webhooks: read by the partner; written by the API outbox (system).',
+        update: { actions: ['clinic.integration.manage', 'assist.integration.manage'], clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
+        note: 'Delivery log of webhooks: read by the partner, whose integration admin records a manual retry; written by the API outbox (system).',
       },
     },
   ),
@@ -1048,7 +1060,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId'],
       access: {
-        select: { actions: ['assistance.manage', 'assist.users.manage'], staff: ALL, assist: always(ASSIST_OWN) },
+        select: { actions: ['assistance.manage', 'assist.users.manage'], staff: always(), assist: always(ASSIST_OWN) },
         ...rw({ actions: ['assist.users.manage', 'assistance.manage'], staff: ALL, assist: ASSIST_OWN }),
         note: 'Users of an assistance company: colleagues of the own company; its admin manages them.',
       },
@@ -1077,7 +1089,12 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId', 'insuredId', 'status', 'createdAt'],
       access: {
-        select: { actions: ['assist.cases.manage', 'qa.review', 'assistance.manage'], staff: ALL, assist: ASSIST_OWN },
+        select: {
+          actions: ['assist.cases.manage', 'qa.review', 'assistance.manage'],
+          // Every MIG employee sees the cases that need attention on the card of the company (complaints, past the SLA).
+          staff: [ALL, always("status <> 'resolved' and (type = 'complaint' or sla_due_at < now())")],
+          assist: ASSIST_OWN,
+        },
         ...rw({ actions: ['assist.cases.manage'], staff: ALL, assist: ASSIST_OWN }),
         note: 'Cases of an assistance company: the own company; MIG (complaints, quality control). Free texts are encrypted.',
       },
@@ -1102,7 +1119,12 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId', 'status'],
       access: {
-        select: { actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review'], staff: ALL, assist: ASSIST_OWN },
+        select: {
+          actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review'],
+          // Every MIG employee sees the submitted rebills of a company on its card; drafts stay the company's.
+          staff: [ALL, always("status <> 'draft'")],
+          assist: ASSIST_OWN,
+        },
         ...rw({ actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit'], staff: ALL, assist: ASSIST_OWN }),
         note: 'Re-invoices of an assistance company to MIG: the own company; MIG review and payment.',
       },
@@ -1122,7 +1144,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId'],
       access: {
-        select: { actions: ['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage'], staff: ALL, assist: ASSIST_OWN },
+        select: { actions: ['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage'], staff: always(), assist: ASSIST_OWN },
         update: STAFF_READ('qa.review'),
         note: 'Quality control samples: MIG doctors review; the assistance company sees the verdicts on its decisions.',
       },
@@ -1182,8 +1204,11 @@ export const TABLES: readonly TableSpec[] = [
       indexes: ['dealId', 'at'],
       access: {
         select: STAFF_READ('deals.manage', 'leads.manage', 'contracts.read', 'quotes.calculate', 'census.upload', 'kp.send', 'kp.create'),
-        insert: STAFF_READ('deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'payments.record', 'tasks.ask'),
-        note: 'Deal activity feed: MIG staff only.',
+        insert: {
+          ...STAFF_READ('deals.manage', 'leads.manage', 'quotes.calculate', 'quotes.approve', 'census.upload', 'kp.create', 'kp.send', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'payments.record', 'tasks.ask'),
+          hr: 'app.client_of_deal(deal_id) = app.company_id()',
+        },
+        note: 'Deal activity feed: MIG staff read it; HR writes the events of its own actions (an offer answered, a signature, a request) into the feed of the own company’s deal.',
       },
     },
   ),
@@ -1254,14 +1279,14 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clientId', 'dealId', 'status'],
       access: {
-        select: { actions: ['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client'], staff: ALL, hr: `${HR_CLIENT} and status <> 'draft' and status <> 'legal_review'` },
+        select: { actions: ['contracts.read', 'contracts.draft', 'contracts.legal_approve', 'contracts.sign_client'], staff: ALL, hr: `${HR_CLIENT} and ((status <> 'draft' and status <> 'legal_review') or app.hr_asked_contract(id))` },
         insert: STAFF_READ('contracts.draft'),
         update: {
           actions: ['contracts.draft', 'contracts.legal_approve', 'contracts.sign_mig', 'contracts.verify_scan', 'contracts.originals', 'payments.record', 'endorsements.manage', 'contracts.sign_client'],
           staff: ALL,
-          hr: `${HR_CLIENT} and status in ('sent', 'signing', 'signed', 'active')`,
+          hr: `${HR_CLIENT} and (status in ('sent', 'signing', 'signed', 'active') or app.hr_asked_contract(id))`,
         },
-        note: 'Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list).',
+        note: 'Contracts: MIG staff; HR — contracts of the own company once sent (signing, the insured list), and a draft while MIG asks HR for its appendix 2 (an open request).',
       },
     },
   ),
@@ -1293,7 +1318,7 @@ export const TABLES: readonly TableSpec[] = [
       docNumber: opt(text()),
       comment: opt(text()),
     },
-    { indexes: ['invoiceId', 'contractId'], access: { select: STAFF_READ('payments.record', 'invoices.read'), insert: STAFF_READ('payments.record'), note: 'Payments: MIG accounting.' } },
+    { indexes: ['invoiceId', 'contractId'], access: { select: STAFF_READ('payments.record', 'invoices.read', 'contracts.read'), insert: STAFF_READ('payments.record'), note: 'Payments: MIG accounting and the readers of the contract card.' } },
   ),
   keyed(
     'bankPayments',
@@ -1549,9 +1574,9 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clinicId'],
       access: {
-        select: { actions: ['clinics.manage', 'registries.review', 'assistance.manage', 'assist.registries.review', 'clinic.check_patient'], staff: ALL, clinic: always(CLINIC_OWN), assist: 'payer = app.assistance_id()::text' },
+        select: { actions: ['clinics.manage', 'registries.review', 'assistance.manage', 'assist.registries.review', 'clinic.check_patient'], staff: ALL, clinic: always(CLINIC_OWN), assist: always('payer = app.assistance_id()::text') },
         ...rw(STAFF_READ('clinics.manage', 'assistance.manage')),
-        note: 'Clinic contracts with a payer (MIG or an assistance company): the clinic, the payer and MIG.',
+        note: 'Clinic contracts with a payer (MIG or an assistance company): the clinic, the payer (every user of the assistance company: its network page) and MIG.',
       },
     },
   ),
@@ -1664,7 +1689,14 @@ export const TABLES: readonly TableSpec[] = [
     'aiRebillFlags',
     'lineId',
     { lineId: uuid(), reason: text() },
-    { access: { select: { actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit'], staff: ALL }, note: 'AI precheck flags of rebill lines: MIG reviewers; written by the API (system).' } },
+    {
+      access: {
+        select: { actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit'], staff: ALL },
+        ...rw(STAFF_READ('rebills.review')),
+        delete: STAFF_READ('rebills.review'),
+        note: 'AI precheck flags of rebill lines: MIG reviewers read them; the reviewer of rebills sets and clears them (the AI precheck).',
+      },
+    },
   ),
   single<StatementKeyRow>(
     'statementKeys',

@@ -9,7 +9,7 @@ import { formatMoney } from '../lib/format';
 import { randomId } from '../lib/random';
 import { tzIso } from '../lib/time';
 import type { ClientRow, InsuredRow, PolicyChangeRow } from '../store/db';
-import { DomainError, errorOf, systemRepos, type BaseCtx } from './kernel';
+import { DomainError, errorOf, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { annualPremiumOf } from './family';
 
@@ -163,8 +163,9 @@ export function toPolicyChange(row: PolicyChangeRow): PolicyChange {
  * Saves the counters (and sets them on `policy`); other changes of `policy` are the caller's to save.
  */
 export async function refreshPolicyTotals(ctx: BaseCtx, policy: Policy): Promise<void> {
-  // Derived counters of the policy and the client: kept by the system after any change of the insured list.
-  const r = systemRepos(ctx, 'derived counters of a policy and its client after a change of the insured list');
+  // Derived counters of the policy and the client after a change of the insured list: by whoever changed it (the
+  // underwriter, who updates both) or by the system's own consequences (a signature, the portfolio transfer).
+  const r = ctx.repos;
   const members = await r.insured.list({ where: { policyId: policy.id, status: 'active' } });
   policy.insuredCount = members.length;
   policy.familyCount = members.filter((i) => i.relation !== 'employee').length;

@@ -20,7 +20,7 @@ import type {
 } from '@mig/contracts';
 import type { ContractSummary, DealView, EndorsementSummary, SignatoryOption } from '@mig/contracts/dto';
 import type { ChecklistInput } from '../nextStep';
-import { activationDate, addDays, addSignature, certificateNumber, endorsementNumber, fullySignedAt, isFullySigned } from '../contracts';
+import { addDays, certificateNumber, endorsementNumber } from '../contracts';
 import { addLine, CHANGE_TYPE_LABEL, excludeLine, programChangeLine, REFUND_RULES } from '../endorsements';
 import { TARIFF_BASE_KEY } from '../config/dmsParameters';
 import { ROLE_LABEL } from '../labels';
@@ -28,10 +28,12 @@ import { asPricingRule, contractPricing, personPremium, PricingError, type Prici
 import { randomId } from '../lib/random';
 import { isoDay, parseIso, tzIso } from '../lib/time';
 import type { ChangeRequestRow, ClientRow, InsuredRow } from '../store/db';
-import { asSystem, conflict, errorOf, notFound, systemRepos, todayIso, type BaseCtx } from './kernel';
+import { conflict, errorOf, notFound, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { createInsured, createListedInsured, nextPolicyNumber, refreshPolicyTotals } from './policy';
 import { notifyAssistance, syncAssistance } from './assistance';
+import { afterSigning } from './system/consequences';
+import { refreshContract } from './system/clocks';
 
 
 export async function staffName(ctx: BaseCtx, id: UUID | undefined): Promise<string | undefined> {
@@ -57,21 +59,19 @@ export async function clientRow(ctx: BaseCtx, id: UUID): Promise<ClientRow> {
 }
 
 export async function dealEvent(ctx: BaseCtx, dealId: UUID, actorName: string, text: string): Promise<void> {
-  // The deal feed records events of any party (the client's HR, legal, signatures).
-  await systemRepos(ctx, 'the deal feed records events of any party').dealEvents.insert({ id: randomId(), dealId, at: tzIso(ctx.now()), actorName, text }, { at: 'start' });
+  // The deal feed records events of any party: MIG staff, the client's HR (its own company's deal, RLS of
+  // deal_events), the system clock (EDO).
+  await ctx.repos.dealEvents.insert({ id: randomId(), dealId, at: tzIso(ctx.now()), actorName, text }, { at: 'start' });
 }
 
 const STAGE_ORDER: DealStage[] = ['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active'];
 
 /** Moves a deal forward (never back, never out of `lost`), with an event in its feed. */
-export async function moveDeal(person: BaseCtx, dealId: UUID | undefined, stage: DealStage, actorName: string, text?: string): Promise<void> {
-  // The pipeline follows events of any party (the client's answer, signatures, payments).
-  const ctx = asSystem(person, 'the sales pipeline follows events of any party');
-  const deal = dealId ? await ctx.repos.deals.get(dealId) : null;
-  if (!deal || deal.stage === 'lost') return;
-  if (STAGE_ORDER.indexOf(stage) <= STAGE_ORDER.indexOf(deal.stage) && stage !== deal.stage) return;
-  if (stage !== deal.stage) await ctx.repos.deals.update(deal.id, { stage, updatedAt: tzIso(ctx.now()) });
-  if (text) await dealEvent(ctx, deal.id, actorName, text);
+export async function moveDeal(ctx: BaseCtx, dealId: UUID | undefined, stage: DealStage, actorName: string, text?: string): Promise<void> {
+  // The pipeline follows events of any party (the client's answer, signatures, payments): the step itself is the
+  // narrow app.fact_advance_deal (HR may not read or update deals).
+  if (!dealId || !(await ctx.repos.facts.advanceDeal(dealId, stage, STAGE_ORDER, tzIso(ctx.now())))) return;
+  if (text) await dealEvent(ctx, dealId, actorName, text);
 }
 
 export async function latestQuote(ctx: BaseCtx, dealId: UUID): Promise<Quote | undefined> {
@@ -166,40 +166,6 @@ export async function createContractInvoices(ctx: BaseCtx, c: Contract): Promise
 
 // ---------------------------------------------------------------- signing
 
-/** After any signature: a fully signed document is finalised once. */
-export async function afterSigning(person: BaseCtx, kind: 'contract' | 'endorsement', id: UUID, actorName: string): Promise<void> {
-  // Consequences of a signature (deal stage, invoices, coming into force, applying an endorsement) are the
-  // system's, also when the client's HR signs.
-  const ctx = asSystem(person, 'consequences of a signature: deal stage, invoices, coming into force, applying an endorsement');
-  if (kind === 'contract') {
-    const c = await contractOf(ctx, id);
-    if (!isFullySigned(c.signing)) {
-      if (c.status === 'sent' || c.status === 'approved') {
-        c.status = 'signing';
-        await ctx.repos.contracts.update(c.id, { status: c.status });
-      }
-      await moveDeal(ctx, c.dealId, 'signing', actorName);
-      return;
-    }
-    if (c.status === 'signed' || c.status === 'active') return;
-    c.status = 'signed';
-    await ctx.repos.contracts.update(c.id, { status: c.status });
-    await createContractInvoices(ctx, c);
-    await moveDeal(ctx, c.dealId, 'awaiting_payment', actorName, `Договор ${c.number} подписан обеими сторонами, выставлены счета`);
-    await refreshContract(ctx, c);
-    return;
-  }
-  const e = await ctx.repos.endorsements.get(id);
-  if (!e) throw notFound();
-  if (!isFullySigned(e.signing)) {
-    if (e.status === 'sent' || e.status === 'approved') await ctx.repos.endorsements.update(e.id, { status: 'signing' });
-    return;
-  }
-  if (e.status === 'signed') return;
-  e.status = 'signed';
-  await ctx.repos.endorsements.update(e.id, { status: e.status });
-  await applyEndorsement(ctx, e, isoDay(parseIso(fullySignedAt(e.signing) ?? tzIso(ctx.now()))));
-}
 
 /** Imitation of the EDO operator: the client «signs» 3 seconds after the document was sent. */
 export function edoArrived(s: Signing, now = Date.now()): boolean {
@@ -217,48 +183,10 @@ export function edoClientSignature(s: Signing, signerName: string, today = isoDa
 }
 
 /** Copies the stored state of the contract into `c` (it changed in nested steps that read it anew). */
-async function reload(ctx: BaseCtx, c: Contract): Promise<void> {
+export async function reload(ctx: BaseCtx, c: Contract): Promise<void> {
   Object.assign(c, await contractOf(ctx, c.id));
 }
 
-/**
- * Lazy server clock: EDO events, coming into force by the activation rule, expiry. Called on every read
- * of the contract and after payments, so the state is current without background jobs. `c` is saved and
- * holds the current state afterwards.
- */
-export async function refreshContract(person: BaseCtx, c: Contract, now = person.now()): Promise<void> {
-  // A job run on read: its effects (signatures from EDO, the policy and insured persons on coming into force,
-  // expiry) are the system's, whoever reads the contract.
-  const ctx: BaseCtx = { ...person, repos: systemRepos(person, 'the lazy server clock of contracts: EDO events, coming into force, expiry') };
-  const r = ctx.repos;
-  if (edoArrived(c.signing, now)) {
-    c.signing = addSignature(c.signing, 'client', edoClientSignature(c.signing, c.params.clientSignatory.name, todayIso(ctx)));
-    await r.contracts.update(c.id, { signing: c.signing });
-    await dealEvent(ctx, c.dealId, 'ЭДО', `Договор ${c.number} подписан клиентом в ЭДО (${c.signing.client?.edoProvider})`);
-    await afterSigning(ctx, 'contract', c.id, 'ЭДО');
-    await reload(ctx, c);
-    return;
-  }
-  const arrived = (await r.endorsements.list({ where: { contractId: c.id } })).filter((x) => edoArrived(x.signing, now));
-  for (const e of arrived) {
-    e.signing = addSignature(e.signing, 'client', edoClientSignature(e.signing, c.params.clientSignatory.name, todayIso(ctx)));
-    await r.endorsements.update(e.id, { signing: e.signing });
-    await afterSigning(ctx, 'endorsement', e.id, 'ЭДО');
-  }
-  if (arrived.length) await reload(ctx, c);
-  const today = isoDay(now);
-  if (c.status === 'signed') {
-    const payments = await r.payments.list({ where: { contractId: c.id } });
-    const on = activationDate(c.params.activationRule, c.params.startDate, c.params.paymentSchedule, payments);
-    if (on && on <= today) await activateContract(ctx, c, on);
-  }
-  if (c.status === 'active' && c.params.endDate < today) {
-    c.status = 'expired';
-    await r.contracts.update(c.id, { status: c.status });
-    const p = c.policyId ? await r.policies.get(c.policyId) : null;
-    if (p && p.status === 'active') await r.policies.update(p.id, { status: 'expired' });
-  }
-}
 
 /** Coming into force (LIFECYCLE_SPEC §9–10): policy, insured persons with certificates, SMS, assistance events. */
 export async function activateContract(ctx: BaseCtx, c: Contract, on: string): Promise<Policy> {
@@ -549,3 +477,5 @@ export async function checklistInput(ctx: BaseCtx, deal: Deal): Promise<Checklis
     invoicePaid: !!c && (await ctx.repos.invoices.exists({ contractId: c.id, status: 'paid' })),
   };
 }
+
+export { afterSigning, refreshContract };

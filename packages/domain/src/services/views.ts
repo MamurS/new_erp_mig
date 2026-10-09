@@ -1,31 +1,28 @@
 /* Projections of DB rows into API DTOs. Masking happens here, on the "server". */
-import type { Client, Insured, LimitCategory, LimitUsage, MyClaim, SessionUser } from '@mig/contracts';
+import type { Client, Insured, MyClaim, SessionUser } from '@mig/contracts';
 import type { ClaimDetail, HrEmployee, InsuredDetail, InsuredListItem } from '@mig/contracts/dto';
 import { can, insuredVisibility } from '../auth/permissions';
 import { CLAIM_TO_LIMIT, claimTransitions, requiresMedicalReview, toMyClaimStatus } from '../claims';
 import type { LegalFormCode } from '../config/legalForms';
-import { limitModeOf } from '../config/dmsParameters';
 import { clauseLabel } from '../documents/templates/index';
-import { ageLimitDate, childAgeLimit, limitPoolOf, reachedAgeLimit } from '../family';
+import { ageLimitDate, childAgeLimit, reachedAgeLimit } from '../family';
 import { maskBirthDate, maskCard, maskEmail, maskPhone, maskPinfl } from '../lib/mask';
 import { DAY, isoDay, parseIso } from '../lib/time';
-import { PROGRAMS } from '../programs';
 import { canApproveDecision } from '../settlement';
 import type { ClaimRow, ClientRow, InsuredRow } from '../store/db';
-import { asSystem, systemRepos, todayIso, type BaseCtx } from './kernel';
+import { todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { limitExtras } from './assistance';
 import { currentReserve, reserveTimeline } from './settlement';
 import { ageLimits, familyBrief, payoutCardOf, principalOf } from './family';
 
 /** Insured people of a client (employees and family members, each person counts). */
 export async function insuredCountFor(ctx: BaseCtx, clientId: string): Promise<number> {
-  return systemRepos(ctx, 'insured count of a client (an aggregate)').insured.count({ clientId, status: 'active' });
+  return ctx.repos.facts.clientInsuredCount(clientId);
 }
 
 /** Legal form of a client (rows that show the client by name carry it next to the name). */
 export async function clientLegalFormOf(ctx: BaseCtx, clientId: string | null | undefined): Promise<LegalFormCode | undefined> {
-  return clientId ? (await systemRepos(ctx, 'legal form shown next to a client\'s name').clients.get(clientId))?.legalForm : undefined;
+  return clientId ? ctx.repos.facts.clientLegalForm(clientId) : undefined;
 }
 
 /** Legal form of a clinic. */
@@ -135,46 +132,10 @@ const PAID_LIKE = new Set(['approved', 'to_pay', 'paid']);
 /** Claim statuses whose amount counts as used limit. */
 export const PAID_LIKE_STATUSES = ['approved', 'to_pay', 'paid'] as const;
 
-/**
- * Limits of a person. Parameter `limitMode`: `individual` — the person's own consumption; `family_shared` — one
- * pool per family and category: the consumption of every person of the family on the policy counts.
- */
-export async function limitsFor(caller: BaseCtx, i: InsuredRow, P?: ParamsView): Promise<LimitUsage[]> {
-  // The person is one the caller may see (the callers fetched `i` in their scope); what the limit consists of —
-  // claims, guarantee letters, registry lines of the family pool — is counted by the system (RLS hides most of it
-  // from the insured person, an HR or an assistance company, who see only the sums).
-  const ctx = asSystem(caller, 'limits: used and reserved sums of a person the caller may see');
-  const params = P ?? (await loadParams(ctx));
-  const policy = await ctx.repos.policies.get(i.policyId);
-  const program = PROGRAMS[policy?.program ?? 'standard'];
-  const from = policy ? parseIso(policy.startDate) : 0;
-  const used: Record<LimitCategory, number> = { outpatient: 0, dental: 0, medicines: 0, inpatient: 0 };
-  const reserved: Record<LimitCategory, number> = { outpatient: 0, dental: 0, medicines: 0, inpatient: 0 };
-  const mode = limitModeOf(params.paramValues());
-  const pool = new Set(mode === 'individual' ? [i.id] : limitPoolOf(i, await ctx.repos.insured.list({ where: { policyId: i.policyId } }), mode));
-  for (const c of await ctx.repos.claims.list({ where: { insuredId: { in: [...pool] }, status: { in: PAID_LIKE_STATUSES } } })) {
-    if (parseIso(c.serviceDate) < from - 7 * DAY) continue;
-    used[CLAIM_TO_LIMIT[c.category]] += c.amountApproved ?? c.amountClaimed;
-  }
-  for (const person of await ctx.repos.insured.list({ where: { id: { in: [...pool] } } })) {
-    // Used before the transfer from the previous system (as of the migration date) counts too.
-    for (const [cat, amount] of Object.entries(person.migratedUsed ?? {}) as [LimitCategory, number][]) used[cat] += amount;
-    // Lines accepted by an assistance count as used; approved guarantee letters reserve the limit.
-    const extra = await limitExtras(ctx, person, from);
-    for (const cat of LIMIT_CATEGORIES) {
-      used[cat] += extra.used[cat];
-      reserved[cat] += extra.reserved[cat];
-    }
-  }
-  return LIMIT_CATEGORIES.map((category) => ({
-    category,
-    limit: program.limits[category],
-    used: used[category],
-    reserved: reserved[category],
-  }));
-}
+/** Limits of a person (services/limits.ts: the narrow coverage inputs, the sums computed as before). */
+export { limitsFor } from './limits';
+import { limitsFor } from './limits';
 
-const LIMIT_CATEGORIES = ['outpatient', 'dental', 'medicines', 'inpatient'] as const;
 
 export async function toClaimDetail(ctx: BaseCtx, c: ClaimRow, user: SessionUser): Promise<ClaimDetail> {
   const i = (await ctx.repos.insured.get(c.insuredId))!;

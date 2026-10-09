@@ -23,33 +23,37 @@ import { createMockProvider } from '../lib/aiProvider';
 import { randomId } from '../lib/random';
 import { isoDay, tzIso } from '../lib/time';
 import type { InsuredRow } from '../store/db';
-import { asSystem, audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { personFor } from './family';
 import { findRegistryLine, insuredOfVisit } from './assistance';
 import { registryOfClinic, requireVisit } from './clinic';
 import { sha256Hex } from './settlement';
-import { limitsFor } from './views';
+import { coverageBriefOf, limitsFor } from './limits';
 import { sameJson } from '../lib/json';
 
 /** Calls kept in the log (the oldest are dropped). */
 const MAX_LOGS = 2000;
 
-async function contextOf(ctx: BaseCtx, i: InsuredRow, P: ParamsView): Promise<CoverageContext> {
-  const p = await ctx.repos.policies.get(i.policyId);
+async function contextOf(ctx: BaseCtx, who: Pick<InsuredRow, 'id'>, P: ParamsView): Promise<CoverageContext> {
+  // The caller is already allowed to check this person (the scope checks of the scenario); the coverage context —
+  // policy, program, used limits — comes as the narrow coverage inputs: a clinic or an assistance company sees only
+  // the verdict.
+  const { policy: p, person: i } = await coverageBriefOf(ctx, who.id);
   if (!p) throw notFound();
   return {
     program: p.program,
     policy: { id: p.id, status: p.status, startDate: p.startDate, endDate: p.endDate },
     insured: { id: i.id, insuredFrom: i.insuredFrom, excludedFrom: i.excludedFrom, status: i.status },
-    limits: await limitsFor(ctx, i, P),
+    limits: await limitsFor(ctx, who, P),
     rules: COVERAGE_RULES,
     catalog: catalogItem,
   };
 }
 
 interface Job {
-  insured: InsuredRow;
+  /** The person checked: the id and the name (redacted from the text before a provider). */
+  insured: Pick<InsuredRow, 'id' | 'fullName'>;
   text?: string;
   serviceCode?: string;
   icd10?: string;
@@ -76,9 +80,7 @@ async function addLog(ctx: BaseCtx, log: AiCallLog): Promise<void> {
 async function check(run: Run, scenario: AiScenario, job: Job, opts: { clinic?: boolean; lang?: 'ru' | 'uz'; receipt?: boolean }): Promise<AiCheckItem> {
   const { ctx, settings, provider } = run;
   const { user } = ctx;
-  // The caller is already allowed to check this person (the scope checks of the scenario); the coverage context —
-  // policy, program, used limits — is the system's: a clinic or an assistance company sees only the verdict.
-  const cov = await contextOf(asSystem(ctx, 'ai: coverage context (policy, program, limits) of a person the caller may check'), job.insured, run.P);
+  const cov = await contextOf(ctx, job.insured, run.P);
   const started = ctx.now();
   const out = await runCoverageCheck(
     { scenario, text: job.text, serviceCode: job.serviceCode, icd10: job.icd10, amount: job.amount, serviceDate: job.serviceDate, lang: opts.lang },

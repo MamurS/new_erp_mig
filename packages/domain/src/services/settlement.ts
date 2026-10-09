@@ -7,7 +7,7 @@ import { detectFlags } from '../settlement';
 import { randomId } from '../lib/random';
 import { parseIso, tzIso } from '../lib/time';
 import type { ClaimRow } from '../store/db';
-import { systemRepos, type BaseCtx } from './kernel';
+import { type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { currentAssistance } from './assistance';
 
@@ -55,15 +55,19 @@ export function reserveOnDate(c: ClaimRow, date: string): number {
  * Recomputes fraud flags; dismissed flags keep their comment. Sets `c.flags` and saves them when the claim
  * is stored already.
  */
-export async function refreshFlags(person: BaseCtx, c: ClaimRow, P?: ParamsView): Promise<FraudFlag[]> {
-  // Fraud checks compare the claim with all claims of the insurer: the system's work, whoever submits it.
-  const ctx: BaseCtx = { ...person, repos: systemRepos(person, 'fraud flags of a claim: compared with every claim of the insurer') };
+export async function refreshFlags(ctx: BaseCtx, c: ClaimRow, P?: ParamsView): Promise<FraudFlag[]> {
+  // Fraud checks compare the claim with all claims of the insurer: other people's claims that may be the same receipt
+  // come as a narrow fact without the person (app.fact_receipt_twins); the person's own claims (the monthly
+  // frequency) under the submitter's RLS. A stored claim only (both callers save it first).
   const params = P ?? (await loadParams(ctx));
   const i = await ctx.repos.insured.get(c.insuredId);
   const policy = i ? await ctx.repos.policies.get(i.policyId) : null;
+  const twins = await ctx.repos.facts.receiptTwins(c.id);
+  const twinIds = new Set(twins.map((t) => t.id));
+  const own = (await ctx.repos.claims.list({ where: { insuredId: c.insuredId, id: { ne: c.id } } })).filter((o) => !twinIds.has(o.id));
   const found = detectFlags({
     claim: c,
-    others: await ctx.repos.claims.list({ where: { id: { ne: c.id } } }),
+    others: [...twins, ...own],
     coverageFrom: i?.insuredFrom ?? policy?.startDate ?? '0000-01-01',
     coverageTo: policy?.endDate ?? '9999-12-31',
     excludedFrom: i?.excludedFrom,

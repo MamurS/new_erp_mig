@@ -32,6 +32,8 @@ import { TABLES, sequenceName, type TableSpec } from './schema';
 import { fieldMapping, keyColumn, physicalColumns, type FieldMapping } from './sql/physical';
 import { qi } from './columns';
 import { maskCard } from '../lib/mask';
+import { genericFacts } from './facts';
+import { pgFacts } from './postgresFacts';
 
 export interface SqlResult {
   rows: Record<string, unknown>[];
@@ -570,12 +572,12 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
       return Object.fromEntries(rows.map((r) => [String(r.lineId), String(r.reason)]));
     },
     async set(k, v) {
-      // Written by the API (system): no role may write the flags (RLS.md).
-      await run(`insert into ${flags.table} (line_id, reason) values ($1::uuid, $2::text) on conflict (line_id) do update set reason = excluded.reason`, [k, v], true);
+      // The reviewer of rebills writes the flags under RLS (RLS.md).
+      await run(`insert into ${flags.table} (line_id, reason) values ($1::uuid, $2::text) on conflict (line_id) do update set reason = excluded.reason`, [k, v], flags.systemInsert);
     },
     async delete(k) {
       if (!UUID.test(k)) return;
-      await run(`delete from ${flags.table} where line_id = $1::uuid`, [k], true);
+      await run(`delete from ${flags.table} where line_id = $1::uuid`, [k], flags.systemOnly);
     },
   };
 
@@ -622,6 +624,8 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     },
   };
 
-  return { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one'>), aiRebillFlags, statementKeys, seq, one };
+  const base: Omit<Repos, 'facts'> = { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one' | 'facts'>), aiRebillFlags, statementKeys, seq, one };
+  // Narrow facts: the system computes them itself; a person asks the SQL functions of store/sql/facts.ts.
+  return { ...base, facts: priv ? genericFacts(base) : pgFacts(session, crypto) };
 }
 

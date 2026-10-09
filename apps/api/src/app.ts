@@ -205,7 +205,8 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
         const out = await inTx(async (tx, base) => {
           const ctx = await signIn(tx, base, req, metaOf(request));
           const f = await fileAccess(ctx, req.id('id'));
-          const { rows } = await tx.privileged((s) => s.query(`select bucket, object_name::text as name from public.files where id = $1::uuid`, [f.id]));
+          // The person may read this row (fileAccess): where its bytes are is read under the person's RLS.
+          const { rows } = await tx.query(`select bucket, object_name::text as name from public.files where id = $1::uuid`, [f.id]);
           const obj = rows[0] as { bucket: string | null; name: string | null } | undefined;
           // A seeded receipt has no stored object: its picture is drawn by the download route itself.
           const url = obj?.bucket && obj.name ? await storage.signedUrl(obj.bucket as never, obj.name, SIGNED_LINK_SEC) : `/api/files/${f.id}`;

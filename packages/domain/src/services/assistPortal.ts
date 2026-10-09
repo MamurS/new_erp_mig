@@ -54,8 +54,9 @@ import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { AssistUserRow, AssistanceCaseRow, GuaranteeRow, InsuredRow } from '../store/db';
-import { asSystem, audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
 import { q, type Qs } from './list';
+import { saveRecomputedRebill } from './system/clocks';
 import { loadParams, type ParamsView } from './params';
 import { assignmentsOf, assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
 import {
@@ -180,21 +181,21 @@ function addWorkdays(fromIso: string, days: number): string {
 
 /** A rebill with fresh checks, fee and totals (saved when they changed) and the names of the people. */
 export async function toRebillView(ctx: BaseCtx, b: Rebill): Promise<RebillView> {
-  // Checks and the fee are recomputed by the system on every read; names of MIG staff are shown to the assistance.
-  const sys = systemRepos(ctx, 'rebill view: recomputed checks and fee, names of the MIG staff who accepted and paid');
+  // Checks and the fee are recomputed on every read (under the reader's facts) and saved when they changed, as a job
+  // run on read would; names of MIG staff come as a narrow fact (the assistance reads no staff).
   const before = canonicalJson(b);
   await recomputeRebill(ctx, b);
-  if (canonicalJson(b) !== before) await sys.rebills.put(b);
+  if (canonicalJson(b) !== before) await saveRecomputedRebill(ctx, b);
   const P = await loadParams(ctx);
-  const name = async (id?: string) => (id ? (await sys.staff.get(id))?.fullName : undefined);
+  const deciders = b.acceptedById || b.paidById ? await ctx.repos.facts.rebillDeciders(b.id) : {};
   const a = await assistanceOf(ctx, b.assistanceId);
   return {
     ...b,
     assistanceName: a.name,
     assistanceLegalForm: a.legalForm,
     ...(b.submittedAt ? { reviewDueAt: addWorkdays(b.submittedAt, P.dmsParam('rebillReviewWorkdays')) } : {}),
-    ...(b.acceptedById ? { acceptedByName: await name(b.acceptedById) } : {}),
-    ...(b.paidById ? { paidByName: await name(b.paidById) } : {}),
+    ...(b.acceptedById ? { acceptedByName: deciders.acceptedByName } : {}),
+    ...(b.paidById ? { paidByName: deciders.paidByName } : {}),
   };
 }
 
@@ -227,8 +228,9 @@ export async function ownRebill(ctx: BaseCtx, assistanceId: UUID, id: UUID): Pro
 
 /** Appointments of people whose policy was assigned to the assistance when the request was made. */
 export async function appointmentsOf(ctx: BaseCtx, assistanceId: UUID): Promise<Appointment[]> {
-  // The scope is the assignment on the date of the request (also a former assistance, read-only): checked here.
-  const r = systemRepos(ctx, 'appointments of the people an assistance company serves, scoped by the assignment on the date');
+  // The scope is the assignment on the date of the request (also a former assistance, read-only): checked here and,
+  // for the company's users, by RLS (app.assist_scope_of over appointments, app.assist_access over insured).
+  const r = ctx.repos;
   const people = new Map((await r.insured.list()).map((i) => [i.id, i]));
   const scopeOn = await scopeChecker(ctx, assistanceId);
   return (await r.appointments.list()).filter((a) => {
@@ -371,22 +373,24 @@ export async function disputeRebillLine(ctx: BaseCtx, b: Rebill, lineId: string,
 
 export async function overview(ctx: AuthCtx): Promise<AssistOverview> {
   const { user, assistanceId } = requireAssist(ctx);
-  // The desktop counts the company's cases, letters, lines and rebills for every role of it (RLS shows each
-  // table to some roles only); the queue items stay role-specific below.
-  const r = systemRepos(ctx, 'assistance desktop: counters of the company\'s cases, letters, registry lines and rebills');
+  // The desktop counters are the same for every role of the company (app.fact_assist_desktop_counters: RLS shows
+  // each table to some roles only); the queue items are role-specific, from the tables the role reads.
+  const r = ctx.repos;
   const a = await assistanceOf(ctx, assistanceId);
   const P = await loadParams(ctx);
   const now = ctx.now();
+  const counters = await r.facts.assistDesktopCounters(assistanceId, now, todayIso(ctx), P.dmsParam('clinicResponseMinutes'));
   const queue: AssistQueueItem[] = [];
   const cases = (await r.cases.list({ where: { assistanceId } })).filter((c) => c.status !== 'resolved');
   const appts: Appointment[] = [];
-  for (const x of await appointmentsOf(ctx, assistanceId)) {
-    if (x.status === 'requested' && parseIso(x.startsAt) > now - 3600_000 && (await isOverdueRequest(ctx, x, now, P))) appts.push(x);
+  if (user.role === 'asst_operator') {
+    for (const x of await appointmentsOf(ctx, assistanceId)) {
+      if (x.status === 'requested' && parseIso(x.startsAt) > now - 3600_000 && (await isOverdueRequest(ctx, x, now, P))) appts.push(x);
+    }
   }
   const letters = await r.guarantees.list({ where: { assistanceId } });
   const gps = letters.filter((g) => g.status === 'requested' && !g.escalated);
   const regs = (await r.registries.list({ where: { status: { ne: 'draft' } } })).filter((x) => linesOf(x, assistanceId).length);
-  const pendingLines = regs.reduce((s, x) => s + linesOf(x, assistanceId).filter((l) => l.status === 'pending' || l.status === 'disputed').length, 0);
   const rebills = await r.rebills.list({ where: { assistanceId } });
   if (user.role === 'asst_operator' || user.role === 'asst_doctor') {
     for (const c of cases) queue.push({ id: c.id, kind: 'case', title: `${c.number} · ${CASE_TYPE_LABEL[c.type]}`, subtitle: c.insuredName, dueAt: c.slaDueAt, to: `/assist/cases/${c.id}` });
@@ -422,11 +426,11 @@ export async function overview(ctx: AuthCtx): Promise<AssistOverview> {
     authorityLimit: authorityLimitOf(a, P),
     queue: queue.sort((x, y) => ((x.dueAt ?? '9') < (y.dueAt ?? '9') ? -1 : 1)),
     counters: {
-      openCases: cases.length,
-      slaBreaches: cases.filter((c) => parseIso(c.slaDueAt) < now).length + appts.length,
-      guaranteesPending: gps.length,
-      linesPending: pendingLines,
-      rebillsInReview: rebills.filter((b) => b.status === 'submitted' || b.status === 'in_review').length,
+      openCases: counters.openCases,
+      slaBreaches: counters.casesPastSla + counters.overdueRequests,
+      guaranteesPending: counters.guaranteesPending,
+      linesPending: counters.linesPending,
+      rebillsInReview: counters.rebillsInReview,
     },
     kpi: await kpiOf(ctx, a, now),
   };
@@ -723,8 +727,9 @@ export async function requestGuaranteeOnCall(ctx: AuthCtx, body: unknown): Promi
   const visit: Visit = { id: randomId(), clinicId: clinic.id, insuredId: i.id, openedById: user.id, method: 'policy', openedAt: tzIso(now), expiresAt: tzIso(now + VISIT_TTL_MS) };
   await r.visits.insert(visit);
   const actor = { id: user.id, clinicId: clinic.id, displayName: user.displayName, role: user.role, assistanceId };
-  // The letter belongs to the clinic of the referral (its row is the clinic's): the system writes it for the assistance.
-  const g = await createGuarantee(asSystem(ctx, 'assistance referral: the guarantee letter in the clinic of the referral'), actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
+  // The letter belongs to the clinic of the referral; the assistance company writes it for its own current client
+  // (RLS of guarantees: the company's letters of a policy it serves today).
+  const g = await createGuarantee(ctx, actor, { visitId: visit.id, serviceCode: svc.code, icd10: input.icd10, estimatedCost: input.estimatedCost, comment: input.comment || undefined }, `ассистанс, ${user.displayName}`);
   if (c) await r.cases.update(c.id, { links: { ...c.links, guaranteeId: g.id }, ...(c.status === 'open' ? { status: 'in_progress' as const } : {}) });
   return toGuaranteeView(ctx, g);
 }
@@ -834,7 +839,7 @@ export async function clinics(ctx: AuthCtx): Promise<AssistClinic[]> {
       clinicLegalForm: c.legalForm,
       city: c.district,
       specialties: c.specialties,
-      ownPrices: await systemRepos(ctx, 'network clinics: whether the company has own prices with a clinic').clinicContracts.exists({ clinicId: c.id, payer: assistanceId }),
+      ownPrices: await ctx.repos.clinicContracts.exists({ clinicId: c.id, payer: assistanceId }),
       priceList: await priceListOf(ctx, c.id, assistanceId),
     });
   }

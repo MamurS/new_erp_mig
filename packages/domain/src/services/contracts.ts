@@ -38,11 +38,12 @@ import { randomId } from '../lib/random';
 import { tzIso } from '../lib/time';
 import type { ChangeRequestRow } from '../store/db';
 import { byLegalForm, byLegalName, filterLegalForm, q as searchTerm, sortBy } from './list';
-import { asSystem, audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, systemRepos, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
+import { saveInvoiceStatus } from './system/clocks';
 import { assistanceName } from './assistance';
 import { personFor } from './family';
-import { afterSigning, checklistInput, clientRow, contractOf, createEndorsement, dealEvent, dealKp, dealOf, endorsementLines, endorsementSummary, latestQuote, moveDeal, pendingRequests, refreshContract, refreshInvoice, signatories, signatoryOption, toChangeRequest } from './lifecycle';
+import { afterSigning, checklistInput, clientRow, contractOf, createEndorsement, dealEvent, dealKp, dealOf, endorsementLines, endorsementSummary, latestQuote, moveDeal, pendingRequests, refreshContract, refreshInvoice, signatories, toChangeRequest } from './lifecycle';
 import { parsePolicyList, toListRow } from './policy';
 import { completeTasks } from './tasks';
 import { toClient } from './views';
@@ -120,33 +121,32 @@ const signerForClient = (c: Contract) => c.params.clientSignatory.name;
 async function freshInvoice(ctx: BaseCtx, inv: Invoice): Promise<Invoice> {
   const before = inv.status;
   refreshInvoice(inv, todayIso(ctx));
-  if (inv.status !== before) await systemRepos(ctx, 'invoice status by date (the lazy server clock, a job run on read)').invoices.update(inv.id, { status: inv.status });
+  if (inv.status !== before) await saveInvoiceStatus(ctx, inv.id, inv.status);
   return inv;
 }
 
-async function contractView(person: BaseCtx, c: Contract): Promise<ContractView> {
-  // The card of a contract the person may read (checked by the caller): the deal, the quote, signatories,
-  // invoices, payments and endorsements around it come from tables the reader's RLS may not cover.
-  const ctx = asSystem(person, 'contract card for its reader: deal, quote, signatories, invoices, payments, endorsements');
+async function contractView(ctx: BaseCtx, c: Contract): Promise<ContractView> {
+  // The card of a contract the person may read (checked by the caller). The deal number, the quote summary and the
+  // MIG signatory come as narrow facts (HR and some MIG roles read neither deals, quotes nor staff); invoices,
+  // payments, endorsements and appendix 2 under the reader's RLS (HR: payments and signatories are not shown).
   const r = ctx.repos;
   const P = await loadParams(ctx);
   const client = await clientRow(ctx, c.clientId);
-  const q = c.quoteId ? await r.quotes.get(c.quoteId) : await latestQuote(ctx, c.dealId);
-  const signatory = await r.staff.get(c.params.migSignatoryId);
+  const { quote: q } = await r.facts.contractQuote(c.dealId, c.quoteId ?? null);
   const invoices: Invoice[] = [];
   for (const i of await r.invoices.list({ where: { contractId: c.id } })) invoices.push(await freshInvoice(ctx, i));
   return {
     ...c,
     client: await toClient(ctx, client),
-    dealNumber: (await r.deals.get(c.dealId))?.number ?? '—',
-    migSignatory: signatory ? signatoryOption(signatory) : null,
+    dealNumber: (await r.facts.dealNumber(c.dealId)) ?? '—',
+    migSignatory: await r.facts.migSignatory(c.params.migSignatoryId),
     signatories: await signatories(ctx),
     insuredRows: ((await r.contractInsured.get(c.id))?.rows ?? []).map((x) => ({ fullName: x.fullName, position: x.position, relation: x.relation })),
     group: await contractGroup(ctx, c),
     invoices,
     payments: await r.payments.list({ where: { contractId: c.id } }),
     endorsements: (await r.endorsements.list({ where: { contractId: c.id } })).map(endorsementSummary),
-    quote: q ? { id: q.id, premiumEmployee: q.premiumEmployee, premiumFamily: q.premiumFamily, total: q.total, program: q.program } : null,
+    quote: q,
     originalOverdue: originalReminderDue(c.signing, ctx.now(), P.dmsParam('paperOriginalReminderDays')),
     assistanceName: (await assistanceName(ctx, c.params.assistanceId ?? null)) ?? undefined,
   };
@@ -156,11 +156,10 @@ async function needsAmountApproval(ctx: BaseCtx, e: Endorsement): Promise<boolea
   return (await ctx.repos.changeRequests.exists({ id: { in: e.changeRequestIds }, type: 'other' })) && !e.amountsApprovedByName;
 }
 
-async function endorsementView(person: BaseCtx, e: Endorsement): Promise<EndorsementView> {
-  const ctx = asSystem(person, 'endorsement card for its reader: the contract, the MIG signatory, change requests');
+async function endorsementView(ctx: BaseCtx, e: Endorsement): Promise<EndorsementView> {
+  // The contract, the client and the change requests under the reader's RLS; the MIG signatory as a narrow fact.
   const c = await contractOf(ctx, e.contractId);
   const client = await clientRow(ctx, c.clientId);
-  const signatory = await ctx.repos.staff.get(c.params.migSignatoryId);
   return {
     ...e,
     contractNumber: c.number,
@@ -168,7 +167,7 @@ async function endorsementView(person: BaseCtx, e: Endorsement): Promise<Endorse
     clientName: client.name,
     clientLegalForm: client.legalForm,
     clientInn: client.inn,
-    migSignatory: signatory ? signatoryOption(signatory) : null,
+    migSignatory: await ctx.repos.facts.migSignatory(c.params.migSignatoryId),
     clientSignatoryName: signerForClient(c),
     requests: (await ctx.repos.changeRequests.list({ where: { id: { in: e.changeRequestIds } } })).map(toChangeRequest),
     needsAmountApproval: await needsAmountApproval(ctx, e),
@@ -244,7 +243,7 @@ export async function contractGroup(ctx: BaseCtx, c: Contract): Promise<{ size: 
   const rows = (await ctx.repos.contractInsured.get(c.id))?.rows;
   const counts = rows?.length ? countsOf(rows) : { employees: c.params.employees, family: c.params.familyMembers };
   const size = groupSize(counts, rules);
-  const exception = !!(c.quoteId ? await ctx.repos.quotes.get(c.quoteId) : null)?.belowMinException;
+  const exception = c.quoteId ? (await ctx.repos.facts.contractQuote(c.dealId, c.quoteId)).belowMinException : false;
   return { size, min: rules.min, below: size < rules.min, exception };
 }
 
@@ -564,27 +563,26 @@ async function bankPaymentView(ctx: BaseCtx, b: BankPayment): Promise<BankPaymen
   };
 }
 
-async function certificates(ctx: BaseCtx, policyId: string): Promise<CertificateView[]> {
-  // Document data of the certificates (the caller decided who may read which).
-  const r = systemRepos(ctx, 'certificates of a policy: client, contract number, assistance and persons (document data)');
+async function certificates(ctx: BaseCtx, policyId: string, insuredId: string | null = null): Promise<CertificateView[]> {
+  // Document data of the certificates (the caller decided who may read which): the policy under the reader's RLS,
+  // the contract number, the client and the persons with a certificate as a narrow fact (app.fact_certificate_data).
+  const r = ctx.repos;
   const p = await r.policies.get(policyId);
   if (!p) throw notFound();
-  const c = p.contractId ? await r.contracts.get(p.contractId) : null;
+  const data = await r.facts.certificateData(p.id, insuredId);
+  if (!data) throw notFound();
   const a = p.assistanceId ? await r.assistances.get(p.assistanceId) : null;
-  const client = await r.clients.get(p.clientId);
-  return (await r.insured.list({ where: { policyId: p.id, status: 'active' } }))
-    .filter((i) => i.certificateNumber)
-    .map((i) => ({
-      insuredId: i.id,
+  return data.rows.map((i) => ({
+      insuredId: i.insuredId,
       fullName: i.fullName,
-      certificateNumber: i.certificateNumber!,
+      certificateNumber: i.certificateNumber,
       insuredFrom: i.insuredFrom,
       policyNumber: p.number,
       policyEndDate: p.endDate,
       program: p.program,
-      clientName: client?.name ?? p.clientName,
-      clientLegalForm: client?.legalForm,
-      contractNumber: c?.number ?? '—',
+      clientName: data.clientName ?? p.clientName,
+      clientLegalForm: data.clientLegalForm,
+      contractNumber: data.contractNumber ?? '—',
       assistanceName: a?.name ?? 'MIG',
       assistanceLegalForm: a?.legalForm,
       assistancePhone: a?.phone24x7 ?? '+998 71 200 00 00',
@@ -780,14 +778,12 @@ export async function newVersion(ctx: AuthCtx, id: string): Promise<ContractView
 export async function uploadInsuredList(ctx: AuthCtx, id: string, text: string): Promise<ContractView> {
   const { user } = ctx;
   // HR uploads appendix 2 of a contract of its company it sees, or of a draft MIG asked it for («Запросить у HR»):
-  // the draft is hidden from HR (RLS), so after these checks the system reads and writes it for HR.
-  const hrCtx = user.role === 'hr' ? asSystem(ctx, 'appendix 2 by HR: the contract of its company MIG asked it to fill') : null;
-  const c = await contractOf(hrCtx ?? ctx, id);
+  // RLS shows HR such a draft while the request is open (app.hr_asked_contract).
+  const c = await contractOf(ctx, id);
   if (user.role === 'hr') {
     const asked = await ctx.repos.tasks.exists({ status: 'open', toRole: 'hr', action: 'insured_list', contractId: c.id });
     if (!can(user, 'contracts.sign_client', { companyId: c.clientId }) || (!HR_VISIBLE.has(c.status) && !asked)) throw notFound();
   } else requirePermission(user, 'contracts.draft');
-  ctx = hrCtx ?? ctx;
   if (c.status === 'active' || c.status === 'signed' || c.status === 'terminated' || c.status === 'expired') throw conflict('srv.contract.listViaEndorsement');
   const parsed = parsePolicyList(text);
   if (parsed.errors.length)
@@ -987,7 +983,7 @@ export async function myCertificate(ctx: AuthCtx, personId: string | null): Prom
   if (!viewer) throw notFound();
   const me = (await personFor(ctx, viewer, personId, 'card')).person;
   if (!me.certificateNumber) throw notFound();
-  return (await certificates(ctx, me.policyId)).find((c) => c.insuredId === me.id) ?? null;
+  return (await certificates(ctx, me.policyId, me.id)).find((c) => c.insuredId === me.id) ?? null;
 }
 
 // ---------------------------------------------------------------- change requests and endorsements (§11)

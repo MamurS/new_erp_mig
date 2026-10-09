@@ -321,10 +321,51 @@ describe.skipIf(!hasDb)('conformance: memory ↔ postgres', () => {
     if (letter) await asstDoctor('asst_doctor', 'POST', `/assist/guarantees/${letter.id}/decision`, { action: 'approve', amount: letter.estimatedCost, validUntil: plusDays(30) });
     await sales('sales', 'GET', `/deals/${sentKp?.dealId ?? deal.id}`);
 
+    // ---- flows that ran with the system's repositories before (docs/PRIVILEGED_AUDIT.md): now as the person, and they succeed
+    const ok: Pair[] = [];
+    const child = d.insured.find((i) => i.principalId === me.id && i.status !== 'excluded');
+    if (child) ok.push(await insured('insured', 'GET', `/me/card-token?personId=${child.id}`));
+    ok.push(await insured('insured', 'GET', '/me/limits'));
+    const referralClinic = d.clinics.find((c) => d.priceLists.some((p) => p.clinicId === c.id && p.items.some((x) => x.code === 'DG-310' && x.requiresGuarantee)));
+    if (person && referralClinic) {
+      ok.push(await asstOperator('asst_operator', 'POST', '/assist/guarantees', { insuredId: person.id, clinicId: referralClinic.id, serviceCode: 'DG-310', icd10: 'M54.5', estimatedCost: 1_500_000, comment: 'Направление по звонку' }));
+    }
+    ok.push(await asstOperator('asst_operator', 'GET', '/assist/overview'));
+    const clinicId = d.clinicUsers.find((u) => u.email === DEMO_CLINIC_USERS[1]!.email)!.clinicId;
+    const registries = await clinicAdmin('clinic_admin', 'GET', '/clinic/registries');
+    const draft = (registries.mem.body as { id: string; status: string }[]).find((x) => x.status === 'draft');
+    const pastVisit = d.visits.find((v) => v.clinicId === clinicId);
+    if (draft && pastVisit) {
+      ok.push(await clinicAdmin('clinic_admin', 'POST', `/clinic/registries/${draft.id}/lines`, { visitId: pastVisit.id, serviceDate: today, serviceCode: 'TH-101', icd10: 'J06.9', quantity: 1, price: d.priceLists.find((p) => p.clinicId === clinicId)?.items.find((x) => x.code === 'TH-101')?.price ?? 150_000 }));
+      await clinicAdmin('clinic_admin', 'POST', `/clinic/registries/${draft.id}/submit`);
+    }
+    const deliveries = await clinicAdmin('clinic_admin', 'GET', '/clinic/integration/deliveries');
+    const undelivered = (deliveries.mem.body as { id: string; status: string }[]).find((x) => x.status !== 'delivered');
+    if (undelivered) ok.push(await clinicAdmin('clinic_admin', 'POST', `/clinic/integration/deliveries/${undelivered.id}/retry`));
+    // The assistance submits its draft rebill, the MIG reviewer accepts it (claims from its lines), the accountant pays
+    // it; the assistance sees who decided.
+    const claimsOfficer = await as(staff('claims_officer'));
+    const billing = await as({ email: DEMO_ASSIST_USERS[2]!.email });
+    const draftRebill = d.rebills.find((x) => x.status === 'draft' && x.assistanceId === d.assistUsers.find((u) => u.email === DEMO_ASSIST_USERS[2]!.email)!.assistanceId);
+    if (draftRebill) {
+      ok.push(await billing('asst_billing', 'POST', `/assist/rebills/${draftRebill.id}/submit`));
+      const view = await claimsOfficer('claims_officer', 'GET', `/rebills/${draftRebill.id}`);
+      ok.push(view);
+      for (const l of ((view.mem.body as { lines?: { id: string; status: string }[] }).lines ?? []).filter((x) => x.status === 'pending' || x.status === 'disputed')) {
+        ok.push(await claimsOfficer('claims_officer', 'POST', `/rebills/${draftRebill.id}/lines/${l.id}/decision`, { decision: 'accept' }));
+      }
+      ok.push(await as(staff('accountant')).then((acc) => acc('accountant', 'POST', `/rebills/${draftRebill.id}/pay`)));
+      ok.push(await billing('asst_billing', 'GET', `/assist/rebills/${draftRebill.id}`));
+    }
+    // The AI precheck of a rebill: the reviewer sets and clears the flags of its lines under RLS.
+    const paidRebill = d.rebills.find((x) => x.status !== 'draft');
+    if (paidRebill) await claimsOfficer('claims_officer', 'POST', `/rebills/${paidRebill.id}/ai-precheck`);
+    ok.push(await as(staff('sales_manager')).then((s2) => s2('sales', 'GET', `/assistance/${d.assistUsers[0]!.assistanceId}/card`)));
+    for (const x of ok) expect(x.pg.status, JSON.stringify(x.pg.body).slice(0, 300)).toBeLessThan(300);
+
     // ---- sign-out everywhere
     await underwriter('underwriter', 'POST', '/auth/logout?all=1');
     await underwriter('underwriter', 'GET', '/auth/me');
-    void today;
     expect(mismatches).toEqual([]);
   });
 });

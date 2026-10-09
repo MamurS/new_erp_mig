@@ -23,9 +23,10 @@ import { addWorkdays, canRemind, isActiveRequest, isDueSoon, isOverdue } from '.
 import { randomId } from '../lib/random';
 import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
-import { asSystem, audit, conflict, forbidden, notFound, requirePermission, systemRepos, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { dealContract } from './lifecycle';
+import { completeTasks } from './system/consequences';
 
 export interface SubjectRefs {
   clientId: string;
@@ -115,16 +116,15 @@ const executorLink = (task: TaskRow) => task.link;
  * A line in the request's history and in the activity of its object (the deal's events, the client's log).
  * Changes `task.history` in place: the caller saves the task.
  */
-async function record(person: BaseCtx, task: TaskRow, kind: TaskEvent['kind'], byName: string, comment?: string): Promise<void> {
-  // The activity of the request's deal and client is written whoever acts on the request (HR included).
-  const ctx = asSystem(person, 'activity of a request in the feed of its deal and the log of its client');
+async function record(ctx: BaseCtx, task: TaskRow, kind: TaskEvent['kind'], byName: string, comment?: string): Promise<void> {
+  // The activity of the request's deal and client is written whoever acts on the request (HR included): the deal
+  // feed under the RLS of deal_events, the client's log through app.fact_append_client_log.
   const at = tzIso(ctx.now());
   task.history.push({ at, kind, byName, ...(comment ? { comment } : {}) });
   const to = task.assigneeName ?? msg(`labels.role.${task.toRole}`);
   const text = msg(`next.activity.${kind}`, { what: whatOf(task), to, who: byName, ...(comment ? { comment } : { comment: '' }) });
   if (task.dealId) await ctx.repos.dealEvents.insert({ id: randomId(), dealId: task.dealId, at, actorName: byName, text }, { at: 'start' });
-  const client = await ctx.repos.clients.get(task.clientId);
-  if (client) await ctx.repos.clients.update(client.id, { log: [{ at, text }, ...(client.log ?? [])] });
+  await ctx.repos.facts.appendClientLog(task.clientId, { at, text });
 }
 
 const saveTask = (ctx: BaseCtx, t: TaskRow) => ctx.repos.tasks.put(t);
@@ -231,9 +231,9 @@ export async function sweepDeadlines(ctx: BaseCtx): Promise<void> {
     if (!kind) continue;
     if (kind === 'overdue' ? task.overdueSent : task.dueSoonSent || task.overdueSent) continue;
     // Claim the reminder: of requests reading at the same time only one sets the flag (Postgres re-checks the
-    // condition after the other's commit), the others skip — the reminder goes once.
-    const sys = systemRepos(ctx, 'deadline reminders: the flag of a task is claimed once by whoever reads first');
-    const claimed = kind === 'overdue' ? await sys.tasks.updateWhere({ id: task.id, overdueSent: { ne: true } }, { overdueSent: true }) : await sys.tasks.updateWhere({ id: task.id, dueSoonSent: { ne: true } }, { dueSoonSent: true });
+    // condition after the other's commit), the others skip — the reminder goes once. The reader may update every
+    // request it sees (RLS of tasks).
+    const claimed = kind === 'overdue' ? await ctx.repos.tasks.updateWhere({ id: task.id, overdueSent: { ne: true } }, { overdueSent: true }) : await ctx.repos.tasks.updateWhere({ id: task.id, dueSoonSent: { ne: true } }, { dueSoonSent: true });
     if (!claimed) continue;
     const text = msg(`next.notify.${kind}`, { what: whatOf(task), subject: task.subjectLabel });
     for (const id of await executorIds(ctx, task)) await notify(ctx, id, text, executorLink(task));
@@ -247,26 +247,6 @@ export function taskView(t: TaskRow, viewerId: string, now = Date.now()): WorkTa
   return { ...rest, overdue: isOverdue(t, now), byMe: t.createdById === viewerId };
 }
 
-/**
- * The action was done: open requests about it (for this deal, contract or client) close and their authors
- * are notified. Returns how many were closed.
- */
-export async function completeTasks(person: BaseCtx, actions: TaskAction | readonly TaskAction[], refs: { dealId?: string; contractId?: string; clientId?: string }, byName: string): Promise<number> {
-  // A step of the pipeline done closes the requests about it, whoever did it (requests of other roles too).
-  const ctx = asSystem(person, 'a step done closes the open requests about it (requests of any role)');
-  const list = typeof actions === 'string' ? [actions] : actions;
-  let n = 0;
-  for (const task of await ctx.repos.tasks.list({ where: { status: { in: ['open', 'in_progress'] }, action: { in: list } } })) {
-    const about =
-      (refs.contractId && (task.contractId === refs.contractId || (task.subjectType === 'contract' && task.subjectId === refs.contractId))) ||
-      (refs.dealId && task.subjectType === 'deal' && task.subjectId === refs.dealId) ||
-      (refs.clientId && task.clientId === refs.clientId && task.subjectType === 'client');
-    if (!about) continue;
-    await closeTask(ctx, task, byName);
-    n += 1;
-  }
-  return n;
-}
 
 // ---------- endpoints ----------
 
@@ -417,29 +397,11 @@ export async function readNotification(ctx: AuthCtx, id: string): Promise<void> 
 }
 
 /** The client's way to a policy: the open (or last) deal, its contract and the first unpaid invoice. */
-export async function clientPipeline(ctx: BaseCtx, clientId: string): Promise<ClientPipeline> {
-  const r = ctx.repos;
-  const client = await r.clients.get(clientId);
-  const hasPolicy = !!client?.activePolicyId || (await r.insured.exists({ clientId }));
-  const hasHr = await r.hrUsers.exists({ companyId: clientId });
-  const deals = await r.deals.list({ where: { clientId }, orderBy: [['updatedAt', 'desc']] });
-  const deal = deals.find((x) => x.stage !== 'lost' && x.stage !== 'active') ?? deals[0];
-  if (!deal) return { hasPolicy, hasHr };
-  const c = await dealContract(ctx, deal.id);
-  const invoice = c ? await r.invoices.first({ where: { contractId: c.id, status: { ne: 'paid' } }, orderBy: [['dueDate', 'asc']] }) : null;
-  return {
-    hasPolicy,
-    hasHr,
-    dealId: deal.id,
-    dealNumber: deal.number,
-    stage: deal.stage,
-    ...(c ? { contractId: c.id, contractNumber: c.number, contractStatus: c.status } : {}),
-    ...(invoice ? { invoiceId: invoice.id, invoiceNumber: invoice.number } : {}),
-  };
-}
-
 export async function pipeline(ctx: AuthCtx, clientId: string): Promise<ClientPipeline> {
   requirePermission(ctx.user, 'clients.read');
   if (!(await ctx.repos.clients.get(clientId))) throw notFound();
-  return clientPipeline({ ...ctx, repos: systemRepos(ctx, 'client pipeline: deal stage, contract and invoice numbers of a client the person may read') }, clientId);
+  // The deal, the contract and the invoice of a client the person reads (app.fact_client_pipeline).
+  return ctx.repos.facts.clientPipeline(clientId);
 }
+
+export { completeTasks };

@@ -28,6 +28,48 @@ const srcDocSink = {
   message: 'srcDoc is allowed only in apps/web/src/features/documents/DocFrame.tsx (sandboxed document frame).',
 };
 
+// Privileged access (RLS bypass, docs/PRIVILEGED_AUDIT.md): a request runs as its person under row-level security.
+// The service role is reached only through these calls, and only from an explicit allowlist of files below:
+// the lazy clocks, cross-role consequences and the webhook outbox (services/system/), the portfolio transfer, the
+// demo routes, sign-in and identity provisioning, jobs, and the store/transaction plumbing itself.
+const privilegedCalls = [
+  {
+    selector: "CallExpression[callee.name=/^(systemRepos|asSystem)$/]",
+    message: 'Privileged repositories (RLS bypass) only in the allowlisted files of eslint.config.js (docs/PRIVILEGED_AUDIT.md): run as the person, add an RLS policy or a narrow fact (store/facts.ts).',
+  },
+  {
+    selector: "CallExpression[callee.property.name='privileged']",
+    message: 'privileged() (the service role) only in the allowlisted files of eslint.config.js (docs/PRIVILEGED_AUDIT.md).',
+  },
+];
+const systemSession = [
+  {
+    selector: "CallExpression[callee.property.name='system']",
+    message: 'The system session (the service role) only in the allowlisted files of eslint.config.js (docs/PRIVILEGED_AUDIT.md).',
+  },
+  {
+    selector: "Property[key.name='privileged'][value.value=true]",
+    message: 'System repositories (privileged: true) only in the allowlisted files of eslint.config.js (docs/PRIVILEGED_AUDIT.md).',
+  },
+];
+const PRIVILEGED_ALLOWLIST = [
+  // The definitions of the capability.
+  'packages/domain/src/services/kernel.ts',
+  // Lazy clocks (jobs run on read), consequences of an act across roles, the webhook outbox.
+  'packages/domain/src/services/system/**',
+  // The portfolio transfer (a data migration approved by two admins).
+  'packages/domain/src/services/migration.ts',
+  // Demo-only routes (staging and CI, never production).
+  'packages/domain/src/http/demoRoutes.ts',
+  // The Postgres repositories: system-only tables and secret columns of rows RLS already returned.
+  'packages/domain/src/store/postgres.ts',
+  // The request transaction, the jobs' database, sign-in and identity provisioning, the background jobs.
+  'apps/api/src/db.ts',
+  'apps/api/src/systemDb.ts',
+  'apps/api/src/auth/**',
+  'apps/api/src/jobs/**',
+];
+
 const storageLocal = [
   { object: 'window', property: 'localStorage', message: 'Use apps/web/src/shared/lib/storage.ts' },
   { object: 'globalThis', property: 'localStorage', message: 'Use apps/web/src/shared/lib/storage.ts' },
@@ -180,6 +222,18 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // Privileged access is forbidden in route handlers, services and the request adapter (docs/PRIVILEGED_AUDIT.md).
+    files: ['packages/domain/src/**/*.ts', 'apps/api/src/**/*.ts'],
+    ignores: ['**/*.test.ts', 'apps/api/src/test/**', ...PRIVILEGED_ALLOWLIST],
+    rules: { 'no-restricted-syntax': ['error', ...htmlSinks, srcDocSink, ...privilegedCalls, ...systemSession] },
+  },
+  {
+    // The request adapter builds the system repositories of sign-in and of the partner API (no person of RLS); it
+    // never takes privileged repositories or groups for a person's request.
+    files: ['apps/api/src/app.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...htmlSinks, srcDocSink, ...privilegedCalls] },
   },
   {
     files: ['apps/web/src/shared/lib/storage.ts'],

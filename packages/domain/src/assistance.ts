@@ -45,12 +45,15 @@ export const REBILL_CHECK_LABEL = defineLabels<RebillCheckCode>('labels.rebillCh
 const within = (a: Pick<AssistanceAssignment, 'from' | 'to'>, date: ISODate) => a.from <= date && (!a.to || date <= a.to);
 
 /** The assistance company of a policy on a date; null — the client is served by MIG. */
-export function assistanceOn(assignments: readonly AssistanceAssignment[], policyId: UUID, date: ISODate): UUID | null {
+/** The fields of an assignment the routing rules read. */
+export type RoutingRow = Pick<AssistanceAssignment, 'policyId' | 'assistanceId' | 'from' | 'to'>;
+
+export function assistanceOn(assignments: readonly RoutingRow[], policyId: UUID, date: ISODate): UUID | null {
   const a = assignments.filter((x) => x.policyId === policyId && within(x, date)).sort((x, y) => (x.from < y.from ? 1 : -1))[0];
   return a?.assistanceId ?? null;
 }
 
-export const payerOn = (assignments: readonly AssistanceAssignment[], policyId: UUID, date: ISODate): Payer => assistanceOn(assignments, policyId, date) ?? 'mig';
+export const payerOn = (assignments: readonly RoutingRow[], policyId: UUID, date: ISODate): Payer => assistanceOn(assignments, policyId, date) ?? 'mig';
 
 function addMonths(date: ISODate, months: number): ISODate {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
@@ -64,7 +67,7 @@ function addMonths(date: ISODate, months: number): ISODate {
  * `none` — anything else (the server answers 404).
  */
 export function assistanceScope(
-  assignments: readonly AssistanceAssignment[],
+  assignments: readonly RoutingRow[],
   assistanceId: UUID,
   policyId: UUID,
   eventDate: ISODate,
