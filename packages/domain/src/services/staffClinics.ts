@@ -9,11 +9,11 @@ import { clinicAdminInviteSchema, clinicCreateSchema, clinicModeSchema, guarante
 import { can } from '../auth/permissions';
 import { approvalOutcome, registryStatusAfterReview } from '../clinics';
 import { randomId } from '../lib/random';
-import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
+import { DAY, isoDay, tzIso } from '../lib/time';
 import type { ClinicUserRow } from '../store/db';
 import { linesOf, settleRegistry, subStatus, subTotals } from './assistance';
 import { claimFromLine, clinicOf, emitWebhook, pushEvent, recomputeRegistry, refreshStoredGuarantee, toGuaranteeView, toRegistrySummary, toRegistryView } from './clinic';
-import { asSystem, audit, conflict, DomainError, forbidden, notFound, requirePermission, requireStaff, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, notFound, requirePermission, requireStaff, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { toUserView } from './clinicPortal';
 import { loadParams } from './params';
 import { revokeKey, toClientView } from './partnerIntegration';
@@ -25,31 +25,26 @@ function migSubRegistry(r: Registry): Registry {
 }
 
 async function clinicCard(ctx: BaseCtx, clinic: Clinic): Promise<ClinicCard> {
+  // Metrics as narrow facts (counts and sums of appointments, registries, webhooks and API calls the reader may
+  // not read); users and keys of the clinic under the RLS of MIG staff with clinics.read.
   const r = ctx.repos;
   const since = ctx.now() - DAY;
-  const answered = (await r.appointments.list({ where: { clinicId: clinic.id, respondedBy: 'clinic' } })).filter((a) => a.respondedAt);
-  const avg = answered.length ? Math.round(answered.reduce((s, a) => s + (parseIso(a.respondedAt!) - parseIso(a.createdAt)), 0) / answered.length / 60_000) : null;
-  const registries = await r.registries.list({ where: { clinicId: clinic.id } });
-  const reviewed = registries.flatMap((x) => x.lines.filter((l) => l.status !== 'pending'));
-  const rejected = reviewed.filter((l) => l.status === 'rejected' || l.status === 'disputed').length;
-  const hooks = await r.webhookDeliveries.list({ where: { clinicId: clinic.id } });
+  const f = await r.facts.clinicCardFigures(clinic.id);
+  const hooks = await r.facts.partnerIntegrationFigures(clinic.id, since);
+  const avg = f.answered ? Math.round(f.answeredMs / f.answered / 60_000) : null;
   const P = await loadParams(ctx);
   return {
     clinic,
     contractNumber: P.nextDocNumber('clinicContract', { code: clinic.id.slice(0, 4) }),
     metrics: {
       avgResponseMinutes: avg,
-      rejectedLineShare: reviewed.length ? rejected / reviewed.length : null,
-      amountToPay: registries.filter((x) => x.status === 'accepted' || x.status === 'partially_accepted').reduce((s, x) => s + x.totals.accepted, 0),
+      rejectedLineShare: f.reviewedLines ? f.rejectedLines / f.reviewedLines : null,
+      amountToPay: f.amountToPay,
     },
     users: (await r.clinicUsers.list({ where: { clinicId: clinic.id } })).map(toUserView),
     keys: (await r.integrationClients.list({ where: { clinicId: clinic.id } })).map(toClientView),
-    webhooks: {
-      endpoints: await r.webhooks.count({ clinicId: clinic.id }),
-      retrying: hooks.filter((w) => w.status === 'retrying').length,
-      failed24h: hooks.filter((w) => w.status === 'failed' && parseIso(w.lastAttemptAt) >= since).length,
-    },
-    apiErrors24h: (await r.apiLogs.list({ where: { clinicId: clinic.id, status: { gte: 400 } } })).filter((l) => parseIso(l.at) >= since).length,
+    webhooks: { endpoints: hooks.endpoints, retrying: hooks.retrying, failed24h: hooks.failed },
+    apiErrors24h: hooks.apiErrors,
   };
 }
 
@@ -61,7 +56,7 @@ function canReadRegistries(user: SessionUser): boolean {
 
 export async function card(ctx: AuthCtx, id: UUID): Promise<ClinicCard> {
   requirePermission(requireStaff(ctx), 'clinics.read');
-  return clinicCard(asSystem(ctx, 'clinic card for MIG staff: users, keys, webhooks, API errors, registries'), await clinicOf(ctx, id));
+  return clinicCard(ctx, await clinicOf(ctx, id));
 }
 
 export async function createClinic(ctx: AuthCtx, body: unknown): Promise<Clinic> {

@@ -86,12 +86,18 @@ import { NESTED_KEYS, TABLE_KEYS, type KeyedName, type LogName, type NestedRows,
 // Access rules (RLS)
 // ------------------------------------------------------------------------------------------------
 
-/** A row predicate (SQL over the table's columns). `always` — not gated by the grant's actions. */
+/**
+ * A row predicate (SQL over the table's columns). `always` — not gated by the grant's actions; `actions` — gated by
+ * these actions instead of the grant's (a second scope of the same group, docs/PRIVILEGED_AUDIT.md).
+ */
 export interface Scope {
   pred: string;
   always?: true;
+  actions?: readonly Action[];
 }
 export type ScopeLike = string | Scope;
+/** One scope, or several (the role passes when any of them applies). */
+export type GroupScope = ScopeLike | readonly ScopeLike[];
 export type RoleGroup = 'staff' | 'hr' | 'insured' | 'clinic' | 'assist';
 export const ROLE_GROUPS: readonly RoleGroup[] = ['staff', 'hr', 'insured', 'clinic', 'assist'];
 
@@ -103,11 +109,11 @@ export const ROLE_GROUPS: readonly RoleGroup[] = ['staff', 'hr', 'insured', 'cli
  */
 export interface Grant {
   actions?: readonly Action[];
-  staff?: ScopeLike;
-  hr?: ScopeLike;
-  insured?: ScopeLike;
-  clinic?: ScopeLike;
-  assist?: ScopeLike;
+  staff?: GroupScope;
+  hr?: GroupScope;
+  insured?: GroupScope;
+  clinic?: GroupScope;
+  assist?: GroupScope;
   anyone?: string;
 }
 export interface Access {
@@ -731,7 +737,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clinicId'],
       access: {
-        select: { actions: ['clinics.manage', 'clinic.users.manage'], staff: ALL, clinic: always(CLINIC_OWN) },
+        select: { actions: ['clinics.manage', 'clinic.users.manage', 'clinics.read'], staff: ALL, clinic: always(CLINIC_OWN) },
         ...rw({ actions: ['clinic.users.manage'], staff: ALL, clinic: CLINIC_OWN }),
         note: 'Users of a clinic: colleagues of the own clinic; the clinic admin manages them (MIG admin — the first admin).',
       },
@@ -897,7 +903,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clinicId'],
       access: {
-        select: { actions: ['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage'], staff: ALL, clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
+        select: { actions: ['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage'], staff: always(), clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' },
         ...rw({ actions: ['clinic.integration.manage', 'assist.integration.manage'], staff: ALL, clinic: CLINIC_OWN, assist: 'clinic_id = app.assistance_id()' }),
         note: 'API keys of a partner (`clinic_id` is the partner: a clinic or an assistance company); `secret_hash` is not readable by `authenticated`.',
       },
@@ -1054,7 +1060,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId'],
       access: {
-        select: { actions: ['assistance.manage', 'assist.users.manage'], staff: ALL, assist: always(ASSIST_OWN) },
+        select: { actions: ['assistance.manage', 'assist.users.manage'], staff: always(), assist: always(ASSIST_OWN) },
         ...rw({ actions: ['assist.users.manage', 'assistance.manage'], staff: ALL, assist: ASSIST_OWN }),
         note: 'Users of an assistance company: colleagues of the own company; its admin manages them.',
       },
@@ -1083,7 +1089,12 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId', 'insuredId', 'status', 'createdAt'],
       access: {
-        select: { actions: ['assist.cases.manage', 'qa.review', 'assistance.manage'], staff: ALL, assist: ASSIST_OWN },
+        select: {
+          actions: ['assist.cases.manage', 'qa.review', 'assistance.manage'],
+          // Every MIG employee sees the cases that need attention on the card of the company (complaints, past the SLA).
+          staff: [ALL, always("status <> 'resolved' and (type = 'complaint' or sla_due_at < now())")],
+          assist: ASSIST_OWN,
+        },
         ...rw({ actions: ['assist.cases.manage'], staff: ALL, assist: ASSIST_OWN }),
         note: 'Cases of an assistance company: the own company; MIG (complaints, quality control). Free texts are encrypted.',
       },
@@ -1108,7 +1119,12 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId', 'status'],
       access: {
-        select: { actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review'], staff: ALL, assist: ASSIST_OWN },
+        select: {
+          actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review'],
+          // Every MIG employee sees the submitted rebills of a company on its card; drafts stay the company's.
+          staff: [ALL, always("status <> 'draft'")],
+          assist: ASSIST_OWN,
+        },
         ...rw({ actions: ['rebills.review', 'rebills.pay', 'assist.rebills.submit'], staff: ALL, assist: ASSIST_OWN }),
         note: 'Re-invoices of an assistance company to MIG: the own company; MIG review and payment.',
       },
@@ -1128,7 +1144,7 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['assistanceId'],
       access: {
-        select: { actions: ['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage'], staff: ALL, assist: ASSIST_OWN },
+        select: { actions: ['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage'], staff: always(), assist: ASSIST_OWN },
         update: STAFF_READ('qa.review'),
         note: 'Quality control samples: MIG doctors review; the assistance company sees the verdicts on its decisions.',
       },

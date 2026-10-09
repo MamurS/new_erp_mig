@@ -6,7 +6,7 @@ import type { LimitCategory, ProgramCode } from '@mig/contracts';
 import { GUARANTEE_DECISION_HOURS, LIMIT_OF_SERVICE } from '../assistance';
 import { CLAIM_TO_LIMIT } from '../claims';
 import type { LegalFormCode } from '../config/legalForms';
-import type { AssistanceReportFigures, Facts } from './facts';
+import type { AssistanceClientRow, AssistanceReportFigures, Facts } from './facts';
 import type { PiiCrypto } from './pii';
 import type { Sql } from './postgres';
 
@@ -124,6 +124,27 @@ export function pgFacts(sql: Sql, crypto: PiiCrypto): Facts {
     },
     async receiptTwins(claimId) {
       return one('app.fact_receipt_twins($1::uuid)', [claimId]);
+    },
+    async partnerIntegrationFigures(partnerId, sinceMs) {
+      return numbers(await one('app.fact_partner_integration_figures($1::uuid, $2::bigint)', [partnerId, sinceMs]));
+    },
+    async clinicCardFigures(clinicId) {
+      return numbers(await one('app.fact_clinic_card_figures($1::uuid)', [clinicId]));
+    },
+    async assistanceClients(assistanceId, today) {
+      return (await one<AssistanceClientRow[]>('app.fact_assistance_clients($1::uuid, $2::date)', [assistanceId, today])).map((x) => ({ ...x, insuredCount: Number(x.insuredCount) }));
+    },
+    async rebillLineFacts(registryLineId, rebillId, assistanceId) {
+      return (await one('app.fact_rebill_line_facts($1::uuid, $2::uuid, $3::uuid)', [registryLineId, rebillId, assistanceId])) ?? null;
+    },
+    async rebillDeciders(rebillId) {
+      return one('app.fact_rebill_deciders($1::uuid)', [rebillId]);
+    },
+    async linkCasesToClaim(guaranteeId, claimId) {
+      await one('app.fact_link_cases_to_claim($1::uuid, $2::uuid)', [guaranteeId, claimId]);
+    },
+    async setClientLossRatio(clientId, lossRatio) {
+      await one('app.fact_set_client_loss_ratio($1::uuid, $2::double precision)', [clientId, lossRatio]);
     },
   };
 }

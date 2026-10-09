@@ -342,6 +342,22 @@ describe.skipIf(!hasDb)('conformance: memory ↔ postgres', () => {
     const deliveries = await clinicAdmin('clinic_admin', 'GET', '/clinic/integration/deliveries');
     const undelivered = (deliveries.mem.body as { id: string; status: string }[]).find((x) => x.status !== 'delivered');
     if (undelivered) ok.push(await clinicAdmin('clinic_admin', 'POST', `/clinic/integration/deliveries/${undelivered.id}/retry`));
+    // The assistance submits its draft rebill, the MIG reviewer accepts it (claims from its lines), the accountant pays
+    // it; the assistance sees who decided.
+    const claimsOfficer = await as(staff('claims_officer'));
+    const billing = await as({ email: DEMO_ASSIST_USERS[2]!.email });
+    const draftRebill = d.rebills.find((x) => x.status === 'draft' && x.assistanceId === d.assistUsers.find((u) => u.email === DEMO_ASSIST_USERS[2]!.email)!.assistanceId);
+    if (draftRebill) {
+      ok.push(await billing('asst_billing', 'POST', `/assist/rebills/${draftRebill.id}/submit`));
+      const view = await claimsOfficer('claims_officer', 'GET', `/rebills/${draftRebill.id}`);
+      ok.push(view);
+      for (const l of ((view.mem.body as { lines?: { id: string; status: string }[] }).lines ?? []).filter((x) => x.status === 'pending' || x.status === 'disputed')) {
+        ok.push(await claimsOfficer('claims_officer', 'POST', `/rebills/${draftRebill.id}/lines/${l.id}/decision`, { decision: 'accept' }));
+      }
+      ok.push(await as(staff('accountant')).then((acc) => acc('accountant', 'POST', `/rebills/${draftRebill.id}/pay`)));
+      ok.push(await billing('asst_billing', 'GET', `/assist/rebills/${draftRebill.id}`));
+    }
+    ok.push(await as(staff('sales_manager')).then((s2) => s2('sales', 'GET', `/assistance/${d.assistUsers[0]!.assistanceId}/card`)));
     for (const x of ok) expect(x.pg.status, JSON.stringify(x.pg.body).slice(0, 300)).toBeLessThan(300);
 
     // ---- sign-out everywhere

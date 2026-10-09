@@ -54,8 +54,9 @@ import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { AssistUserRow, AssistanceCaseRow, GuaranteeRow, InsuredRow } from '../store/db';
-import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, systemRepos, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
 import { q, type Qs } from './list';
+import { saveRecomputedRebill } from './clocks';
 import { loadParams, type ParamsView } from './params';
 import { assignmentsOf, assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
 import {
@@ -180,21 +181,21 @@ function addWorkdays(fromIso: string, days: number): string {
 
 /** A rebill with fresh checks, fee and totals (saved when they changed) and the names of the people. */
 export async function toRebillView(ctx: BaseCtx, b: Rebill): Promise<RebillView> {
-  // Checks and the fee are recomputed by the system on every read; names of MIG staff are shown to the assistance.
-  const sys = systemRepos(ctx, 'rebill view: recomputed checks and fee, names of the MIG staff who accepted and paid');
+  // Checks and the fee are recomputed on every read (under the reader's facts) and saved when they changed, as a job
+  // run on read would; names of MIG staff come as a narrow fact (the assistance reads no staff).
   const before = canonicalJson(b);
   await recomputeRebill(ctx, b);
-  if (canonicalJson(b) !== before) await sys.rebills.put(b);
+  if (canonicalJson(b) !== before) await saveRecomputedRebill(ctx, b);
   const P = await loadParams(ctx);
-  const name = async (id?: string) => (id ? (await sys.staff.get(id))?.fullName : undefined);
+  const deciders = b.acceptedById || b.paidById ? await ctx.repos.facts.rebillDeciders(b.id) : {};
   const a = await assistanceOf(ctx, b.assistanceId);
   return {
     ...b,
     assistanceName: a.name,
     assistanceLegalForm: a.legalForm,
     ...(b.submittedAt ? { reviewDueAt: addWorkdays(b.submittedAt, P.dmsParam('rebillReviewWorkdays')) } : {}),
-    ...(b.acceptedById ? { acceptedByName: await name(b.acceptedById) } : {}),
-    ...(b.paidById ? { paidByName: await name(b.paidById) } : {}),
+    ...(b.acceptedById ? { acceptedByName: deciders.acceptedByName } : {}),
+    ...(b.paidById ? { paidByName: deciders.paidByName } : {}),
   };
 }
 

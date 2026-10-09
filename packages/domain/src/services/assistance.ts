@@ -206,41 +206,35 @@ export async function findRegistryLine(ctx: BaseCtx, lineId: UUID): Promise<{ r:
 }
 
 /** Automatic checks of one rebill line against the data of MIG (§5.5). */
-export async function checksFor(person: BaseCtx, rebill: Pick<Rebill, 'id' | 'assistanceId'>, line: Pick<RebillLine, 'registryLineId'>): Promise<RebillLine['checks']> {
-  const ctx = asSystem(person, 'automatic checks of a rebill line against the data of MIG');
-  const found = await findRegistryLine(ctx, line.registryLineId);
-  if (!found) return [{ code: 'not_paid_to_clinic', message: msg('srv.rebill.registryLineNotFound') }];
-  const { r, l } = found;
-  const who = await patientRowOf(ctx, l.visitId);
-  const policy = who ? await ctx.repos.policies.get(who.policyId) : null;
-  const svc = (await priceListOf(ctx, r.clinicId)).find((p) => p.code === l.serviceCode);
-  const contract = (await priceListOf(ctx, r.clinicId, rebill.assistanceId)).find((p) => p.code === l.serviceCode);
-  const g = l.guaranteeNumber ? await ctx.repos.guarantees.first({ where: { number: l.guaranteeNumber, clinicId: r.clinicId } }) : null;
+export async function checksFor(ctx: BaseCtx, rebill: Pick<Rebill, 'id' | 'assistanceId'>, line: Pick<RebillLine, 'registryLineId'>): Promise<RebillLine['checks']> {
+  // MIG's data behind the line (the patient's and the policy's term, prices, the letter, duplicates, the AI flag) as
+  // one narrow fact (app.fact_rebill_line_facts); the limit and the routing as their own facts.
+  const f = await ctx.repos.facts.rebillLineFacts(line.registryLineId, rebill.id, rebill.assistanceId);
+  if (!f) return [{ code: 'not_paid_to_clinic', message: msg('srv.rebill.registryLineNotFound') }];
+  const { line: l, person: who, policy } = f;
   let limitLeft = Number.MAX_SAFE_INTEGER;
   if (who) {
-    const cat = LIMIT_OF_SERVICE[svc?.category ?? 'outpatient'];
+    const cat = LIMIT_OF_SERVICE[f.service?.category ?? 'outpatient'];
     const usage = (await limitsFor(ctx, who)).find((x) => x.category === cat);
     // The line itself is already counted as used once it is accepted.
     if (usage) limitLeft = usage.limit - usage.used + (l.status === 'accepted' ? l.amount : 0);
   }
   const policyActive = !!policy && !!who && policy.startDate <= l.serviceDate && l.serviceDate <= policy.endDate && who.insuredFrom <= l.serviceDate && (!who.excludedFrom || l.serviceDate < who.excludedFrom);
-  const others = await ctx.repos.rebills.list({ where: { id: { ne: rebill.id } } });
   const checks = rebillChecks({
     accepted: l.status === 'accepted',
-    paidToClinic: !!l.payment,
+    paidToClinic: l.paid,
     policyActive,
     assigned: !!policy && payerOn(await routingOf(ctx, policy.id), policy.id, l.serviceDate) === rebill.assistanceId,
     amount: l.amount,
     limitLeft,
-    requiresGuarantee: !!svc?.requiresGuarantee,
-    guaranteeApproved: g && (g.status === 'approved' || g.status === 'used') ? (g.approvedAmount ?? g.estimatedCost) : null,
-    duplicate: others.some((b) => b.lines.some((x) => x.registryLineId === l.id && x.status !== 'rejected')),
+    requiresGuarantee: !!f.service?.requiresGuarantee,
+    guaranteeApproved: f.guaranteeApproved,
+    duplicate: f.duplicate,
     price: l.price,
-    contractPrice: contract?.price ?? null,
+    contractPrice: f.contractPrice,
   });
   // The AI precheck (AI_COVERAGE_SPEC §4.4) adds its flag next to the automatic checks.
-  const ai = await ctx.repos.aiRebillFlags.get(l.id);
-  return ai ? [...checks, { code: 'ai_disagrees', message: ai }] : checks;
+  return f.aiFlag ? [...checks, { code: 'ai_disagrees', message: f.aiFlag }] : checks;
 }
 
 export async function toRebillLine(ctx: BaseCtx, r: Registry, l: RegistryLine): Promise<RebillLine> {
@@ -328,9 +322,10 @@ export function rebillStatusAfterReview(lines: RebillLine[]): Rebill['status'] {
 }
 
 /** Accepted lines of an accepted rebill become MIG claims with the `assistance` source (§5.5). */
-export async function claimsFromRebill(person: BaseCtx, b: Rebill, actorName: string): Promise<void> {
-  // Accepted lines become claims of MIG: the system's bookkeeping after the rebill decision.
-  const ctx = asSystem(person, 'claims created from the accepted lines of a rebill');
+export async function claimsFromRebill(ctx: BaseCtx, b: Rebill, actorName: string): Promise<void> {
+  // Accepted lines become claims of MIG, created by the reviewer of the rebill (claims, registries, visits and
+  // persons under the reviewer's RLS); the links of the assistance's cases and the client's loss ratio, which the
+  // reviewer may not edit, through narrow facts.
   const r = ctx.repos;
   const P = await loadParams(ctx);
   const now = tzIso(ctx.now());
@@ -367,12 +362,10 @@ export async function claimsFromRebill(person: BaseCtx, b: Rebill, actorName: st
     await r.claims.insert(claim, { at: 'start' });
     // A case that led to the letter of this line now points to the claim as well.
     const letter = found.l.guaranteeNumber ? await r.guarantees.first({ where: { number: found.l.guaranteeNumber, clinicId: found.r.clinicId } }) : null;
-    if (letter) {
-      for (const c of await r.cases.list()) if (c.links.guaranteeId === letter.id) await r.cases.update(c.id, { links: { ...c.links, claimId: claim.id } });
-    }
+    if (letter) await r.facts.linkCasesToClaim(letter.id, claim.id);
     // The claim enters the client's loss ratio like any other paid-out claim.
     const client = await r.clients.get(who.clientId);
-    if (client && client.premium > 0) await r.clients.update(client.id, { lossRatio: Math.round(((client.lossRatio ?? 0) + line.amount / client.premium) * 1000) / 1000 });
+    if (client && client.premium > 0) await r.facts.setClientLossRatio(client.id, Math.round(((client.lossRatio ?? 0) + line.amount / client.premium) * 1000) / 1000);
   }
 }
 

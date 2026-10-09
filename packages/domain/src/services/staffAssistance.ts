@@ -13,9 +13,9 @@ import { legalNameCollator } from '../config/legalForms';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { AssistanceCaseRow } from '../store/db';
-import { asSystem, audit, conflict, DomainError, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
+import { audit, conflict, DomainError, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
 import { byLegalForm, byLegalName, filterLegalForm, isUuid, sortBy, type Qs } from './list';
-import { assistanceName, assistanceOf, claimsFromRebill, ensureQaSample, feeOf, kpiOf, notifyAssistance, rebillStatusAfterReview, rosterOf, syncAssistance } from './assistance';
+import { assistanceName, assistanceOf, claimsFromRebill, ensureQaSample, feeOf, kpiOf, notifyAssistance, rebillStatusAfterReview, syncAssistance } from './assistance';
 import { toRebillSummary, toRebillView } from './assistPortal';
 import { revokeKey, toClientView } from './partnerIntegration';
 import { assistanceLegalFormOf, clientLegalFormOf } from './views';
@@ -121,24 +121,21 @@ export async function createAssistance(ctx: AuthCtx, body: unknown, opts: { init
   return listItem(ctx, a, ctx.now());
 }
 
-export async function card(person: AuthCtx, id: UUID): Promise<AssistanceCardView> {
-  const user = requireStaff(person);
-  const ctx = asSystem(person, 'assistance card for MIG staff: portfolio, users, keys, rebills, quality control, audit (with audit.read)');
+export async function card(ctx: AuthCtx, id: UUID): Promise<AssistanceCardView> {
+  // The portfolio, the integration figures, the KPI and the fee as narrow facts; users, keys, QA samples, rebills
+  // past the draft and the cases needing attention under the RLS of MIG staff (every employee opens the card).
+  const user = requireStaff(ctx);
   const r = ctx.repos;
   const a = await assistanceOf(ctx, id);
   const now = ctx.now();
   const since = now - DAY;
-  const roster = await rosterOf(ctx, a.id);
-  const assignments = await r.assignments.list();
   const today = todayIso(ctx);
   const clients = new Map<string, AssistanceCardView['clients'][number]>();
-  for (const p of await r.policies.list()) {
-    if (assistanceOn(assignments, p.id, today) !== a.id) continue;
-    const from = assignments.filter((x) => x.policyId === p.id && x.assistanceId === a.id).sort((x, y) => (x.from < y.from ? 1 : -1))[0]?.from ?? p.startDate;
-    clients.set(p.clientId, { id: p.clientId, name: p.clientName, legalForm: (await clientLegalFormOf(ctx, p.clientId)) ?? 'other', insuredCount: roster.filter((i) => i.policyId === p.id && i.status === 'active').length, policyNumber: p.number, from });
+  for (const p of await r.facts.assistanceClients(a.id, today)) {
+    clients.set(p.clientId, { id: p.clientId, name: p.clientName, legalForm: (await clientLegalFormOf(ctx, p.clientId)) ?? 'other', insuredCount: p.insuredCount, policyNumber: p.policyNumber, from: p.from ?? p.startDate });
   }
-  const hooks = await r.webhookDeliveries.list({ where: { clinicId: a.id } });
-  const insuredCount = roster.filter((i) => i.status === 'active').length;
+  const hooks = await r.facts.partnerIntegrationFigures(a.id, since);
+  const insuredCount = (await r.facts.assistanceListFigures(a.id, now, today)).insuredCount;
   const month = isoDay(now).slice(0, 7);
   const monthFee = (await feeOf(ctx, a, month, 0)).amount;
   const rebills: RebillSummary[] = [];
@@ -152,12 +149,8 @@ export async function card(person: AuthCtx, id: UUID): Promise<AssistanceCardVie
     clients: [...clients.values()].sort((x, y) => legalNameCollator.compare(x.name, y.name)),
     users: (await r.assistUsers.list({ where: { assistanceId: a.id } })).map((u) => ({ id: u.id, email: u.email, fullName: u.fullName, role: u.role, active: u.active, lastLoginAt: u.lastLoginAt })),
     keys: (await r.integrationClients.list({ where: { clinicId: a.id } })).map(({ secretHash: _h, ...k }): IntegrationClient => k),
-    webhooks: {
-      endpoints: await r.webhooks.count({ clinicId: a.id }),
-      retrying: hooks.filter((w) => w.status === 'retrying').length,
-      failed24h: hooks.filter((w) => w.status === 'failed' && parseIso(w.lastAttemptAt) >= since).length,
-    },
-    apiErrors24h: (await r.apiLogs.list({ where: { clinicId: a.id, status: { gte: 400 } } })).filter((l) => parseIso(l.at) >= since).length,
+    webhooks: { endpoints: hooks.endpoints, retrying: hooks.retrying, failed24h: hooks.failed },
+    apiErrors24h: hooks.apiErrors,
     rebills,
     qa,
     audit: can(user, 'audit.read') ? await r.audit.list({ where: { assistanceId: a.id }, limit: 50 }) : [],

@@ -73,6 +73,9 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
   const servedPolicyToday = db.assignments.find((x) => x.assistanceId === asstId && !x.to)?.policyId ?? servedPolicy;
   const myClaim = db.claims.find((x) => x.insuredId === me.id)!;
   const strangerClaim = db.claims.find((x) => !db.insured.some((i) => i.id === x.insuredId && (i.id === me.id || i.principalId === me.id)))!;
+  const rebillLine = db.registries.flatMap((x) => x.lines).find((l) => l.payer && l.payer !== 'mig');
+  const payerUser = ids.find((i) => i.role === 'asst_billing' && rebillLine && (i.claims.app_metadata as Record<string, string>).assistance_id === rebillLine.payer) ?? who('asst_billing');
+  const otherPayerUser = ids.find((i) => i.role.startsWith('asst_') && rebillLine && (i.claims.app_metadata as Record<string, string>).assistance_id !== rebillLine.payer);
   const MAPS = `${lit(JSON.stringify({ medicines: 'medicines', doctor_visit: 'outpatient', diagnostics: 'outpatient', dental: 'dental', inpatient: 'inpatient' }))}, ${lit(JSON.stringify({ outpatient: 'outpatient', diagnostics_advanced: 'outpatient', dental: 'dental', medicines: 'medicines', inpatient: 'inpatient' }))}`;
   const order = `array['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active']`;
   const lines: string[] = [
@@ -259,6 +262,32 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
     `select is(${valueAs(who('insured'), `select coalesce(bool_and(not (x ? 'insuredName') and not (x ? 'clientId')), true)::text from jsonb_array_elements(app.fact_receipt_twins('${myClaim.id}')) x`)}, 'true', 'receipt twins: no name or client');`,
     `select is(${valueAs(who('insured'), `select app.fact_receipt_twins('${strangerClaim.id}')::text`)}, 'denied', 'receipt twins: not of a claim the caller does not see');`,
     `select is(${valueAs(hr, `select app.fact_receipt_twins('${myClaim.id}')::text`)}, 'denied', 'receipt twins: HR is refused');`,
+    '-- partner cards of MIG staff: counts only; lists under the staff RLS',
+    `select is(${valueAs(who('legal'), `select (app.fact_partner_integration_figures('${asstId}', 0) ? 'apiErrors')::text`)}, 'true', 'partner figures: any MIG employee');`,
+    `select is(${valueAs(asstAdmin, `select app.fact_partner_integration_figures('${assistanceId}', 0)::text`)}, 'denied', 'partner figures: not for the partner itself (it reads its own log)');`,
+    `select is(${valueAs(who('underwriter'), `select (app.fact_clinic_card_figures('${regClinic}') ? 'amountToPay')::text`)}, 'true', 'clinic card figures: MIG staff with clinics.read');`,
+    `select is(${valueAs(who('accountant'), `select app.fact_clinic_card_figures('${regClinic}')::text`)}, 'denied', 'clinic card figures: a role without clinics.read is refused');`,
+    `select is(${valueAs(who('sales_manager'), `select jsonb_array_length(app.fact_assistance_clients('${asstId}', current_date))::text`)}, (select count(*)::text from public.policies p where app.assistance_on(p.id, current_date) = '${asstId}'), 'assistance clients: the policies the company serves today');`,
+    `select is(${valueAs(asstOp, `select app.fact_assistance_clients('${asstId}', current_date)::text`)}, 'denied', 'assistance clients: not for the company itself');`,
+    `select is(tests.count_as(${c(who('sales_manager'))}, 'cases'), (select count(*) from public.cases where status <> 'resolved' and (type = 'complaint' or sla_due_at < now())), 'cases: a MIG employee without case access sees only those needing attention');`,
+    `select is(tests.count_as(${c(who('sales_manager'))}, 'rebills'), (select count(*) from public.rebills where status <> 'draft'), 'rebills: a MIG employee sees submitted rebills, never drafts');`,
+    `select is(tests.count_as(${c(hr)}, 'cases'), 0::bigint, 'cases: HR sees none');`,
+    `select is(tests.count_as(${c(who('legal'))}, 'assist_users'), (select count(*) from public.assist_users), 'assistance users: every MIG employee (the card of the company)');`,
+    `select is(tests.count_as(${c(asstOp)}, 'assist_users'), (select count(*) from public.assist_users where assistance_id = '${asstId}'), 'assistance users: a company only its own');`,
+    `select is((tests.as_user(${c(who('legal'))}, 'select secret_hash from public.integration_clients limit 1')).n, -1, 'API keys: the secret hash stays unreadable');`,
+    '-- rebill lines: MIG staff, the paying company for its own lines',
+    ...(rebillLine
+      ? [
+          `select is(${valueAs(who('claims_officer'), `select (app.fact_rebill_line_facts('${rebillLine.id}', '${FIX_ID(2301)}', '${rebillLine.payer}') ? 'duplicate')::text`)}, 'true', 'rebill line facts: the MIG reviewer');`,
+          `select is(${valueAs(payerUser, `select (app.fact_rebill_line_facts('${rebillLine.id}', '${FIX_ID(2301)}', '${rebillLine.payer}') ? 'line')::text`)}, 'true', 'rebill line facts: the paying company of the line');`,
+          `select is(${valueAs(payerUser, `select (app.fact_rebill_line_facts('${rebillLine.id}', '${FIX_ID(2301)}', '${rebillLine.payer}') -> 'person' ? 'fullName')::text`)}, 'false', 'rebill line facts: no name of the person');`,
+          ...(otherPayerUser ? [`select is(${valueAs(otherPayerUser, `select app.fact_rebill_line_facts('${rebillLine.id}', '${FIX_ID(2301)}', '${String((otherPayerUser.claims.app_metadata as Record<string, string>).assistance_id)}')::text`)}, 'denied', 'rebill line facts: not a line paid by another company');`] : []),
+        ]
+      : []),
+    `select is(${valueAs(who('insured'), `select app.fact_rebill_line_facts(gen_random_uuid(), gen_random_uuid(), gen_random_uuid())::text`)}, 'denied', 'rebill line facts: the insured person is refused');`,
+    `select is(${valueAs(who('operator'), `select app.fact_link_cases_to_claim(gen_random_uuid(), '${myClaim.id}')::text`)}, 'denied', 'case links: only the reviewer of rebills');`,
+    `select is(${valueAs(who('claims_officer'), `select app.fact_set_client_loss_ratio('${otherClient.id}', 0.5)::text`)}, '', 'loss ratio: the reviewer of rebills');`,
+    `select is(${valueAs(hr, `select app.fact_set_client_loss_ratio('${hrCompany}', 0.5)::text`)}, 'denied', 'loss ratio: HR is refused');`,
     `select is(tests.value_as('{}'::jsonb, 'select app.fact_client_legal_form(''${otherClient.id}'')'), 'denied', 'no claims: every fact is refused');`,
   ];
   const asserts = lines.filter((l) => /^select (is|ok|throws_ok)\(/.test(l));

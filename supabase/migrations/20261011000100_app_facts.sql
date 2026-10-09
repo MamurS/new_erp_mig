@@ -659,3 +659,156 @@ end $$;
 comment on function app.fact_receipt_twins(uuid) is 'Other claims that may be the same receipt as a claim the caller sees (fiscal sign, image, amount and date), without the person: the duplicate check of a new claim.';
 revoke execute on function app.fact_receipt_twins(uuid) from public;
 grant execute on function app.fact_receipt_twins(uuid) to authenticated, service_role;
+
+create or replace function app.fact_partner_integration_figures(p_partner uuid, p_since bigint) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff()), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return jsonb_build_object(
+      'endpoints', (select count(*) from public.webhooks w where w.clinic_id = p_partner),
+      'retrying', (select count(*) from public.webhook_deliveries d where d.clinic_id = p_partner and d.status = 'retrying'),
+      'failed', (select count(*) from public.webhook_deliveries d where d.clinic_id = p_partner and d.status = 'failed' and d.last_attempt_at >= to_timestamp(p_since / 1000.0)),
+      'apiErrors', (select count(*) from public.api_logs l where l.clinic_id = p_partner and l.status >= 400 and l."at" >= to_timestamp(p_since / 1000.0)));
+end $$;
+comment on function app.fact_partner_integration_figures(uuid, bigint) is 'Webhook endpoints, failing deliveries and API errors of a partner (counts): the clinic and assistance cards of MIG staff.';
+revoke execute on function app.fact_partner_integration_figures(uuid, bigint) from public;
+grant execute on function app.fact_partner_integration_figures(uuid, bigint) to authenticated, service_role;
+
+create or replace function app.fact_clinic_card_figures(p_clinic uuid) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff() and (select app.can('clinics.read'))), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return jsonb_build_object(
+      'answered', (select count(*) from public.appointments a where a.clinic_id = p_clinic and a.responded_by = 'clinic' and a.responded_at is not null),
+      'answeredMs', (select coalesce(sum(extract(epoch from (a.responded_at - a.created_at)) * 1000), 0)::bigint from public.appointments a
+        where a.clinic_id = p_clinic and a.responded_by = 'clinic' and a.responded_at is not null),
+      'reviewedLines', (select count(*) from public.registries r cross join lateral jsonb_array_elements(coalesce(r.lines, '[]'::jsonb)) as l(e)
+        where r.clinic_id = p_clinic and l.e ->> 'status' <> 'pending'),
+      'rejectedLines', (select count(*) from public.registries r cross join lateral jsonb_array_elements(coalesce(r.lines, '[]'::jsonb)) as l(e)
+        where r.clinic_id = p_clinic and l.e ->> 'status' in ('rejected', 'disputed')),
+      'amountToPay', (select coalesce(sum((r.totals ->> 'accepted')::numeric), 0) from public.registries r where r.clinic_id = p_clinic and r.status in ('accepted', 'partially_accepted')));
+end $$;
+comment on function app.fact_clinic_card_figures(uuid) is 'Response time of a clinic and the figures of its registries (counts and sums): the clinic card of MIG staff with clinics.read.';
+revoke execute on function app.fact_clinic_card_figures(uuid) from public;
+grant execute on function app.fact_clinic_card_figures(uuid) to authenticated, service_role;
+
+create or replace function app.fact_assistance_clients(p_assistance uuid, p_today date) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff()), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('policyId', p.id, 'clientId', p.client_id, 'clientName', p.client_name, 'policyNumber', p.number,
+        'startDate', p.start_date::text,
+        'from', (select a."from"::text from public.assignments a where a.policy_id = p.id and a.assistance_id = p_assistance order by a."from" desc, a._pos desc limit 1),
+        'insuredCount', (select count(*) from public.insured i where i.policy_id = p.id and i.status = 'active')) order by p._pos), '[]'::jsonb)
+      from public.policies p where app.assistance_on(p.id, p_today) is not distinct from p_assistance and p_assistance is not null);
+end $$;
+comment on function app.fact_assistance_clients(uuid, date) is 'The policies an assistance company serves today: client, number, since when, active persons (the assistance card of MIG staff).';
+revoke execute on function app.fact_assistance_clients(uuid, date) from public;
+grant execute on function app.fact_assistance_clients(uuid, date) to authenticated, service_role;
+
+create or replace function app.fact_rebill_line_facts(p_line uuid, p_rebill uuid, p_assistance uuid) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff() or (app.is_assist() and p_assistance = app.assistance_id())), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  declare
+    v_reg public.registries;
+    v_reg_id uuid;
+    l jsonb;
+    v_who public.insured;
+    v_policy public.policies;
+    v_mig jsonb;
+    v_list jsonb;
+    v_svc jsonb;
+    v_contract jsonb;
+    v_g public.guarantees;
+  begin
+    select r.id, e.e into v_reg_id, l from public.registries r cross join lateral jsonb_array_elements(coalesce(r.lines, '[]'::jsonb)) with ordinality as e(e, n)
+      where e.e ->> 'id' = p_line::text order by r._pos, e.n limit 1;
+    if l is null then
+      return null;
+    end if;
+    select * into v_reg from public.registries r where r.id = v_reg_id;
+    if app.is_assist() and coalesce(l ->> 'payer', 'mig') <> p_assistance::text then
+      raise exception 'not allowed' using errcode = '42501';
+    end if;
+    select i.* into v_who from public.visits v join public.insured i on i.id = v.insured_id where v.id::text = l ->> 'visitId';
+    if v_who.id is not null then
+      select * into v_policy from public.policies p where p.id = v_who.policy_id;
+    end if;
+    v_mig := coalesce((select pl.items from public.price_lists pl where pl.clinic_id = v_reg.clinic_id), '[]'::jsonb);
+    v_list := coalesce((select c.price_list from public.clinic_contracts c where c.clinic_id = v_reg.clinic_id and c.payer = p_assistance::text order by c._pos limit 1), v_mig);
+    select it.e into v_svc from jsonb_array_elements(v_mig) with ordinality as it(e, n) where it.e ->> 'code' = l ->> 'serviceCode' order by it.n limit 1;
+    select it.e into v_contract from jsonb_array_elements(v_list) with ordinality as it(e, n) where it.e ->> 'code' = l ->> 'serviceCode' order by it.n limit 1;
+    if l ->> 'guaranteeNumber' is not null then
+      select * into v_g from public.guarantees g where g.number = l ->> 'guaranteeNumber' and g.clinic_id = v_reg.clinic_id order by g._pos limit 1;
+    end if;
+    return jsonb_build_object(
+      'line', jsonb_build_object('id', l -> 'id', 'status', l -> 'status', 'paid', coalesce(l -> 'payment', 'null'::jsonb) not in ('null'::jsonb, 'false'::jsonb),
+        'amount', l -> 'amount', 'price', l -> 'price', 'serviceDate', l -> 'serviceDate'),
+      'person', case when v_who.id is null then null else jsonb_strip_nulls(jsonb_build_object('id', v_who.id, 'insuredFrom', v_who.insured_from::text, 'excludedFrom', v_who.excluded_from::text)) end,
+      'policy', case when v_policy.id is null then null else jsonb_build_object('id', v_policy.id, 'startDate', v_policy.start_date::text, 'endDate', v_policy.end_date::text) end,
+      'service', case when v_svc is null then null else jsonb_build_object('category', v_svc -> 'category', 'requiresGuarantee', coalesce(v_svc -> 'requiresGuarantee', 'false'::jsonb)) end,
+      'contractPrice', v_contract -> 'price',
+      'guaranteeApproved', case when v_g.id is not null and v_g.status in ('approved', 'used') then to_jsonb(coalesce(v_g.approved_amount, v_g.estimated_cost)) else null end,
+      'duplicate', exists (select 1 from public.rebills b cross join lateral jsonb_array_elements(coalesce(b.lines, '[]'::jsonb)) as x(e)
+        where b.id <> p_rebill and x.e ->> 'registryLineId' = p_line::text and x.e ->> 'status' <> 'rejected'),
+      'aiFlag', (select f.reason from public.ai_rebill_flags f where f.line_id = p_line));
+  end;
+end $$;
+comment on function app.fact_rebill_line_facts(uuid, uuid, uuid) is 'What the automatic checks of a rebill line need (the line, the term of the patient and the policy, prices, the approved letter, duplicates, the AI flag): MIG staff; an assistance company for its own lines.';
+revoke execute on function app.fact_rebill_line_facts(uuid, uuid, uuid) from public;
+grant execute on function app.fact_rebill_line_facts(uuid, uuid, uuid) to authenticated, service_role;
+
+create or replace function app.fact_rebill_deciders(p_rebill uuid) returns jsonb
+  language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((exists (select 1 from public.rebills v where v.id = p_rebill and ((select app.active()) and ( ((select app.is_staff()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review']::text[]))) or ((select app.is_staff()) and (status <> 'draft')) or ((select app.is_assist()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review']::text[])) and (assistance_id = (select app.assistance_id()))) )))), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return (select jsonb_strip_nulls(jsonb_build_object(
+        'acceptedByName', (select s.full_name from public.staff s where s.id = b.accepted_by_id),
+        'paidByName', (select s.full_name from public.staff s where s.id = b.paid_by_id)))
+      from public.rebills b where b.id = p_rebill);
+end $$;
+comment on function app.fact_rebill_deciders(uuid) is 'Names of the MIG employees who accepted and paid a rebill the caller reads (the assistance company sees who decided).';
+revoke execute on function app.fact_rebill_deciders(uuid) from public;
+grant execute on function app.fact_rebill_deciders(uuid) to authenticated, service_role;
+
+create or replace function app.fact_link_cases_to_claim(p_guarantee uuid, p_claim uuid) returns void
+  language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff() and (select app.can('rebills.review')) and exists (select 1 from public.claims c where c.id = p_claim)), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  update public.cases set links = coalesce(links, '{}'::jsonb) || jsonb_build_object('claimId', p_claim) where links ->> 'guaranteeId' = p_guarantee::text;
+end $$;
+comment on function app.fact_link_cases_to_claim(uuid, uuid) is 'Cases of an assistance company that led to a guarantee letter point to the claim MIG created from the accepted rebill line: the MIG reviewer of rebills.';
+revoke execute on function app.fact_link_cases_to_claim(uuid, uuid) from public;
+grant execute on function app.fact_link_cases_to_claim(uuid, uuid) to authenticated, service_role;
+
+create or replace function app.fact_set_client_loss_ratio(p_client uuid, p_ratio double precision) returns void
+  language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not app.active() or not coalesce((app.is_staff() and (select app.can('rebills.review'))), false) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  update public.clients set loss_ratio = p_ratio where id = p_client;
+end $$;
+comment on function app.fact_set_client_loss_ratio(uuid, double precision) is 'The loss ratio of a client after a claim created from an accepted rebill line: the MIG reviewer of rebills (who may not edit clients).';
+revoke execute on function app.fact_set_client_loss_ratio(uuid, double precision) from public;
+grant execute on function app.fact_set_client_loss_ratio(uuid, double precision) to authenticated, service_role;

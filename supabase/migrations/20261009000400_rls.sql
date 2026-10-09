@@ -302,7 +302,7 @@ grant select, insert, update on public.kp to authenticated;
 alter table public.clinic_users enable row level security;
 create policy clinic_users_select on public.clinic_users for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'clinic.users.manage']::text[])))
+      ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'clinic.users.manage', 'clinics.read']::text[])))
       or ((select app.is_clinic()) and (clinic_id = (select app.clinic_id())))
     ));
 create policy clinic_users_insert on public.clinic_users for insert to authenticated
@@ -426,7 +426,7 @@ grant select, insert, update on public.registries to authenticated;
 alter table public.integration_clients enable row level security;
 create policy integration_clients_select on public.integration_clients for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])))
+      ((select app.is_staff()))
       or ((select app.is_clinic()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.clinic_id())))
       or ((select app.is_assist()) and (select app.can_any(array['clinics.manage', 'clinic.integration.manage', 'assistance.manage', 'assist.integration.manage']::text[])) and (clinic_id = (select app.assistance_id())))
     ));
@@ -563,7 +563,7 @@ grant select, insert, update on public.assistances to authenticated;
 alter table public.assist_users enable row level security;
 create policy assist_users_select on public.assist_users for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['assistance.manage', 'assist.users.manage']::text[])))
+      ((select app.is_staff()))
       or ((select app.is_assist()) and (assistance_id = (select app.assistance_id())))
     ));
 create policy assist_users_insert on public.assist_users for insert to authenticated
@@ -587,6 +587,7 @@ alter table public.cases enable row level security;
 create policy cases_select on public.cases for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['assist.cases.manage', 'qa.review', 'assistance.manage']::text[])))
+      or ((select app.is_staff()) and (status <> 'resolved' and (type = 'complaint' or sla_due_at < now())))
       or ((select app.is_assist()) and (select app.can_any(array['assist.cases.manage', 'qa.review', 'assistance.manage']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy cases_insert on public.cases for insert to authenticated
@@ -610,6 +611,7 @@ alter table public.rebills enable row level security;
 create policy rebills_select on public.rebills for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review']::text[])))
+      or ((select app.is_staff()) and (status <> 'draft'))
       or ((select app.is_assist()) and (select app.can_any(array['rebills.review', 'rebills.pay', 'assist.rebills.submit', 'assist.registries.review']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy rebills_insert on public.rebills for insert to authenticated
@@ -632,7 +634,7 @@ grant select, insert, update on public.rebills to authenticated;
 alter table public.qa_samples enable row level security;
 create policy qa_samples_select on public.qa_samples for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage']::text[])))
+      ((select app.is_staff()))
       or ((select app.is_assist()) and (select app.can_any(array['qa.review', 'assistance.manage', 'assist.guarantees.decide', 'assist.users.manage']::text[])) and (assistance_id = (select app.assistance_id())))
     ));
 create policy qa_samples_update on public.qa_samples for update to authenticated

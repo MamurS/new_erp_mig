@@ -7,7 +7,7 @@
  * in the system repositories of the API (`genericFacts`). The services keep their logic: a fact returns the
  * minimal rows in storage order and the service picks, sorts and sums exactly as before.
  */
-import type { AssistanceAssignment, AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, LimitCategory, PolicyStatus, PriceListItem, ProgramCode, Quote, UUID } from '@mig/contracts';
+import type { AssistanceAssignment, AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, LimitCategory, PolicyStatus, PriceListItem, ProgramCode, Quote, Registry, RegistryLine, UUID } from '@mig/contracts';
 import type { ClientPipeline, SignatoryOption } from '@mig/contracts/dto';
 import type { LegalFormCode } from '../config/legalForms';
 import type { ClaimRow, InsuredRow } from './db';
@@ -126,6 +126,41 @@ export interface Facts {
    * the same amount and date), in storage order; a person other than the claim's is `insuredId: 'other'`.
    */
   receiptTwins(claimId: UUID): Promise<ReceiptTwin[]>;
+  /** Webhook endpoints, failing deliveries and API errors of a partner (a clinic or an assistance company) since a moment. */
+  partnerIntegrationFigures(partnerId: UUID, sinceMs: number): Promise<{ endpoints: number; retrying: number; failed: number; apiErrors: number }>;
+  /** Response time and registry figures of a clinic (the clinic card of MIG staff). */
+  clinicCardFigures(clinicId: UUID): Promise<{ answered: number; answeredMs: number; reviewedLines: number; rejectedLines: number; amountToPay: number }>;
+  /** The policies an assistance company serves today, with their client and active persons (its card for MIG staff). */
+  assistanceClients(assistanceId: UUID, today: string): Promise<AssistanceClientRow[]>;
+  /** What the automatic checks of a rebill line need from MIG's data (null: the registry line does not exist). */
+  rebillLineFacts(registryLineId: UUID, rebillId: UUID, assistanceId: UUID): Promise<RebillLineData | null>;
+  /** Names of the MIG employees who accepted and paid a rebill. */
+  rebillDeciders(rebillId: UUID): Promise<{ acceptedByName?: string; paidByName?: string }>;
+  /** Cases that led to a guarantee letter now point to the claim created from it. */
+  linkCasesToClaim(guaranteeId: UUID, claimId: UUID): Promise<void>;
+  /** The loss ratio of a client after a paid-out claim (computed by the caller). */
+  setClientLossRatio(clientId: UUID, lossRatio: number): Promise<void>;
+}
+
+export interface AssistanceClientRow {
+  policyId: UUID;
+  clientId: UUID;
+  clientName: string;
+  policyNumber: string;
+  startDate: string;
+  from: string | null;
+  insuredCount: number;
+}
+
+export interface RebillLineData {
+  line: { id: UUID; status: string; paid: boolean; amount: number; price: number; serviceDate: string };
+  person: { id: UUID; insuredFrom: string; excludedFrom?: string } | null;
+  policy: { id: UUID; startDate: string; endDate: string } | null;
+  service: { category: PriceListItem['category']; requiresGuarantee: boolean } | null;
+  contractPrice: number | null;
+  guaranteeApproved: number | null;
+  duplicate: boolean;
+  aiFlag: string | null;
 }
 
 /** A claim that may be the same receipt (the fields of the duplicate check, no person). */
@@ -509,6 +544,81 @@ export function genericFacts(r: Base): Facts {
           ...(o.receiptHash ? { receiptHash: o.receiptHash } : {}),
           ...(o.receiptFiscal ? { receiptFiscal: o.receiptFiscal } : {}),
         }));
+    },
+    async partnerIntegrationFigures(partnerId, sinceMs) {
+      const hooks = await r.webhookDeliveries.list({ where: { clinicId: partnerId } });
+      return {
+        endpoints: await r.webhooks.count({ clinicId: partnerId }),
+        retrying: hooks.filter((w) => w.status === 'retrying').length,
+        failed: hooks.filter((w) => w.status === 'failed' && parseIso(w.lastAttemptAt) >= sinceMs).length,
+        apiErrors: (await r.apiLogs.list({ where: { clinicId: partnerId, status: { gte: 400 } } })).filter((l) => parseIso(l.at) >= sinceMs).length,
+      };
+    },
+    async clinicCardFigures(clinicId) {
+      const answered = (await r.appointments.list({ where: { clinicId, respondedBy: 'clinic' } })).filter((a) => a.respondedAt);
+      const registries = await r.registries.list({ where: { clinicId } });
+      const reviewed = registries.flatMap((x) => x.lines.filter((l) => l.status !== 'pending'));
+      return {
+        answered: answered.length,
+        answeredMs: answered.reduce((x, a) => x + (parseIso(a.respondedAt!) - parseIso(a.createdAt)), 0),
+        reviewedLines: reviewed.length,
+        rejectedLines: reviewed.filter((l) => l.status === 'rejected' || l.status === 'disputed').length,
+        amountToPay: registries.filter((x) => x.status === 'accepted' || x.status === 'partially_accepted').reduce((x, reg) => x + reg.totals.accepted, 0),
+      };
+    },
+    async assistanceClients(assistanceId, today) {
+      const assignments = await r.assignments.list();
+      const out: AssistanceClientRow[] = [];
+      for (const p of await r.policies.list()) {
+        if (assistanceOn(assignments, p.id, today) !== assistanceId) continue;
+        const from = assignments.filter((x) => x.policyId === p.id && x.assistanceId === assistanceId).sort((x, y) => (x.from < y.from ? 1 : -1))[0]?.from ?? null;
+        out.push({ policyId: p.id, clientId: p.clientId, clientName: p.clientName, policyNumber: p.number, startDate: p.startDate, from, insuredCount: await r.insured.count({ policyId: p.id, status: 'active' }) });
+      }
+      return out;
+    },
+    async rebillLineFacts(registryLineId, rebillId, assistanceId) {
+      let reg: Registry | undefined;
+      let l: RegistryLine | undefined;
+      for (const x of await r.registries.list()) {
+        l = x.lines.find((y) => y.id === registryLineId);
+        if (l) {
+          reg = x;
+          break;
+        }
+      }
+      if (!reg || !l) return null;
+      const v = l.visitId ? await r.visits.get(l.visitId) : null;
+      const who = v ? await r.insured.get(v.insuredId) : null;
+      const policy = who ? await r.policies.get(who.policyId) : null;
+      const mig = (await r.priceLists.get(reg.clinicId))?.items ?? [];
+      const own = await r.clinicContracts.first({ where: { clinicId: reg.clinicId, payer: assistanceId } });
+      const svc = mig.find((p) => p.code === l.serviceCode);
+      const contract = (own ? own.priceList : mig).find((p) => p.code === l.serviceCode);
+      const g = l.guaranteeNumber ? await r.guarantees.first({ where: { number: l.guaranteeNumber, clinicId: reg.clinicId } }) : null;
+      const others = await r.rebills.list({ where: { id: { ne: rebillId } } });
+      return {
+        line: { id: l.id, status: l.status, paid: !!l.payment, amount: l.amount, price: l.price, serviceDate: l.serviceDate },
+        person: who ? { id: who.id, insuredFrom: who.insuredFrom, ...(who.excludedFrom ? { excludedFrom: who.excludedFrom } : {}) } : null,
+        policy: policy ? { id: policy.id, startDate: policy.startDate, endDate: policy.endDate } : null,
+        service: svc ? { category: svc.category, requiresGuarantee: svc.requiresGuarantee } : null,
+        contractPrice: contract?.price ?? null,
+        guaranteeApproved: g && (g.status === 'approved' || g.status === 'used') ? (g.approvedAmount ?? g.estimatedCost) : null,
+        duplicate: others.some((b) => b.lines.some((x) => x.registryLineId === l!.id && x.status !== 'rejected')),
+        aiFlag: (await r.aiRebillFlags.get(l.id)) ?? null,
+      };
+    },
+    async rebillDeciders(rebillId) {
+      const b = await r.rebills.get(rebillId);
+      const name = async (id?: string) => (id ? (await r.staff.get(id))?.fullName : undefined);
+      const acceptedByName = await name(b?.acceptedById);
+      const paidByName = await name(b?.paidById);
+      return { ...(acceptedByName !== undefined ? { acceptedByName } : {}), ...(paidByName !== undefined ? { paidByName } : {}) };
+    },
+    async linkCasesToClaim(guaranteeId, claimId) {
+      for (const c of await r.cases.list()) if (c.links.guaranteeId === guaranteeId) await r.cases.update(c.id, { links: { ...c.links, claimId } });
+    },
+    async setClientLossRatio(clientId, lossRatio) {
+      await r.clients.update(clientId, { lossRatio });
     },
   };
 }
