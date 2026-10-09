@@ -26,7 +26,10 @@ x-logging: &logging
 
 x-api-env: &api-env
   APP_ENV: ${APP_ENV:?APP_ENV is production or staging}
-  NODE_ENV: production
+  # Staging with demo sign-in (ALLOW_TEST_TOTP=true) sets NODE_ENV=staging: the API refuses the test MFA mode under
+  # NODE_ENV=production or APP_ENV=production.
+  NODE_ENV: ${NODE_ENV:-production}
+  ALLOW_TEST_TOTP: ${ALLOW_TEST_TOTP:-false}
   HOST: 0.0.0.0
   PORT: '8787'
   LOG_LEVEL: ${LOG_LEVEL:-info}

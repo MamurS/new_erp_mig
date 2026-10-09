@@ -5,8 +5,12 @@
  * APP_ENV: production | staging | ci | development.
  * - production: every secret is required and must not be a published development value; no demo routes, no
  *   demo password, no test MFA codes, no bearer sessions; personal data of key version 0 (plaintext) is refused.
- * - staging, ci, development: demo routes (`/api/__demo/*`), the test MFA mode (`000000`), development keys
- *   when none are given (the generated seed is sealed with them).
+ * - staging, ci, development: demo routes (`/api/__demo/*`), development keys when none are given (the generated
+ *   seed is sealed with them).
+ *
+ * ALLOW_TEST_TOTP=true (off by default): the test MFA mode — `000000` is accepted as a TOTP code (and stands for the
+ * last SMS code of a phone), people without a factor get a demo factor, «Войти как…» works. The API refuses to start
+ * with it when APP_ENV=production or NODE_ENV=production.
  */
 import { DEV_PII_KEY, DEV_PII_KEY_VERSION, aesPiiCrypto, parsePiiKeys, sameKey, type AesPiiCrypto } from '@mig/domain/store/piiAes';
 import { DEV_HMAC_KEY } from '@mig/domain/store/devKeys';
@@ -32,8 +36,10 @@ export interface ApiEnv {
   sessionSecret: string;
   smsHookSecret: string;
   smsProvider: string;
-  /** Demo routes, the test MFA mode, codes in the development SMS log: everything but production. */
+  /** Demo routes, codes in the development SMS log: everything but production. */
   demo: boolean;
+  /** The test MFA mode (`000000`, demo factors, «Войти как…»): only with ALLOW_TEST_TOTP=true, never in production. */
+  testTotp: boolean;
   /** DEV/CI/STAGING ONLY: the password new e-mail accounts get instead of an invitation. */
   demoPassword?: string;
   /** `mig_session` without `Secure` (local http only). */
@@ -78,6 +84,8 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
   }
   // Step 4's temporary bearer sessions are gone: the web app uses the session cookie in every environment.
   if (env.AUTH_BEARER_COMPAT) throw new Error('AUTH_BEARER_COMPAT was removed: sessions are cookies only');
+  const testTotp = env.ALLOW_TEST_TOTP === 'true';
+  if (testTotp && (prod || env.NODE_ENV === 'production')) throw new Error('ALLOW_TEST_TOTP must not be set when APP_ENV or NODE_ENV is production');
   if (env.INSECURE_DEV_COOKIE === '1' && appEnv !== 'development') throw new Error('INSECURE_DEV_COOKIE is for local development only');
   return {
     appEnv,
@@ -94,6 +102,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     smsHookSecret,
     smsProvider: env.SMS_PROVIDER ?? 'log',
     demo: !prod,
+    testTotp,
     ...(env.DEMO_PASSWORD && !prod ? { demoPassword: env.DEMO_PASSWORD } : {}),
     insecureDevCookie: env.INSECURE_DEV_COOKIE === '1',
     ...(env.INVITE_REDIRECT_URL ? { inviteRedirectTo: env.INVITE_REDIRECT_URL } : {}),

@@ -106,6 +106,7 @@ describe('environment (production refuses development secrets)', () => {
   it('starts with real secrets: no demo, no test MFA, no bearer path; plaintext version 0 refused', async () => {
     const env = readEnv(prod);
     expect(env.demo).toBe(false);
+    expect(env.testTotp).toBe(false);
     expect('bearerCompat' in env).toBe(false);
     expect(env.demoPassword).toBeUndefined();
     expect((await env.crypto.seal('x')).keyVer).toBe(4);
@@ -127,6 +128,16 @@ describe('environment (production refuses development secrets)', () => {
     ['without the Supabase service key', { SUPABASE_SERVICE_ROLE_KEY: '' }],
   ])('refuses to start %s', (_label, patch) => {
     expect(() => readEnv({ ...prod, ...patch })).toThrow();
+  });
+
+  it('the test TOTP code 000000 is off unless ALLOW_TEST_TOTP=true, and refused with APP_ENV or NODE_ENV production', () => {
+    const base = { DATABASE_URL: 'x', SUPABASE_URL: 'x', SUPABASE_SERVICE_ROLE_KEY: 'k' };
+    expect(readEnv({ ...base, APP_ENV: 'staging' }).testTotp).toBe(false);
+    expect(readEnv({ ...base, APP_ENV: 'ci', ALLOW_TEST_TOTP: '1' }).testTotp).toBe(false);
+    expect(readEnv({ ...base, APP_ENV: 'staging', ALLOW_TEST_TOTP: 'true' }).testTotp).toBe(true);
+    expect(() => readEnv({ ...prod, ALLOW_TEST_TOTP: 'true' })).toThrow(/ALLOW_TEST_TOTP/);
+    expect(() => readEnv({ ...base, APP_ENV: 'staging', NODE_ENV: 'production', ALLOW_TEST_TOTP: 'true' })).toThrow(/ALLOW_TEST_TOTP/);
+    expect(readEnv({ ...base, APP_ENV: 'staging', NODE_ENV: 'production' }).testTotp).toBe(false);
   });
 
   it('development and ci: development keys and the demo switches', () => {

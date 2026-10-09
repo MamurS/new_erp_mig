@@ -55,6 +55,8 @@ const backendServers = (): WebServer[] => [
     stderr: 'pipe',
     env: {
       APP_ENV: 'ci',
+      // The test MFA mode (000000, demo factors, «Войти как…»): off unless asked for (apps/api/src/env.ts).
+      ALLOW_TEST_TOTP: 'true',
       HOST: '0.0.0.0',
       PORT: String(API_PORT),
       DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',

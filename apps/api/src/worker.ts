@@ -19,7 +19,7 @@ const identity = identitySync({
   crypto: env.crypto,
   gotrue,
   demoPassword: env.demoPassword,
-  testMfa: env.demo,
+  testMfa: env.testTotp,
   inviteRedirectTo: env.inviteRedirectTo,
   log: serverLog,
 });
