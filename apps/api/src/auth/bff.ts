@@ -564,7 +564,7 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     try {
       const number = authPhone(await open(c.phone_enc, c.phone_key_ver));
       // Test mode: the demo code of a phone that is not a demo phone stands for the code its SMS carried.
-      const effective = o.testMfa && code === DEMO_CODE ? (o.testPhoneCodes?.take(number) ?? code) : code;
+      const effective = o.testMfa && code === DEMO_CODE ? ((await o.testPhoneCodes?.take(number)) ?? code) : code;
       tokens = await o.gotrue.verifyPhoneOtp(number, effective, meta.ip);
     } catch (e) {
       if (e instanceof AuthApiError && e.status < 500) return wrongCode(sql, base, challengeId, c);

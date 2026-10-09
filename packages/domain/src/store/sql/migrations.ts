@@ -10,7 +10,7 @@ import { REVEAL, SEQUENCES, TABLES, sequenceName, type TableSpec } from '../sche
 import { META_COLUMNS, LOG_ID, hasSecrets, indexColumn, keyColumn, lit, physicalColumns, readableColumns } from './physical';
 import { ALL_ROLES, ASSIST_ROLES, CLINIC_ROLES, OPS, STAFF_ROLES, cached, grantExpression } from './rls';
 import { CLEANUP_STATEMENTS, cleanupFunction } from './cleanup';
-import { authMigrations, storageGcMigration } from './migrationsAuth';
+import { authMigrations, sharedStateMigration, storageGcMigration } from './migrationsAuth';
 import { factsMigration } from './facts';
 
 export interface SqlFile {
@@ -609,6 +609,7 @@ export function buildMigrations(): SqlFile[] {
     ...authMigrations(),
     { name: '20261011000100_app_facts.sql', sql: factsMigration() },
     { name: '20261011000200_storage_gc.sql', sql: storageGcMigration() },
+    { name: '20261012000100_shared_state.sql', sql: sharedStateMigration() },
   ];
 }
 

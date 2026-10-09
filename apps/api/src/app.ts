@@ -142,6 +142,8 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
       method: r.method,
       url: `/api${r.path}`,
       handler: async (request, reply) => {
+        // The demo knobs are shared by the API replicas (Postgres): this request sees the current clock and switch.
+        await o.demo?.sync();
         const startedAt = Date.now();
         const req = routeRequest(fetchRequest(request), request.params as Record<string, string>, startedAt);
         if (needsCsrf(r) && req.header(CSRF_HEADER) !== CSRF_VALUE) return json(reply, 403, CSRF);

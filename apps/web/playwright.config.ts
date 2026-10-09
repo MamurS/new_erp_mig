@@ -19,6 +19,10 @@ const BACKEND = process.env.E2E_BACKEND === '1';
 // 8787: the address the Send SMS hook of the local Supabase stack calls (supabase/config.toml); the API listens on
 // all interfaces so the hook reaches it from the Docker network (codes of phones added by tests, the test mode).
 const API_PORT = Number(process.env.E2E_API_PORT) || 8787;
+// E2E_API_REPLICAS=2 (CI): two API processes behind a round-robin balancer on API_PORT (scripts/e2e-api-lb.mjs) —
+// consecutive requests of one test reach different replicas, as with API_REPLICAS behind Caddy.
+const API_REPLICAS = Math.max(1, Number(process.env.E2E_API_REPLICAS) || 1);
+const replicaPorts = API_REPLICAS === 1 ? [API_PORT] : Array.from({ length: API_REPLICAS }, (_, i) => API_PORT + 10 + i);
 const root = fileURLToPath(new URL('../..', import.meta.url));
 
 /** SUPABASE_URL and the service role key: from the environment (CI) or the local stack (`supabase status`). */
@@ -41,13 +45,12 @@ const mockServer: WebServer = {
 
 type WebServer = NonNullable<Extract<PlaywrightTestConfig['webServer'], unknown[]>>[number];
 
-const backendServers = (): WebServer[] => [
-  {
+const apiServer = (port: number): WebServer => ({
     // The API as CI runs it: demo routes and knobs, test MFA codes, the `__Host-` cookie (Chromium accepts Secure
     // cookies on http://localhost). Built beforehand: `npm run api:build`.
     command: 'node --enable-source-maps apps/api/dist/server.js',
     cwd: root,
-    url: `http://127.0.0.1:${API_PORT}/api/__demo/failures`,
+    url: `http://127.0.0.1:${port}/api/__demo/failures`,
     reuseExistingServer: false,
     timeout: 60_000,
     // Failures only (LOG_LEVEL=warn): a 500 of the API shows its error in the run's output.
@@ -58,13 +61,27 @@ const backendServers = (): WebServer[] => [
       // The test MFA mode (000000, demo factors, «Войти как…»): off unless asked for (apps/api/src/env.ts).
       ALLOW_TEST_TOTP: 'true',
       HOST: '0.0.0.0',
-      PORT: String(API_PORT),
+      PORT: String(port),
       DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
       DEMO_PASSWORD: 'Demo-2026!',
       LOG_LEVEL: 'warn',
       ...supabaseEnv(),
     },
-  },
+});
+
+const backendServers = (): WebServer[] => [
+  ...replicaPorts.map(apiServer),
+  ...(API_REPLICAS > 1
+    ? [
+        {
+          command: `node scripts/e2e-api-lb.mjs ${API_PORT} ${replicaPorts.join(' ')}`,
+          cwd: root,
+          url: `http://127.0.0.1:${API_PORT}/api/__demo/failures`,
+          reuseExistingServer: false,
+          timeout: 30_000,
+        },
+      ]
+    : []),
   {
     command: `npx vite build --outDir dist-e2e-backend --emptyOutDir && npx vite preview --outDir dist-e2e-backend --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
