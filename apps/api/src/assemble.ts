@@ -19,6 +19,8 @@ import type { ApiEnv } from './env';
 import { sharpImageCodec } from './files/imageCodec';
 import { supabaseStorage, type SupabaseStorage } from './files/storage';
 import { identitySync, type IdentitySync } from './jobs/identity';
+import { gotrueCredentials } from './auth/credentials';
+import { inviteBaseUrl, mailerOf } from './mail/smtp';
 import { createWorker, type Worker } from './jobs/worker';
 import { serverLog } from './log';
 
@@ -62,7 +64,6 @@ export async function assemble(
     gotrue,
     demoPassword: env.demoPassword,
     testMfa: env.testTotp,
-    inviteRedirectTo: env.inviteRedirectTo,
     log,
   });
   const sms = smsSender(env.smsProvider, { revealCodes: env.demo, log });
@@ -70,7 +71,8 @@ export async function assemble(
   const testCodes = env.testTotp ? testPhoneCodes(pool) : null;
   await storage.ensureBuckets();
   // The worker's job runner (started below when WORKER=inline); the demo clock runs the date clocks with it.
-  const jobs = createWorker({ pool, crypto: env.crypto, identity, storage, log, now, ...(env.workerIntervalMs ? { intervalMs: env.workerIntervalMs } : {}) });
+  const mail = { mailer: mailerOf(env.smtp, (m) => log(m)), baseUrl: inviteBaseUrl(env.inviteRedirectTo) };
+  const jobs = createWorker({ pool, crypto: env.crypto, identity, storage, log, now, mail, ...(env.workerIntervalMs ? { intervalMs: env.workerIntervalMs } : {}) });
   const app = await buildApp({
     pool,
     crypto: env.crypto,
@@ -92,6 +94,7 @@ export async function assemble(
     }),
     storage,
     images: sharpImageCodec(),
+    credentials: gotrueCredentials(gotrue, identity),
     smsHook: { secret: env.smsHookSecret, sender: sms, testCodes },
     demoRoutes: env.demo ? demoOptions : null,
     demo,

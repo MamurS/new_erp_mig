@@ -537,6 +537,8 @@ export const auditEntry: z.ZodType<T.AuditEntry> = z.object({
     'task_taken',
     'task_rejected',
     'task_reminded',
+    'invitation_sent',
+    'invitation_accepted',
   ]),
   targetType: z.enum(['insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill', 'parameter', 'deal', 'quote', 'contract', 'endorsement', 'invoice', 'ai', 'migration']),
   targetId: uuid.optional(),
@@ -598,8 +600,27 @@ export const staffUser: z.ZodType<T.StaffUser> = z.object({
   lastLoginAt: isoDateTime.optional(),
   authority: staffAuthority,
   signatory: z.object({ canSign: z.literal(true), basis: z.string() }).optional(),
+  invitation: z.lazy(() => invitationBrief).optional(),
 });
 export const staffUsers = z.array(staffUser);
+
+export const invitationBrief: z.ZodType<T.InvitationBrief> = z.object({
+  status: z.enum(['pending', 'expired']),
+  expiresAt: isoDateTime,
+  sentAt: isoDateTime.optional(),
+});
+export const invitationView: z.ZodType<T.InvitationView> = z.object({
+  status: z.enum(['pending', 'expired']),
+  expiresAt: isoDateTime,
+  sentAt: isoDateTime.optional(),
+  userId: uuid,
+  fullName: z.string(),
+  email: z.string(),
+  portal: z.enum(['staff', 'hr', 'clinic', 'assist']),
+  organization: z.string().optional(),
+});
+export const invitationList = z.array(invitationView);
+export const invitationCheck: z.ZodType<T.InvitationCheck> = z.object({ email: z.string(), expiresAt: isoDateTime });
 
 const kpi: z.ZodType<D.Kpi> = z.object({
   key: z.string(),
@@ -847,6 +868,7 @@ const dmsParamKey = z.enum([
   'pinflChecksPerHour',
   'pinflFailsBeforeLock',
   'pinflLockMinutes',
+  'inviteValidityDays',
   'tariffBaseBasic',
   'tariffBaseStandard',
   'tariffBaseStandardPlus',

@@ -28,6 +28,8 @@ export const params: Translation<typeof Ru> = {
   'params.loginWindowMinutes.description': 'Muvaffaqiyatsiz kirish urinishlari qaysi davr uchun hisoblanadi.',
   'params.loginLockMinutes.label': 'Kirishni bloklash',
   'params.loginLockMinutes.description': 'Urinishlar soni oshib ketgandan keyin kirish necha daqiqaga bloklanadi.',
+  'params.inviteValidityDays.label': 'Taklifnomaning amal qilish muddati',
+  'params.inviteValidityDays.description': 'Parol oʻrnatish uchun taklif xatidagi havola necha kun amal qiladi.',
   'params.pinflChecksPerHour.label': 'Soatiga JShShIR boʻyicha tekshiruvlar',
   'params.pinflChecksPerHour.description': 'Klinikaning bitta foydalanuvchisi soatiga JShShIR boʻyicha nechta bemor tekshiruvini bajarishi mumkin.',
   'params.pinflFailsBeforeLock.label': 'Bloklashgacha JShShIR boʻyicha muvaffaqiyatsiz tekshiruvlar',

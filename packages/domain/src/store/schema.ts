@@ -521,7 +521,7 @@ export const TABLES: readonly TableSpec[] = [
         'claim_decision_rejected', 'claim_reserve_changed', 'claim_created', 'claim_flag_dismissed', 'claim_appealed', 'claim_appeal_resolved', 'ai_settings_proposed',
         'ai_settings_changed', 'ai_settings_rejected', 'ai_kill_switch', 'ai_feedback', 'migration_validated', 'migration_submitted', 'migration_applied', 'migration_rejected',
         'migration_rolled_back', 'migration_scan_attached', 'family_consent_granted', 'family_consent_revoked', 'family_request_created', 'family_request_decided',
-        'payout_card_changed', 'task_created', 'task_done', 'task_taken', 'task_rejected', 'task_reminded',
+        'payout_card_changed', 'task_created', 'task_done', 'task_taken', 'task_rejected', 'task_reminded', 'invitation_sent', 'invitation_accepted',
       ),
       targetType: enumOf<AuditEntry['targetType']>()(
         'insured', 'claim', 'policy', 'client', 'export', 'user', 'session', 'kp', 'clinic', 'visit', 'guarantee', 'registry', 'integration', 'assistance', 'case', 'rebill',
@@ -1721,6 +1721,7 @@ export const REVEAL: Readonly<Record<string, { actions: readonly Action[]; self:
  */
 export const LATER_ENUM_VALUES: readonly { collection: string; field: string; migration: string; values: readonly string[] }[] = [
   { collection: 'audit', field: 'action', migration: '20261013000100_job_actions.sql', values: ['contract_expired', 'policy_expired'] },
+  { collection: 'audit', field: 'action', migration: '20261014000100_invitations.sql', values: ['invitation_sent', 'invitation_accepted'] },
 ];
 
 /** Values of an enum field its table was created with (LATER_ENUM_VALUES left out). */
@@ -1731,9 +1732,10 @@ export function initialEnumValues(collection: string, field: string, values: rea
 
 /**
  * Collections of Db that are not tables: Postgres sequences and objects split into the tables above; `jobMarks` is
- * `app.job_marks` of a later migration (system-only, store/sql/migrationsJobs.ts).
+ * `app.job_marks` of a later migration (system-only, store/sql/migrationsJobs.ts), `invitations` is `app.invitations`
+ * (system-only, store/sql/migrationsInvitations.ts).
  */
-export const NON_TABLE_COLLECTIONS = ['kpSeq', 'guaranteeSeq', 'caseSeq', 'dealSeq', 'contractSeq', 'integrationsSeed', 'statementKeys', 'dmsParams', 'ai', 'help', 'jobMarks'] as const satisfies readonly (keyof Db)[];
+export const NON_TABLE_COLLECTIONS = ['kpSeq', 'guaranteeSeq', 'caseSeq', 'dealSeq', 'contractSeq', 'integrationsSeed', 'statementKeys', 'dmsParams', 'ai', 'help', 'jobMarks', 'invitations'] as const satisfies readonly (keyof Db)[];
 // Every collection of Db is stored somewhere: a keyed table, a log table, or one of the above.
 type Stored = KeyedName | LogName | (typeof NON_TABLE_COLLECTIONS)[number];
 export const _allCollectionsStored: [Exclude<keyof Db, Stored>] extends [never] ? true : { unmapped: Exclude<keyof Db, Stored> } = true;

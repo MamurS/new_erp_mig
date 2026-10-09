@@ -417,6 +417,11 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     return passwordStep(tx, base, email, password, meta);
   };
 
+  async function acceptedInvitation(userId: string): Promise<boolean> {
+    const { rows } = await o.pool.query(`select 1 from app.invitations where user_id = $1::uuid and used_at is not null limit 1`, [userId]);
+    return rows.length > 0;
+  }
+
   async function passwordStep(tx: RequestTx, base: BaseCtx, email: string, password: string, meta: RequestMeta): Promise<AuthAnswer> {
     const P = await loadParams(base);
     const key = `email:${email}`;
@@ -435,7 +440,9 @@ export function bffAuth(o: BffOptions): AuthAdapter {
     let factorId =
       tokens.user.factors?.find((f) => f.factor_type === 'totp' && f.status === 'verified')?.id ?? null;
     let enrollment: { uri: string; secret: string } | null = null;
-    if (!factorId && o.testMfa && o.ensureDemoFactor) {
+    // An account that accepted an invitation enrols a real authenticator even in the test MFA mode (e2e of the first
+    // sign-in); the demo factor is for the seeded and demo-password accounts only.
+    if (!factorId && o.testMfa && o.ensureDemoFactor && !(await acceptedInvitation(account.id))) {
       await o.ensureDemoFactor(account.id);
       factorId = devFactorId(account.id);
     } else if (!factorId) {

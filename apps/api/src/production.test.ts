@@ -38,6 +38,9 @@ describe.skipIf(!hasDb || !hasSupabase)('production mode', () => {
       PII_HMAC_KEY: randomBytes(32).toString('hex'),
       SESSION_SECRET: randomBytes(32).toString('hex'),
       SMS_HOOK_SECRET: hookSecret,
+      SMTP_HOST: '127.0.0.1',
+      SMTP_FROM: 'MIG DMS <noreply@mig.test>',
+      INVITE_REDIRECT_URL: 'https://dms.example/',
       WORKER: 'off',
     });
     api = await assemble(env, { pool, log: (msg, data = {}) => logged.push({ msg, data }) });

@@ -2,6 +2,7 @@
  * Shape of the demo database (seed output, the in-memory mock server's state). Rows hold full (unmasked)
  * values; handlers mask on output.
  */
+import type { InvitationRow } from './repo';
 import type { UserNotification, WorkTask } from '@mig/contracts/dto';
 import type {
   AiCallLog,
@@ -61,7 +62,7 @@ import type {
 import type { HelpQuestionRow } from '@mig/contracts/help';
 import type { MigrationBatchStatus, MigrationContractPremium, MigrationIssue, MigrationPremiumSource, MigrationStep, MigrationStepStatus, MigrationTotals } from '@mig/contracts/migration';
 
-export interface StaffRow extends StaffUser {
+export interface StaffRow extends Omit<StaffUser, 'invitation'> {
   password: string;
 }
 export interface HrUserRow {
@@ -385,6 +386,8 @@ export interface Db {
   notifications: NotificationRow[];
   // ---- background jobs: what a job already did, once per subject and occurrence (repo `jobMarks`) ----
   jobMarks: JobMarkRow[];
+  // ---- invitations of e-mail accounts (repo `invitations`; the mock keeps the token, there is no secret in it) ----
+  invitations: InvitationRow[];
 }
 
 /** An action of a background job done for one subject and occurrence (a reminder of one SLA breach, …). */

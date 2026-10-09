@@ -4,7 +4,7 @@ import { LEGAL_FORMS } from '@mig/domain/config/legalForms';
 import type * as D from './dto';
 import type * as T from './index';
 import * as I from './integration';
-import { clinic } from './schemas';
+import { clinic, invitationBrief } from './schemas';
 
 const uuid = z.string().min(1);
 const isoDateTime = z.string().min(10);
@@ -89,6 +89,7 @@ export const clinicUser: z.ZodType<D.ClinicUserView> = z.object({
   role: clinicRole,
   active: z.boolean(),
   lastLoginAt: isoDateTime.optional(),
+  invitation: invitationBrief.optional(),
 });
 export const clinicUsers = z.array(clinicUser);
 

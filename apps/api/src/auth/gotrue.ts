@@ -180,10 +180,8 @@ export class GoTrue {
     return this.call('PUT', `/admin/users/${id}`, { body: p });
   }
 
-  /** The invitation e-mail (Supabase Auth sends it through the SMTP of its deployment). */
-  async inviteUserByEmail(email: string, redirectTo?: string): Promise<void> {
-    await this.call('POST', `/invite${redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : ''}`, {
-      body: { email },
-    });
+  /** Removes a second factor of the user (an accepted invitation starts without one). */
+  async adminDeleteFactor(userId: string, factorId: string): Promise<void> {
+    await this.call('DELETE', `/admin/users/${userId}/factors/${factorId}`);
   }
 }

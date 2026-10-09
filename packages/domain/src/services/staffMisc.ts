@@ -2,6 +2,7 @@
  * The staff portal's smaller screens: clinics and their free slots, limit change requests (four-eyes),
  * reports, CSV exports, the audit log and staff users.
  */
+import { issueInvitation, withInvitations } from './invitations';
 import { msg, translate } from '@mig/i18n';
 import type { AuditEntry, Clinic, LimitChangeRequest, Page, Slot, Specialty, StaffUser } from '@mig/contracts';
 import type { ClaimsByCategoryRow, LossRatioRow, PremiumByMonthRow } from '@mig/contracts/dto';
@@ -286,7 +287,7 @@ export async function auditLog(ctx: AuthCtx, qs: Qs): Promise<Page<AuditEntry>> 
 /** GET /admin/users. */
 export async function staffUsers(ctx: AuthCtx): Promise<StaffUser[]> {
   requirePermission(ctx.user, 'users.manage');
-  return (await ctx.repos.staff.list()).map(withoutPassword);
+  return withInvitations(ctx, (await ctx.repos.staff.list()).map(withoutPassword));
 }
 
 /** POST /admin/users: an invited staff user (the adapter answers 201). */
@@ -301,7 +302,8 @@ export async function inviteStaffUser(ctx: AuthCtx, body: unknown): Promise<Staf
   const row: StaffRow = { id: randomId(), ...input, active: true, authority: {}, password: DEMO_PASSWORD };
   await r.staff.insert(row);
   await audit(ctx, user, 'role_change', { targetType: 'user', targetId: row.id, targetLabel: `${row.fullName}: ${row.role}` });
-  return withoutPassword(row);
+  await issueInvitation(ctx, row, user);
+  return (await withInvitations(ctx, [withoutPassword(row)]))[0]!;
 }
 
 /** PATCH /admin/users/:id: role and activity; a change ends the person's sessions. */

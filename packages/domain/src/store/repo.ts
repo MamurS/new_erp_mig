@@ -76,6 +76,41 @@ export interface JobMarks {
   claim(job: string, subject: string, occurrence: string): Promise<boolean>;
 }
 
+/**
+ * Invitations of e-mail accounts (stage 1.5): a single-use link to set the first password. The token itself is kept
+ * only until the e-mail leaves (encrypted at rest in Postgres); afterwards only its SHA-256 is known. System-only:
+ * `app.invitations` in Postgres (services/system/invitations.ts).
+ */
+export interface InvitationRow {
+  id: string;
+  userId: string;
+  /** SHA-256 of the token, hex. */
+  tokenHash: string;
+  /** The token, until the e-mail is sent (only `unsent` returns it). */
+  token?: string;
+  createdAt: number;
+  expiresAt: number;
+  sentAt?: number;
+  usedAt?: number;
+  revokedAt?: number;
+}
+export interface Invitations {
+  /** A new invitation of the account; its earlier open ones are revoked. */
+  issue(row: InvitationRow): Promise<void>;
+  byTokenHash(hash: string): Promise<InvitationRow | null>;
+  /** The latest open (not used, not revoked) invitation of each of the accounts, or of all accounts. */
+  open(userIds?: readonly string[]): Promise<InvitationRow[]>;
+  /** Marks it used: true only for the first caller, while it is open and not expired at `at`. */
+  use(id: string, at: number): Promise<boolean>;
+  /**
+   * Up to `limit` open, unexpired invitations whose e-mail has not left, with their token, oldest first. Each is leased
+   * for two minutes: two workers never send the same one; a failed send is retried after the lease (10 tries).
+   */
+  unsent(limit: number, at: number): Promise<InvitationRow[]>;
+  /** The e-mail left: the token is dropped. */
+  sent(id: string, at: number): Promise<void>;
+}
+
 /** Document number sequences: `next` returns the incremented value. */
 export type SeqName = 'kp' | 'guarantee' | 'case' | 'deal' | 'contract';
 export interface Seqs {
@@ -173,6 +208,7 @@ export type Repos = { [N in KeyedName]: Table<RowOf<N>, (typeof TABLE_KEYS)[N], 
   aiRebillFlags: MapStore<string>;
   statementKeys: SetStore;
   jobMarks: JobMarks;
+  invitations: Invitations;
   seq: Seqs;
   one: Singletons;
   /** Narrow facts about rows the person's row-level security hides (store/facts.ts). */

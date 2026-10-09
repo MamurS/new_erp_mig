@@ -47,6 +47,8 @@ HTTPS_PORT=$HTTPS_PORT
 API_IMAGE=${API_IMAGE:-mig-dms/api:smoke}
 CADDY_IMAGE=${CADDY_IMAGE:-mig-dms/caddy:smoke}
 BACKUP_DIR=$WORK/backups
+SMTP_HOST=smtp.smoke.invalid
+SMTP_FROM=MIG DMS <noreply@smoke.invalid>
 EOF
 
 log "configuration"

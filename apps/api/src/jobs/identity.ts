@@ -5,9 +5,10 @@
  * session store calls `syncOne` directly when a token's claims no longer match the account.
  *
  * - a new e-mail account (an admin created a MIG user, the sales manager opened an HR cabinet, a clinic or an
- *   assistance company got its users): created unconfirmed and invited — `inviteUserByEmail`, the e-mail goes
- *   through the SMTP of Supabase Auth (GOTRUE_SMTP_* of the deployment). Development and ci with DEMO_PASSWORD:
- *   created confirmed with the demo password instead (no SMTP there), with the demo TOTP factor (test MFA mode);
+ *   assistance company got its users): created confirmed and without a password; the person sets it with the link of
+ *   our invitation e-mail (services/invitations.ts, sent by the worker through the SMTP of MIG). Development and ci
+ *   with DEMO_PASSWORD: created with the demo password (and the demo TOTP factor in the test MFA mode) as well, so the
+ *   demo accounts sign in at once; an accepted invitation replaces both;
  * - a new phone account (an employee invited to the app): a confirmed phone, signed in with a one-time code;
  * - a deactivated account is banned (its BFF sessions already ended with its `sessions` rows).
  */
@@ -28,8 +29,6 @@ export interface IdentitySyncOptions {
   demoPassword?: string;
   /** Test MFA mode: new e-mail accounts get the demo TOTP factor. */
   testMfa: boolean;
-  /** Where the invitation link leads (the sign-in page of the deployment). */
-  inviteRedirectTo?: string;
   log?: (msg: string, data?: Record<string, unknown>) => void;
 }
 
@@ -86,13 +85,13 @@ export function identitySync(o: IdentitySyncOptions): IdentitySync {
         });
         if (o.testMfa) await ensureDemoFactor(userId);
       } else {
+        // No password until the person accepts the invitation (the password grant fails until then).
         await o.gotrue.adminCreateUser({
           id: userId,
           email: spec.email,
-          email_confirm: false,
+          email_confirm: true,
           app_metadata: appMetadata,
         });
-        await o.gotrue.inviteUserByEmail(spec.email, o.inviteRedirectTo);
       }
     } else if (spec.phone) {
       await o.gotrue.adminCreateUser({

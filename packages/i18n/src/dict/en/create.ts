@@ -33,7 +33,7 @@ export const create: Translation<typeof Ru> = {
   'create.claimPick.placeholder': 'Insured person’s full name…',
   'create.staffUser.add': 'Invite an employee',
   'create.staffUser.title': 'New MIG employee',
-  'create.staffUser.description': 'The employee gets an invitation to their work email and signs in with a second factor.',
+  'create.staffUser.description': 'The employee gets an e-mail with a link at their work address, sets a password and connects an authenticator app at the first sign-in.',
   'create.staffUser.email': 'Work email',
   'create.staffUser.invite': 'Invite',
   'create.staffUser.invited': 'Invitation sent',

@@ -10,6 +10,7 @@ import { supabaseStorage } from './files/storage';
 import { readEnv } from './env';
 import { identitySync } from './jobs/identity';
 import { createWorker } from './jobs/worker';
+import { inviteBaseUrl, mailerOf } from './mail/smtp';
 import { serverLog } from './log';
 
 const env = readEnv();
@@ -21,11 +22,11 @@ const identity = identitySync({
   gotrue,
   demoPassword: env.demoPassword,
   testMfa: env.testTotp,
-  inviteRedirectTo: env.inviteRedirectTo,
   log: serverLog,
 });
 const storage = supabaseStorage({ url: env.supabaseUrl, serviceKey: env.serviceKey });
-const worker = createWorker({ pool, crypto: env.crypto, identity, storage, log: serverLog, ...(env.workerIntervalMs ? { intervalMs: env.workerIntervalMs } : {}) });
+const mail = { mailer: mailerOf(env.smtp, (m) => serverLog(m, {})), baseUrl: inviteBaseUrl(env.inviteRedirectTo) };
+const worker = createWorker({ pool, crypto: env.crypto, identity, storage, log: serverLog, mail, ...(env.workerIntervalMs ? { intervalMs: env.workerIntervalMs } : {}) });
 worker.start();
 // The worker's own timer is unref'd (inside the API it must not keep the process alive); alone, the process has
 // nothing else to wait for and would exit at once: this handle keeps it running until a signal. It also refreshes

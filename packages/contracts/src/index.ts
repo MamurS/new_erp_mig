@@ -483,7 +483,9 @@ export type AuditAction =
   | 'task_done'
   | 'task_taken'
   | 'task_rejected'
-  | 'task_reminded';
+  | 'task_reminded'
+  | 'invitation_sent'
+  | 'invitation_accepted';
 
 export interface AuditEntry {
   id: UUID;
@@ -556,6 +558,35 @@ export interface StaffUser {
   lastLoginAt?: ISODateTime;
   authority: StaffAuthority;
   signatory?: { canSign: true; basis: string };   // «Доверенность № … от …»
+  /** The account has not set its password yet (stage 1.5 invitations). */
+  invitation?: InvitationBrief;
+}
+
+/**
+ * The invitation of an e-mail account (staff, HR, clinics, assistance): a single-use link to set the password. Only an
+ * open one is shown: `pending` until it expires, then `expired` until it is sent again.
+ */
+export type InvitationStatus = 'pending' | 'expired';
+export interface InvitationBrief {
+  status: InvitationStatus;
+  expiresAt: ISODateTime;
+  /** When the e-mail left (absent while it waits for the mail job). */
+  sentAt?: ISODateTime;
+}
+export type AccountPortal = 'staff' | 'hr' | 'clinic' | 'assist';
+/** An open invitation in the list of the MIG administrator (every portal). */
+export interface InvitationView extends InvitationBrief {
+  userId: UUID;
+  fullName: string;
+  email: string;
+  portal: AccountPortal;
+  /** The company, clinic or assistance of the account. */
+  organization?: string;
+}
+/** What the invitation page shows before the password is set: the account's e-mail, masked. */
+export interface InvitationCheck {
+  email: string;
+  expiresAt: ISODateTime;
 }
 
 export interface Page<T> {
@@ -901,6 +932,7 @@ export type DmsParamKey =
   | 'pinflChecksPerHour'
   | 'pinflFailsBeforeLock'
   | 'pinflLockMinutes'
+  | 'inviteValidityDays'
   | 'tariffBaseBasic'
   | 'tariffBaseStandard'
   | 'tariffBaseStandardPlus'

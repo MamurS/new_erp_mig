@@ -26,6 +26,8 @@ export const params = {
   'params.loginWindowMinutes.description': 'За какой период считаются неудачные попытки входа.',
   'params.loginLockMinutes.label': 'Блокировка входа',
   'params.loginLockMinutes.description': 'На сколько минут блокируется вход после превышения числа попыток.',
+  'params.inviteValidityDays.label': 'Срок действия приглашения',
+  'params.inviteValidityDays.description': 'Сколько дней действует ссылка из письма-приглашения, чтобы задать пароль.',
   'params.pinflChecksPerHour.label': 'Проверок по ПИНФЛ в час',
   'params.pinflChecksPerHour.description': 'Сколько проверок пациента по ПИНФЛ один пользователь клиники может сделать за час.',
   'params.pinflFailsBeforeLock.label': 'Неудачных проверок по ПИНФЛ до блокировки',

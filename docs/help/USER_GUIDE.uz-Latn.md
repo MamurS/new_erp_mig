@@ -40,6 +40,17 @@ MIG xodimlari, HR, klinikalar va assistanslar email, parol va bir martalik kod b
 3. **Voyaga yetgan oila aʼzolari** (turmush oʻrtogʻi, ota-onasi) oʻz telefon raqami bilan kiradi. Chegaraviy yoshgacha boʻlgan bolalar ota-onasining ilovasida koʻrinadi va alohida kirishga ega emas.
 4. 10 daqiqa ichida 5 marta notoʻgʻri urinishdan soʻng kirish 5 daqiqaga bloklanadi. Xato haqidagi xabar aynan nima notoʻgʻri ekanini aytmaydi — bu taxmin qilib topishdan himoya.
 
+### Taklifnoma orqali birinchi kirish {#invitation}
+
+<!-- audience: staff hr clinic assist -->
+
+Email bilan yangi hisobni (MIG xodimi, mijozning HR, klinika yoki assistans foydalanuvchisi) administrator yaratadi — tizim oʻzi «Mosaic Insurance Group DMS tizimiga taklifnoma» xatini yuboradi.
+
+1. Xatdagi havolani toʻliq oching. «MIG DMS tizimiga taklifnoma» ekranida havola qaysi hisob uchun ekani (manzil qisman yashirilgan) va qachongacha amal qilishi koʻrinadi.
+2. Yangi parolni kiriting — kamida 12 ta belgi, harflar va raqamlar bilan — va uni takrorlang → «Parolni oʻrnatish».
+3. «Parol oʻrnatildi» → «Kirishga oʻtish»: email va yangi parol bilan kiring. Birinchi kirishda autentifikator ilovasini ulang (yuqoridagi «Kirish» boʻlimi).
+4. Havola bir martalik va 3 kun amal qiladi («Taklifnomaning amal qilish muddati» parametri). Agar «Havola ishlamayapti» chiqsa — parol allaqachon oʻrnatilgan, havola eskirgan yoki yangisi bilan almashtirilgan: administratordan «Qayta yuborish» tugmasini bosishni soʻrang. Shundan keyin avvalgi havola ishlamaydi.
+
 ### Portal ekrani {#portal-screen}
 
 <!-- audience: all -->
@@ -836,7 +847,7 @@ Ushbu boʻlimni hamkorlar va mijozlarga alohida berish mumkin: unda faqat ular o
 <!-- audience: staff clinic -->
 
 - **Registrator:** «Bemorni tekshirish» → tashrif; «Qabullar» — tasdiqlash, vaqt taklif qilish, rad etish; «Kafolat xatlari» — tashrifdan soʻrov, soʻrov boʻyicha hujjatlarni qoʻshimcha yuklash.
-- **Klinika administratori:** xuddi shu, qoʻshimcha ravishda «Reyestrlar» (boʻlim 9), «Hujjatlar» (shartnoma, narxlar roʻyxati, solishtirma dalolatnomalar), «Foydalanuvchilar» (taklif qilish, rolni almashtirish, faolsizlantirish — oʻzingizni faolsizlantirib boʻlmaydi), «Integratsiya» (boʻlim 15).
+- **Klinika administratori:** xuddi shu, qoʻshimcha ravishda «Reyestrlar» (boʻlim 9), «Hujjatlar» (shartnoma, narxlar roʻyxati, solishtirma dalolatnomalar), «Foydalanuvchilar» (taklif qilish, taklifnomani qayta yuborish, rolni almashtirish, faolsizlantirish — oʻzingizni faolsizlantirib boʻlmaydi), «Integratsiya» (boʻlim 15).
 - **Esda tuting:** polisni tekshirmasdan bemor maʼlumotlari mavjud emas; QR bir martalik.
 
 ### Assistans {#guide-assistance}
@@ -846,7 +857,7 @@ Ushbu boʻlimni hamkorlar va mijozlarga alohida berish mumkin: unda faqat ular o
 - **Operator:** «Murojaatlar» — qoʻngʻiroqdan yaratish, sugʻurtalangan shaxsni topish; «Qabullar» — klinikalardan eskalatsiyalar; «Chatlar» — ilovadan xabarlar.
 - **Shifokor:** «Kafolat xatlari» — vakolatlar doirasida qaror yoki MIGga eskalatsiya; quyi reyestrlar qatorlarini tekshirish; sabab bilan oʻz sugʻurtalanganlarining tibbiy kartasi.
 - **Moliyachi:** «Klinikalar reyestrlari» — tekshirish va klinikalarga toʻlovni belgilash; «MIG hisoblari» — oy uchun shakllantirish, yuborish, rad etishlarga javob berish.
-- **Administrator:** «Foydalanuvchilar», «Integratsiya».
+- **Administrator:** «Foydalanuvchilar» (taklif qilish, taklifnomani qayta yuborish, oʻchirish), «Integratsiya».
 - **Esda tuting:** siz faqat hodisa sanasidagi oʻz mijozlaringizning sugʻurtalanganlarini koʻrasiz; barcha navbatlarning muddatlari bor, muddat oʻtgani ajratib koʻrsatiladi.
 
 ## 15. Maʼmuriyat {#administration}
@@ -860,7 +871,9 @@ MIG administratori foydalanuvchilar, vakolatlar, parametrlar, hamkorlar va integ
 
 <!-- audience: staff -->
 
-1. «+ Yaratish» → «Foydalanuvchi» → email, F.I.Sh., rol → «Taklif qilish». Xodim taklifnoma oladi, parol oʻrnatadi va ikkinchi omilni sozlaydi.
+1. «+ Yaratish» → «Foydalanuvchi» → email, F.I.Sh., rol → «Taklif qilish». Xodim havolali xat oladi, parol oʻrnatadi va birinchi kirishda autentifikator ilovasini ulaydi («Taklifnoma orqali birinchi kirish» boʻlimi).
+   Parol oʻrnatilmaguncha «Holat» ustunida «Taklifnoma yuborildi» (havola qachongacha amal qilishi bilan), «Taklifnoma yuborish navbatida» yoki «Taklifnoma muddati tugagan» koʻrinadi. «Qayta yuborish» tugmasi yangi havola yuboradi — avvalgisi ishlamay qoladi.
+   Jadval ostida «Taklifnomalar» bloki: hali parol oʻrnatmagan mijozlar HR, klinikalar va assistanslar hisoblari. Taklifnomani u yerda ham qayta yuborish mumkin.
 2. «Maʼmuriyat» → «Foydalanuvchilar va rollar»: rolni almashtirish (tasdiqlash bilan), ishdan boʻshagan xodimni faolsizlantirish. Administrator rolini oʻzingizdan olib tashlab boʻlmaydi.
 3. **Vakolatlar va imzolash huquqi** — xodim profilida: tarifdan eng katta chegirma va kelishuvsiz kotirovka sugʻurta mukofoti (anderrayter), zarar boʻyicha qarorning eng katta summasi (zararlar boʻyicha mutaxassis), asos bilan imzolash huquqi («… dagi …-son ishonchnoma»). Oʻzgarish faqat **ikkinchi administrator** tasdiqlagandan keyin qoʻllanadi; xodimning oʻzi tasdiqlay olmaydi.
 
@@ -875,7 +888,7 @@ MIG administratori foydalanuvchilar, vakolatlar, parametrlar, hamkorlar va integ
 - **tarif:** dasturlarning bazaviy stavkalari, yosh guruhlari koeffitsiyentlari, guruh hajmi uchun chegirmalar;
 - **xizmat koʻrsatish:** qoʻshimcha kelishuvlar davriyligi, chiqarishda qaytarish qoidasi, yangi xodim qaysi sanadan qoplanishi, muddat oʻtganda bloklash;
 - **oila aʼzolari:** limitlar rejimi, bolalar va talabalarning chegaraviy yoshi;
-- **xavfsizlik:** kirish urinishlari va JShShIR boʻyicha tekshiruvlar limitlari;
+- **xavfsizlik:** kirish urinishlari va JShShIR boʻyicha tekshiruvlar limitlari, taklifnomaning amal qilish muddati;
 - **raqamlash:** hujjat raqamlari shablonlari (faqat lotin harflari, raqamlar, «-» va «/»).
 
 Oʻzgartirish: «Yangi qiymat taklif qilish» → ikkinchi administrator yoki anderrayter tasdiqlaydi → qiymat amal qiladi, auditda «avval — keyin, kim, qachon» yozuvi.

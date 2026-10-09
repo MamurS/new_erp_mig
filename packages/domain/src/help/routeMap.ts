@@ -93,6 +93,7 @@ export const ROUTE_HELP: Readonly<Record<string, string>> = {
   // public pages
   '/login': 'login',
   '/login/otp': 'login',
+  '/invite': 'invitation',
   '/app/login': 'login',
   '/app/login/code': 'login',
   '/app/consent': 'login',

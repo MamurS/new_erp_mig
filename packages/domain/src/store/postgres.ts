@@ -30,7 +30,7 @@ import { isOp, orderTerm, type ArrayOp, type Op, type Query, type Where } from '
 import { computedOf, type ComputedDef } from './computed';
 import { COLLATION_SQL, searchColumn } from './sql/listQueries';
 import { searchKey } from '../lib/searchNormalize';
-import type { InsertOptions, JobMarks, LogTable, MapStore, Repos, SeqName, SetStore, Table } from './repo';
+import type { InsertOptions, InvitationRow, Invitations, JobMarks, LogTable, MapStore, Repos, SeqName, SetStore, Table } from './repo';
 import { TABLES, listQueriesOf, sequenceName, type TableSpec } from './schema';
 import { fieldMapping, keyColumn, physicalColumns, type FieldMapping } from './sql/physical';
 import { qi } from './columns';
@@ -662,6 +662,60 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     },
   };
 
+  // System-only (no grant to a person's role): the token is sealed with the PII key until the e-mail leaves.
+  const INV = `id::text as id, user_id::text as user_id, token_hash, (extract(epoch from created_at) * 1000)::bigint as created_at, (extract(epoch from expires_at) * 1000)::bigint as expires_at, (extract(epoch from sent_at) * 1000)::bigint as sent_at, (extract(epoch from used_at) * 1000)::bigint as used_at, (extract(epoch from revoked_at) * 1000)::bigint as revoked_at`;
+  const ms = (v: number) => new Date(v).toISOString();
+  async function invitationOf(row: Rec): Promise<InvitationRow> {
+    const out: InvitationRow = { id: String(row.id), userId: String(row.user_id), tokenHash: String(row.token_hash), createdAt: Number(row.created_at), expiresAt: Number(row.expires_at) };
+    if (row.sent_at !== null && row.sent_at !== undefined) out.sentAt = Number(row.sent_at);
+    if (row.used_at !== null && row.used_at !== undefined) out.usedAt = Number(row.used_at);
+    if (row.revoked_at !== null && row.revoked_at !== undefined) out.revokedAt = Number(row.revoked_at);
+    if (row.token_enc) out.token = await crypto.open(bytesOf(row.token_enc), Number(row.token_key_ver));
+    return out;
+  }
+  const invitations: Invitations = {
+    async issue(row) {
+      if (!row.token) throw new Error('an invitation is issued with its token');
+      const sealed = await crypto.seal(row.token);
+      await run(`update app.invitations set revoked_at = $2::timestamptz, token_enc = null, token_key_ver = null where user_id = $1::uuid and used_at is null and revoked_at is null`, [row.userId, ms(row.createdAt)], true);
+      await run(
+        `insert into app.invitations (id, user_id, token_hash, token_enc, token_key_ver, created_at, expires_at) values ($1::uuid, $2::uuid, $3, $4, $5, $6::timestamptz, $7::timestamptz)`,
+        [row.id, row.userId, row.tokenHash, sealed.enc, sealed.keyVer, ms(row.createdAt), ms(row.expiresAt)],
+        true,
+      );
+    },
+    async byTokenHash(hash) {
+      const { rows } = await run(`select ${INV} from app.invitations where token_hash = $1`, [hash], true);
+      return rows[0] ? invitationOf(rows[0]) : null;
+    },
+    async open(userIds) {
+      const { rows } = await run(
+        `select distinct on (user_id) ${INV} from app.invitations where used_at is null and revoked_at is null${userIds ? ' and user_id = any($1::uuid[])' : ''} order by user_id, created_at desc`,
+        userIds ? [userIds] : [],
+        true,
+      );
+      return Promise.all(rows.map(invitationOf));
+    },
+    async use(id, at) {
+      const r = await run(`update app.invitations set used_at = $2::timestamptz, token_enc = null, token_key_ver = null where id = $1::uuid and used_at is null and revoked_at is null and expires_at > $2::timestamptz`, [id, ms(at)], true);
+      return r.rowCount > 0;
+    },
+    async unsent(limit, at) {
+      const { rows } = await run(
+        `update app.invitations i set lease_until = $2::timestamptz + interval '2 minutes', attempts = attempts + 1
+           where i.id in (select id from app.invitations where sent_at is null and used_at is null and revoked_at is null and expires_at > $2::timestamptz
+                            and attempts < 10 and (lease_until is null or lease_until <= $2::timestamptz) order by created_at limit $1 for update skip locked)
+         returning ${INV}, token_enc, token_key_ver`,
+        [limit, ms(at)],
+        true,
+      );
+      return Promise.all(rows.map(invitationOf));
+    },
+    async sent(id, at) {
+      await run(`update app.invitations set sent_at = $2::timestamptz, token_enc = null, token_key_ver = null where id = $1::uuid`, [id, ms(at)], true);
+    },
+  };
+
   const one: Repos['one'] = {
     async dmsParamValues() {
       const rows = await select(params, {});
@@ -696,7 +750,7 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     },
   };
 
-  const base: Omit<Repos, 'facts'> = { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'jobMarks' | 'seq' | 'one' | 'facts'>), aiRebillFlags, statementKeys, jobMarks, seq, one };
+  const base: Omit<Repos, 'facts'> = { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'jobMarks' | 'invitations' | 'seq' | 'one' | 'facts'>), aiRebillFlags, statementKeys, jobMarks, invitations, seq, one };
   // Narrow facts: the system computes them itself; a person asks the SQL functions of store/sql/facts.ts.
   return { ...base, facts: priv ? genericFacts(base) : pgFacts(session, crypto) };
 }

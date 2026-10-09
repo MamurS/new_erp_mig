@@ -106,6 +106,11 @@ export interface ServiceEnv {
   demo: boolean;
   /** Server-side re-encoding of uploaded images (the API); without it (the mock) their metadata is stripped. */
   images?: ImageCodec;
+  /**
+   * The credentials of e-mail accounts (the API: Supabase Auth). An accepted invitation sets the password and removes
+   * the TOTP factors, so the first sign-in sets one up. Absent in the mock: the account row keeps the password.
+   */
+  credentials?: { setPassword(userId: string, password: string): Promise<void> };
 }
 
 /** A signed-in person: resolved by the adapter from the session before the service runs. */

@@ -101,6 +101,9 @@ describe('environment (production refuses development secrets)', () => {
     PII_HMAC_KEY: 'p'.repeat(40),
     SESSION_SECRET: 's'.repeat(48),
     SMS_HOOK_SECRET: `v1,whsec_${Buffer.from('q'.repeat(32)).toString('base64')}`,
+    SMTP_HOST: 'smtp.mig.uz',
+    SMTP_FROM: 'MIG DMS <noreply@mig.uz>',
+    INVITE_REDIRECT_URL: 'https://dms.mig.uz/',
   };
 
   it('starts with real secrets: no demo, no test MFA, no bearer path; plaintext version 0 refused', async () => {
@@ -109,6 +112,8 @@ describe('environment (production refuses development secrets)', () => {
     expect(env.testTotp).toBe(false);
     expect('bearerCompat' in env).toBe(false);
     expect(env.demoPassword).toBeUndefined();
+    expect(env.smtp).toEqual({ host: 'smtp.mig.uz', port: 587, tls: 'starttls', from: 'MIG DMS <noreply@mig.uz>' });
+    expect(readEnv({ ...prod, SMTP_TLS: 'tls', SMTP_PORT: '', SMTP_USER: 'u', SMTP_PASS: 'p' }).smtp).toMatchObject({ port: 465, tls: 'tls', user: 'u', pass: 'p' });
     expect((await env.crypto.seal('x')).keyVer).toBe(4);
     await expect(env.crypto.open(new TextEncoder().encode('x'), 0)).rejects.toThrow();
   });
@@ -126,6 +131,10 @@ describe('environment (production refuses development secrets)', () => {
     ['with the bearer path', { AUTH_BEARER_COMPAT: '1' }],
     ['with the insecure development cookie', { INSECURE_DEV_COOKIE: '1' }],
     ['without the Supabase service key', { SUPABASE_SERVICE_ROLE_KEY: '' }],
+    ['without SMTP (invitation e-mails)', { SMTP_HOST: '' }],
+    ['with SMTP without TLS', { SMTP_TLS: 'none' }],
+    ['without the sender of e-mails', { SMTP_FROM: '' }],
+    ['without the https address of the portal', { INVITE_REDIRECT_URL: 'http://dms.mig.uz/' }],
   ])('refuses to start %s', (_label, patch) => {
     expect(() => readEnv({ ...prod, ...patch })).toThrow();
   });

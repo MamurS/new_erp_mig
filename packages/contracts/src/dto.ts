@@ -1,6 +1,7 @@
 /* Screen-level DTOs. Part of the API contract, alongside ./index.ts. */
 import type { LegalFormCode } from '@mig/domain/config/legalForms';
 import type {
+  InvitationBrief,
   AiProviderId,
   AiScenario,
   AiSettings,
@@ -439,6 +440,7 @@ export interface ClinicUserView {
   role: ClinicRole;
   active: boolean;
   lastLoginAt?: ISODateTime;
+  invitation?: InvitationBrief;
 }
 export interface GuaranteeView extends GuaranteeLetter {
   clinicName: string;
@@ -622,6 +624,7 @@ export interface AssistUserView {
   role: AssistanceRole;
   active: boolean;
   lastLoginAt?: ISODateTime;
+  invitation?: InvitationBrief;
 }
 export interface AssistanceListItem extends AssistanceBrief {
   contractNumber: string;

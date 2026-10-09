@@ -400,7 +400,7 @@ describe.skipIf(!hasDb || !hasSupabase)('sign-in with Supabase Auth and BFF sess
       });
     });
 
-    it('production invites by e-mail (Supabase Auth sends it through its SMTP); no password is set', async () => {
+    it('production creates the e-mail account confirmed and without a password (our invitation e-mail sets it)', async () => {
       const calls: { method: string; path: string; body: unknown }[] = [];
       const fake: typeof fetch = async (input, init) => {
         const url = new URL(String(input));
@@ -418,23 +418,21 @@ describe.skipIf(!hasDb || !hasSupabase)('sign-in with Supabase Auth and BFF sess
         crypto,
         gotrue: new GoTrue({ url: SUPABASE!.url, serviceKey: SUPABASE!.serviceKey, fetch: fake }),
         testMfa: false,
-        inviteRedirectTo: 'https://dms.example/login',
       });
       const hr = d.hrUsers[0]!;
       await sync.syncOne(hr.id);
       expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
         `GET /auth/v1/admin/users/${hr.id}`,
         'POST /auth/v1/admin/users',
-        `POST /auth/v1/invite?redirect_to=${encodeURIComponent('https://dms.example/login')}`,
       ]);
+      // Confirmed, without a password: the person sets it with the link of our invitation e-mail.
       expect(calls[1]!.body).toMatchObject({
         id: hr.id,
         email: hr.email,
-        email_confirm: false,
+        email_confirm: true,
         app_metadata: { role: 'hr', company_id: hr.companyId, clinic_id: null },
       });
       expect(calls[1]!.body).not.toHaveProperty('password');
-      expect(calls[2]!.body).toEqual({ email: hr.email });
     });
   });
 

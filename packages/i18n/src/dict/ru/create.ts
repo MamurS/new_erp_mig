@@ -31,7 +31,7 @@ export const create = {
   'create.claimPick.placeholder': 'ФИО застрахованного…',
   'create.staffUser.add': 'Пригласить сотрудника',
   'create.staffUser.title': 'Новый сотрудник МИГ',
-  'create.staffUser.description': 'Сотрудник получит приглашение на рабочую почту и войдёт со вторым фактором.',
+  'create.staffUser.description': 'Сотрудник получит письмо со ссылкой на рабочую почту, задаст пароль и при первом входе подключит приложение-аутентификатор.',
   'create.staffUser.email': 'Рабочая почта',
   'create.staffUser.invite': 'Пригласить',
   'create.staffUser.invited': 'Приглашение отправлено',

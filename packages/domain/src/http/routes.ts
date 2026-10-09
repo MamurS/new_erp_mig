@@ -42,6 +42,7 @@ import * as hr from '../services/hr';
 import * as insured from '../services/insured';
 import * as integration from '../services/integration';
 import * as integrationAssistance from '../services/integrationAssistance';
+import * as invitations from '../services/invitations';
 import { issueToken, parseJsonBody, type ApiAnswer, type ApiCallCtx, type ApiSpec } from '../services/integrationKit';
 import type { AuthCtx, BaseCtx } from '../services/kernel';
 import * as kp from '../services/kp';
@@ -248,6 +249,9 @@ export const ROUTES: readonly RouteDef[] = [
   open('POST', '/auth/phone/verify', 'json', async (ctx, req) => auth.phoneVerify(ctx, await req.json()), { session: 'start' }),
   open('POST', '/auth/logout', 'none', async (_ctx, req, _deps, session) => auth.logout(await session().catch(() => null), req.query.get('all') === '1'), { session: 'end' }),
   get('/auth/me', (ctx) => auth.me(ctx)),
+  // Invitations of e-mail accounts: the page of the link sets the first password (no session).
+  open('POST', '/auth/invitation', 'json', async (ctx, req) => invitations.checkInvitation(ctx, await req.json())),
+  open('POST', '/auth/invitation/accept', 'json', async (ctx, req) => invitations.acceptInvitation(ctx, await req.json())),
 
   // ---------------- the staff dashboard (services/dashboard.ts) ----------------
   get('/dashboard', (ctx) => dashboard.dashboard(ctx)),
@@ -353,6 +357,8 @@ export const ROUTES: readonly RouteDef[] = [
   get('/admin/users', (ctx) => misc.staffUsers(ctx)),
   send('POST', '/admin/users', async (ctx, req) => misc.inviteStaffUser(ctx, await req.json()), CREATED),
   send('PATCH', '/admin/users/:id', async (ctx, req) => misc.updateStaffUser(ctx, req.id('id'), await req.json())),
+  get('/invitations', (ctx) => invitations.listInvitations(ctx)),
+  act('POST', '/invitations/:id/resend', (ctx, req) => invitations.resendInvitation(ctx, req.id('id'))),
 
   // ---------------- commercial offers (services/kp.ts) ----------------
   get('/clients/:id/kp-defaults', (ctx, req) => kp.kpDefaults(ctx, req.id('id'), req.query)),

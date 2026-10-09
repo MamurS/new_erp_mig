@@ -877,6 +877,7 @@ export function createSeed(opts: SeedOptions = {}): Db {
     tasks: [],
     notifications: [],
     jobMarks: [],
+    invitations: [],
   };
   seedAssistance(out, { now });
   seedLifecycle(out, { now });

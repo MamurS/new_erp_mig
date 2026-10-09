@@ -116,6 +116,8 @@ export const labels = {
   'labels.audit.contract_scan_verified': 'Скан проверен',
   'labels.audit.contract_original': 'Отметка об оригинале',
   'labels.audit.contract_activated': 'Договор вступил в силу',
+  'labels.audit.invitation_sent': 'Отправлено приглашение',
+  'labels.audit.invitation_accepted': 'Пароль задан по приглашению',
   'labels.audit.contract_terminated': 'Договор расторгнут',
   'labels.audit.contract_expired': 'Срок договора истёк',
   'labels.audit.policy_expired': 'Срок полиса истёк',

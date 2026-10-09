@@ -11,6 +11,8 @@ import {
   NESTED_KEYS,
   TABLE_KEYS,
   type InsertOptions,
+  type InvitationRow,
+  type Invitations,
   type JobMarks,
   type LogTable,
   type MapStore,
@@ -211,11 +213,59 @@ export function memoryRepos(db: () => Db): Repos {
       return true;
     },
   };
+  const leases = new Map<string, { until: number; tries: number }>();
+  const isOpen = (x: InvitationRow) => x.usedAt === undefined && x.revokedAt === undefined;
+  const withoutToken = ({ token: _t, ...x }: InvitationRow): InvitationRow => x;
+  const invitations: Invitations = {
+    async issue(row) {
+      const list = db().invitations;
+      for (const x of list) if (x.userId === row.userId && isOpen(x)) {
+          x.revokedAt = row.createdAt;
+          delete x.token;
+        }
+      list.push({ ...row });
+    },
+    async byTokenHash(hash) {
+      const x = db().invitations.find((i) => i.tokenHash === hash);
+      return x ? withoutToken(x) : null;
+    },
+    async open(userIds) {
+      const want = userIds ? new Set(userIds) : null;
+      const latest = new Map<string, InvitationRow>();
+      for (const x of db().invitations) if (isOpen(x) && (!want || want.has(x.userId)) && (latest.get(x.userId)?.createdAt ?? -1) <= x.createdAt) latest.set(x.userId, x);
+      return [...latest.values()].map(withoutToken);
+    },
+    async use(id, at) {
+      const x = db().invitations.find((i) => i.id === id);
+      if (!x || !isOpen(x) || x.expiresAt <= at) return false;
+      x.usedAt = at;
+      delete x.token;
+      return true;
+    },
+    async unsent(limit, at) {
+      const out: InvitationRow[] = [];
+      for (const x of db().invitations) {
+        if (out.length >= limit) break;
+        const l = leases.get(x.id);
+        if (!isOpen(x) || x.sentAt !== undefined || x.expiresAt <= at || (l && (l.until > at || l.tries >= 10))) continue;
+        leases.set(x.id, { until: at + 120_000, tries: (l?.tries ?? 0) + 1 });
+        out.push({ ...x });
+      }
+      return out;
+    },
+    async sent(id, at) {
+      const x = db().invitations.find((i) => i.id === id);
+      if (!x) return;
+      x.sentAt = at;
+      delete x.token;
+    },
+  };
   const base: Omit<Repos, 'facts'> = {
-    ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'jobMarks' | 'seq' | 'one' | 'facts'>),
+    ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'jobMarks' | 'invitations' | 'seq' | 'one' | 'facts'>),
     aiRebillFlags: flags,
     statementKeys,
     jobMarks,
+    invitations,
     seq: {
       async next(name) {
         const d = db();

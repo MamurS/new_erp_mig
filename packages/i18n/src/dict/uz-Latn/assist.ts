@@ -248,7 +248,7 @@ export const assist: Translation<typeof Ru> = {
   'assist.card.noGuarantees': 'Xatlar yoʻq',
   'assist.users.invited': 'Foydalanuvchi taklif qilindi',
   'assist.users.inviteTitle': 'Foydalanuvchini taklif qilish',
-  'assist.users.inviteDescription': 'Email va parol hamda tasdiqlash kodi bilan kirish (MFA)',
+  'assist.users.inviteDescription': 'Foydalanuvchi havolali xat oladi, parol oʻrnatadi va birinchi kirishda autentifikator ilovasini ulaydi (MFA)',
   'assist.users.invite': 'Taklif qilish',
   'assist.users.title': 'Foydalanuvchilar',
   'assist.users.saved': 'Saqlandi',

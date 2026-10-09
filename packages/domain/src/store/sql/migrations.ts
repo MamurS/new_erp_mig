@@ -14,6 +14,7 @@ import { factsMigration } from './facts';
 import { LIST_QUERIES_MIGRATION, listQueriesMigration } from './listQueries';
 import { JOBS_STEP3 as JOBS } from './jobsStep3';
 import { JOB_ACTIONS_MIGRATION, jobActionsMigration } from './migrationsJobs';
+import { INVITATIONS_MIGRATION, invitationsMigration } from './migrationsInvitations';
 
 export interface SqlFile {
   name: string;
@@ -614,6 +615,7 @@ export function buildMigrations(): SqlFile[] {
     { name: LIST_QUERIES_MIGRATION, sql: listQueriesMigration() },
     { name: '20261012000200_shared_state.sql', sql: sharedStateMigration() },
     { name: JOB_ACTIONS_MIGRATION, sql: jobActionsMigration() },
+    { name: INVITATIONS_MIGRATION, sql: invitationsMigration() },
   ];
 }
 

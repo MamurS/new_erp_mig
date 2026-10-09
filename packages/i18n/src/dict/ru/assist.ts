@@ -259,7 +259,7 @@ export const assist = {
 
   'assist.users.invited': 'Пользователь приглашён',
   'assist.users.inviteTitle': 'Пригласить пользователя',
-  'assist.users.inviteDescription': 'Вход по email и паролю с кодом подтверждения (MFA)',
+  'assist.users.inviteDescription': 'Пользователь получит письмо со ссылкой, задаст пароль и при первом входе подключит приложение-аутентификатор (MFA)',
   'assist.users.invite': 'Пригласить',
   'assist.users.title': 'Пользователи',
   'assist.users.saved': 'Сохранено',

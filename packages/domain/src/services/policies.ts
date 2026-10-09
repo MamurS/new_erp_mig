@@ -2,6 +2,7 @@
  * Policy issuance by MIG (POLICY_SPEC): the check of the initial list, issuing a policy with its insured
  * persons, the queue of insured-list changes and MIG's decision on them.
  */
+import { issueInvitation } from './invitations';
 import { msg, translate } from '@mig/i18n';
 import type { Contract, Policy, PolicyChange } from '@mig/contracts';
 import type { PolicyChangeDecisionResult, PolicyListCheck } from '@mig/contracts/dto';
@@ -90,6 +91,7 @@ export async function issuePolicy(ctx: AuthCtx, clientId: string, body: unknown)
   if (input.hr && !(await r.hrUsers.exists({ companyId: client.id }))) {
     const hr: HrUserRow = { id: randomId(), email: input.hr.email, password: DEMO_PASSWORD, fullName: input.hr.fullName, companyId: client.id };
     await r.hrUsers.insert(hr);
+    await issueInvitation(ctx, hr, user);
     await r.clients.update(client.id, { hrContact: { ...client.hrContact, name: hr.fullName, email: hr.email } });
   }
   await audit(ctx, user, 'policy_issued', { targetType: 'policy', targetId: policy.id, targetLabel: `${policy.number}: ${rows.length} застр.` });

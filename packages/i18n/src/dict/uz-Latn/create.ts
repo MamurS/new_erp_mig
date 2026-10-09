@@ -33,7 +33,7 @@ export const create: Translation<typeof Ru> = {
   'create.claimPick.placeholder': 'Sugʻurtalangan shaxsning F.I.Sh.…',
   'create.staffUser.add': 'Xodimni taklif qilish',
   'create.staffUser.title': 'MIG yangi xodimi',
-  'create.staffUser.description': 'Xodim ish pochtasiga taklif oladi va ikkinchi omil bilan kiradi.',
+  'create.staffUser.description': 'Xodim ish pochtasiga havolali xat oladi, parol oʻrnatadi va birinchi kirishda autentifikator ilovasini ulaydi.',
   'create.staffUser.email': 'Ish pochtasi',
   'create.staffUser.invite': 'Taklif qilish',
   'create.staffUser.invited': 'Taklif yuborildi',

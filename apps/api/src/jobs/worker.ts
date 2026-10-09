@@ -2,7 +2,7 @@
  * The background worker (BACKEND_SPEC §10): pg_cron schedules every job of packages/domain/src/services/jobs.ts;
  * `db` jobs run inside Postgres, `api` jobs become rows of `app.job_queue` that this worker takes and runs with
  * the system context through the same service code as the mock (services/jobRunner.ts). It also drains the
- * identity sync queue (jobs/identity.ts) and, with Storage, deletes the objects of removed file rows every pass and
+ * identity sync queue (jobs/identity.ts), sends invitation e-mails (services/system/invitations.ts) and, with Storage, deletes the objects of removed file rows every pass and
  * sweeps orphan objects once a day (files/gc.ts).
  *
  * Runs inside the API process (WORKER=inline, the default) or as its own process (`node apps/api/dist/worker.js`,
@@ -12,6 +12,7 @@ import type pg from 'pg';
 import { JOBS } from '@mig/domain/services/jobs';
 import { runApiJob, type JobSummary } from '@mig/domain/services/jobRunner';
 import { edoEvents } from '@mig/domain/services/lifecycle';
+import { sendInvitations, type Mailer } from '@mig/domain/services/system/invitations';
 import type { BlobStore } from '@mig/domain/store/blob';
 import type { PiiCrypto } from '@mig/domain/store/pii';
 import { storageGc, type StorageGc } from '../files/gc';
@@ -27,6 +28,8 @@ export interface WorkerOptions {
   /** The services' clock (tests pin it). */
   now?: () => number;
   intervalMs?: number;
+  /** Invitation e-mails (the SMTP of MIG) and where their links lead. */
+  mail?: { mailer: Mailer; baseUrl: string };
   log?: (msg: string, data?: Record<string, unknown>) => void;
 }
 
@@ -37,6 +40,8 @@ export interface Worker {
     identities: { synced: number; failed: number };
     /** Contracts that got a client signature from the EDO operator this pass. */
     edo: number;
+    /** Invitation e-mails sent (and failed, retried later) this pass. */
+    invitations?: { sent: number; failed: number };
     storage?: { removed: number; failed: number; orphans?: { removed: number; failed: number } };
   }>;
   /** The Storage collector (with `storage`). */
@@ -106,7 +111,14 @@ export function createWorker(o: WorkerOptions): Worker {
     // The EDO operator is polled every pass (signatures arrive seconds after the send, not on a schedule).
     const edo = await withSystemDb(o.pool, { crypto: o.crypto, now: o.now }, (ctx) => edoEvents(ctx));
     if (edo) log('edo signatures', { contracts: edo });
-    return { jobs, identities, edo, ...(storage ? { storage } : {}) };
+    // Invitation e-mails leave on the next pass after the account is created (counts only in the log).
+    let invitations: { sent: number; failed: number } | undefined;
+    if (o.mail) {
+      const { mailer, baseUrl } = o.mail;
+      invitations = await withSystemDb(o.pool, { crypto: o.crypto, now: o.now }, (ctx) => sendInvitations(ctx, mailer, baseUrl));
+      if (invitations.sent || invitations.failed) log('invitation e-mails', invitations);
+    }
+    return { jobs, identities, edo, ...(invitations ? { invitations } : {}), ...(storage ? { storage } : {}) };
   }
 
   return {
