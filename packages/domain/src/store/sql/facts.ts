@@ -410,6 +410,93 @@ export const FACT_FUNCTIONS: readonly FactFn[] = [
       'premiumFamily', q.premium_family, 'total', q.total, 'program', q.program) end, 'belowMinException', v_below);
   end;`,
     comment: 'The quote summary (premiums, total, program) of a contract the caller reads — its own quote or the deal’s latest — and whether its own quote allows a group below the minimum.',
+  },  {
+    sig: 'fact_assistance_kpi_figures(p_assistance uuid, p_now bigint, p_today date, p_decision_hours integer)',
+    returns: 'jsonb',
+    gate: `app.is_staff() or (app.is_assist() and p_assistance = app.assistance_id())`,
+    body: `declare
+    v_people uuid[];
+    v_policies uuid[];
+    v_paid numeric;
+    v_lines numeric;
+  begin
+    select coalesce(array_agg(r.id), '{}'), coalesce(array_agg(distinct r.policy_id), '{}') into v_people, v_policies from app.roster_of(p_assistance, p_today) r;
+    select coalesce(sum(coalesce(c.amount_approved, c.amount_claimed)), 0) into v_paid from public.claims c
+      where c.insured_id = any(v_people) and c.status in ('approved', 'to_pay', 'paid');
+    select coalesce(sum((l.e ->> 'amount')::numeric), 0) into v_lines
+      from public.registries reg cross join lateral jsonb_array_elements(coalesce(reg.lines, '[]'::jsonb)) as l(e)
+      where l.e ->> 'payer' = p_assistance::text and l.e ->> 'status' = 'accepted'
+        and not exists (select 1 from public.claims c where c.registry_line_id::text = l.e ->> 'id');
+    return jsonb_build_object(
+      'rosterSize', cardinality(v_people),
+      'answered', (select count(*) from public.appointments a where a.responded_at is not null and a.insured_id = any(v_people)),
+      'answeredMs', (select coalesce(sum(extract(epoch from (a.responded_at - a.created_at)) * 1000), 0)::bigint from public.appointments a where a.responded_at is not null and a.insured_id = any(v_people)),
+      'decided', (select count(*) from public.guarantees g where g.assistance_id = p_assistance and g.decided_by = 'assistance' and g.decided_at is not null),
+      'onTime', (select count(*) from public.guarantees g where g.assistance_id = p_assistance and g.decided_by = 'assistance' and g.decided_at is not null
+        and extract(epoch from (g.decided_at - g.created_at)) * 1000 <= p_decision_hours * 3600000),
+      'reviewed', (select count(*) from public.qa_samples q where q.assistance_id = p_assistance and q.verdict is not null),
+      'agreed', (select count(*) from public.qa_samples q where q.assistance_id = p_assistance and q.verdict = 'agree'),
+      'complaints', (select count(*) from public.cases c where c.assistance_id = p_assistance and c.type = 'complaint' and c.created_at >= to_timestamp((p_now - 30 * 86400000::bigint) / 1000.0)),
+      'premium', (select coalesce(sum(p.premium), 0) from public.policies p where p.id = any(v_policies)),
+      'losses', v_paid + v_lines);
+  end;`,
+    comment: 'Figures of the KPI of an assistance company over its portfolio (counts and sums only): MIG staff, the users of the company.',
+  },
+  {
+    sig: 'fact_assistance_fee_figures(p_assistance uuid, p_period text, p_from date, p_to date, p_today date)',
+    returns: 'jsonb',
+    gate: `app.is_staff() or (app.is_assist() and p_assistance = app.assistance_id())`,
+    body: `return jsonb_build_object(
+      'insuredCount', (select count(*) from public.insured i
+        where i.policy_id in (select p.id from public.policies p where app.assistance_on(p.id, least(p_to, p_today)) is not distinct from p_assistance)
+          and i.insured_from <= p_to and (i.excluded_from is null or i.excluded_from > p_from)),
+      'casesCount', (select count(*) from public.cases c where c.assistance_id = p_assistance and to_char(c.created_at at time zone app.tz(), 'YYYY-MM') = p_period));`,
+    comment: 'Insured persons and cases of an assistance company in a month (the base of its fee): MIG staff, the users of the company.',
+  },
+  {
+    sig: 'fact_assistance_list_figures(p_assistance uuid, p_now bigint, p_today date)',
+    returns: 'jsonb',
+    gate: `app.is_staff()`,
+    body: `return jsonb_build_object(
+      'insuredCount', (select count(*) from app.roster_of(p_assistance, p_today) r where r.status = 'active'),
+      'clientsCount', (select count(distinct r.client_id) from app.roster_of(p_assistance, p_today) r),
+      'rebillsToReview', (select count(*) from public.rebills b where b.assistance_id = p_assistance and b.status in ('submitted', 'in_review')),
+      'slaBreaches', (select count(*) from public.cases c where c.assistance_id = p_assistance and c.status <> 'resolved' and c.sla_due_at < to_timestamp(p_now / 1000.0)));`,
+    comment: 'Counters of an assistance company in the list of MIG staff: insured persons and clients served today, rebills to review, cases past the SLA.',
+  },
+  {
+    sig: 'fact_assistance_report_figures(p_today date)',
+    returns: 'jsonb',
+    gate: `app.is_staff() and (select app.can('reports.read'))`,
+    body: `return (select coalesce(jsonb_agg(jsonb_build_object('assistanceId', g.id, 'insuredCount', g.insured, 'premium', g.premium, 'paid', g.paid, 'fee', g.fee) order by g.ord, g.pos), '[]'::jsonb)
+      from (
+        select x.id, x.ord, x.pos,
+          (select count(*) from public.insured i join public.policies p on p.id = i.policy_id
+            where p.status <> 'draft' and app.assistance_on(p.id, least(p.end_date, p_today)) is not distinct from x.id and i.status = 'active') as insured,
+          (select coalesce(sum(p.premium), 0) from public.policies p where p.status <> 'draft' and app.assistance_on(p.id, least(p.end_date, p_today)) is not distinct from x.id) as premium,
+          (select coalesce(sum(coalesce(c.amount_approved, c.amount_claimed)), 0) from public.claims c join public.insured i on i.id = c.insured_id join public.policies p on p.id = i.policy_id
+            where p.status <> 'draft' and app.assistance_on(p.id, least(p.end_date, p_today)) is not distinct from x.id and c.status in ('approved', 'to_pay', 'paid')) as paid,
+          case when x.id is null then 0 else (select coalesce(sum((b.fee ->> 'amount')::numeric), 0) from public.rebills b where b.assistance_id = x.id and b.status <> 'draft') end as fee
+        from (select a.id, 0 as ord, a._pos as pos from public.assistances a union all select null::uuid, 1, 0) x
+      ) g);`,
+    comment: 'Premium, paid claims, fees and insured persons by assistance company (and MIG) over the whole portfolio: the report of MIG staff with reports.read.',
+  },
+  {
+    sig: 'fact_assist_desktop_counters(p_assistance uuid, p_now bigint, p_today date, p_default_minutes integer)',
+    returns: 'jsonb',
+    gate: `app.is_assist() and p_assistance = app.assistance_id()`,
+    body: `return jsonb_build_object(
+      'openCases', (select count(*) from public.cases c where c.assistance_id = p_assistance and c.status <> 'resolved'),
+      'casesPastSla', (select count(*) from public.cases c where c.assistance_id = p_assistance and c.status <> 'resolved' and c.sla_due_at < to_timestamp(p_now / 1000.0)),
+      'overdueRequests', (select count(*) from public.appointments a join public.insured i on i.id = a.insured_id left join public.clinics cl on cl.id = a.clinic_id
+        where app.assist_scope_of(p_assistance, i.policy_id, (a.created_at at time zone app.tz())::date) <> 'none'
+          and a.status = 'requested' and a.starts_at > to_timestamp((p_now - 3600000) / 1000.0) and a.proposed_starts_at is null
+          and p_now - (extract(epoch from a.created_at) * 1000)::bigint > coalesce(cl.response_sla_minutes, p_default_minutes) * 60000),
+      'guaranteesPending', (select count(*) from public.guarantees g where g.assistance_id = p_assistance and g.status = 'requested' and not coalesce(g.escalated, false)),
+      'linesPending', (select count(*) from public.registries reg cross join lateral jsonb_array_elements(coalesce(reg.lines, '[]'::jsonb)) as l(e)
+        where reg.status <> 'draft' and coalesce(l.e ->> 'payer', 'mig') = p_assistance::text and l.e ->> 'status' in ('pending', 'disputed')),
+      'rebillsInReview', (select count(*) from public.rebills b where b.assistance_id = p_assistance and b.status in ('submitted', 'in_review')));`,
+    comment: 'Counters of the desktop of an assistance company, the same for every role of it (open cases, past the SLA, overdue requests, letters, lines, rebills): its users.',
   },
 ];
 
@@ -436,8 +523,23 @@ grant execute on function app.${name}(${types}) to authenticated, service_role;
 `;
 }
 
+/** Helpers the facts share; not callable by users (they answer for any company). */
+const PRIVATE_HELPERS = `-- The roster of an assistance company on a day: persons of the policies it serves on that day (rosterOf()).
+create or replace function app.roster_of(p_assistance uuid, p_day date) returns setof public.insured
+  language sql stable security definer set search_path = ''
+as $$
+  select i.* from public.insured i
+    where i.policy_id in (select p.id from public.policies p where app.assistance_on(p.id, p_day) is not distinct from p_assistance and p_assistance is not null)
+    order by i._pos
+$$;
+revoke execute on function app.roster_of(uuid, date) from public, authenticated;
+revoke execute on function app.assistance_on(uuid, date) from authenticated;
+revoke execute on function app.assist_scope_of(uuid, uuid, date) from authenticated;
+`;
+
 /** The migration with every fact function. */
 export function factsMigration(): string {
   return `${HEADER}
+${PRIVATE_HELPERS}
 ${FACT_FUNCTIONS.map(factSql).join('\n')}`;
 }

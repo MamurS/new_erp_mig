@@ -14,7 +14,7 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { AssistanceCaseRow } from '../store/db';
 import { asSystem, audit, conflict, DomainError, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
-import { byLegalForm, byLegalName, filterLegalForm, sortBy, type Qs } from './list';
+import { byLegalForm, byLegalName, filterLegalForm, isUuid, sortBy, type Qs } from './list';
 import { assistanceName, assistanceOf, claimsFromRebill, ensureQaSample, feeOf, kpiOf, notifyAssistance, rebillStatusAfterReview, rosterOf, syncAssistance } from './assistance';
 import { toRebillSummary, toRebillView } from './assistPortal';
 import { revokeKey, toClientView } from './partnerIntegration';
@@ -23,7 +23,8 @@ import { assistanceLegalFormOf, clientLegalFormOf } from './views';
 const caseOut = ({ policyId: _p, createdById: _c, resolvedAt: _r, ...c }: AssistanceCaseRow): AssistanceCase => c;
 
 async function listItem(ctx: BaseCtx, a: AssistanceCompany, now: number): Promise<AssistanceListItem> {
-  const roster = await rosterOf(ctx, a.id);
+  // Counters over the company's portfolio for any MIG employee (app.fact_assistance_list_figures).
+  const f = await ctx.repos.facts.assistanceListFigures(a.id, now, todayIso(ctx));
   return {
     id: a.id,
     name: a.name,
@@ -31,11 +32,11 @@ async function listItem(ctx: BaseCtx, a: AssistanceCompany, now: number): Promis
     phone24x7: a.phone24x7,
     integrationMode: a.integrationMode,
     contractNumber: a.contract.number,
-    insuredCount: roster.filter((i) => i.status === 'active').length,
-    clientsCount: new Set(roster.map((i) => i.clientId)).size,
+    insuredCount: f.insuredCount,
+    clientsCount: f.clientsCount,
     kpi: await kpiOf(ctx, a, now),
-    rebillsToReview: await ctx.repos.rebills.count({ assistanceId: a.id, status: { in: ['submitted', 'in_review'] } }),
-    slaBreaches: (await ctx.repos.cases.list({ where: { assistanceId: a.id, status: { ne: 'resolved' } } })).filter((c) => parseIso(c.slaDueAt) < now).length,
+    rebillsToReview: f.rebillsToReview,
+    slaBreaches: f.slaBreaches,
   };
 }
 
@@ -63,24 +64,9 @@ async function rebillOf(ctx: BaseCtx, id: UUID): Promise<Rebill> {
 }
 
 async function reportByAssistance(ctx: BaseCtx): Promise<AssistanceReportRow[]> {
-  const r = ctx.repos;
-  const today = todayIso(ctx);
-  const assignments = await r.assignments.list();
-  const allPolicies = await r.policies.list();
-  const insured = await r.insured.list();
-  const claims = await r.claims.list();
-  const rebills = await r.rebills.list({ where: { status: { ne: 'draft' } } });
+  // Aggregates over the whole portfolio by assistance company (app.fact_assistance_report_figures).
   const rows: AssistanceReportRow[] = [];
-  const groups: (string | null)[] = [...(await r.assistances.list()).map((a) => a.id), null];
-  for (const id of groups) {
-    const policies = allPolicies.filter((p) => p.status !== 'draft' && assistanceOn(assignments, p.id, p.endDate < today ? p.endDate : today) === id);
-    const ids = new Set(policies.map((p) => p.id));
-    const people = insured.filter((i) => ids.has(i.policyId));
-    const personIds = new Set(people.map((i) => i.id));
-    const premium = policies.reduce((s, p) => s + p.premium, 0);
-    const paid = claims.filter((c) => personIds.has(c.insuredId) && (c.status === 'approved' || c.status === 'to_pay' || c.status === 'paid')).reduce((s, c) => s + (c.amountApproved ?? c.amountClaimed), 0);
-    const fee = id ? rebills.filter((b) => b.assistanceId === id).reduce((s, b) => s + b.fee.amount, 0) : 0;
-    const insuredCount = people.filter((i) => i.status === 'active').length;
+  for (const { assistanceId: id, insuredCount, premium, paid, fee } of await ctx.repos.facts.assistanceReportFigures(todayIso(ctx))) {
     rows.push({
       assistanceId: id,
       name: id ? ((await assistanceName(ctx, id)) ?? '—') : t('srv.noAssistance'),
@@ -102,8 +88,7 @@ export async function listAssistances(ctx: AuthCtx, qs: Qs): Promise<AssistanceL
   requireStaff(ctx);
   const now = ctx.now();
   const items: AssistanceListItem[] = [];
-  const sys = asSystem(ctx, 'assistance list for MIG staff: portfolio, KPI and counters of every company');
-  for (const a of await ctx.repos.assistances.list()) items.push(await listItem(sys, a, now));
+  for (const a of await ctx.repos.assistances.list()) items.push(await listItem(ctx, a, now));
   const rows = filterLegalForm(items, qs, (a) => a.legalForm);
   return sortBy(rows, qs, {
     name: byLegalName((a) => a.name),
@@ -236,11 +221,11 @@ export async function revokeAssistanceKey(ctx: AuthCtx, id: UUID, keyId: UUID): 
 export async function policyAssignments(ctx: AuthCtx, policyId: UUID): Promise<AssignmentView[]> {
   const user = requireStaff(ctx);
   if (!can(user, 'policies.read') && !can(user, 'clients.read')) throw forbidden();
-  // Staff reading clients see the assistance history of a policy without reading the policy itself.
-  const sys = asSystem(ctx, 'assistance assignments of a policy for staff with clients.read');
-  const p = await sys.repos.policies.get(policyId);
-  if (!p) throw notFound();
-  return assignmentViews(sys, p.id);
+  // Staff reading clients see the assistance history of a policy without reading the policy itself: its existence
+  // comes as a narrow fact (app.fact_policy_brief); assignments, staff and companies every MIG employee reads.
+  const exists = !!(await ctx.repos.policies.get(policyId)) || (can(user, 'clients.read') && isUuid(policyId) && !!(await ctx.repos.facts.policyBrief(policyId)));
+  if (!exists) throw notFound();
+  return assignmentViews(ctx, policyId);
 }
 
 export async function assignPolicy(ctx: AuthCtx, policyId: UUID, body: unknown): Promise<AssignmentView[]> {
@@ -387,5 +372,5 @@ export async function reviewQa(ctx: AuthCtx, id: UUID, body: unknown): Promise<Q
 export async function reportByAssistanceFor(ctx: AuthCtx): Promise<AssistanceReportRow[]> {
   const user = requireStaff(ctx);
   requirePermission(user, 'reports.read');
-  return reportByAssistance(asSystem(ctx, 'report by assistance company (aggregates over the whole portfolio)'));
+  return reportByAssistance(ctx);
 }

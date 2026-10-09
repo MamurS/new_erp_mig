@@ -47,14 +47,14 @@ create policy clients_update on public.clients for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['clients.write', 'leads.manage', 'deals.manage', 'contracts.draft', 'assistance.assign', 'migration.manage']::text[]))));
 grant select, insert, update on public.clients to authenticated;
 
--- policies: HR — policies of the own company; the insured — the own policy; an assistance company — policies assigned to it today.
+-- policies: HR — policies of the own company; the insured — the own policy; an assistance company — policies assigned to it today, read-only for 12 months after (ASSISTANCE_SPEC §3).
 alter table public.policies enable row level security;
 create policy policies_select on public.policies for select to authenticated
   using ((select app.active()) and (
       ((select app.is_staff()) and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])))
       or ((select app.role()) = 'hr' and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (client_id = (select app.company_id())))
       or ((select app.role()) = 'insured' and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (id = (select app.my_policy_id())))
-      or ((select app.is_assist()) and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (app.assist_covers(id, current_date)))
+      or ((select app.is_assist()) and (select app.can_any(array['policies.read', 'policies.write', 'assistance.assign', 'contracts.read', 'claims.read', 'insured.read', 'assist.insured.search']::text[])) and (app.assist_access(id) <> 'none'))
     ));
 create policy policies_insert on public.policies for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['policies.write', 'assistance.assign', 'contracts.draft', 'policy_changes.decide']::text[]))));
@@ -63,7 +63,7 @@ create policy policies_update on public.policies for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['policies.write', 'assistance.assign', 'contracts.draft', 'policy_changes.decide']::text[]))));
 grant select, insert, update on public.policies to authenticated;
 
--- insured: HR — employees of the own company; the insured — self and the own family (names); a clinic — patients with an open visit; an assistance company — persons of policies assigned to it today. Ciphertexts of PINFL and phone are not readable by `authenticated` (column privileges); lists use the view `insured_masked`.
+-- insured: HR — employees of the own company; the insured — self and the own family (names); a clinic — patients with an open visit; an assistance company — persons of policies assigned to it today, read-only for 12 months after. Ciphertexts of PINFL and phone are not readable by `authenticated` (column privileges); lists use the view `insured_masked`.
 alter table public.insured enable row level security;
 create policy insured_select on public.insured for select to authenticated
   using ((select app.active()) and (
@@ -71,7 +71,7 @@ create policy insured_select on public.insured for select to authenticated
       or ((select app.role()) = 'hr' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (client_id = (select app.company_id())))
       or ((select app.role()) = 'insured' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.my_family_ids())::uuid[])))
       or ((select app.is_clinic()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.clinic_patient_ids())::uuid[])))
-      or ((select app.is_assist()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (app.assist_covers(policy_id, current_date)))
+      or ((select app.is_assist()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (app.assist_access(policy_id) <> 'none'))
     ));
 create policy insured_insert on public.insured for insert to authenticated
   with check ((select app.active()) and (
@@ -119,14 +119,14 @@ create policy claims_update on public.claims for update to authenticated
     ));
 grant select, insert, update on public.claims to authenticated;
 
--- appointments: The insured books for self and the family; a clinic — appointments of the own clinic; an assistance company — of persons assigned to it on the visit date.
+-- appointments: The insured books for self and the family; a clinic — appointments of the own clinic; an assistance company — reads requests of persons assigned to it on the date of the request (read-only for 12 months after), writes those of persons assigned on the visit date.
 alter table public.appointments enable row level security;
 create policy appointments_select on public.appointments for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])))
-      or ((select app.role()) = 'insured' and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])) and (insured_id = any((select app.my_person_ids())::uuid[])))
-      or ((select app.is_clinic()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])) and (clinic_id = (select app.clinic_id())))
-      or ((select app.is_assist()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage']::text[])) and (app.assist_covers_insured(insured_id, (starts_at at time zone (select app.tz()))::date)))
+      ((select app.is_staff()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])))
+      or ((select app.role()) = 'insured' and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])) and (insured_id = any((select app.my_person_ids())::uuid[])))
+      or ((select app.is_clinic()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])) and (clinic_id = (select app.clinic_id())))
+      or ((select app.is_assist()) and (select app.can_any(array['appointments.read', 'appointments.manage', 'clinic.appointments.manage', 'assist.appointments.manage', 'assist.insured.search']::text[])) and (app.assist_scope(app.policy_of_insured(insured_id), (created_at at time zone (select app.tz()))::date) <> 'none'))
     ));
 create policy appointments_insert on public.appointments for insert to authenticated
   with check ((select app.active()) and (

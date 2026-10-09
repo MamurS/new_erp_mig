@@ -253,6 +253,54 @@ ${def(
     and t.action = 'insured_list' and t.client_id = app.company_id())`,
   'MIG asked the HR of the own company for appendix 2 of this contract (an open request): HR may read and fill the draft.',
 )}
+${def('today()', 'date', 'select (now() at time zone app.tz())::date', 'Today in Tashkent (business dates).')}
+${def(
+  'add_months(p_date date, p_months integer)',
+  'date',
+  `select make_date(
+    extract(year from p_date)::int + ((extract(month from p_date)::int - 1 + p_months) / 12),
+    ((extract(month from p_date)::int - 1 + p_months) % 12) + 1, 1) + (extract(day from p_date)::int - 1)`,
+  'A date plus months with the overflow of JavaScript dates (Jan 31 + 1 month = Mar 3), as addMonths() of the domain.',
+  'immutable',
+)}
+${def('policy_of_insured(p_insured uuid)', 'uuid', 'select i.policy_id from public.insured i where i.id = p_insured', 'Policy of an insured person (assistance scope of appointments).')}
+${def(
+  'assistance_on(p_policy uuid, p_day date)',
+  'uuid',
+  `select a.assistance_id from public.assignments a
+    where a.policy_id = p_policy and a."from" <= p_day and (a."to" is null or p_day <= a."to")
+    order by a."from" desc, a._pos desc limit 1`,
+  'The assistance company serving a policy on a date (null: MIG), as assistanceOn() of the domain: the latest assignment covering the date.',
+)}
+${def(
+  'assist_scope_of(p_assistance uuid, p_policy uuid, p_day date)',
+  'text',
+  `select case
+      when a.policy_id is null then 'none'
+      when a."to" is null or a."to" >= app.today() then 'full'
+      when app.add_months(a."to", 12) >= app.today() then 'read'
+      else 'none' end
+    from (select 1) x left join lateral (select * from public.assignments s
+      where s.policy_id = p_policy and s.assistance_id = p_assistance and s."from" <= p_day and (s."to" is null or p_day <= s."to")
+      order by s._pos limit 1) a on true`,
+  'Access of an assistance company to a record of a policy dated p_day, as assistanceScope() of the domain: full, read (a former company, 12 months) or none.',
+)}
+${def(
+  'assist_scope(p_policy uuid, p_day date)',
+  'text',
+  'select app.assist_scope_of(app.assistance_id(), p_policy, p_day)',
+  'Access of the user’s assistance company to a record of a policy dated p_day (full, read or none).',
+)}
+${def(
+  'assist_access(p_policy uuid)',
+  'text',
+  `select case
+      when app.assist_scope_of(app.assistance_id(), p_policy, app.today()) <> 'none' then app.assist_scope_of(app.assistance_id(), p_policy, app.today())
+      when exists (select 1 from public.assignments a where a.policy_id = p_policy and a.assistance_id = app.assistance_id() and a."to" is not null
+        and app.assist_scope_of(app.assistance_id(), p_policy, a."to") <> 'none') then 'read'
+      else 'none' end`,
+  'Access of the user’s assistance company to a person of a policy, as insuredAccess(): the current assignment, or read-only for a former company within 12 months.',
+)}
 ${def('client_of_deal(p_deal uuid)', 'uuid', 'select d.client_id from public.deals d where d.id = p_deal', 'Client of a deal (HR writes events of the own company’s deal into its feed).')}
 ${def(
   'my_card_ids()',

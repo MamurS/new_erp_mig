@@ -3,10 +3,10 @@
  * (store/sql/facts.ts) as the person — the function checks the permission and returns only the value.
  */
 import type { LimitCategory, ProgramCode } from '@mig/contracts';
-import { LIMIT_OF_SERVICE } from '../assistance';
+import { GUARANTEE_DECISION_HOURS, LIMIT_OF_SERVICE } from '../assistance';
 import { CLAIM_TO_LIMIT } from '../claims';
 import type { LegalFormCode } from '../config/legalForms';
-import type { Facts } from './facts';
+import type { AssistanceReportFigures, Facts } from './facts';
 import type { PiiCrypto } from './pii';
 import type { Sql } from './postgres';
 
@@ -107,5 +107,27 @@ export function pgFacts(sql: Sql, crypto: PiiCrypto): Facts {
     async contractQuote(dealId, quoteId) {
       return one('app.fact_contract_quote($1::uuid, $2::uuid)', [dealId, quoteId]);
     },
+    async assistanceKpiFigures(assistanceId, nowMs, today) {
+      return numbers(await one('app.fact_assistance_kpi_figures($1::uuid, $2::bigint, $3::date, $4::integer)', [assistanceId, nowMs, today, GUARANTEE_DECISION_HOURS]));
+    },
+    async assistanceFeeFigures(assistanceId, period, from, to, today) {
+      return numbers(await one('app.fact_assistance_fee_figures($1::uuid, $2::text, $3::date, $4::date, $5::date)', [assistanceId, period, from, to, today]));
+    },
+    async assistanceListFigures(assistanceId, nowMs, today) {
+      return numbers(await one('app.fact_assistance_list_figures($1::uuid, $2::bigint, $3::date)', [assistanceId, nowMs, today]));
+    },
+    async assistanceReportFigures(today) {
+      return (await one<AssistanceReportFigures[]>('app.fact_assistance_report_figures($1::date)', [today])).map((x) => ({ ...numbers(x), assistanceId: x.assistanceId }));
+    },
+    async assistDesktopCounters(assistanceId, nowMs, today, defaultResponseMinutes) {
+      return numbers(await one('app.fact_assist_desktop_counters($1::uuid, $2::bigint, $3::date, $4::integer)', [assistanceId, nowMs, today, defaultResponseMinutes]));
+    },
   };
+}
+
+/** Sums and counts come from SQL as numerics: numbers, as the system computes them. */
+function numbers<T extends object>(o: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(o)) out[k] = typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v;
+  return out as T;
 }

@@ -227,8 +227,9 @@ export async function ownRebill(ctx: BaseCtx, assistanceId: UUID, id: UUID): Pro
 
 /** Appointments of people whose policy was assigned to the assistance when the request was made. */
 export async function appointmentsOf(ctx: BaseCtx, assistanceId: UUID): Promise<Appointment[]> {
-  // The scope is the assignment on the date of the request (also a former assistance, read-only): checked here.
-  const r = systemRepos(ctx, 'appointments of the people an assistance company serves, scoped by the assignment on the date');
+  // The scope is the assignment on the date of the request (also a former assistance, read-only): checked here and,
+  // for the company's users, by RLS (app.assist_scope_of over appointments, app.assist_access over insured).
+  const r = ctx.repos;
   const people = new Map((await r.insured.list()).map((i) => [i.id, i]));
   const scopeOn = await scopeChecker(ctx, assistanceId);
   return (await r.appointments.list()).filter((a) => {
@@ -371,22 +372,24 @@ export async function disputeRebillLine(ctx: BaseCtx, b: Rebill, lineId: string,
 
 export async function overview(ctx: AuthCtx): Promise<AssistOverview> {
   const { user, assistanceId } = requireAssist(ctx);
-  // The desktop counts the company's cases, letters, lines and rebills for every role of it (RLS shows each
-  // table to some roles only); the queue items stay role-specific below.
-  const r = systemRepos(ctx, 'assistance desktop: counters of the company\'s cases, letters, registry lines and rebills');
+  // The desktop counters are the same for every role of the company (app.fact_assist_desktop_counters: RLS shows
+  // each table to some roles only); the queue items are role-specific, from the tables the role reads.
+  const r = ctx.repos;
   const a = await assistanceOf(ctx, assistanceId);
   const P = await loadParams(ctx);
   const now = ctx.now();
+  const counters = await r.facts.assistDesktopCounters(assistanceId, now, todayIso(ctx), P.dmsParam('clinicResponseMinutes'));
   const queue: AssistQueueItem[] = [];
   const cases = (await r.cases.list({ where: { assistanceId } })).filter((c) => c.status !== 'resolved');
   const appts: Appointment[] = [];
-  for (const x of await appointmentsOf(ctx, assistanceId)) {
-    if (x.status === 'requested' && parseIso(x.startsAt) > now - 3600_000 && (await isOverdueRequest(ctx, x, now, P))) appts.push(x);
+  if (user.role === 'asst_operator') {
+    for (const x of await appointmentsOf(ctx, assistanceId)) {
+      if (x.status === 'requested' && parseIso(x.startsAt) > now - 3600_000 && (await isOverdueRequest(ctx, x, now, P))) appts.push(x);
+    }
   }
   const letters = await r.guarantees.list({ where: { assistanceId } });
   const gps = letters.filter((g) => g.status === 'requested' && !g.escalated);
   const regs = (await r.registries.list({ where: { status: { ne: 'draft' } } })).filter((x) => linesOf(x, assistanceId).length);
-  const pendingLines = regs.reduce((s, x) => s + linesOf(x, assistanceId).filter((l) => l.status === 'pending' || l.status === 'disputed').length, 0);
   const rebills = await r.rebills.list({ where: { assistanceId } });
   if (user.role === 'asst_operator' || user.role === 'asst_doctor') {
     for (const c of cases) queue.push({ id: c.id, kind: 'case', title: `${c.number} · ${CASE_TYPE_LABEL[c.type]}`, subtitle: c.insuredName, dueAt: c.slaDueAt, to: `/assist/cases/${c.id}` });
@@ -422,11 +425,11 @@ export async function overview(ctx: AuthCtx): Promise<AssistOverview> {
     authorityLimit: authorityLimitOf(a, P),
     queue: queue.sort((x, y) => ((x.dueAt ?? '9') < (y.dueAt ?? '9') ? -1 : 1)),
     counters: {
-      openCases: cases.length,
-      slaBreaches: cases.filter((c) => parseIso(c.slaDueAt) < now).length + appts.length,
-      guaranteesPending: gps.length,
-      linesPending: pendingLines,
-      rebillsInReview: rebills.filter((b) => b.status === 'submitted' || b.status === 'in_review').length,
+      openCases: counters.openCases,
+      slaBreaches: counters.casesPastSla + counters.overdueRequests,
+      guaranteesPending: counters.guaranteesPending,
+      linesPending: counters.linesPending,
+      rebillsInReview: counters.rebillsInReview,
     },
     kpi: await kpiOf(ctx, a, now),
   };

@@ -11,7 +11,7 @@ import type { AssistanceAssignment, AuditAction, AuditEntry, ClaimCategory, Clai
 import type { ClientPipeline, SignatoryOption } from '@mig/contracts/dto';
 import type { LegalFormCode } from '../config/legalForms';
 import type { InsuredRow } from './db';
-import { LIMIT_OF_SERVICE } from '../assistance';
+import { assistanceOn, assistanceScope, GUARANTEE_DECISION_HOURS, LIMIT_OF_SERVICE } from '../assistance';
 import { CLAIM_TO_LIMIT } from '../claims';
 import type { LimitMode } from '../config/dmsParameters';
 import { limitPoolOf } from '../family';
@@ -108,6 +108,49 @@ export interface Facts {
    * quote `quoteId` allows a group below the minimum.
    */
   contractQuote(dealId: UUID, quoteId: UUID | null): Promise<{ quote: ContractQuote | null; belowMinException: boolean }>;
+  /** The figures of the KPI of an assistance company over its portfolio today (counts and sums only). */
+  assistanceKpiFigures(assistanceId: UUID, nowMs: number, today: string): Promise<KpiFigures>;
+  /** Insured persons and cases of an assistance company in a month (the base of its fee). */
+  assistanceFeeFigures(assistanceId: UUID, period: string, from: string, to: string, today: string): Promise<{ insuredCount: number; casesCount: number }>;
+  /** Counters of an assistance company in the list of MIG staff. */
+  assistanceListFigures(assistanceId: UUID, nowMs: number, today: string): Promise<{ insuredCount: number; clientsCount: number; rebillsToReview: number; slaBreaches: number }>;
+  /** Premium, paid claims, fees and insured persons by assistance company (null: MIG) over the whole portfolio. */
+  assistanceReportFigures(today: string): Promise<AssistanceReportFigures[]>;
+  /**
+   * Counters of the desktop of an assistance company (every role sees them): open cases, those past the SLA, overdue
+   * appointment requests, letters to decide, registry lines to review, rebills in review.
+   */
+  assistDesktopCounters(assistanceId: UUID, nowMs: number, today: string, defaultResponseMinutes: number): Promise<AssistDesktopCounters>;
+}
+
+export interface KpiFigures {
+  rosterSize: number;
+  answered: number;
+  answeredMs: number;
+  decided: number;
+  onTime: number;
+  reviewed: number;
+  agreed: number;
+  complaints: number;
+  premium: number;
+  losses: number;
+}
+
+export interface AssistanceReportFigures {
+  assistanceId: UUID | null;
+  insuredCount: number;
+  premium: number;
+  paid: number;
+  fee: number;
+}
+
+export interface AssistDesktopCounters {
+  openCases: number;
+  casesPastSla: number;
+  overdueRequests: number;
+  guaranteesPending: number;
+  linesPending: number;
+  rebillsInReview: number;
 }
 
 export interface CertificateData {
@@ -342,5 +385,96 @@ export function genericFacts(r: Base): Facts {
         belowMinException: !!own?.belowMinException,
       };
     },
+    async assistanceKpiFigures(assistanceId, nowMs, today) {
+      const roster = await rosterIn(r, assistanceId, today);
+      const people = new Set(roster.map((i) => i.id));
+      const answered = (await r.appointments.list({ where: { respondedAt: { isNull: false } } })).filter((x) => people.has(x.insuredId) && x.respondedAt);
+      const decided = (await r.guarantees.list({ where: { assistanceId, decidedBy: 'assistance' } })).filter((g) => g.decidedAt);
+      const reviewed = (await r.qaSamples.list({ where: { assistanceId } })).filter((x) => x.verdict);
+      const policyIds = new Set(roster.map((i) => i.policyId));
+      const allClaims = await r.claims.list();
+      const paid = allClaims.filter((c) => people.has(c.insuredId) && (PAID_LIKE_STATUSES as readonly string[]).includes(c.status)).reduce((x, c) => x + (c.amountApproved ?? c.amountClaimed), 0);
+      const claimedLines = new Set(allClaims.map((c) => c.registryLineId).filter(Boolean));
+      const inLines = (await r.registries.list()).flatMap((x) => x.lines).filter((l) => l.payer === assistanceId && l.status === 'accepted' && !claimedLines.has(l.id));
+      return {
+        rosterSize: roster.length,
+        answered: answered.length,
+        answeredMs: answered.reduce((x, a) => x + (parseIso(a.respondedAt!) - parseIso(a.createdAt)), 0),
+        decided: decided.length,
+        onTime: decided.filter((g) => parseIso(g.decidedAt!) - parseIso(g.createdAt) <= GUARANTEE_DECISION_HOURS * 3600_000).length,
+        reviewed: reviewed.length,
+        agreed: reviewed.filter((x) => x.verdict === 'agree').length,
+        complaints: (await r.cases.list({ where: { assistanceId, type: 'complaint' } })).filter((c) => parseIso(c.createdAt) >= nowMs - 30 * DAY).length,
+        premium: (await r.policies.list()).filter((p) => policyIds.has(p.id)).reduce((x, p) => x + p.premium, 0),
+        losses: paid + inLines.reduce((x, l) => x + l.amount, 0),
+      };
+    },
+    async assistanceFeeFigures(assistanceId, period, from, to, today) {
+      const assignments = await r.assignments.list();
+      const policies = new Set((await r.policies.list()).filter((p) => assistanceOn(assignments, p.id, to < today ? to : today) === assistanceId).map((p) => p.id));
+      const insuredCount = policies.size ? (await r.insured.list({ where: { policyId: { in: [...policies] }, insuredFrom: { lte: to } } })).filter((i) => !i.excludedFrom || i.excludedFrom > from).length : 0;
+      const casesCount = (await r.cases.list({ where: { assistanceId } })).filter((c) => c.createdAt.slice(0, 7) === period).length;
+      return { insuredCount, casesCount };
+    },
+    async assistanceListFigures(assistanceId, nowMs, today) {
+      const roster = await rosterIn(r, assistanceId, today);
+      return {
+        insuredCount: roster.filter((i) => i.status === 'active').length,
+        clientsCount: new Set(roster.map((i) => i.clientId)).size,
+        rebillsToReview: await r.rebills.count({ assistanceId, status: { in: ['submitted', 'in_review'] } }),
+        slaBreaches: (await r.cases.list({ where: { assistanceId, status: { ne: 'resolved' } } })).filter((c) => parseIso(c.slaDueAt) < nowMs).length,
+      };
+    },
+    async assistanceReportFigures(today) {
+      const assignments = await r.assignments.list();
+      const allPolicies = await r.policies.list();
+      const insured = await r.insured.list();
+      const claims = await r.claims.list();
+      const rebills = await r.rebills.list({ where: { status: { ne: 'draft' } } });
+      const out: AssistanceReportFigures[] = [];
+      for (const id of [...(await r.assistances.list()).map((a) => a.id), null]) {
+        const policies = allPolicies.filter((p) => p.status !== 'draft' && assistanceOn(assignments, p.id, p.endDate < today ? p.endDate : today) === id);
+        const ids = new Set(policies.map((p) => p.id));
+        const people = insured.filter((i) => ids.has(i.policyId));
+        const personIds = new Set(people.map((i) => i.id));
+        out.push({
+          assistanceId: id,
+          insuredCount: people.filter((i) => i.status === 'active').length,
+          premium: policies.reduce((x, p) => x + p.premium, 0),
+          paid: claims.filter((c) => personIds.has(c.insuredId) && (c.status === 'approved' || c.status === 'to_pay' || c.status === 'paid')).reduce((x, c) => x + (c.amountApproved ?? c.amountClaimed), 0),
+          fee: id ? rebills.filter((b) => b.assistanceId === id).reduce((x, b) => x + b.fee.amount, 0) : 0,
+        });
+      }
+      return out;
+    },
+    async assistDesktopCounters(assistanceId, nowMs, today, defaultResponseMinutes) {
+      const cases = (await r.cases.list({ where: { assistanceId } })).filter((c) => c.status !== 'resolved');
+      const assignments = await r.assignments.list();
+      const people = new Map((await r.insured.list()).map((i) => [i.id, i]));
+      const clinics = new Map((await r.clinics.list()).map((c) => [c.id, c]));
+      const overdue = (await r.appointments.list()).filter((a) => {
+        const who = people.get(a.insuredId);
+        if (!who || assistanceScope(assignments, assistanceId, who.policyId, a.createdAt.slice(0, 10), today) === 'none') return false;
+        if (a.status !== 'requested' || parseIso(a.startsAt) <= nowMs - 3600_000 || a.proposedStartsAt) return false;
+        return nowMs - parseIso(a.createdAt) > (clinics.get(a.clinicId)?.responseSlaMinutes ?? defaultResponseMinutes) * 60_000;
+      });
+      const regs = (await r.registries.list({ where: { status: { ne: 'draft' } } })).map((x) => x.lines.filter((l) => (l.payer ?? 'mig') === assistanceId)).filter((ls) => ls.length);
+      return {
+        openCases: cases.length,
+        casesPastSla: cases.filter((c) => parseIso(c.slaDueAt) < nowMs).length,
+        overdueRequests: overdue.length,
+        guaranteesPending: (await r.guarantees.list({ where: { assistanceId } })).filter((g) => g.status === 'requested' && !g.escalated).length,
+        linesPending: regs.reduce((x, ls) => x + ls.filter((l) => l.status === 'pending' || l.status === 'disputed').length, 0),
+        rebillsInReview: (await r.rebills.list({ where: { assistanceId } })).filter((b) => b.status === 'submitted' || b.status === 'in_review').length,
+      };
+    },
   };
+}
+
+/** People whose policy is assigned to the assistance company today (rosterOf). */
+async function rosterIn(r: Base, assistanceId: UUID, today: string): Promise<InsuredRow[]> {
+  const assignments = await r.assignments.list();
+  const policies = (await r.policies.list()).filter((p) => assistanceOn(assignments, p.id, today) === assistanceId).map((p) => p.id);
+  if (!policies.length) return [];
+  return r.insured.list({ where: { policyId: { in: policies } } });
 }

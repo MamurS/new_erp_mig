@@ -67,6 +67,9 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
   const anyContract = db.contracts.find((x) => x.quoteId) ?? db.contracts[0]!;
   const signatoryId = anyContract.params.migSignatoryId;
   const signatoryCanSign = !!db.staff.find((x) => x.id === signatoryId)?.signatory?.canSign;
+  const otherAssistance = db.assistances.find((x) => x.id !== asstId)!.id;
+  const formerPolicy = db.policies.find((p) => !db.assignments.some((x) => x.policyId === p.id && x.assistanceId === asstId) && db.insured.some((i) => i.policyId === p.id))!;
+  const neverPolicy = db.policies.find((p) => p.id !== formerPolicy.id && !db.assignments.some((x) => x.policyId === p.id && x.assistanceId === asstId) && db.insured.some((i) => i.policyId === p.id))!;
   const MAPS = `${lit(JSON.stringify({ medicines: 'medicines', doctor_visit: 'outpatient', diagnostics: 'outpatient', dental: 'dental', inpatient: 'inpatient' }))}, ${lit(JSON.stringify({ outpatient: 'outpatient', diagnostics_advanced: 'outpatient', dental: 'dental', medicines: 'medicines', inpatient: 'inpatient' }))}`;
   const order = `array['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active']`;
   const lines: string[] = [
@@ -217,6 +220,27 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
     `select is((tests.as_user(${c(hr)}, 'update public.contracts set insured_count = 1 where id = ''${FIX_ID(2101)}''')).n, 0, 'contracts: and no longer writable');`,
     `select is(tests.count_as(${c(who('operator'))}, 'payments'), (select count(*) from public.payments), 'payments: the operator reads the payments of the contract card');`,
     `select is(tests.count_as(${c(hr)}, 'payments'), 0::bigint, 'payments: HR reads none');`,
+    '-- assistance aggregates: counts and sums of the own company (MIG staff: every company)',
+    `select is(${valueAs(asstOp, `select (select string_agg(k, ',' order by k) from jsonb_object_keys(app.fact_assistance_kpi_figures('${asstId}', (extract(epoch from now()) * 1000)::bigint, current_date, 24)) k)`)}, 'agreed,answered,answeredMs,complaints,decided,losses,onTime,premium,reviewed,rosterSize', 'kpi figures: only counts and sums of the own company');`,
+    `select is(${valueAs(asstOp, `select app.fact_assistance_kpi_figures('${otherAssistance}', 0, current_date, 24)::text`)}, 'denied', 'kpi figures: not of another company');`,
+    `select is(${valueAs(who('sales_manager'), `select (app.fact_assistance_kpi_figures('${asstId}', 0, current_date, 24) ? 'premium')::text`)}, 'true', 'kpi figures: any MIG employee (the list of companies)');`,
+    `select is(${valueAs(who('insured'), `select app.fact_assistance_kpi_figures('${asstId}', 0, current_date, 24)::text`)}, 'denied', 'kpi figures: the insured person is refused');`,
+    `select is(${valueAs(who('asst_billing'), `select (app.fact_assistance_fee_figures('${asstId}', to_char(current_date, 'YYYY-MM'), date_trunc('month', current_date)::date, current_date, current_date) ? 'insuredCount')::text`)}, 'true', 'fee figures: the billing of the own company');`,
+    `select is(${valueAs(who('asst_billing'), `select app.fact_assistance_fee_figures('${otherAssistance}', '2026-01', '2026-01-01', '2026-01-31', current_date)::text`)}, 'denied', 'fee figures: not of another company');`,
+    `select is(${valueAs(who('legal'), `select (app.fact_assistance_list_figures('${asstId}', 0, current_date) ? 'clientsCount')::text`)}, 'true', 'list figures: a MIG employee');`,
+    `select is(${valueAs(asstOp, `select app.fact_assistance_list_figures('${asstId}', 0, current_date)::text`)}, 'denied', 'list figures: not for an assistance company');`,
+    `select is(${valueAs(who('underwriter'), `select jsonb_array_length(app.fact_assistance_report_figures(current_date))`)}, (select (count(*) + 1)::text from public.assistances), 'report figures: a row per company and MIG for reports.read');`,
+    `select is(${valueAs(who('operator'), `select app.fact_assistance_report_figures(current_date)::text`)}, 'denied', 'report figures: a MIG role without reports.read is refused');`,
+    `select is(${valueAs(asstAdmin, `select (app.fact_assist_desktop_counters('${assistanceId}', (extract(epoch from now()) * 1000)::bigint, current_date, 60) ? 'openCases')::text`)}, 'true', 'desktop counters: every user of the own company');`,
+    `select is(${valueAs(asstAdmin, `select app.fact_assist_desktop_counters('${assistanceId === asstId ? otherAssistance : asstId}', 0, current_date, 60)::text`)}, 'denied', 'desktop counters: not of another company');`,
+    `select is(${valueAs(who('operator'), `select app.fact_assist_desktop_counters('${asstId}', 0, current_date, 60)::text`)}, 'denied', 'desktop counters: MIG staff use their own screens');`,
+    '-- a former assistance company reads the persons and requests of a policy for 12 months after (read-only)',
+    `insert into public.assignments (policy_id, assistance_id, "from", "to", set_by_id, set_at) values ('${formerPolicy.id}', '${asstId}', current_date - 200, current_date - 30, '${String(who('underwriter').claims.sub)}', now());`,
+    `select ok((tests.as_user(${c(asstOp)}, 'select 1 from public.insured where policy_id = ''${formerPolicy.id}''')).n > 0, 'former access: the persons of a policy served until a month ago');`,
+    `select ok((tests.as_user(${c(asstOp)}, 'select 1 from public.policies where id = ''${formerPolicy.id}''')).n = 1, 'former access: the policy too');`,
+    `select is((tests.as_user(${c(asstOp)}, 'select 1 from public.insured where policy_id = ''${neverPolicy.id}''')).n, 0, 'former access: never a policy the company did not serve');`,
+    `update public.assignments set "from" = current_date - 600, "to" = current_date - 400 where policy_id = '${formerPolicy.id}' and assistance_id = '${asstId}' and "to" = current_date - 30;`,
+    `select is((tests.as_user(${c(asstOp)}, 'select 1 from public.insured where policy_id = ''${formerPolicy.id}''')).n, 0, 'former access: ends 12 months after the assignment');`,
     `select is(tests.value_as('{}'::jsonb, 'select app.fact_client_legal_form(''${otherClient.id}'')'), 'denied', 'no claims: every fact is refused');`,
   ];
   const asserts = lines.filter((l) => /^select (is|ok|throws_ok)\(/.test(l));

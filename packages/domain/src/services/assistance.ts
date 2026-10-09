@@ -20,7 +20,6 @@ import {
   assistanceOn,
   assistanceScope,
   feeFor,
-  GUARANTEE_DECISION_HOURS,
   LIMIT_OF_SERVICE,
   payerOn,
   qaSample,
@@ -28,10 +27,10 @@ import {
 } from '../assistance';
 import { registryStatusAfterReview } from '../clinics';
 import { randomId } from '../lib/random';
-import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
+import { DAY, isoDay, tzIso } from '../lib/time';
 import type { ClaimRow, InsuredRow } from '../store/db';
 import type { Routing, VisitPatient } from '../store/facts';
-import { asSystem, conflict, DomainError, notFound, systemRepos, todayIso, type BaseCtx } from './kernel';
+import { asSystem, conflict, DomainError, notFound, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, priceListOf } from './clinic';
 import { limitsFor } from './views';
@@ -63,8 +62,9 @@ export async function currentAssistance(ctx: BaseCtx, policyId: UUID): Promise<U
 
 /** Keeps the cached `assistanceId` of policies and clients in line with the assignments for today. */
 export async function syncAssistance(ctx: BaseCtx): Promise<void> {
-  // A cache of the assignments on policies and clients: kept by the system.
-  const r = systemRepos(ctx, 'cached assistance of policies and clients (follows the assignments)');
+  // A cache of the assignments on policies and clients: kept by whoever changes the assignments (the underwriter,
+  // who reads and updates both) or by the system's jobs (the portfolio transfer, the contract clock).
+  const r = ctx.repos;
   const today = todayIso(ctx);
   const assignments = await r.assignments.list();
   const policies = await r.policies.list();
@@ -116,10 +116,16 @@ export async function requireInsuredOf(ctx: BaseCtx, assistanceId: UUID, insured
 
 /** People whose policy is assigned to the assistance today. */
 export async function rosterOf(ctx: BaseCtx, assistanceId: UUID): Promise<InsuredRow[]> {
-  const r = systemRepos(ctx, 'roster of an assistance company: people of the policies assigned to it today');
+  // The company's own assignments covering today (an assistance company reads only its own), confirmed by the routing
+  // of each policy (the latest assignment of any company wins); the persons under the reader's RLS.
+  const r = ctx.repos;
   const today = todayIso(ctx);
-  const assignments = await r.assignments.list();
-  const policies = (await r.policies.list()).filter((p) => assistanceOn(assignments, p.id, today) === assistanceId).map((p) => p.id);
+  const own = await r.assignments.list({ where: { assistanceId } });
+  const policies: UUID[] = [];
+  for (const policyId of new Set(own.map((a) => a.policyId))) {
+    if (assistanceOn(own, policyId, today) !== assistanceId) continue;
+    if (assistanceOn(await routingOf(ctx, policyId), policyId, today) === assistanceId) policies.push(policyId);
+  }
   if (!policies.length) return [];
   return r.insured.list({ where: { policyId: { in: policies } } });
 }
@@ -176,7 +182,6 @@ export function settleRegistry(r: Registry, now = Date.now()): void {
 
 // ---------------------------------------------------------------- limits
 
-const PAID_LIKE_REBILL = new Set(['approved', 'to_pay', 'paid']);
 
 // ---------------------------------------------------------------- rebills
 
@@ -260,14 +265,10 @@ function monthBounds(period: string): { from: string; to: string } {
 }
 
 /** Fee of the rebill by the model of the contract, with the formula shown to both sides. */
-export async function feeOf(person: BaseCtx, a: AssistanceCompany, period: string, claimsAmount: number): Promise<Rebill['fee']> {
-  const ctx = asSystem(person, 'fee of a rebill: counts of insured persons and cases of the assistance company');
+export async function feeOf(ctx: BaseCtx, a: AssistanceCompany, period: string, claimsAmount: number): Promise<Rebill['fee']> {
+  // Counts of insured persons and cases of the company in the month (app.fact_assistance_fee_figures).
   const { from, to } = monthBounds(period);
-  const today = todayIso(ctx);
-  const assignments = await ctx.repos.assignments.list();
-  const policies = new Set((await ctx.repos.policies.list()).filter((p) => assistanceOn(assignments, p.id, to < today ? to : today) === a.id).map((p) => p.id));
-  const insuredCount = policies.size ? (await ctx.repos.insured.list({ where: { policyId: { in: [...policies] }, insuredFrom: { lte: to } } })).filter((i) => !i.excludedFrom || i.excludedFrom > from).length : 0;
-  const casesCount = (await ctx.repos.cases.list({ where: { assistanceId: a.id } })).filter((c) => c.createdAt.slice(0, 7) === period).length;
+  const { insuredCount, casesCount } = await ctx.repos.facts.assistanceFeeFigures(a.id, period, from, to, todayIso(ctx));
   return feeFor(a.contract.feeModel, a.contract.feeValue, { insuredCount, claimsAmount, casesCount });
 }
 
@@ -377,32 +378,15 @@ export async function claimsFromRebill(person: BaseCtx, b: Rebill, actorName: st
 
 // ---------------------------------------------------------------- KPI & quality control
 
-export async function kpiOf(person: BaseCtx, a: AssistanceCompany, now = person.now()): Promise<AssistanceKpi> {
-  const ctx = asSystem(person, 'KPI of an assistance company (aggregates over its portfolio)');
-  const r = ctx.repos;
-  const roster = await rosterOf(ctx, a.id);
-  const people = new Set(roster.map((i) => i.id));
-  const answered = (await r.appointments.list({ where: { respondedAt: { isNull: false } } })).filter((x) => people.has(x.insuredId) && x.respondedAt);
-  const avg = answered.length ? Math.round(answered.reduce((s, x) => s + (parseIso(x.respondedAt!) - parseIso(x.createdAt)), 0) / answered.length / 60_000) : 0;
-  const decided = (await r.guarantees.list({ where: { assistanceId: a.id, decidedBy: 'assistance' } })).filter((g) => g.decidedAt);
-  const onTime = decided.filter((g) => parseIso(g.decidedAt!) - parseIso(g.createdAt) <= GUARANTEE_DECISION_HOURS * 3600_000).length;
-  const reviewed = (await r.qaSamples.list({ where: { assistanceId: a.id } })).filter((s) => s.verdict);
-  const agreed = reviewed.filter((s) => s.verdict === 'agree').length;
-  const complaints = (await r.cases.list({ where: { assistanceId: a.id, type: 'complaint' } })).filter((c) => parseIso(c.createdAt) >= now - 30 * DAY).length;
-  // Loss ratio of the portfolio: every paid-out claim of its people plus lines accepted but not rebilled yet.
-  const policyIds = new Set(roster.map((i) => i.policyId));
-  const premium = (await r.policies.list()).filter((p) => policyIds.has(p.id)).reduce((s, p) => s + p.premium, 0);
-  const allClaims = await r.claims.list();
-  const paid = allClaims.filter((c) => people.has(c.insuredId) && PAID_LIKE_REBILL.has(c.status)).reduce((s, c) => s + (c.amountApproved ?? c.amountClaimed), 0);
-  const claimedLines = new Set(allClaims.map((c) => c.registryLineId).filter(Boolean));
-  const inLines = (await r.registries.list()).flatMap((x) => x.lines).filter((l) => l.payer === a.id && l.status === 'accepted' && !claimedLines.has(l.id));
-  const losses = paid + inLines.reduce((s, l) => s + l.amount, 0);
+export async function kpiOf(ctx: BaseCtx, a: AssistanceCompany, now = ctx.now()): Promise<AssistanceKpi> {
+  // Aggregates over the company's portfolio: counts and sums only (app.fact_assistance_kpi_figures).
+  const f = await ctx.repos.facts.assistanceKpiFigures(a.id, now, todayIso(ctx));
   return {
-    appointmentResponseMinutesAvg: avg,
-    guaranteesOnTimeShare: decided.length ? onTime / decided.length : 1,
-    qaAgreementShare: reviewed.length ? agreed / reviewed.length : 1,
-    complaintsPer1000: roster.length ? Math.round((complaints / roster.length) * 1000 * 10) / 10 : 0,
-    lossRatio: premium > 0 ? Math.round((losses / premium) * 1000) / 1000 : null,
+    appointmentResponseMinutesAvg: f.answered ? Math.round(f.answeredMs / f.answered / 60_000) : 0,
+    guaranteesOnTimeShare: f.decided ? f.onTime / f.decided : 1,
+    qaAgreementShare: f.reviewed ? f.agreed / f.reviewed : 1,
+    complaintsPer1000: f.rosterSize ? Math.round((f.complaints / f.rosterSize) * 1000 * 10) / 10 : 0,
+    lossRatio: f.premium > 0 ? Math.round((f.losses / f.premium) * 1000) / 1000 : null,
   };
 }
 
