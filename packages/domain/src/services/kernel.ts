@@ -138,6 +138,18 @@ export const todayIso = (ctx: Pick<BaseCtx, 'now'>): string => isoDay(ctx.now())
 export type AuditActor = Pick<SessionUser, 'id' | 'displayName' | 'role'> & { assistanceId?: string };
 export type AuditTarget = Pick<AuditEntry, 'targetType'> & Partial<Pick<AuditEntry, 'targetId' | 'targetLabel' | 'reason' | 'assistanceId'>>;
 
+/**
+ * The system as the author of what the background jobs do (audit entries, requests): no person, never signs in, and
+ * nobody is notified on its behalf (`notify` skips it). Shown as «Система».
+ */
+export const SYSTEM_ACTOR = { id: '00000000-0000-4000-8000-00000000c0de', displayName: 'Система', role: 'admin' } as const satisfies AuditActor;
+
+/** The person of the context when it has one (a request), else the system (a background job). */
+export function actorOf(ctx: BaseCtx): AuditActor {
+  const user = (ctx as Partial<AuthCtx>).user;
+  return user ? { id: user.id, displayName: user.displayName, role: user.role } : SYSTEM_ACTOR;
+}
+
 /** Writes an audit entry (newest first). */
 export async function audit(ctx: BaseCtx, actor: AuditActor, action: AuditAction, target: AuditTarget): Promise<void> {
   // Actions of assistance users are tagged with their company (ASSISTANCE_SPEC §3).

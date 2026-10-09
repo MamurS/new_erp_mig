@@ -6,12 +6,12 @@
  * MIG, an invoice read by HR), so the save is the system's. Privileged access: this folder (services/system/) is on
  * the allowlist of the lint rule against it (eslint.config.js).
  */
-import type { Contract, Invoice, Rebill, UUID } from '@mig/contracts';
+import type { Contract, Invoice, Policy, Rebill, UUID } from '@mig/contracts';
 import { qaSample } from '../../assistance';
 import { activationDate, addSignature } from '../../contracts';
 import { randomId } from '../../lib/random';
 import { isoDay, tzIso } from '../../lib/time';
-import { asSystem, systemRepos, todayIso, type BaseCtx } from '../kernel';
+import { actorOf, asSystem, audit, systemRepos, todayIso, type AuditActor, type BaseCtx } from '../kernel';
 import { loadParams } from '../params';
 import { activateContract, dealEvent, edoArrived, edoClientSignature, reload } from '../lifecycle';
 import { afterSigning } from './consequences';
@@ -61,17 +61,65 @@ export async function refreshContract(person: BaseCtx, c: Contract, now = person
   }
   if (arrived.length) await reload(ctx, c);
   const today = isoDay(now);
+  // Each transition is claimed by a conditional update first: of two readers (or a reader and the job) at the same
+  // time only one moves the contract (Postgres re-checks the status after the other's commit), so the policy is
+  // issued and the transition audited once. The actor of the audit entry is whoever ran the clock: the reader, or
+  // the system for the background job.
   if (c.status === 'signed') {
     const payments = await r.payments.list({ where: { contractId: c.id } });
     const on = activationDate(c.params.activationRule, c.params.startDate, c.params.paymentSchedule, payments);
-    if (on && on <= today) await activateContract(ctx, c, on);
+    if (on && on <= today && (await r.contracts.updateWhere({ id: c.id, status: 'signed' }, { status: 'active' }))) {
+      const policy = await activateContract(ctx, c, on);
+      await audit(ctx, actorOf(person), 'contract_activated', { targetType: 'contract', targetId: c.id, targetLabel: `${c.number}: с ${ru(on)}, полис ${policy.number}` });
+    }
   }
-  if (c.status === 'active' && c.params.endDate < today) {
+  if (c.status === 'active' && c.params.endDate < today && (await r.contracts.updateWhere({ id: c.id, status: 'active' }, { status: 'expired' }))) {
     c.status = 'expired';
-    await r.contracts.update(c.id, { status: c.status });
+    await audit(ctx, actorOf(person), 'contract_expired', { targetType: 'contract', targetId: c.id, targetLabel: `${c.number}: действовал до ${ru(c.params.endDate)}` });
     const p = c.policyId ? await r.policies.get(c.policyId) : null;
-    if (p && p.status === 'active') await r.policies.update(p.id, { status: 'expired' });
+    if (p) await expirePolicy(ctx, p, actorOf(person));
   }
+}
+
+const ru = (iso: string) => iso.split('-').reverse().join('.');
+
+/**
+ * A policy past its end date expires (once: a conditional update claims it) and the transition is audited; a client
+ * whose current policy it was and that has no other active one becomes «Истёк». True when it expired now.
+ */
+async function expirePolicy(ctx: BaseCtx, p: Policy, actor: AuditActor): Promise<boolean> {
+  const r = ctx.repos;
+  if (!(await r.policies.updateWhere({ id: p.id, status: 'active' }, { status: 'expired' }))) return false;
+  await audit(ctx, actor, 'policy_expired', { targetType: 'policy', targetId: p.id, targetLabel: `${p.number}: действовал до ${ru(p.endDate)}` });
+  const client = await r.clients.get(p.clientId);
+  if (client?.activePolicyId === p.id && client.status === 'active' && !(await r.policies.exists({ clientId: client.id, status: 'active' }))) await r.clients.update(client.id, { status: 'expired' });
+  return true;
+}
+
+/**
+ * The background job `contract-lifecycle` (BACKEND_SPEC §10): every contract's clock (EDO events, coming into force,
+ * expiry — the same refresh the screens run on read), then policies without a contract of their own past their end
+ * date. Returns the counts of the transitions it made.
+ */
+export async function contractLifecycle(person: BaseCtx): Promise<{ activated: number; contractsExpired: number; policiesExpired: number }> {
+  const ctx = asSystem(person, 'the background job of the contract lifecycle: coming into force and expiry');
+  const r = ctx.repos;
+  const out = { activated: 0, contractsExpired: 0, policiesExpired: 0 };
+  for (const c of await r.contracts.list({ where: { status: { in: ['sent', 'signing', 'signed', 'active'] } } })) {
+    const was = c.status;
+    await refreshContract(ctx, c);
+    if (was !== 'active' && c.status === 'active') out.activated += 1;
+    if (c.status === 'expired') out.contractsExpired += 1;
+  }
+  const today = todayIso(ctx);
+  for (const p of await r.policies.list({ where: { status: 'active', endDate: { lt: today } } })) {
+    // A policy of a contract follows its contract (above); an active contract of a policy past its end date is not
+    // left behind either: its own clock expires both.
+    const c = p.contractId ? await r.contracts.get(p.contractId) : null;
+    if (c && c.status === 'active') continue;
+    if (await expirePolicy(ctx, p, actorOf(person))) out.policiesExpired += 1;
+  }
+  return out;
 }
 
 /** Adds this month's 5% sample of the assistance's decisions to the MIG queue (deterministic, idempotent). */

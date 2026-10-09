@@ -377,7 +377,8 @@ const policyChangeItems: Builder = async (ctx) => {
   }));
 };
 
-const lastActivity = async (ctx: BaseCtx, dealId: string, fallback: string) => (await ctx.repos.dealEvents.list({ where: { dealId } })).reduce((m, e) => (e.at > m ? e.at : m), fallback);
+/** The last event of a deal (its feed), else `fallback`: what «no activity» of a lead is counted from. */
+export const lastActivity = async (ctx: BaseCtx, dealId: string, fallback: string) => (await ctx.repos.dealEvents.list({ where: { dealId } })).reduce((m, e) => (e.at > m ? e.at : m), fallback);
 
 const salesItems: Builder = async (ctx, P, user, now) => {
   const r = ctx.repos;

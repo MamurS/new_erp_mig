@@ -25,7 +25,7 @@ import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
 import type { Where } from '../store/query';
 import { allOf } from './list';
-import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, forbidden, notFound, requirePermission, SYSTEM_ACTOR, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { dealContract } from './lifecycle';
 import { completeTasks } from './system/consequences';
@@ -103,7 +103,9 @@ export function isExecutor(task: TaskRow, user: Pick<SessionUser, 'id' | 'role' 
   return !task.assigneeId || task.assigneeId === user.id;
 }
 
-export async function notify(ctx: BaseCtx, userId: string, text: string, link?: string, detail?: string): Promise<NotificationRow> {
+/** An in-app notification (the bell). The system (author of the background jobs' requests) gets none. */
+export async function notify(ctx: BaseCtx, userId: string, text: string, link?: string, detail?: string): Promise<NotificationRow | null> {
+  if (userId === SYSTEM_ACTOR.id) return null;
   const n: NotificationRow = { id: randomId(), userId, text, ...(detail ? { detail } : {}), ...(link ? { link } : {}), createdAt: tzIso(ctx.now()), read: false };
   return ctx.repos.notifications.insert(n, { at: 'start' });
 }
@@ -136,6 +138,8 @@ export async function createTask(
   actor: Pick<SessionUser, 'id' | 'displayName'>,
   input: { action: TaskAction; toRole: Role; subjectType: TaskSubjectType; subjectId: string; comment: string },
   refs: SubjectRefs,
+  /** A request of a background job: its own title (packed key) and the executor's place. */
+  opts: { title?: string; link?: string } = {},
 ): Promise<TaskRow> {
   const now = ctx.now();
   const P = await loadParams(ctx);
@@ -151,9 +155,9 @@ export async function createTask(
     subjectId: input.subjectId,
     clientId: refs.clientId,
     clientName: refs.clientName,
-    title: taskTitle(input.action, { deal: refs.dealNumber, contract: refs.contractNumber, client: refs.clientName }),
+    title: opts.title ?? taskTitle(input.action, { deal: refs.dealNumber, contract: refs.contractNumber, client: refs.clientName }),
     comment: input.comment,
-    link: taskLink(input.action, input.toRole, refs),
+    link: opts.link ?? taskLink(input.action, input.toRole, refs),
     createdById: actor.id,
     createdByName: actor.displayName,
     createdAt: tzIso(now),
