@@ -188,7 +188,7 @@ revoke execute on function app.job_cleanup_expired() from public, authenticated;
 `;
 }
 
-function storageGcMigration(): string {
+export function storageGcMigration(): string {
   return `${HEADER('Storage objects of removed file rows: a queue the API worker drains (apps/api/src/files/gc.ts), so an object never outlives its row by more than a worker pass; orphans (an upload whose row never committed) are swept daily.')}
 create table app.storage_gc (
   id bigint generated always as identity primary key,
@@ -254,6 +254,5 @@ export function authMigrations(): { name: string; sql: string }[] {
   return [
     { name: '20261010000100_auth_sessions.sql', sql: authMigration() },
     { name: '20261010000200_files_storage.sql', sql: filesMigration() },
-    { name: '20261011000100_storage_gc.sql', sql: storageGcMigration() },
   ];
 }

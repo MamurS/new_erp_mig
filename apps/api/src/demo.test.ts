@@ -34,6 +34,8 @@ describe.skipIf(!hasDb || !hasSupabase)('demo knobs of ci/staging', () => {
     await loadSeed(pool, createSeed({ now: Date.now() }));
     const env = readEnv({
       APP_ENV: 'ci',
+      // «Войти как…» and the test MFA codes need the explicit switch (env.ts), as in playwright.config.ts.
+      ALLOW_TEST_TOTP: 'true',
       DATABASE_URL: process.env.DATABASE_URL,
       SUPABASE_URL: SUPABASE!.url,
       SUPABASE_SERVICE_ROLE_KEY: SUPABASE!.serviceKey,
