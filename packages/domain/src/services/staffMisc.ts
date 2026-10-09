@@ -15,14 +15,17 @@ import { FOUR_EYES_LIMIT_HINT } from '../limits';
 import { toCsv } from '../lib/csv';
 import { randomId } from '../lib/random';
 import { hashString, mulberry32 } from '../lib/rng';
-import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { StaffRow } from '../store/db';
+import type { ComputedFields } from '../store/computed';
+import type { Where } from '../store/query';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { byLegalForm, byLegalName, filterLegalForm, paginate, q, sortBy, sp, type Qs } from './list';
+import { allOf, legalFormWhere, NOTHING, pageOf, q, searchWhere, sortParam, sp, tsBound, type Qs } from './list';
 import { clinicSlots } from './clinic';
 import { toClient, toHrEmployee } from './views';
+
+type ClinicQ = Clinic & ComputedFields['clinics'];
 
 const SPECIALTIES = new Set<Specialty>(['therapist', 'pediatrician', 'dentist', 'cardiologist', 'gynecologist', 'ent', 'neurologist', 'ophthalmologist']);
 
@@ -69,26 +72,24 @@ const withoutPassword = ({ password: _p, ...s }: StaffRow): StaffUser => s;
 
 // ---------------------------------------------------------------- endpoints: clinics
 
-/** GET /clinics: search, specialty and legal form filters, sort. */
+/** GET /clinics: search, specialty and legal form filters, sort (in SQL; the list is not paged). */
 export async function clinics(ctx: AuthCtx, qs: Qs): Promise<Clinic[]> {
   requirePermission(ctx.user, 'clinics.read');
-  let list = await ctx.repos.clinics.list();
   const term = q(qs);
-  if (term) list = list.filter((c) => matchesSearch(term, c.name, c.district));
   const spec = sp(qs).get('specialty') as Specialty | null;
-  if (spec && SPECIALTIES.has(spec)) list = list.filter((c) => c.specialties.includes(spec));
-  list = filterLegalForm(list, qs, (c) => c.legalForm);
-  return sortBy(
-    list,
-    qs,
-    {
-      name: byLegalName((c) => c.name),
-      legalForm: byLegalForm((c) => c.legalForm),
-      district: (c) => c.district,
-      contractUntil: (c) => c.contractUntil,
-    },
-    'name:asc',
-  );
+  return ctx.repos.clinics.list({
+    where: allOf<ClinicQ>(term && searchWhere<ClinicQ>(term, ['name', 'district']), spec && SPECIALTIES.has(spec) && { specialties: { includes: spec } }, legalFormWhere<ClinicQ>(qs, 'legalForm')),
+    orderBy: sortParam<ClinicQ>(
+      qs,
+      {
+        name: { field: 'name', collate: 'legal' },
+        legalForm: { field: 'legalFormOrd' },
+        district: { field: 'district', collate: 'ru' },
+        contractUntil: { field: 'contractUntil' },
+      },
+      'name:asc',
+    ),
+  });
 }
 
 /** GET /clinics/nearby: a stable fictional distance per person and clinic. */
@@ -258,7 +259,7 @@ export async function exportCsv(ctx: AuthCtx, body: unknown): Promise<{ csv: str
 
 // ---------------------------------------------------------------- endpoints: audit and users
 
-/** GET /audit: filters by action, person, assistance company and dates; the newest first, paged. */
+/** GET /audit: filters by action, person, assistance company and dates; the newest first (storage order), paged in SQL. */
 export async function auditLog(ctx: AuthCtx, qs: Qs): Promise<Page<AuditEntry>> {
   requirePermission(ctx.user, 'audit.read');
   const s = sp(qs);
@@ -266,18 +267,20 @@ export async function auditLog(ctx: AuthCtx, qs: Qs): Promise<Page<AuditEntry>> 
   const actorId = s.get('actorId');
   // Actions of assistance users, by company (ASSISTANCE_SPEC §3).
   const assistanceId = s.get('assistanceId');
-  let list = await ctx.repos.audit.list({
-    where: {
-      ...(action ? { action: { in: action.split(',') as AuditEntry['action'][] } } : {}),
-      ...(actorId ? { actorId } : {}),
-      ...(assistanceId ? { assistanceId } : {}),
-    },
+  const day = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? parseIso(v) : null);
+  const from = day(s.get('from'));
+  const to = day(s.get('to'));
+  // `parseIso(at) >= from` and `parseIso(at) < to + DAY`; an impossible date matches nothing.
+  const range = (ms: number | null, op: 'gte' | 'lt'): Where<AuditEntry> | null => (ms === null ? null : Number.isNaN(ms) ? (NOTHING as Where<AuditEntry>) : { at: { [op]: tsBound(ms) } });
+  return pageOf(ctx.repos.audit, qs, {
+    where: allOf<AuditEntry>(
+      action && { action: { in: action.split(',') as AuditEntry['action'][] } },
+      actorId && { actorId },
+      assistanceId && { assistanceId },
+      range(from, 'gte'),
+      range(to === null ? null : to + DAY, 'lt'),
+    ),
   });
-  const from = s.get('from');
-  if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) list = list.filter((e) => parseIso(e.at) >= parseIso(from));
-  const to = s.get('to');
-  if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) list = list.filter((e) => parseIso(e.at) < parseIso(to) + DAY);
-  return paginate(list, qs);
 }
 
 /** GET /admin/users. */

@@ -40,6 +40,8 @@ import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { signWebhook } from '../lib/webhook';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, GuaranteeRow, InsuredRow, WebhookDeliveryRow, WebhookEndpointRow } from '../store/db';
+import type { Where } from '../store/query';
+import { allOf } from './list';
 import { audit, conflict, DomainError, insuredLabel, notFound, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { saveGuaranteeExpiry } from './system/clocks';
@@ -296,6 +298,15 @@ export async function refreshStoredGuarantee(ctx: BaseCtx, g: GuaranteeRow): Pro
   refreshGuarantee(g, ctx.now());
   if (g.status !== before) await saveGuaranteeExpiry(ctx, g.id);
   return g;
+}
+
+/**
+ * The lazy expiry of the letters it changes — approved ones past their validity (refreshGuarantee) — as reading each
+ * letter would do; lists then filter by the stored status in SQL.
+ */
+export async function expireDueGuarantees(ctx: BaseCtx, where?: Where<GuaranteeRow>): Promise<void> {
+  const due = await ctx.repos.guarantees.list({ where: allOf<GuaranteeRow>(where, { status: 'approved', validUntil: { lt: isoDay(ctx.now()) } }) });
+  for (const g of due) await refreshStoredGuarantee(ctx, g);
 }
 
 export async function toGuaranteeView(ctx: BaseCtx, g: GuaranteeRow, P?: ParamsView): Promise<GuaranteeView> {

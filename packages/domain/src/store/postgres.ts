@@ -374,7 +374,7 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
       else if (isText) expr = `${expr} collate ${o.collate && o.collate !== 'C' ? COLLATION_SQL[o.collate] : '"C"'}`;
       parts.push(`${expr} ${o.dir === 'desc' ? 'desc' : 'asc'} nulls ${o.nulls === 'first' ? 'first' : 'last'}`);
     }
-    parts.push('_pos');
+    parts.push(q?.ties === 'desc' ? '_pos desc' : '_pos');
     return parts.join(', ');
   }
 

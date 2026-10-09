@@ -9,17 +9,21 @@ import type { AuditEntry, Client, ClientDocument, Policy } from '@mig/contracts'
 import { can } from '../auth/permissions';
 import { CLAIM_CATEGORY_LABEL } from '../claims';
 import { formatMoney } from '../lib/format';
-import { matchesSearch } from '../lib/searchNormalize';
 import { randomId } from '../lib/random';
 import { parseIso, tzIso } from '../lib/time';
 import { legalFormProblem } from '../minGroup';
 import { PROGRAMS } from '../programs';
-import type { ClaimRow, ClientRow } from '../store/db';
+import type { ClaimRow, ClientRow, InsuredRow } from '../store/db';
+import type { ComputedFields } from '../store/computed';
+import type { Where } from '../store/query';
+
+type ClientQ = ClientRow & ComputedFields['clients'];
+type PolicyQ = Policy & ComputedFields['policies'];
 import type { ClaimFigure } from '../store/facts';
 import { DomainError, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { byLegalForm, byLegalName, filterLegalForm, paginate, q, sortBy } from './list';
+import { allOf, legalFormWhere, pageOf, q, searchWhere, sortParam } from './list';
 import { loadParams } from './params';
-import { clientLegalFormOf, toClient, toInsuredListItem } from './views';
+import { clientLegalFormOf, toClient, toInsuredListItems } from './views';
 import { hasLiveKp, renewalsWithoutOffer } from './dashboard';
 
 export async function findClient(ctx: BaseCtx, id: string): Promise<ClientRow> {
@@ -58,46 +62,45 @@ export async function listClients(ctx: AuthCtx, qs: URLSearchParams): Promise<Cl
   requirePermission(user, 'clients.read');
   const P = await loadParams(ctx);
   const now = ctx.now();
-  let list = await ctx.repos.clients.list();
   const term = q(qs);
-  if (term) list = list.filter((c) => matchesSearch(term, c.name) || c.inn.includes(term.trim()));
   const status = qs.get('status');
-  if (status) list = list.filter((c) => status.split(',').includes(c.status));
   const program = qs.get('program');
-  if (program) list = list.filter((c) => c.program && program.split(',').includes(c.program));
   const managerId = qs.get('managerId');
-  if (managerId) list = list.filter((c) => c.managerId === managerId);
-  list = filterLegalForm(list, qs, (c) => c.legalForm);
   const view = qs.get('view');
-  if (view === 'mine') list = list.filter((c) => c.managerId === user.id);
-  if (view === 'q4') {
-    const y = new Date(now).getFullYear();
-    list = list.filter((c) => c.renewalDate && c.renewalDate >= `${y}-10-01` && c.renewalDate <= `${y}-12-31`);
-  }
-  if (view === 'loss') list = list.filter((c) => (c.lossRatio ?? 0) >= P.dmsParam('lossRatioWarn'));
-  if (view === 'renewals') {
-    const ids = new Set((await renewalsWithoutOffer(ctx, now)).map((c) => c.id));
-    list = list.filter((c) => ids.has(c.id));
-  }
-  const mapped: Client[] = [];
-  for (const c of list) mapped.push(await toClient(ctx, c));
-  const sorted = sortBy(
-    mapped,
+  const y = new Date(now).getFullYear();
+  const warn = P.dmsParam('lossRatioWarn');
+  // `(lossRatio ?? 0) >= warn`: a client without a ratio counts as 0.
+  const loss: Where<ClientQ> = warn <= 0 ? { $or: [{ lossRatio: { gte: warn } }, { lossRatio: { isNull: true } }] } : { lossRatio: { gte: warn } };
+  const where = allOf<ClientQ>(
+    term && { $or: [{ name: { search: term } }, { inn: { contains: term.trim() } }] },
+    status && { status: { in: status.split(',') as ClientRow['status'][] } },
+    program && { program: { in: program.split(',') as NonNullable<ClientRow['program']>[] } },
+    managerId && { managerId },
+    legalFormWhere<ClientQ>(qs, 'legalForm'),
+    view === 'mine' && { managerId: user.id },
+    view === 'q4' && { renewalDate: { gte: `${y}-10-01`, lte: `${y}-12-31` } },
+    view === 'loss' && loss,
+    view === 'renewals' && { id: { in: (await renewalsWithoutOffer(ctx, now)).map((c) => c.id) } },
+  );
+  const orderBy = sortParam<ClientQ>(
     qs,
     {
-      name: byLegalName((c) => c.name),
-      legalForm: byLegalForm((c) => c.legalForm),
-      program: (c) => c.program ?? '',
-      insuredCount: (c) => c.insuredCount,
-      premium: (c) => c.premium,
-      renewalDate: (c) => (c.renewalDate ? parseIso(c.renewalDate) : null),
-      lossRatio: (c) => c.lossRatio,
-      managerName: (c) => c.managerName,
-      status: (c) => c.status,
+      name: { field: 'name', collate: 'legal' },
+      legalForm: { field: 'legalFormOrd' },
+      program: { field: 'program', collate: 'ru', ifNull: '' },
+      insuredCount: { field: 'insuredCount' },
+      premium: { field: 'premium' },
+      renewalDate: { field: 'renewalDate' },
+      lossRatio: { field: 'lossRatio' },
+      managerName: { field: 'managerName', collate: 'ru' },
+      status: { field: 'status', collate: 'ru' },
     },
     'name:asc',
   );
-  return { ...paginate(sorted, qs), totalPremium: mapped.reduce((s, c) => s + c.premium, 0) };
+  const page = await pageOf(ctx.repos.clients, qs, { where, orderBy });
+  const items: Client[] = [];
+  for (const c of page.items) items.push(await toClient(ctx, c));
+  return { ...page, items, totalPremium: await ctx.repos.clients.sum('premium', where) };
 }
 
 export async function createClient(ctx: AuthCtx, body: unknown): Promise<Client> {
@@ -202,12 +205,11 @@ export async function clientInsured(ctx: AuthCtx, id: string, qs: URLSearchParam
   requirePermission(user, 'insured.read');
   const c = await findClient(ctx, id);
   const term = q(qs);
-  let list = await ctx.repos.insured.list({ where: { clientId: c.id } });
-  if (term) list = list.filter((i) => matchesSearch(term, i.fullName));
-  const sorted = sortBy(list, qs, { fullName: (i) => i.fullName, position: (i) => i.position }, 'fullName:asc');
-  const items: InsuredListItem[] = [];
-  for (const i of sorted) items.push(await toInsuredListItem(ctx, i, user));
-  return paginate(items, qs);
+  const page = await pageOf(ctx.repos.insured, qs, {
+    where: allOf<InsuredRow>({ clientId: c.id }, term && { fullName: { search: term } }),
+    orderBy: sortParam<InsuredRow>(qs, { fullName: { field: 'fullName', collate: 'ru' }, position: { field: 'position', collate: 'ru' } }, 'fullName:asc'),
+  });
+  return { ...page, items: await toInsuredListItems(ctx, page.items, user) };
 }
 
 export async function clientDocuments(ctx: AuthCtx, id: string): Promise<ClientDocument[]> {
@@ -237,37 +239,37 @@ export async function listPolicies(ctx: AuthCtx, qs: URLSearchParams) {
   const { user } = ctx;
   requirePermission(user, 'policies.read');
   if (user.role === 'hr' || user.role === 'insured') throw notFound();
-  let list: Policy[] = await ctx.repos.policies.list();
   const term = q(qs);
-  if (term) list = list.filter((p) => matchesSearch(term, p.number, p.clientName));
   const status = qs.get('status');
-  if (status) list = list.filter((p) => status.split(',').includes(p.status));
   const program = qs.get('program');
-  if (program) list = list.filter((p) => program.split(',').includes(p.program));
   const clientId = qs.get('clientId');
-  if (clientId) list = list.filter((p) => p.clientId === clientId);
-  const rows: (Policy & { clientLegalForm: Awaited<ReturnType<typeof clientLegalFormOf>> })[] = [];
-  for (const p of list) rows.push({ ...p, clientLegalForm: await clientLegalFormOf(ctx, p.clientId) });
-  const withForm = filterLegalForm(rows, qs, (p) => p.clientLegalForm);
-  return paginate(
-    sortBy(
-      withForm,
+  const page = await pageOf(ctx.repos.policies, qs, {
+    where: allOf<PolicyQ>(
+      term && searchWhere<PolicyQ>(term, ['number', 'clientName']),
+      status && { status: { in: status.split(',') as Policy['status'][] } },
+      program && { program: { in: program.split(',') as Policy['program'][] } },
+      clientId && { clientId },
+      legalFormWhere<PolicyQ>(qs, 'clientLegalForm'),
+    ),
+    orderBy: sortParam<PolicyQ>(
       qs,
       {
-        number: (p) => p.number,
-        clientName: byLegalName((p) => p.clientName),
-        legalForm: byLegalForm((p) => p.clientLegalForm),
-        program: (p) => p.program,
-        startDate: (p) => p.startDate,
-        endDate: (p) => p.endDate,
-        premium: (p) => p.premium,
-        insuredCount: (p) => p.insuredCount,
-        status: (p) => p.status,
+        number: { field: 'number', collate: 'ru' },
+        clientName: { field: 'clientName', collate: 'legal' },
+        legalForm: { field: 'clientLegalFormOrd' },
+        program: { field: 'program', collate: 'ru' },
+        startDate: { field: 'startDate' },
+        endDate: { field: 'endDate' },
+        premium: { field: 'premium' },
+        insuredCount: { field: 'insuredCount' },
+        status: { field: 'status', collate: 'ru' },
       },
       'endDate:asc',
     ),
-    qs,
-  );
+  });
+  const items: (Policy & { clientLegalForm: Awaited<ReturnType<typeof clientLegalFormOf>> })[] = [];
+  for (const p of page.items) items.push({ ...p, clientLegalForm: await clientLegalFormOf(ctx, p.clientId) });
+  return { ...page, items };
 }
 
 export async function policyDetail(ctx: AuthCtx, id: string): Promise<PolicyDetail> {

@@ -13,7 +13,7 @@ import type { LegalFormCode } from '../config/legalForms';
 import { LEGAL_FORMS } from '../config/legalForms';
 import { FAMILY_RELATIONS } from '../family';
 import { currentReserve } from '../services/reserve';
-import type { ClaimRow, ClientRow, Db, InsuredRow } from './db';
+import type { AssistanceCaseRow, ClaimRow, ClientRow, Db, InsuredRow } from './db';
 import type { KeyedName, LogName, RowOf } from './repo';
 
 export type ComputedKind = 'int' | 'numeric' | 'text' | 'bool';
@@ -32,6 +32,7 @@ export interface ComputedFields {
   policies: { clientLegalForm: LegalFormCode; clientLegalFormOrd: number };
   claims: { reserve: number; hasPendingDecision: boolean; appealOpen: boolean; flagged: boolean };
   insured: { activeFamily: number; pendingExclusion: boolean };
+  cases: { resolved: boolean };
 }
 
 export type ComputedOf<N> = N extends keyof ComputedFields ? ComputedFields[N] : object;
@@ -54,10 +55,10 @@ type Defs = { [N in keyof ComputedFields]: { [F in keyof ComputedFields[N]]: Com
 export const COMPUTED: Defs = {
   clients: {
     legalFormOrd: { kind: 'int', sql: legalFormOrdSql('legal_form'), mem: () => (c: ClientRow) => legalFormOrd(c.legalForm) },
-    // The client card's counter (views.ts insuredCountFor → app.fact_client_insured_count).
+    // The client card's counter (views.ts insuredCountFor → app.fact_client_insured_count), for all rows at once.
     insuredCount: {
       kind: 'int',
-      sql: 'app.fact_client_insured_count(clients.id)',
+      sql: "coalesce(((select app.list_client_insured_counts()) ->> clients.id::text)::int, 0)",
       mem: (db) => {
         const m = countBy(db.insured, (i) => i.clientId, (i) => i.status === 'active');
         return (c: ClientRow) => m.get(c.id) ?? 0;
@@ -125,6 +126,10 @@ export const COMPUTED: Defs = {
         return (i: InsuredRow) => s.has(i.id);
       },
     },
+  },
+  cases: {
+    // The assistance desk lists open cases first.
+    resolved: { kind: 'bool', sql: "(cases.status = 'resolved')", mem: () => (c: AssistanceCaseRow) => c.status === 'resolved' },
   },
 };
 

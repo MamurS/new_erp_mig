@@ -63,6 +63,7 @@ declare
   v_id text;
   r record;
   v_sql text;
+  v_cols text;
 begin
   perform set_config('request.jwt.claims', p_claims::text, true);
   execute format('select %I::text from public.%I where coalesce((%s), false) = %L order by _pos limit 1', p_key, p_table, p_pred, p_own) into v_id;
@@ -72,7 +73,10 @@ begin
   end if;
   begin
     if p_op = 'insert' then
-      v_sql := format('insert into public.%I select * from pg_temp.tests_src', p_table);
+      -- Generated columns (search keys of the lists) are computed by the table, never inserted.
+      select string_agg(quote_ident(attname), ', ' order by attnum) into v_cols from pg_attribute
+        where attrelid = format('public.%I', p_table)::regclass and attnum > 0 and not attisdropped and attgenerated = '';
+      v_sql := format('insert into public.%I (%s) select %s from pg_temp.tests_src', p_table, v_cols, v_cols);
       execute format('create temp table tests_src as select * from public.%I where %I::text = %L', p_table, p_key, v_id);
       if p_sets = '' then
         execute format('delete from public.%I where %I::text = %L', p_table, p_key, v_id);

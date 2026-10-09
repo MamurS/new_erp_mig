@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 import { msg } from '@mig/i18n';
-import type { Appointment, AssistanceAssignment, MedicalRecordEntry, Rebill, Registry, SessionUser, UUID, Visit } from '@mig/contracts';
+import type { Appointment, AssistanceAssignment, MedicalRecordEntry, Policy, Rebill, Registry, SessionUser, UUID, Visit } from '@mig/contracts';
 import type {
   AssistAppointment,
   AssistCaseView,
@@ -50,18 +50,20 @@ import { isAssistRole, SPECIALTY_LABEL } from '../labels';
 import { formatMoney } from '../lib/format';
 import { formatPhoneFull, maskBirthDate, maskPhone, maskPinfl } from '../lib/mask';
 import { randomId, randomToken } from '../lib/random';
-import { matchesSearch } from '../lib/searchNormalize';
+import type { ComputedFields } from '../store/computed';
+import type { OrderBy, Query, Where } from '../store/query';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import type { AssistUserRow, AssistanceCaseRow, GuaranteeRow, InsuredRow } from '../store/db';
 import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, requirePermission, todayIso, validate, type AuditActor, type AuthCtx, type BaseCtx } from './kernel';
-import { q, type Qs } from './list';
+import { allOf, q, tsFloor, type Qs } from './list';
 import { saveRecomputedRebill } from './system/clocks';
 import { loadParams, type ParamsView } from './params';
-import { assignmentsOf, assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterOf, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
+import { assignmentsOf, assistanceOf, authorityLimitOf, kpiOf, linesOf, recomputeRebill, rebillStatusAfterReview, requireAssistanceScope, requireInsuredOf, rosterPolicyIds, settleRegistry, subStatus, subTotals, upsertDraftRebill } from './assistance';
 import {
   clinicOf,
   clinicResponseMinutes,
+  isOverdueRequestOf,
   createAppointment,
   emitWebhook,
   isOverdueRequest,
@@ -76,7 +78,7 @@ import { createGuarantee } from './clinicPortal';
 import type { PartnerScope } from './partnerIntegration';
 import { principalOf } from './family';
 import { fieldLabel, MEDICAL_TTL, medicalRecords } from './insured';
-import { limitsFor } from './views';
+import { limitsFor, principalsOf } from './views';
 import { canonicalJson } from '../lib/json';
 
 export interface AssistCtx {
@@ -105,8 +107,13 @@ async function clinicAnswerDue(ctx: BaseCtx, a: Appointment, P: ParamsView): Pro
   return tzIso(parseIso(a.createdAt) + (await clinicResponseMinutes(ctx, a.clinicId, P)) * 60_000);
 }
 
-async function toItem(ctx: BaseCtx, i: InsuredRow, access: 'full' | 'read'): Promise<AssistInsuredItem> {
-  const p = await ctx.repos.policies.get(i.policyId);
+async function toItem(
+  ctx: BaseCtx,
+  i: InsuredRow,
+  access: 'full' | 'read',
+  page?: { policies: ReadonlyMap<string, Pick<Policy, 'number' | 'program'>>; principals: ReadonlyMap<string, Pick<InsuredRow, 'fullName'>> },
+): Promise<AssistInsuredItem> {
+  const p = page ? page.policies.get(i.policyId) : await ctx.repos.policies.get(i.policyId);
   return {
     id: i.id,
     fullName: i.fullName,
@@ -118,7 +125,7 @@ async function toItem(ctx: BaseCtx, i: InsuredRow, access: 'full' | 'read'): Pro
     pinflMasked: maskPinfl(i.pinfl),
     birthDateMasked: maskBirthDate(i.birthDate),
     relation: i.relation,
-    ...(i.principalId ? { principalName: (await principalOf(ctx, i))?.fullName } : {}),
+    ...(i.principalId ? { principalName: (page ? page.principals.get(i.principalId) : await principalOf(ctx, i))?.fullName } : {}),
     access,
   };
 }
@@ -227,16 +234,19 @@ export async function ownRebill(ctx: BaseCtx, assistanceId: UUID, id: UUID): Pro
 }
 
 /** Appointments of people whose policy was assigned to the assistance when the request was made. */
-export async function appointmentsOf(ctx: BaseCtx, assistanceId: UUID): Promise<Appointment[]> {
+export async function appointmentsOf(ctx: BaseCtx, assistanceId: UUID, q: Pick<Query<Appointment>, 'where' | 'orderBy' | 'ties'> = {}): Promise<Appointment[]> {
   // The scope is the assignment on the date of the request (also a former assistance, read-only): checked here and,
-  // for the company's users, by RLS (app.assist_scope_of over appointments, app.assist_access over insured).
+  // for the company's users, by RLS (app.assist_scope_of over appointments, app.assist_access over insured). Only
+  // people of policies the company was ever assigned can be in scope: SQL narrows to them, the dates are checked here.
   const r = ctx.repos;
-  const people = new Map((await r.insured.list()).map((i) => [i.id, i]));
-  const scopeOn = await scopeChecker(ctx, assistanceId);
-  return (await r.appointments.list()).filter((a) => {
-    const who = people.get(a.insuredId);
-    return !!who && scopeOn(who.policyId, a.createdAt) !== 'none';
-  });
+  const own = await r.assignments.list({ where: { assistanceId } });
+  const policyIds = [...new Set(own.map((a) => a.policyId))];
+  if (!policyIds.length) return [];
+  const people = new Map((await r.insured.select(['id', 'policyId'], { where: { policyId: { in: policyIds } } })).map((i) => [i.id, i.policyId]));
+  if (!people.size) return [];
+  const today = todayIso(ctx);
+  const list = await r.appointments.list({ where: allOf<Appointment>({ insuredId: { in: [...people.keys()] } }, q.where), orderBy: q.orderBy, ties: q.ties });
+  return list.filter((a) => assistanceScope(own, assistanceId, people.get(a.insuredId)!, a.createdAt.slice(0, 10), today) !== 'none');
 }
 
 /** A case of the assistance linked to the person (404 when the id is given but is not one). */
@@ -384,8 +394,8 @@ export async function overview(ctx: AuthCtx): Promise<AssistOverview> {
   const cases = (await r.cases.list({ where: { assistanceId } })).filter((c) => c.status !== 'resolved');
   const appts: Appointment[] = [];
   if (user.role === 'asst_operator') {
-    for (const x of await appointmentsOf(ctx, assistanceId)) {
-      if (x.status === 'requested' && parseIso(x.startsAt) > now - 3600_000 && (await isOverdueRequest(ctx, x, now, P))) appts.push(x);
+    for (const x of await appointmentsOf(ctx, assistanceId, { where: { status: 'requested', startsAt: { gt: tsFloor(now - 3600_000) } } })) {
+      if (await isOverdueRequest(ctx, x, now, P)) appts.push(x);
     }
   }
   const letters = await r.guarantees.list({ where: { assistanceId } });
@@ -441,15 +451,34 @@ export async function overview(ctx: AuthCtx): Promise<AssistOverview> {
 export async function searchInsured(ctx: AuthCtx, qs: Qs): Promise<AssistInsuredItem[]> {
   const { assistanceId } = requireAssist(ctx, 'assist.insured.search');
   const term = q(qs);
-  const digits = term.replace(/\D/g, '');
-  const policies = new Map((await ctx.repos.policies.list()).map((p) => [p.id, p.number.toLowerCase()]));
-  const list = (await rosterOf(ctx, assistanceId))
-    .filter((i) => !term || matchesSearch(term, i.fullName, policies.get(i.policyId)) || (digits.length >= 4 && i.phone.replace(/\D/g, '').includes(digits)))
-    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
-    .slice(0, 50);
+  const policyIds = await rosterPolicyIds(ctx, assistanceId);
+  if (!policyIds.length) return [];
+  let match: Where<InsuredRow> | null = null;
+  if (term) {
+    // The name, the number of the person's policy, or the whole phone number (identity data is encrypted: equality
+    // through its search HMAC).
+    const byNumber = await ctx.repos.policies.select(['id'], { where: { id: { in: policyIds }, number: { search: term } } });
+    const phone = fullPhone(term);
+    match = { $or: [{ fullName: { search: term } }, ...(byNumber.length ? [{ policyId: { in: byNumber.map((p) => p.id) } }] : []), ...(phone ? [{ phone }] : [])] } as Where<InsuredRow>;
+  }
+  const list = await ctx.repos.insured.list({ where: allOf<InsuredRow>({ policyId: { in: policyIds } }, match), orderBy: [{ field: 'fullName', collate: 'ru' }], limit: 50 });
+  // The policies and the employees of the page, read once.
+  const policyIdsOfPage = [...new Set(list.map((i) => i.policyId))];
+  const page = {
+    policies: new Map((policyIdsOfPage.length ? await ctx.repos.policies.select(['id', 'number', 'program'], { where: { id: { in: policyIdsOfPage } } }) : []).map((p) => [p.id, p])),
+    principals: await principalsOf(ctx, list),
+  };
   const out: AssistInsuredItem[] = [];
-  for (const i of list) out.push(await toItem(ctx, i, 'full'));
+  for (const i of list) out.push(await toItem(ctx, i, 'full', page));
   return out;
+}
+
+/** A whole phone number typed in the search (9 digits, or 12 with the country code 998) as stored, else null. */
+function fullPhone(term: string): string | null {
+  const d = term.replace(/\D/g, '');
+  if (d.length === 9) return `+998${d}`;
+  if (d.length === 12 && d.startsWith('998')) return `+${d}`;
+  return null;
 }
 
 export async function insuredDetail(ctx: AuthCtx, id: UUID): Promise<AssistInsuredDetail> {
@@ -470,7 +499,7 @@ export async function insuredDetail(ctx: AuthCtx, id: UUID): Promise<AssistInsur
       .map((c) => caseView(c, assistanceId, scopeOn))
       .filter((c): c is AssistCaseView => !!c)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    appointments: (await appointmentsOf(ctx, assistanceId)).filter((a) => a.insuredId === i.id).sort((a, b) => (a.startsAt < b.startsAt ? 1 : -1)),
+    appointments: await appointmentsOf(ctx, assistanceId, { where: { insuredId: i.id }, orderBy: [['startsAt', 'desc']], ties: 'desc' }),
     guarantees,
   };
 }
@@ -523,19 +552,20 @@ export async function listCases(ctx: AuthCtx, qs: URLSearchParams): Promise<Assi
   const type = qs.get('type');
   const [sortKey, sortDir] = (qs.get('sort') ?? '').split(':');
   const scopeOn = await scopeChecker(ctx, assistanceId);
-  return (await ctx.repos.cases.list())
-    .map((c) => caseView(c, assistanceId, scopeOn))
-    .filter((c): c is AssistCaseView => !!c)
-    .filter((c) => (!status || status.split(',').includes(c.status)) && (!type || c.type === type))
-    .sort((a, b) => {
-      // Explicit sort by a column; otherwise open cases first, newest first.
-      if (sortKey === 'number' || sortKey === 'createdAt') {
-        const x = a[sortKey];
-        const y = b[sortKey];
-        return (x < y ? -1 : x > y ? 1 : 0) * (sortDir === 'desc' ? -1 : 1);
-      }
-      return (a.status === 'resolved') === (b.status === 'resolved') ? (a.createdAt < b.createdAt ? 1 : -1) : a.status === 'resolved' ? 1 : -1;
-    });
+  // Explicit sort by a column; otherwise open cases first, newest first.
+  const orderBy: OrderBy<AssistanceCaseRow & ComputedFields['cases']> =
+    sortKey === 'number' || sortKey === 'createdAt'
+      ? [[sortKey, sortDir === 'desc' ? 'desc' : 'asc']]
+      : [
+          ['resolved', 'asc'],
+          ['createdAt', 'desc'],
+        ];
+  const rows = await ctx.repos.cases.list({
+    where: allOf<AssistanceCaseRow & ComputedFields['cases']>({ assistanceId }, status && { status: { in: status.split(',') as AssistanceCaseRow['status'][] } }, type && { type: type as AssistanceCaseRow['type'] }),
+    orderBy,
+    ties: sortKey === 'number' || sortKey === 'createdAt' ? 'asc' : 'desc',
+  });
+  return rows.map((c) => caseView(c, assistanceId, scopeOn)).filter((c): c is AssistCaseView => !!c);
 }
 
 export async function getCase(ctx: AuthCtx, id: UUID): Promise<AssistCaseView> {
@@ -606,12 +636,18 @@ export async function listAppointments(ctx: AuthCtx, view: string | null): Promi
   const v = view ?? 'requests';
   const now = ctx.now();
   const P = await loadParams(ctx);
-  const list: AssistAppointment[] = [];
-  for (const a of await appointmentsOf(ctx, assistanceId)) {
-    if (!(v === 'requests' ? a.status === 'requested' && parseIso(a.startsAt) > now - 3600_000 : parseIso(a.startsAt) > now - 30 * DAY)) continue;
-    list.push({ ...a, overdue: await isOverdueRequest(ctx, a, now, P), slaDueAt: await clinicAnswerDue(ctx, a, P) });
-  }
-  return list.sort((a, b) => (a.overdue === b.overdue ? (a.startsAt < b.startsAt ? -1 : 1) : a.overdue ? -1 : 1));
+  const where: Where<Appointment> = v === 'requests' ? { status: 'requested', startsAt: { gt: tsFloor(now - 3600_000) } } : { startsAt: { gt: tsFloor(now - 30 * DAY) } };
+  const rows = await appointmentsOf(ctx, assistanceId, { where, orderBy: [['startsAt', 'asc']] });
+  // The clinics' answer times, read once for the list (clinicAnswerDue, isOverdueRequest).
+  const clinicIds = [...new Set(rows.map((a) => a.clinicId))];
+  const clinics = new Map((clinicIds.length ? await ctx.repos.clinics.select(['id', 'responseSlaMinutes'], { where: { id: { in: clinicIds } } }) : []).map((c) => [c.id, c]));
+  const list: AssistAppointment[] = rows.map((a) => {
+    const clinic = clinics.get(a.clinicId);
+    const minutes = clinic?.responseSlaMinutes ?? P.dmsParam('clinicResponseMinutes');
+    return { ...a, overdue: isOverdueRequestOf(a, clinic, now, P), slaDueAt: tzIso(parseIso(a.createdAt) + minutes * 60_000) };
+  });
+  // Overdue requests first, each group by the time of the appointment (a stable sort keeps the SQL order).
+  return list.sort((a, b) => Number(b.overdue) - Number(a.overdue));
 }
 
 export async function createAssistAppointment(ctx: AuthCtx, body: unknown): Promise<Appointment> {
@@ -629,7 +665,7 @@ export type AppointmentAnswerKind = 'confirm' | 'reschedule' | 'decline';
 
 /** An appointment request of the assistance's person that the clinic left unanswered too long (404 otherwise; 409 while the clinic may still answer). */
 export async function overdueAppointmentOf(ctx: BaseCtx, assistanceId: UUID, id: UUID, conflictError: () => Error): Promise<Appointment> {
-  const a = (await appointmentsOf(ctx, assistanceId)).find((x) => x.id === id);
+  const a = (await appointmentsOf(ctx, assistanceId, { where: { id } }))[0];
   if (!a) throw notFound();
   // The clinic answers first; the assistance steps in when the clinic did not answer in time (§5.1).
   if (!(await isOverdueRequest(ctx, a))) throw conflictError();
@@ -654,12 +690,14 @@ export async function answerAppointment(ctx: AuthCtx, kind: AppointmentAnswerKin
 
 export async function chatThreads(ctx: AuthCtx): Promise<AssistChatThread[]> {
   const { assistanceId } = requireAssist(ctx, 'assist.appointments.manage');
-  const roster = new Map((await rosterOf(ctx, assistanceId)).map((i) => [i.id, i]));
+  const policyIds = await rosterPolicyIds(ctx, assistanceId);
+  if (!policyIds.length) return [];
+  const roster = new Map((await ctx.repos.insured.select(['id', 'fullName'], { where: { policyId: { in: policyIds } } })).map((i) => [i.id, i]));
+  if (!roster.size) return [];
   const now = ctx.now();
   const threads = new Map<string, AssistChatThread>();
-  for (const m of await ctx.repos.chat.list()) {
-    const who = roster.get(m.insuredId);
-    if (!who || parseIso(m.visibleAt) > now) continue;
+  for (const m of await ctx.repos.chat.list({ where: { insuredId: { in: [...roster.keys()] }, visibleAt: { lte: tsFloor(now) } } })) {
+    const who = roster.get(m.insuredId)!;
     const prev = threads.get(who.id);
     if (!prev || prev.lastAt <= m.at) threads.set(who.id, { insuredId: who.id, insuredName: who.fullName, lastText: m.text.slice(0, 120), lastAt: m.at, unanswered: m.from === 'insured' });
   }
@@ -691,11 +729,11 @@ function requireGuaranteeReader(user: SessionUser): void {
   if (!can(user, 'assist.guarantees.decide') && user.role !== 'asst_operator') throw forbidden();
 }
 
-/** Letters of the assistance within its scope, expiry refreshed, in storage order. */
-export async function lettersOf(ctx: BaseCtx, assistanceId: UUID): Promise<GuaranteeRow[]> {
+/** Letters of the assistance within its scope, expiry refreshed, in storage order (or `orderBy`). */
+export async function lettersOf(ctx: BaseCtx, assistanceId: UUID, order: Pick<Query<GuaranteeRow>, 'orderBy' | 'ties'> = {}): Promise<GuaranteeRow[]> {
   const scopeOn = await scopeChecker(ctx, assistanceId);
   const out: GuaranteeRow[] = [];
-  for (const g of await ctx.repos.guarantees.list({ where: { assistanceId } })) {
+  for (const g of await ctx.repos.guarantees.list({ where: { assistanceId }, ...order })) {
     if (g.policyId && scopeOn(g.policyId, g.createdAt) !== 'none') out.push(await refreshStoredGuarantee(ctx, g));
   }
   return out;
@@ -704,7 +742,8 @@ export async function lettersOf(ctx: BaseCtx, assistanceId: UUID): Promise<Guara
 export async function listGuarantees(ctx: AuthCtx, status: string | null): Promise<GuaranteeView[]> {
   const { user, assistanceId } = requireAssist(ctx);
   requireGuaranteeReader(user);
-  const list = (await lettersOf(ctx, assistanceId)).filter((g) => !status || status.split(',').includes(g.status)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  // The status after the lazy expiry (lettersOf refreshes every letter it reads).
+  const list = (await lettersOf(ctx, assistanceId, { orderBy: [['createdAt', 'desc']], ties: 'desc' })).filter((g) => !status || status.split(',').includes(g.status));
   const out: GuaranteeView[] = [];
   for (const g of list) out.push(await toGuaranteeView(ctx, g));
   return out;
@@ -754,16 +793,17 @@ export async function decideGuarantee(ctx: AuthCtx, id: UUID, body: unknown): Pr
 
 // ---------------------------------------------------------------- endpoints: own sub-registries
 
-/** Submitted registries with lines of the assistance, in storage order. */
-export async function registriesOf(ctx: BaseCtx, assistanceId: UUID): Promise<Registry[]> {
-  return (await ctx.repos.registries.list({ where: { status: { ne: 'draft' } } })).filter((r) => linesOf(r, assistanceId).length);
+/** Submitted registries with lines of the assistance, in storage order (or `orderBy`). */
+export async function registriesOf(ctx: BaseCtx, assistanceId: UUID, order: Pick<Query<Registry>, 'orderBy' | 'ties'> = {}): Promise<Registry[]> {
+  // Whose a line is depends on the payer of each line (linesOf): the registries are few per clinic and month.
+  return (await ctx.repos.registries.list({ where: { status: { ne: 'draft' } }, ...order })).filter((r) => linesOf(r, assistanceId).length);
 }
 
 export async function listRegistries(ctx: AuthCtx): Promise<SubRegistrySummary[]> {
   const { assistanceId } = requireAssist(ctx, 'assist.registries.review');
   const P = await loadParams(ctx);
   const out: SubRegistrySummary[] = [];
-  for (const r of (await registriesOf(ctx, assistanceId)).sort((a, b) => ((a.submittedAt ?? '') < (b.submittedAt ?? '') ? 1 : -1))) out.push(await toSubSummary(ctx, r, assistanceId, P));
+  for (const r of await registriesOf(ctx, assistanceId, { orderBy: [{ field: 'submittedAt', dir: 'desc', nulls: 'last' }], ties: 'desc' })) out.push(await toSubSummary(ctx, r, assistanceId, P));
   return out;
 }
 
@@ -795,7 +835,7 @@ export async function payRegistry(ctx: AuthCtx, id: UUID, body: unknown): Promis
 export async function listRebills(ctx: AuthCtx): Promise<RebillSummary[]> {
   const { assistanceId } = requireAssist(ctx, 'assist.rebills.submit');
   const out: RebillSummary[] = [];
-  for (const b of (await ctx.repos.rebills.list({ where: { assistanceId } })).sort((a, b) => (a.period < b.period ? 1 : -1))) out.push(await toRebillSummary(ctx, b));
+  for (const b of await ctx.repos.rebills.list({ where: { assistanceId }, orderBy: [['period', 'desc']], ties: 'desc' })) out.push(await toRebillSummary(ctx, b));
   return out;
 }
 

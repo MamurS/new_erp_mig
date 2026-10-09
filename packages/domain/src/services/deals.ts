@@ -31,7 +31,7 @@ import { calculateQuote, canApproveQuote, quoteAuthorityProblem } from '../tarif
 import { randomId } from '../lib/random';
 import { DAY, isoDay, tzIso } from '../lib/time';
 import type { StaffRow } from '../store/db';
-import { byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
+import { allOf, byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView } from './lifecycle';
@@ -325,11 +325,11 @@ export async function listDeals(ctx: AuthCtx, qs: URLSearchParams): Promise<Deal
   const user = requireMig(ctx);
   readDeals(user);
   for (const c of await ctx.repos.contracts.list()) await refreshContract(ctx, c);
-  let list = await ctx.repos.deals.list();
   const owner = qs.get('ownerId');
-  if (owner) list = list.filter((x) => x.ownerId === owner);
   const type = qs.get('type');
-  if (type === 'new' || type === 'renewal') list = list.filter((x) => x.type === type);
+  const list = await ctx.repos.deals.list({ where: allOf<Deal>(owner && { ownerId: owner }, (type === 'new' || type === 'renewal') && { type }) });
+  // The view of each deal (client, owner, the premium of its quote or contract) and the sort by it: deals are about
+  // one per client and year.
   const all: DealView[] = [];
   for (const x of list) all.push(await toDealView(ctx, x));
   const views = filterLegalForm(all, qs, (x) => x.clientLegalForm);

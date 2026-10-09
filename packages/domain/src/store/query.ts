@@ -73,6 +73,11 @@ export interface Query<T, X = object> {
   where?: Where<T & X>;
   /** Storage order breaks ties (always the last key). */
   orderBy?: OrderBy<T & X>;
+  /**
+   * `desc`: ties in reverse storage order (the latest stored first) — what the lists' «newest first» sorts written as
+   * `(a.at < b.at ? 1 : -1)` gave for equal times. Default `asc`.
+   */
+  ties?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
   /** Only these fields of each row (lists that need a few columns: no decryption of identity data). */
@@ -186,7 +191,13 @@ export function compareBy<T>(orderBy: OrderBy<T>, get: FieldGetter = plain): (a:
 /** Filters, orders (stable: storage order breaks ties) and pages rows in JavaScript. */
 export function applyQuery<T>(rows: readonly T[], q: Query<T> = {}, get: FieldGetter = plain): T[] {
   let out = rows.filter((r) => matches(r, q.where as Where<T>, get));
-  if (q.orderBy?.length) out = out.sort(compareBy(q.orderBy as OrderBy<T>, get));
+  if (q.ties === 'desc') {
+    const by = q.orderBy?.length ? compareBy(q.orderBy as OrderBy<T>, get) : () => 0;
+    out = out
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => by(a.r, b.r) || b.i - a.i)
+      .map((x) => x.r);
+  } else if (q.orderBy?.length) out = out.sort(compareBy(q.orderBy as OrderBy<T>, get));
   const offset = q.offset ?? 0;
   if (offset || q.limit !== undefined) out = out.slice(offset, q.limit === undefined ? undefined : offset + q.limit);
   return out;

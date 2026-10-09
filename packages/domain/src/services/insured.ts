@@ -11,12 +11,11 @@ import { can } from '../auth/permissions';
 import { formatPhoneFull } from '../lib/mask';
 import { randomId, randomToken } from '../lib/random';
 import { hashString, int, mulberry32, pick, uuidFrom } from '../lib/rng';
-import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, tzIso } from '../lib/time';
 import type { InsuredRow } from '../store/db';
 import { audit, DomainError, forbidden, insuredLabel, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { paginate, q, sortBy, type Qs } from './list';
-import { limitsFor, toInsuredDetail, toInsuredListItem } from './views';
+import { allOf, pageOf, q, sortParam, sp, type Qs } from './list';
+import { limitsFor, toInsuredDetail, toInsuredListItems } from './views';
 
 /** How long a grant to read the medical history lasts. */
 export const MEDICAL_TTL = 15 * 60_000;
@@ -72,17 +71,16 @@ function requireCardReader(ctx: AuthCtx, opts: { accountant: boolean }): void {
 
 // ---------------------------------------------------------------- endpoints
 
-/** GET /insured: search, client filter, sort and page. */
+/** GET /insured: search, client filter, sort and page (in SQL: the page, the order and the total). */
 export async function list(ctx: AuthCtx, qs: Qs): Promise<Page<InsuredListItem>> {
   requireCardReader(ctx, { accountant: false });
-  const clientId = (qs instanceof URLSearchParams ? qs : qs.searchParams).get('clientId');
-  let rows = await ctx.repos.insured.list(clientId ? { where: { clientId } } : {});
+  const clientId = sp(qs).get('clientId');
   const term = q(qs);
-  if (term) rows = rows.filter((i) => matchesSearch(term, i.fullName));
-  const p = paginate(sortBy(rows, qs, { fullName: (i) => i.fullName, clientName: (i) => i.clientName }, 'fullName:asc'), qs);
-  const items: InsuredListItem[] = [];
-  for (const i of p.items) items.push(await toInsuredListItem(ctx, i, ctx.user));
-  return { ...p, items };
+  const p = await pageOf(ctx.repos.insured, qs, {
+    where: allOf<InsuredRow>(clientId && { clientId }, term && { fullName: { search: term } }),
+    orderBy: sortParam<InsuredRow>(qs, { fullName: { field: 'fullName', collate: 'ru' }, clientName: { field: 'clientName', collate: 'ru' } }, 'fullName:asc'),
+  });
+  return { ...p, items: await toInsuredListItems(ctx, p.items, ctx.user) };
 }
 
 /** GET /insured/:id. */

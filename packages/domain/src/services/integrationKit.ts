@@ -272,9 +272,25 @@ export const toIntegrationAppointment = (a: Appointment) =>
     proposedStartsAt: a.proposedStartsAt,
   });
 
-/** Cursor pages of the partner API (the cursor is the offset, base64). */
+/** The offset a cursor of the partner API stands for (the cursor is the offset, base64). */
+function offsetOf(cursor: string | undefined): number {
+  return cursor && /^\d+$/.test(atob(cursor)) ? Number(atob(cursor)) : 0;
+}
+
+/** Cursor pages of the partner API over a list in memory. */
 export function page<T>(items: T[], cursor: string | undefined, limit: number): { items: T[]; nextCursor: string | null } {
-  const offset = cursor && /^\d+$/.test(atob(cursor)) ? Number(atob(cursor)) : 0;
+  const offset = offsetOf(cursor);
   const slice = items.slice(offset, offset + limit);
   return { items: slice, nextCursor: offset + limit < items.length ? btoa(String(offset + limit)) : null };
+}
+
+/** A cursor page as a repository query: the offset and one row more than the page (is there a next page). */
+export function pageWindow(cursor: string | undefined, limit: number): { offset: number; limit: number } {
+  return { offset: offsetOf(cursor), limit: limit + 1 };
+}
+
+/** The page of the rows a `pageWindow` query returned (the same answer as `page` over the whole list). */
+export function windowPage<T>(rows: T[], cursor: string | undefined, limit: number): { items: T[]; nextCursor: string | null } {
+  const offset = offsetOf(cursor);
+  return { items: rows.slice(0, limit), nextCursor: rows.length > limit ? btoa(String(offset + limit)) : null };
 }

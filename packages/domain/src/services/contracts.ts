@@ -37,7 +37,8 @@ import { detectMime } from '../lib/mime';
 import { randomId } from '../lib/random';
 import { tzIso } from '../lib/time';
 import type { ChangeRequestRow } from '../store/db';
-import { byLegalForm, byLegalName, filterLegalForm, q as searchTerm, sortBy } from './list';
+import type { Where } from '../store/query';
+import { allOf, byLegalForm, byLegalName, filterLegalForm, q as searchTerm, sortBy } from './list';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { saveInvoiceStatus } from './system/clocks';
@@ -610,19 +611,25 @@ async function refreshAllContracts(ctx: BaseCtx): Promise<void> {
 
 export async function listContracts(ctx: AuthCtx, qs: URLSearchParams): Promise<ContractView[]> {
   const { user } = ctx;
+  // The lazy clock first (it may change statuses), then the list with its filters in SQL.
   await refreshAllContracts(ctx);
-  let list = await ctx.repos.contracts.list();
   if (user.role === 'hr') {
     if (!user.companyId) throw forbidden();
-    list = list.filter((c) => c.clientId === user.companyId && HR_VISIBLE.has(c.status));
   } else if (!isStaffRole(user.role) || !can(user, 'contracts.read')) throw forbidden();
   const status = qs.get('status');
-  if (status) list = list.filter((c) => status.split(',').includes(c.status));
   const clientId = qs.get('clientId');
-  if (clientId) list = list.filter((c) => c.clientId === clientId);
   // `?q=`: the new number, the number in the previous system (transferred contracts) or the client.
   const term = searchTerm(qs);
-  if (term) list = list.filter((c) => c.number.toLowerCase().includes(term) || (c.externalNumber ?? '').toLowerCase().includes(term) || c.clientName.toLowerCase().includes(term));
+  const list = await ctx.repos.contracts.list({
+    where: allOf<Contract>(
+      user.role === 'hr' && { clientId: user.companyId, status: { in: [...HR_VISIBLE] as Contract['status'][] } },
+      status && { status: { in: status.split(',') as Contract['status'][] } },
+      clientId && { clientId },
+      term && { $or: [{ number: { contains: term } }, { externalNumber: { contains: term } }, { clientName: { contains: term } }] },
+    ),
+  });
+  // The view of each contract (client, quote, invoices) and the sort by its figures: contracts are about one per
+  // client and year.
   const all: ContractView[] = [];
   for (const c of list) all.push(forViewer(user, await contractView(ctx, c)));
   const views = filterLegalForm(all, qs, (c) => c.client.legalForm);
@@ -992,16 +999,16 @@ export async function myCertificate(ctx: AuthCtx, personId: string | null): Prom
 
 export async function listChangeRequests(ctx: AuthCtx, qs: URLSearchParams): Promise<ChangeRequestView[]> {
   const { user } = ctx;
-  let list = await ctx.repos.changeRequests.list();
+  let own: Where<ChangeRequestRow> | null = null;
   if (user.role === 'hr') {
     if (!can(user, 'endorsements.manage', { companyId: user.companyId })) throw forbidden();
-    const ids = new Set((await ctx.repos.contracts.list({ where: { clientId: user.companyId } })).map((c) => c.id));
-    list = list.filter((r) => ids.has(r.contractId));
+    own = { contractId: { in: (await ctx.repos.contracts.select(['id'], { where: { clientId: user.companyId } })).map((c) => c.id) } };
   } else if (!isStaffRole(user.role) || !can(user, 'contracts.read')) throw forbidden();
   const contractId = qs.get('contractId');
-  if (contractId) list = list.filter((r) => r.contractId === contractId);
   const status = qs.get('status');
-  if (status) list = list.filter((r) => status.split(',').includes(r.status));
+  const list = await ctx.repos.changeRequests.list({
+    where: allOf<ChangeRequestRow>(own, contractId && { contractId }, status && { status: { in: status.split(',') as ChangeRequestRow['status'][] } }),
+  });
   const all: ChangeRequestView[] = [];
   for (const r of list) all.push(await changeRequestView(ctx, r));
   return filterLegalForm(all, qs, (r) => r.clientLegalForm);
@@ -1035,14 +1042,15 @@ export async function createChangeRequest(ctx: AuthCtx, body: unknown): Promise<
 
 export async function listEndorsements(ctx: AuthCtx, qs: URLSearchParams): Promise<EndorsementView[]> {
   const { user } = ctx;
+  // The lazy clock first (it may sign endorsements into force), then the list with its filters in SQL.
   await refreshAllContracts(ctx);
-  let list = await ctx.repos.endorsements.list();
+  let own: Where<Endorsement> | null = null;
   if (user.role === 'hr') {
-    const ids = new Set((await ctx.repos.contracts.list()).filter((c) => c.clientId === user.companyId).map((c) => c.id));
-    list = list.filter((e) => ids.has(e.contractId) && HR_VISIBLE.has(e.status));
+    const ids = (await ctx.repos.contracts.select(['id', 'clientId'])).filter((c) => c.clientId === user.companyId).map((c) => c.id);
+    own = { contractId: { in: ids }, status: { in: [...HR_VISIBLE] as Endorsement['status'][] } };
   } else if (!isStaffRole(user.role) || !can(user, 'contracts.read')) throw forbidden();
   const contractId = qs.get('contractId');
-  if (contractId) list = list.filter((e) => e.contractId === contractId);
+  const list = await ctx.repos.endorsements.list({ where: allOf<Endorsement>(own, contractId && { contractId }) });
   const all: EndorsementView[] = [];
   for (const e of list) all.push(forViewer(user, await endorsementView(ctx, e)));
   const views = filterLegalForm(all, qs, (e) => e.clientLegalForm);

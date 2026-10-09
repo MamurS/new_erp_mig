@@ -70,6 +70,36 @@ $$;
 comment on function app.claim_reserve(jsonb, jsonb, bigint, bigint) is 'services/reserve.ts currentReserve(): the current reserve of a claim (the claims list sorts by it).';
 grant execute on function app.search_key(text), app.claim_reserve(jsonb, jsonb, bigint, bigint) to authenticated, service_role;
 
+-- The assistance roster: one array of policies per statement instead of app.assist_access per row.
+create or replace function app.assist_policy_ids() returns uuid[]
+  language sql stable security definer set search_path = ''
+as $$
+  select coalesce(array_agg(s.p), '{}') from (select distinct a.policy_id as p from public.assignments a where a.assistance_id = app.assistance_id()) s
+    where app.assist_access(s.p) <> 'none'
+$$;
+comment on function app.assist_policy_ids is 'Policies the user’s assistance company has access to (app.assist_access), as an array: the insured SELECT policy.';
+grant execute on function app.assist_policy_ids() to authenticated, service_role;
+alter policy insured_select on public.insured
+  using ((select app.active()) and (
+      ((select app.is_staff()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (client_id = (select app.company_id())))
+      or ((select app.role()) = 'insured' and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.my_family_ids())::uuid[])))
+      or ((select app.is_clinic()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (id = any((select app.clinic_patient_ids())::uuid[])))
+      or ((select app.is_assist()) and (select app.can_any(array['insured.read', 'assist.insured.search', 'clinic.check_patient', 'policy_changes.decide']::text[])) and (policy_id = any((select app.assist_policy_ids())::uuid[])))
+    ));
+
+-- The client list sorted by the number of insured: the counters of app.fact_client_insured_count for every client the
+-- caller sees, once per statement (store/computed.ts clients.insuredCount).
+create or replace function app.list_client_insured_counts() returns jsonb
+  language sql stable security definer set search_path = ''
+as $$
+  select coalesce(jsonb_object_agg(i.client_id, i.n), '{}'::jsonb)
+    from (select client_id, count(*)::int as n from public.insured where status = 'active' group by client_id) i
+    where app.active() and exists (select 1 from public.clients v where v.id = i.client_id and ((select app.active()) and ( ((select app.is_staff()) and (select app.can_any(array['clients.read', 'leads.manage', 'deals.manage', 'contracts.read', 'invoices.read', 'policies.read', 'kp.read', 'policy_changes.read']::text[]))) or ((select app.role()) = 'hr' and (id = (select app.company_id()))) )))
+$$;
+comment on function app.list_client_insured_counts is 'Active insured persons by client (app.fact_client_insured_count) of the clients the caller sees, as one object: the sort of the client list.';
+grant execute on function app.list_client_insured_counts() to authenticated, service_role;
+
 -- clients
 alter table public.clients add column name_sk text generated always as (app.search_key(name)) stored;
 create index clients_name_sk_trgm_idx on public.clients using gin (name_sk extensions.gin_trgm_ops);
