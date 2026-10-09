@@ -26,9 +26,12 @@
 import { bucketOf, sha256OfBytes, type BlobStore, type BucketId } from './blob';
 import type { Db, FileRow } from './db';
 import { piiMask, type PiiCrypto } from './pii';
-import { isOp, type Op, type Query, type Where } from './query';
+import { isOp, orderTerm, type ArrayOp, type Op, type Query, type Where } from './query';
+import { computedOf, type ComputedDef } from './computed';
+import { COLLATION_SQL, searchColumn } from './sql/listQueries';
+import { searchKey } from '../lib/searchNormalize';
 import type { InsertOptions, LogTable, MapStore, Repos, SeqName, SetStore, Table } from './repo';
-import { TABLES, sequenceName, type TableSpec } from './schema';
+import { TABLES, listQueriesOf, sequenceName, type TableSpec } from './schema';
 import { fieldMapping, keyColumn, physicalColumns, type FieldMapping } from './sql/physical';
 import { qi } from './columns';
 import { maskCard } from '../lib/mask';
@@ -95,6 +98,9 @@ const CAST: Record<string, string> = {
   textArray: 'text[]',
 };
 
+/** Parameter casts of computed fields (store/computed.ts ComputedKind). */
+const COMPUTED_CAST: Record<string, string> = { int: 'integer', numeric: 'numeric', text: 'text', bool: 'boolean' };
+
 /** Builds the parameter list of one statement. */
 class Params {
   readonly values: unknown[] = [];
@@ -115,6 +121,10 @@ class TableMap {
   /** Operations no role may do: privileged by design (see the header). */
   readonly systemOnly: boolean;
   readonly systemInsert: boolean;
+  /** Computed fields of the list queries (store/computed.ts). */
+  readonly computed: Readonly<Record<string, ComputedDef<unknown>>>;
+  /** Field → its generated search-key column (schema.ts LIST_QUERIES). */
+  readonly searchColumns = new Map<string, string>();
 
   constructor(readonly spec: TableSpec) {
     this.table = `public.${spec.table}`;
@@ -126,12 +136,15 @@ class TableMap {
     const a = spec.access;
     this.systemOnly = !a.select && !a.insert && !a.update && !a.delete;
     this.systemInsert = !a.insert;
+    this.computed = computedOf(spec.collection);
+    for (const f of listQueriesOf(spec.collection).search ?? []) this.searchColumns.set(f, searchColumn(f, this.byField.get(f)!.column!));
   }
 
-  /** The select list (`secret`: include the secret columns). */
-  selectList(withSecret: boolean): string {
+  /** The select list (`secret`: include the secret columns; `fields`: only these fields). */
+  selectList(withSecret: boolean, fields: ReadonlySet<string> | null = null): string {
     const out: string[] = [];
     for (const m of this.fields) {
+      if (fields && !fields.has(m.field)) continue;
       for (const col of m.columns) {
         if (!withSecret && this.secret.has(col)) continue;
         out.push(readExpr(m, col));
@@ -177,9 +190,10 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
 
   // ------------------------------------------------------------------ rows
 
-  async function fromRow(t: TableMap, raw: Rec): Promise<Rec> {
+  async function fromRow(t: TableMap, raw: Rec, fields: ReadonlySet<string> | null = null): Promise<Rec> {
     const out: Rec = {};
     for (const m of t.fields) {
+      if (fields && !fields.has(m.field)) continue;
       if (m.kind === 'virtual') {
         if (m.field === 'password' && o.demoPassword !== undefined) out.password = o.demoPassword;
         continue;
@@ -243,10 +257,65 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
 
   // ------------------------------------------------------------------ where / order
 
+  /** A comparison over one SQL expression of a scalar kind (a column or a computed field). */
+  function scalarCond(t: TableMap, field: string, expr: string, kind: string, op: Op<unknown>, p: Params, searchCol: string | null): string {
+    const cast = CAST[kind] ?? COMPUTED_CAST[kind]!;
+    const isText = kind === 'text' || kind === 'enum';
+    const isUuid = kind === 'uuid';
+    const sortable = isText ? `${expr} collate "C"` : expr;
+    const valid = (v: unknown) => !isUuid || (typeof v === 'string' && UUID.test(v));
+    const parts: string[] = [];
+    if ('eq' in op) {
+      const v = op.eq;
+      parts.push(none(v) ? `${expr} is null` : valid(v) ? `${expr} = ${p.add(v, cast)}` : 'false');
+    }
+    if ('ne' in op) {
+      const v = op.ne;
+      parts.push(none(v) ? `${expr} is not null` : valid(v) ? `${expr} is distinct from ${p.add(v, cast)}` : 'true');
+    }
+    if (op.in) {
+      const vs = op.in.filter(valid);
+      parts.push(vs.length ? `${expr} = any(${p.add(vs, `${cast}[]`)})` : 'false');
+    }
+    if (op.notIn) {
+      const vs = op.notIn.filter(valid);
+      if (vs.length) parts.push(`(${expr} is null or ${expr} <> all(${p.add(vs, `${cast}[]`)}))`);
+    }
+    if (op.isNull !== undefined) parts.push(op.isNull ? `${expr} is null` : `${expr} is not null`);
+    if (op.contains !== undefined) {
+      if (!isText) parts.push('false');
+      else parts.push(`${expr} ilike ${p.add(`%${op.contains.replace(/[\\%_]/g, (x) => `\\${x}`)}%`, 'text')}`);
+    }
+    if (op.search !== undefined) {
+      if (!searchCol) throw new Error(`${t.spec.collection}.${field}: no search key column (schema.ts LIST_QUERIES)`);
+      const key = searchKey(op.search);
+      // An empty key matches every row (matchesSearch).
+      if (key) parts.push(`${qi(searchCol)} like ${p.add(`%${key.replace(/[\\%_]/g, (x) => `\\${x}`)}%`, 'text')}`);
+    }
+    const cmp: [keyof Op<unknown>, string][] = [
+      ['gt', '>'],
+      ['gte', '>='],
+      ['lt', '<'],
+      ['lte', '<='],
+    ];
+    for (const [k, sym] of cmp) {
+      const v = op[k];
+      if (v === undefined) continue;
+      if (isUuid) parts.push(`${expr}::text collate "C" ${sym} ${p.add(String(v), 'text')}`);
+      else parts.push(`${sortable} ${sym} ${p.add(v, cast)}${isText ? ' collate "C"' : ''}`);
+    }
+    return parts.join(' and ') || 'true';
+  }
+
   async function cond(t: TableMap, field: string, c: unknown, p: Params): Promise<string> {
+    const computed = t.computed[field];
+    if (computed) return scalarCond(t, field, `(${computed.sql})`, computed.kind, isOp(c) ? c : { eq: c as never }, p, null);
     const m = t.byField.get(field);
     if (!m) throw new Error(`${t.spec.collection}: unknown field ${field} in a query`);
     if (m.kind === 'virtual' || m.card || (m.pii && m.pii !== 'encrypt+hmac')) throw new Error(`${t.spec.collection}.${field} cannot be queried`);
+    if (m.kind === 'textArray' && isOp(c) && 'includes' in c) {
+      return `${qi(m.column!)} @> array[${p.add(String((c as unknown as ArrayOp<unknown>).includes), 'text')}]`;
+    }
     const op: Op<unknown> = isOp(c) ? c : { eq: c as never };
     const parts: string[] = [];
     if (m.pii) {
@@ -264,46 +333,7 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
       }
       return parts.join(' and ') || 'true';
     }
-    const col = qi(m.column!);
-    const cast = CAST[m.kind]!;
-    const isText = m.kind === 'text' || m.kind === 'enum';
-    const isUuid = m.kind === 'uuid';
-    const sortable = isText ? `${col} collate "C"` : col;
-    const valid = (v: unknown) => !isUuid || (typeof v === 'string' && UUID.test(v));
-    if ('eq' in op) {
-      const v = op.eq;
-      parts.push(none(v) ? `${col} is null` : valid(v) ? `${col} = ${p.add(v, cast)}` : 'false');
-    }
-    if ('ne' in op) {
-      const v = op.ne;
-      parts.push(none(v) ? `${col} is not null` : valid(v) ? `${col} is distinct from ${p.add(v, cast)}` : 'true');
-    }
-    if (op.in) {
-      const vs = op.in.filter(valid);
-      parts.push(vs.length ? `${col} = any(${p.add(vs, `${cast}[]`)})` : 'false');
-    }
-    if (op.notIn) {
-      const vs = op.notIn.filter(valid);
-      if (vs.length) parts.push(`(${col} is null or ${col} <> all(${p.add(vs, `${cast}[]`)}))`);
-    }
-    if (op.isNull !== undefined) parts.push(op.isNull ? `${col} is null` : `${col} is not null`);
-    if (op.contains !== undefined) {
-      if (!isText) parts.push('false');
-      else parts.push(`${col} ilike ${p.add(`%${op.contains.replace(/[\\%_]/g, (x) => `\\${x}`)}%`, 'text')}`);
-    }
-    const cmp: [keyof Op<unknown>, string][] = [
-      ['gt', '>'],
-      ['gte', '>='],
-      ['lt', '<'],
-      ['lte', '<='],
-    ];
-    for (const [k, sym] of cmp) {
-      const v = op[k];
-      if (v === undefined) continue;
-      if (isUuid) parts.push(`${col}::text collate "C" ${sym} ${p.add(String(v), 'text')}`);
-      else parts.push(`${sortable} ${sym} ${p.add(v, cast)}${isText ? ' collate "C"' : ''}`);
-    }
-    return parts.join(' and ') || 'true';
+    return scalarCond(t, field, qi(m.column!), m.kind, op, p, t.searchColumns.get(field) ?? null);
   }
 
   async function whereSql<T>(t: TableMap, where: Where<T> | undefined, p: Params): Promise<string> {
@@ -311,19 +341,38 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     const parts: string[] = [];
     for (const [k, c] of Object.entries(where)) {
       if (c === undefined) continue;
+      if (k === '$or' || k === '$and') {
+        const alts: string[] = [];
+        for (const w of c as Where<T>[]) alts.push(`(${await whereSql(t, w, p)})`);
+        parts.push(alts.length ? alts.join(k === '$or' ? ' or ' : ' and ') : k === '$or' ? 'false' : 'true');
+        continue;
+      }
       parts.push(await cond(t, k, c, p));
     }
     return parts.length ? parts.map((x) => `(${x})`).join(' and ') : 'true';
   }
 
-  function orderSql<T>(t: TableMap, q: Query<T> | undefined): string {
+  function orderSql<T>(t: TableMap, q: Query<T> | undefined, p: Params): string {
     const parts: string[] = [];
-    for (const [field, dir] of q?.orderBy ?? []) {
-      const m = t.byField.get(field);
-      if (!m || !m.column || m.pii || m.card) throw new Error(`${t.spec.collection}: cannot order by ${field}`);
-      const col = qi(m.column);
-      const expr = m.kind === 'text' || m.kind === 'enum' ? `${col} collate "C"` : m.kind === 'uuid' ? `${col}::text collate "C"` : col;
-      parts.push(`${expr} ${dir} nulls last`);
+    for (const item of q?.orderBy ?? []) {
+      const o = orderTerm(item);
+      const computed = t.computed[o.field];
+      let expr: string;
+      let kind: string;
+      if (computed) {
+        expr = `(${computed.sql})`;
+        kind = computed.kind;
+      } else {
+        const m = t.byField.get(o.field);
+        if (!m || !m.column || m.pii || m.card) throw new Error(`${t.spec.collection}: cannot order by ${o.field}`);
+        expr = qi(m.column);
+        kind = m.kind;
+      }
+      const isText = kind === 'text' || kind === 'enum';
+      if (o.ifNull !== undefined) expr = `coalesce(${expr}, ${p.add(o.ifNull, isText ? 'text' : (CAST[kind] ?? COMPUTED_CAST[kind]!))})`;
+      if (kind === 'uuid') expr = `${expr}::text collate "C"`;
+      else if (isText) expr = `${expr} collate ${o.collate && o.collate !== 'C' ? COLLATION_SQL[o.collate] : '"C"'}`;
+      parts.push(`${expr} ${o.dir === 'desc' ? 'desc' : 'asc'} nulls ${o.nulls === 'first' ? 'first' : 'last'}`);
     }
     parts.push('_pos');
     return parts.join(', ');
@@ -334,13 +383,16 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
   async function select<T>(t: TableMap, q: Query<T> | undefined): Promise<Rec[]> {
     const p = new Params();
     const withSecret = priv || t.systemOnly;
-    let text = `select ${t.selectList(withSecret)} from ${t.table} where ${await whereSql(t, q?.where, p)} order by ${orderSql(t, q)}`;
+    const fields = q?.fields ? new Set<string>(q.fields) : null;
+    const where = await whereSql(t, q?.where, p);
+    let text = `select ${t.selectList(withSecret, fields)} from ${t.table} where ${where} order by ${orderSql(t, q, p)}`;
     if (q?.limit !== undefined) text += ` limit ${p.add(q.limit, 'bigint')}`;
     if (q?.offset) text += ` offset ${p.add(q.offset, 'bigint')}`;
     const { rows } = await run(text, p.values, t.systemOnly);
-    if (!withSecret && t.hasSecrets() && rows.length && t.key) {
+    const secretCols = [...t.secret].filter((c) => !fields || t.fields.some((m) => fields.has(m.field) && m.columns.includes(c)));
+    if (!withSecret && secretCols.length && rows.length && t.key) {
       // The person's RLS chose the rows; their secret columns are read by the API itself.
-      const cols = [...t.secret].map(qi).join(', ');
+      const cols = secretCols.map(qi).join(', ');
       const keyCast = CAST[t.keyField!.kind]!;
       const { rows: secrets } = await session.privileged((s) =>
         s.query(`select ${qi(t.key!)} as k, ${cols} from ${t.table} where ${qi(t.key!)} = any($1::${keyCast}[])`, [rows.map((r) => r[t.key!])]),
@@ -349,13 +401,21 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
       for (const r of rows) Object.assign(r, byKey.get(String(r[t.key])) ?? {});
     }
     const out: Rec[] = [];
-    for (const r of rows) out.push(await fromRow(t, r));
+    for (const r of rows) out.push(await fromRow(t, r, fields));
     return out;
   }
 
   async function count<T>(t: TableMap, where: Where<T> | undefined): Promise<number> {
     const p = new Params();
     const { rows } = await run(`select count(*)::int as n from ${t.table} where ${await whereSql(t, where, p)}`, p.values, t.systemOnly);
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  async function sum<T>(t: TableMap, field: string, where: Where<T> | undefined): Promise<number> {
+    const m = t.byField.get(field);
+    if (!m || !m.column || m.pii || m.card || !['int', 'bigint', 'float', 'epoch'].includes(m.kind)) throw new Error(`${t.spec.collection}: cannot sum ${field}`);
+    const p = new Params();
+    const { rows } = await run(`select coalesce(sum(${qi(m.column)}), 0) as n from ${t.table} where ${await whereSql(t, where, p)}`, p.values, t.systemOnly);
     return Number(rows[0]?.n ?? 0);
   }
 
@@ -458,12 +518,16 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     return {
       name: t.spec.collection,
       async list(q) {
-        return (await select(t, q)) as T[];
+        return (await select(t, q as Query<T>)) as T[];
+      },
+      async select(fields, q) {
+        return (await select(t, { ...(q as Query<T>), fields })) as never;
       },
       async first(q) {
         return ((await select(t, { ...q, limit: 1 }))[0] as T | undefined) ?? null;
       },
       count: (where) => count(t, where),
+      sum: (field, where) => sum(t, field, where),
       async exists(where) {
         return (await count(t, where)) > 0;
       },
@@ -481,7 +545,7 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
 
   function table<T, K extends PropertyKey>(t: TableMap): Table<T, K> {
     const keyField = t.spec.key!;
-    const byKey = (k: unknown) => ({ [keyField]: k }) as Where<T>;
+    const byKey = (k: unknown) => ({ [keyField]: k }) as Where<T> & Where<T & object>;
     const base = logTable<T>(t);
     return {
       ...base,
@@ -491,7 +555,7 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
       },
       async getMany(keys) {
         if (!keys.length) return [];
-        return (await select(t, { where: { [keyField]: { in: keys } } as Where<T> })) as T[];
+        return (await select(t, { where: { [keyField]: { in: keys } } as never })) as T[];
       },
       async update(k, patch) {
         const row = (await select(t, { where: byKey(k), limit: 1 }))[0];

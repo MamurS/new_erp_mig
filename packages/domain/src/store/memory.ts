@@ -4,7 +4,8 @@
  * change here exactly as it would in Postgres. Array order is storage order (`_pos` in Postgres).
  */
 import type { Db } from './db';
-import { applyQuery, matches, type Query, type Where } from './query';
+import { applyQuery, fieldsOf, matches, pick, type FieldGetter, type Query, type Where } from './query';
+import { computedOf } from './computed';
 import {
   LOG_TABLES,
   NESTED_KEYS,
@@ -37,6 +38,23 @@ function merge<T>(row: T, patch: Partial<T>): T {
 
 interface Slot<T> {
   rows(): T[];
+  /** The whole database (computed fields read other collections). */
+  db(): Db;
+}
+
+/** Reads the fields of a query: computed fields of the collection are prepared once per query. */
+function getterFor(name: string, slot: Slot<unknown>, used: Set<string>): FieldGetter | undefined {
+  const defs = computedOf(name);
+  const fns = new Map<string, (row: unknown) => unknown>();
+  for (const f of used) {
+    const d = defs[f];
+    if (d) fns.set(f, d.mem(slot.db()));
+  }
+  if (!fns.size) return undefined;
+  return (row, field) => {
+    const fn = fns.get(field);
+    return fn ? fn(row) : (row as Record<string, unknown>)[field];
+  };
 }
 
 function logTable<T>(name: string, slot: Slot<T>): LogTable<T> {
@@ -46,20 +64,31 @@ function logTable<T>(name: string, slot: Slot<T>): LogTable<T> {
     if (opts?.at === 'start') arr.unshift(...items);
     else arr.push(...items);
   };
+  const run = (q: Query<T> | undefined) => applyQuery(slot.rows(), q, getterFor(name, slot as Slot<unknown>, fieldsOf(q)));
+  const filter = (where: Where<T> | undefined) => {
+    const get = getterFor(name, slot as Slot<unknown>, fieldsOf({ where } as Query<T>));
+    return slot.rows().filter((r) => matches(r, where, get));
+  };
   return {
     name,
     async list(q?: Query<T>) {
-      return applyQuery(slot.rows(), q).map(copy);
+      return run(q).map((r) => copy(pick(r, q?.fields)));
+    },
+    async select(fields, q) {
+      return run({ ...q, fields } as Query<T>).map((r) => copy(pick(r, fields)));
     },
     async first(q?: Query<T>) {
-      const r = applyQuery(slot.rows(), { ...q, limit: 1 })[0];
-      return r === undefined ? null : copy(r);
+      const r = run({ ...q, limit: 1 })[0];
+      return r === undefined ? null : copy(pick(r, q?.fields));
     },
     async count(where?: Where<T>) {
-      return slot.rows().filter((r) => matches(r, where)).length;
+      return filter(where).length;
+    },
+    async sum(field, where) {
+      return filter(where).reduce((s, r) => s + (Number((r as Record<string, unknown>)[field]) || 0), 0);
     },
     async exists(where: Where<T>) {
-      return slot.rows().some((r) => matches(r, where));
+      return filter(where).length > 0;
     },
     async insert(row: T, opts?: InsertOptions) {
       insertRows([row], opts);
@@ -145,11 +174,11 @@ const NESTED_SLOT: { [N in keyof NestedRows]: (d: Db) => NestedRows[N][] } = {
 export function memoryRepos(db: () => Db): Repos {
   const out: Record<string, unknown> = {};
   const rec = db as unknown as () => Record<string, unknown[]>;
-  for (const [name, key] of Object.entries(TABLE_KEYS)) out[name] = table(name, key, { rows: () => rec()[name]! });
-  for (const name of LOG_TABLES) out[name] = logTable(name, { rows: () => rec()[name]! });
+  for (const [name, key] of Object.entries(TABLE_KEYS)) out[name] = table(name, key, { rows: () => rec()[name]!, db });
+  for (const name of LOG_TABLES) out[name] = logTable(name, { rows: () => rec()[name]!, db });
   for (const [name, key] of Object.entries(NESTED_KEYS)) {
     const get = NESTED_SLOT[name as keyof NestedRows] as (d: Db) => unknown[];
-    out[name] = table(name, key, { rows: () => get(db()) });
+    out[name] = table(name, key, { rows: () => get(db()), db });
   }
   const flags: MapStore<string> = {
     async get(k) {

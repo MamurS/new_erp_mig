@@ -7,6 +7,7 @@
 import type { Db } from './db';
 import type { Facts } from './facts';
 import type { Query, Where } from './query';
+import type { ComputedOf } from './computed';
 
 /** Row type of a collection of the database. */
 export type RowOf<N extends keyof Db> = Db[N] extends readonly (infer R)[] ? R : never;
@@ -16,13 +17,20 @@ export interface InsertOptions {
   at?: 'start' | 'end';
 }
 
-/** Rows without a primary key: append-only logs and link tables. */
-export interface LogTable<T> {
+/**
+ * Rows without a primary key: append-only logs and link tables. `X` — computed fields of the table
+ * (store/computed.ts): queries may filter and order by them, rows do not carry them.
+ */
+export interface LogTable<T, X = object> {
   readonly name: string;
-  list(q?: Query<T>): Promise<T[]>;
-  first(q?: Query<T>): Promise<T | null>;
-  count(where?: Where<T>): Promise<number>;
-  exists(where: Where<T>): Promise<boolean>;
+  list(q?: Query<T, X>): Promise<T[]>;
+  /** Only the given fields of the matching rows (no decryption of identity data the list does not show). */
+  select<F extends keyof T & string>(fields: readonly F[], q?: Omit<Query<T, X>, 'fields'>): Promise<Pick<T, F>[]>;
+  first(q?: Query<T, X>): Promise<T | null>;
+  count(where?: Where<T & X>): Promise<number>;
+  /** Sum of a numeric field over the matching rows (0 when none). */
+  sum(field: keyof T & string, where?: Where<T & X>): Promise<number>;
+  exists(where: Where<T & X>): Promise<boolean>;
   insert(row: T, opts?: InsertOptions): Promise<T>;
   insertMany(rows: readonly T[], opts?: InsertOptions): Promise<void>;
   /** Merges `patch` into every matching row; returns how many changed. */
@@ -34,7 +42,7 @@ export interface LogTable<T> {
 export type KeyValue<T, K extends PropertyKey> = K extends keyof T ? T[K] : never;
 
 /** Rows with a primary key in field `K`. */
-export interface Table<T, K extends PropertyKey = 'id'> extends LogTable<T> {
+export interface Table<T, K extends PropertyKey = 'id', X = object> extends LogTable<T, X> {
   readonly key: K;
   get(key: KeyValue<T, K>): Promise<T | null>;
   getMany(keys: readonly KeyValue<T, K>[]): Promise<T[]>;
@@ -149,7 +157,7 @@ export interface NestedRows {
 }
 export const NESTED_KEYS = { dmsParamChanges: 'id', aiChanges: 'id', aiLogs: 'id', helpQuestions: 'id' } as const satisfies { [N in keyof NestedRows]: keyof NestedRows[N] };
 
-export type Repos = { [N in KeyedName]: Table<RowOf<N>, (typeof TABLE_KEYS)[N]> } & { [N in LogName]: LogTable<RowOf<N>> } & {
+export type Repos = { [N in KeyedName]: Table<RowOf<N>, (typeof TABLE_KEYS)[N], ComputedOf<N>> } & { [N in LogName]: LogTable<RowOf<N>, ComputedOf<N>> } & {
   [N in keyof NestedRows]: Table<NestedRows[N], (typeof NESTED_KEYS)[N]>;
 } & {
   /** AI precheck flags of registry lines: line id → reason. */

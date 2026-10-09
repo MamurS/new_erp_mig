@@ -12,6 +12,7 @@ import { ALL_ROLES, ASSIST_ROLES, CLINIC_ROLES, OPS, STAFF_ROLES, cached, grantE
 import { CLEANUP_STATEMENTS, cleanupFunction } from './cleanup';
 import { authMigrations, storageGcMigration } from './migrationsAuth';
 import { factsMigration } from './facts';
+import { LIST_QUERIES_MIGRATION, listQueriesMigration } from './listQueries';
 
 export interface SqlFile {
   name: string;
@@ -609,6 +610,7 @@ export function buildMigrations(): SqlFile[] {
     ...authMigrations(),
     { name: '20261011000100_app_facts.sql', sql: factsMigration() },
     { name: '20261011000200_storage_gc.sql', sql: storageGcMigration() },
+    { name: LIST_QUERIES_MIGRATION, sql: listQueriesMigration() },
   ];
 }
 
