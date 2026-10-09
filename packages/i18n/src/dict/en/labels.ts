@@ -119,6 +119,8 @@ export const labels: Translation<typeof Ru> = {
   'labels.audit.contract_original': 'Original marked',
   'labels.audit.contract_activated': 'Contract took effect',
   'labels.audit.contract_terminated': 'Contract terminated',
+  'labels.audit.contract_expired': 'Contract expired',
+  'labels.audit.policy_expired': 'Policy expired',
   'labels.audit.payment_recorded': 'Payment recorded',
   'labels.audit.payments_imported': '1C statement imported',
   'labels.audit.payment_allocated': 'Payment matched manually',

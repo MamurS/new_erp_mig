@@ -383,6 +383,16 @@ export interface Db {
   // ---- next steps: tasks between roles («Попросить …», «Запросить у HR») and in-app notifications ----
   tasks: TaskRow[];
   notifications: NotificationRow[];
+  // ---- background jobs: what a job already did, once per subject and occurrence (repo `jobMarks`) ----
+  jobMarks: JobMarkRow[];
+}
+
+/** An action of a background job done for one subject and occurrence (a reminder of one SLA breach, …). */
+export interface JobMarkRow {
+  job: string;
+  subject: string;
+  occurrence: string;
+  at: string;
 }
 
 /** A task for a role (staff) or for the HR of a client (`toRole: 'hr'`, `clientId`). */

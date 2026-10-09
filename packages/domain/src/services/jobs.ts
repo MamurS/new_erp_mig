@@ -4,8 +4,11 @@
  *
  * - `db` jobs are SQL functions of schema `app` that pg_cron calls directly;
  * - `api` jobs need the domain services (deadlines, renewals, activation, age limits): pg_cron puts a row
- *   into `app.job_queue` and the API (step 4) takes it and runs `service` with the system context. The mock
- *   calls the same service functions.
+ *   into `app.job_queue` and the API takes it and runs `service` with the system context (services/jobRunner.ts).
+ *   Every action of a job happens once: `jobMarks` (app.job_marks) or the state it changes guards it.
+ *
+ * The step 3 migration registered the catalog from a frozen copy (store/sql/jobsStep3.ts); a changed `service` or
+ * `description` reaches `app.job_catalog` through the newer migration (store/sql/migrationsJobs.ts).
  *
  * Cron expressions are in UTC (pg_cron's default); Tashkent is UTC+5.
  */
@@ -34,43 +37,43 @@ export const JOBS: readonly JobSpec[] = [
     name: 'sla-reminders',
     cron: '*/10 * * * *',
     runner: 'api',
-    service: 'dashboard.queueFor',
-    description: 'SLA of claims, guarantee letters, appointments and assistance cases: overdue items in the work queues.',
+    service: 'reminders.slaReminders',
+    description: 'SLA of claims, guarantee letters, appointments awaiting the clinic and assistance cases: the responsible people are notified once per breach.',
   },
   {
     name: 'sales-reminders',
     cron: '7 1 * * *',
     runner: 'api',
-    service: 'deals (kpNoAnswerDays, leadIdleDays)',
-    description: 'Commercial offers without an answer and leads without activity (06:07 Tashkent).',
+    service: 'reminders.salesReminders (leadIdleDays, kpNoAnswerDays)',
+    description: 'Leads without activity and commercial offers without an answer: the deal manager is notified once per state (06:07 Tashkent).',
   },
   {
     name: 'renewal-deals',
     cron: '13 1 * * *',
     runner: 'api',
-    service: 'deals.ensureRenewalDeal (renewalLeadDays)',
-    description: 'Renewal deals N days before the policy ends (06:13 Tashkent).',
+    service: 'deals.openRenewalDeals (renewalLeadDays)',
+    description: 'The renewal deal N days before the policy ends, once per policy (06:13 Tashkent).',
   },
   {
     name: 'contract-lifecycle',
     cron: '5 19 * * *',
     runner: 'api',
-    service: 'lifecycle.refreshContract',
-    description: 'Contracts entering into force and policies expiring (00:05 Tashkent).',
+    service: 'lifecycle.contractLifecycle',
+    description: 'Contracts entering into force, contracts and policies expiring after the end date; audited (00:05 Tashkent).',
   },
   {
     name: 'child-age-limit',
     cron: '21 1 * * *',
     runner: 'api',
-    service: 'family.ageLimits',
-    description: 'Children reaching the age limit (maxChildAge / studentMaxAge) (06:21 Tashkent).',
+    service: 'reminders.ageLimitTasks',
+    description: 'Children reaching the age limit (maxChildAge / studentMaxAge): a request to the underwriter once per child and limit (06:21 Tashkent).',
   },
   {
     name: 'cleanup-expired',
     cron: '*/30 * * * *',
     runner: 'db',
     sql: 'select app.job_cleanup_expired()',
-    description: 'Expired sessions, login challenges, attempt counters, lockouts, card tokens, partner tokens and idempotency keys.',
+    description: 'Expired sessions, login challenges, attempt counters, lockouts, card tokens, partner tokens, idempotency keys, test SMS codes and old job marks.',
   },
   {
     name: 'audit-chain-check',

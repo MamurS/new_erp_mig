@@ -445,6 +445,8 @@ export type AuditAction =
   | 'contract_original'
   | 'contract_activated'
   | 'contract_terminated'
+  | 'contract_expired'
+  | 'policy_expired'
   | 'payment_recorded'
   | 'payments_imported'
   | 'payment_allocated'

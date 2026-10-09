@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createSeed } from '@mig/seed/seed';
 import { NESTED_KEYS, LOG_TABLES, TABLE_KEYS } from '../repo';
-import { TABLES } from '../schema';
+import { LATER_ENUM_VALUES, TABLES } from '../schema';
 import { snake } from '../columns';
 import { buildMigrations, MIGRATIONS_DIR } from './migrations';
 import { buildRlsDoc, RLS_DOC_PATH } from './rlsDoc';
@@ -45,6 +45,21 @@ describe('database schema', () => {
     expect(insured.find((m) => m.field === 'phone')?.columns).toEqual(['phone_enc', 'phone_key_ver', 'phone_hmac', 'phone_mask']);
     for (const t of TABLES) for (const c of physicalColumns(t)) expect(['pinfl', 'phone', 'payout_card', 'password']).not.toContain(c.name);
     expect(snake('phone24x7')).toBe('phone24x7');
+  });
+});
+
+describe('migrations only go forward', () => {
+  it('an enum value added later is outside the CHECK of its table and widened by its own migration', () => {
+    const files = buildMigrations();
+    const base = files.find((f) => f.name.endsWith('_schema.sql'))!;
+    for (const x of LATER_ENUM_VALUES) {
+      const later = files.find((f) => f.name === x.migration);
+      expect(later, x.migration).toBeDefined();
+      for (const v of x.values) {
+        expect(base.sql).not.toContain(`'${v}'`);
+        expect(later!.sql).toContain(`'${v}'`);
+      }
+    }
   });
 });
 

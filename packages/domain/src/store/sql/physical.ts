@@ -4,7 +4,7 @@
  * row of the domain to columns and back.
  */
 import { qi, snake, type Column, type ColumnKind } from '../columns';
-import { TABLES, tableOf, type TableSpec } from '../schema';
+import { TABLES, initialEnumValues, tableOf, type TableSpec } from '../schema';
 
 /** Service columns present in every table (not part of the row types). */
 export const META_COLUMNS = ['_pos', '_created_at', '_updated_at', '_created_by'] as const;
@@ -123,7 +123,7 @@ export function physicalColumns(t: TableSpec): PhysicalColumn[] {
       continue;
     }
     const col: PhysicalColumn = { name: base, sqlType: SQL_TYPE[c.kind], notNull };
-    if (c.kind === 'enum' && c.values) col.check = `${qi(base)} in (${c.values.map(lit).join(', ')})`;
+    if (c.kind === 'enum' && c.values) col.check = `${qi(base)} in (${initialEnumValues(t.collection, field, c.values).map(lit).join(', ')})`;
     if (c.ref) {
       const target = tableOf(c.ref);
       col.references = `public.${target.table}(${keyColumn(target)})`;

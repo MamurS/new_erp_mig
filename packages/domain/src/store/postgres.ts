@@ -30,7 +30,7 @@ import { isOp, orderTerm, type ArrayOp, type Op, type Query, type Where } from '
 import { computedOf, type ComputedDef } from './computed';
 import { COLLATION_SQL, searchColumn } from './sql/listQueries';
 import { searchKey } from '../lib/searchNormalize';
-import type { InsertOptions, LogTable, MapStore, Repos, SeqName, SetStore, Table } from './repo';
+import type { InsertOptions, JobMarks, LogTable, MapStore, Repos, SeqName, SetStore, Table } from './repo';
 import { TABLES, listQueriesOf, sequenceName, type TableSpec } from './schema';
 import { fieldMapping, keyColumn, physicalColumns, type FieldMapping } from './sql/physical';
 import { qi } from './columns';
@@ -654,6 +654,14 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     },
   };
 
+  // System-only (no grant to a person's role): the job's repositories are privileged; the mark commits with the action.
+  const jobMarks: JobMarks = {
+    async claim(job, subject, occurrence) {
+      const r = await run(`insert into app.job_marks (job, subject, occurrence) values ($1::text, $2::text, $3::text) on conflict do nothing`, [job, subject, occurrence], true);
+      return r.rowCount > 0;
+    },
+  };
+
   const one: Repos['one'] = {
     async dmsParamValues() {
       const rows = await select(params, {});
@@ -688,7 +696,7 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     },
   };
 
-  const base: Omit<Repos, 'facts'> = { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one' | 'facts'>), aiRebillFlags, statementKeys, seq, one };
+  const base: Omit<Repos, 'facts'> = { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'jobMarks' | 'seq' | 'one' | 'facts'>), aiRebillFlags, statementKeys, jobMarks, seq, one };
   // Narrow facts: the system computes them itself; a person asks the SQL functions of store/sql/facts.ts.
   return { ...base, facts: priv ? genericFacts(base) : pgFacts(session, crypto) };
 }

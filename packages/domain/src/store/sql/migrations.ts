@@ -4,7 +4,6 @@
  * source of truth for the database and a test fails when they differ from this output.
  */
 import { PERMISSIONS } from '../../auth/permissions';
-import { JOBS } from '../../services/jobs';
 import { qi, snake } from '../columns';
 import { REVEAL, SEQUENCES, TABLES, sequenceName, type TableSpec } from '../schema';
 import { META_COLUMNS, LOG_ID, hasSecrets, indexColumn, keyColumn, lit, physicalColumns, readableColumns } from './physical';
@@ -13,6 +12,8 @@ import { CLEANUP_STATEMENTS, cleanupFunction } from './cleanup';
 import { authMigrations, sharedStateMigration, storageGcMigration } from './migrationsAuth';
 import { factsMigration } from './facts';
 import { LIST_QUERIES_MIGRATION, listQueriesMigration } from './listQueries';
+import { JOBS_STEP3 as JOBS } from './jobsStep3';
+import { JOB_ACTIONS_MIGRATION, jobActionsMigration } from './migrationsJobs';
 
 export interface SqlFile {
   name: string;
@@ -612,6 +613,7 @@ export function buildMigrations(): SqlFile[] {
     { name: '20261011000200_storage_gc.sql', sql: storageGcMigration() },
     { name: LIST_QUERIES_MIGRATION, sql: listQueriesMigration() },
     { name: '20261012000200_shared_state.sql', sql: sharedStateMigration() },
+    { name: JOB_ACTIONS_MIGRATION, sql: jobActionsMigration() },
   ];
 }
 
