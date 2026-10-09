@@ -13,11 +13,15 @@ import { DEMO_UNDERWRITER_NAME } from '../auth/demo';
 import { PROGRAM_LABEL } from '../labels';
 import { countsOf, exclusionDropsBelow, groupSize, type GroupCounts } from '../minGroup';
 import { isActiveRequest } from '../requests';
-import { matchesSearch } from '../lib/searchNormalize';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { InsuredRow, PolicyChangeRow } from '../store/db';
+import type { ComputedFields } from '../store/computed';
+import type { OrderBy, Where } from '../store/query';
+import { isFamilyRelation } from '../family';
+
+type InsuredQ = InsuredRow & ComputedFields['insured'];
 import { audit, conflict, DomainError, forbidden, insuredLabel, notFound, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { paginate, q } from './list';
+import { allOf, pageParams, q, searchWhere, tsBound } from './list';
 import { loadParams } from './params';
 import { familyOf } from './family';
 import { employeeOfCompany, hrFamilyList, requestFamilyAdd, toFamilyRequest } from './familyRequests';
@@ -147,57 +151,148 @@ export async function overview(ctx: AuthCtx): Promise<HrOverview> {
   };
 }
 
+/**
+ * GET /hr/employees: the company's employees and its change requests to add one, as one list (requests first on
+ * ties). Both come from SQL already filtered and ordered; the page is the merge of the two ordered streams (each
+ * read up to the end of the page), the total — two counts. Only the rows of the page become views.
+ */
 export async function listEmployees(ctx: AuthCtx, qs: URLSearchParams) {
   const user = requireHr(ctx);
-  // Employees with their families listed by name; family members themselves are in /hr/family.
-  const own = await ctx.repos.insured.list({ where: { clientId: user.companyId, relation: 'employee' } });
   const monthAgo = ctx.now() - 30 * DAY;
-  const requests = (await ctx.repos.policyChanges.list({ where: { clientId: user.companyId, kind: 'add', relation: 'employee' } })).filter(
-    (c) => c.status === 'pending' || (c.status === 'rejected' && parseIso(c.decidedAt ?? c.requestedAt) >= monthAgo),
-  );
-  const rows = async (list: PolicyChangeRow[]) => {
-    const out: HrEmployee[] = [];
-    for (const r of list) out.push(await requestRow(ctx, r));
-    return out;
-  };
-  const views = async (list: InsuredRow[]) => {
-    const out: HrEmployee[] = [];
-    for (const i of list) out.push(await employeeView(ctx, i));
-    return out;
-  };
   const filter = qs.get('filter');
-  let list: HrEmployee[];
-  if (filter === 'requests') {
-    list = [...(await rows(requests)), ...(await views(own)).filter((e) => e.pendingExclusionFrom)];
-  } else {
-    let people = own;
-    if (filter === 'not_in_app') people = people.filter((i) => i.appStatus !== 'active' && i.status === 'active');
-    if (filter === 'recent') people = people.filter((i) => ctx.now() - parseIso(i.addedAt) <= 30 * DAY);
-    if (filter === 'excluded') people = people.filter((i) => i.status === 'excluded');
-    list = await views(people);
-    // Requests are visible in the full list right away (POLICY_SPEC §5.1).
-    if (!filter) list = [...(await rows(requests)), ...list];
-  }
   const term = q(qs);
-  if (term) list = list.filter((i) => matchesSearch(term, i.fullName, i.position));
   const sort = qs.get('sort') ?? 'fullName:asc';
-  const [key, dir] = sort.split(':');
-  const mul = dir === 'desc' ? -1 : 1;
-  const getters: Record<string, (i: HrEmployee) => string | number> = {
-    fullName: (i) => i.fullName,
-    insuredFrom: (i) => i.insuredFrom,
-    family: (i) => i.family.filter((m) => m.status === 'active').length,
-    appStatus: (i) => i.appStatus,
-    addedAt: (i) => i.addedAt,
-  };
-  const get = getters[key ?? ''] ?? getters.fullName!;
-  list = [...list].sort((a, b) => {
-    const va = get(a);
-    const vb = get(b);
-    return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ru')) * mul;
-  });
-  return paginate(list, qs);
+  const [rawKey, dir] = sort.split(':');
+  const key = rawKey && Object.prototype.hasOwnProperty.call(EMPLOYEE_SORT, rawKey) ? (rawKey as keyof typeof EMPLOYEE_SORT) : 'fullName';
+  const desc = dir === 'desc';
+  const s = EMPLOYEE_SORT[key];
+  // Change requests to add an employee: pending ones, and the rejected ones of the last 30 days.
+  const requests: Where<PolicyChangeRow> | null =
+    !filter || filter === 'requests'
+      ? allOf<PolicyChangeRow>(
+          { clientId: user.companyId, kind: 'add', relation: 'employee' },
+          {
+            $or: [
+              { status: 'pending' },
+              { status: 'rejected', $or: [{ decidedAt: { gte: tsBound(monthAgo) } }, { decidedAt: { isNull: true }, requestedAt: { gte: tsBound(monthAgo) } }] },
+            ],
+          },
+          term && searchWhere<PolicyChangeRow>(term, ['fullName', 'position']),
+        )
+      : null;
+  // Employees (their families are in /hr/family); «Заявки» shows the ones with a pending exclusion.
+  const people = allOf<InsuredQ>(
+    { clientId: user.companyId, relation: 'employee' },
+    filter === 'requests' && { pendingExclusion: true },
+    filter === 'not_in_app' && { appStatus: { ne: 'active' }, status: 'active' },
+    filter === 'recent' && { addedAt: { gte: tsBound(ctx.now() - 30 * DAY) } },
+    filter === 'excluded' && { status: 'excluded' },
+    term && searchWhere<InsuredQ>(term, ['fullName', 'position']),
+  );
+  const { page, pageSize } = pageParams(qs);
+  const end = page * pageSize;
+  const order = <T>(field: (keyof T & string) | null, collate?: 'ru'): OrderBy<T> => (field ? [{ field, dir: desc ? 'desc' : 'asc', ...(collate ? { collate } : {}) }] : []);
+  const reqRows = requests ? await ctx.repos.policyChanges.list({ where: requests, orderBy: order<PolicyChangeRow>(s.request, s.collate), limit: end }) : [];
+  const empRows = await ctx.repos.insured.list({ where: people, orderBy: order<InsuredQ>(s.employee, s.collate), limit: end });
+  // The merge: a stable sort of «requests, then employees» by the same key.
+  const valueOf = (x: { kind: 'request'; r: PolicyChangeRow } | { kind: 'employee'; i: InsuredRow }, fam: Map<string, number>): string | number =>
+    x.kind === 'request' ? s.requestValue(x.r) : s.employeeValue(x.i, fam);
+  const cmp = (a: string | number, b: string | number) => (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'ru')) * (desc ? -1 : 1);
+  const fam = key === 'family' ? await familyCounts(ctx, empRows) : new Map<string, number>();
+  const merged: ({ kind: 'request'; r: PolicyChangeRow } | { kind: 'employee'; i: InsuredRow })[] = [];
+  let ri = 0;
+  let ei = 0;
+  while (merged.length < end && (ri < reqRows.length || ei < empRows.length)) {
+    const r = reqRows[ri];
+    const e = empRows[ei];
+    if (r && (!e || cmp(valueOf({ kind: 'request', r }, fam), valueOf({ kind: 'employee', i: e }, fam)) <= 0)) {
+      merged.push({ kind: 'request', r });
+      ri++;
+    } else {
+      merged.push({ kind: 'employee', i: e! });
+      ei++;
+    }
+  }
+  const rowsOfPage = merged.slice((page - 1) * pageSize, end);
+  const views = await employeeViews(
+    ctx,
+    rowsOfPage.flatMap((x) => (x.kind === 'employee' ? [x.i] : [])),
+  );
+  const items: HrEmployee[] = [];
+  for (const x of rowsOfPage) items.push(x.kind === 'request' ? await requestRow(ctx, x.r) : views.get(x.i.id)!);
+  const total = (requests ? await ctx.repos.policyChanges.count(requests) : 0) + (await ctx.repos.insured.count(people));
+  return { items, total, page, pageSize };
 }
+
+/**
+ * employeeView of several employees with the reads batched: their policies, exclusion requests and families once for
+ * all (the same rules: the first pending exclusion, the first exclusion rejected in the last 30 days, the family in
+ * storage order).
+ */
+async function employeeViews(ctx: BaseCtx, people: readonly InsuredRow[]): Promise<Map<string, HrEmployee>> {
+  const out = new Map<string, HrEmployee>();
+  if (!people.length) return out;
+  const r = ctx.repos;
+  const ids = people.map((i) => i.id);
+  const policyIds = [...new Set(people.map((i) => i.policyId))];
+  const programs = new Map((await r.policies.select(['id', 'program'], { where: { id: { in: policyIds } } })).map((p) => [p.id, p.program]));
+  const exclusions = await r.policyChanges.list({ where: { kind: 'exclude', status: { in: ['pending', 'rejected'] }, insuredId: { in: ids } } });
+  const members = await r.insured.list({ where: { principalId: { in: ids } } });
+  const now = ctx.now();
+  for (const i of people) {
+    const pending = exclusions.find((c) => c.insuredId === i.id && c.status === 'pending');
+    const rejected = !pending && i.status === 'active' ? exclusions.find((c) => c.insuredId === i.id && c.status === 'rejected' && now - parseIso(c.decidedAt ?? c.requestedAt) <= 30 * DAY) : undefined;
+    const family =
+      i.relation === 'employee'
+        ? members.filter((m) => m.principalId === i.id).flatMap((m) => (isFamilyRelation(m.relation) ? [{ id: m.id, fullName: m.fullName, relation: m.relation, status: m.status }] : []))
+        : [];
+    out.set(i.id, {
+      id: i.id,
+      fullName: i.fullName,
+      position: i.position,
+      program: programs.get(i.policyId) ?? 'standard',
+      insuredFrom: i.insuredFrom,
+      family,
+      appStatus: i.appStatus,
+      status: i.status,
+      excludedFrom: i.excludedFrom,
+      addedAt: i.addedAt,
+      ...(pending ? { pendingExclusionFrom: pending.effectiveDate } : {}),
+      ...(rejected ? { rejectionReason: rejected.rejectionReason } : {}),
+    });
+  }
+  return out;
+}
+
+/** Active family members of the employees (the «Семья» sort key of the merge; SQL orders by `activeFamily`). */
+async function familyCounts(ctx: BaseCtx, employees: readonly InsuredRow[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!employees.length) return out;
+  const members = await ctx.repos.insured.select(['principalId', 'relation', 'status'], { where: { principalId: { in: employees.map((i) => i.id) }, status: 'active' } });
+  for (const m of members) if (m.principalId && isFamilyRelation(m.relation)) out.set(m.principalId, (out.get(m.principalId) ?? 0) + 1);
+  return out;
+}
+
+/**
+ * Sort keys of the HR list: the field of each source in SQL and the value the merge compares (as the list compared
+ * them: numbers by value, text with localeCompare 'ru'). A request has no family and is «not invited».
+ */
+const EMPLOYEE_SORT = {
+  fullName: { request: 'fullName', employee: 'fullName', collate: 'ru', requestValue: (r: PolicyChangeRow) => r.fullName, employeeValue: (i: InsuredRow) => i.fullName },
+  insuredFrom: { request: 'effectiveDate', employee: 'insuredFrom', collate: undefined, requestValue: (r: PolicyChangeRow) => r.effectiveDate, employeeValue: (i: InsuredRow) => i.insuredFrom },
+  family: { request: null, employee: 'activeFamily', collate: undefined, requestValue: () => 0, employeeValue: (i: InsuredRow, fam: Map<string, number>) => fam.get(i.id) ?? 0 },
+  appStatus: { request: null, employee: 'appStatus', collate: 'ru', requestValue: () => 'not_invited', employeeValue: (i: InsuredRow) => i.appStatus },
+  addedAt: { request: 'requestedAt', employee: 'addedAt', collate: undefined, requestValue: (r: PolicyChangeRow) => r.requestedAt, employeeValue: (i: InsuredRow) => i.addedAt },
+} as const satisfies Record<
+  string,
+  {
+    request: (keyof PolicyChangeRow & string) | null;
+    employee: keyof InsuredQ & string;
+    collate: 'ru' | undefined;
+    requestValue: (r: PolicyChangeRow) => string | number;
+    employeeValue: (i: InsuredRow, fam: Map<string, number>) => string | number;
+  }
+>;
 
 export async function getEmployee(ctx: AuthCtx, id: string): Promise<HrEmployee> {
   const user = requireHr(ctx);

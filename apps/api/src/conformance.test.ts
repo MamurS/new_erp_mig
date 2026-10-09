@@ -189,6 +189,134 @@ describe.skipIf(!hasDb)('conformance: memory ↔ postgres', () => {
     expect(mismatches).toEqual([]);
   });
 
+  it('lists: pages, sorts and filters computed in SQL answer as in memory', async () => {
+    const d = createSeed({ now: T });
+    const day = new Date(T + 5 * 3600_000).toISOString().slice(0, 10);
+    const sorts = (keys: string[]) => keys.flatMap((k) => [`sort=${k}:asc`, `sort=${k}:desc`]);
+    const me = d.insured.find((i) => i.phone === DEMO_INSURED_PHONE)!;
+    const client = d.clients.find((c) => c.id === me.clientId)!;
+    const someName = me.fullName.split(' ')[0]!;
+    const staffEmail = (role: string) => DEMO_STAFF.find((s) => s.role === role)!.email;
+    const cases: [Who, string, string[]][] = [
+      [
+        { email: staffEmail('underwriter') },
+        '/clients',
+        [
+          ...sorts(['name', 'legalForm', 'program', 'insuredCount', 'premium', 'renewalDate', 'lossRatio', 'managerName', 'status', 'unknown']),
+          'page=2&pageSize=10',
+          'page=99',
+          'q=tosh',
+          `q=${encodeURIComponent(client.name.slice(0, 5))}`,
+          `q=${client.inn.slice(2, 7)}`,
+          'status=active,lead',
+          'program=standard,premium&sort=premium:desc',
+          'form=llc,jsc&sort=legalForm:desc',
+          'view=mine',
+          'view=q4',
+          'view=loss',
+          'view=renewals',
+          `managerId=${client.managerId}`,
+          'managerId=not-a-uuid',
+        ],
+      ],
+      [{ email: staffEmail('underwriter') }, `/clients/${client.id}/insured`, [...sorts(['fullName', 'position']), 'page=2&pageSize=5', `q=${encodeURIComponent(someName)}`]],
+      [
+        { email: staffEmail('underwriter') },
+        '/policies',
+        [...sorts(['number', 'clientName', 'legalForm', 'program', 'startDate', 'endDate', 'premium', 'insuredCount', 'status']), 'page=2&pageSize=7', 'q=tosh', 'status=active', 'program=standard,basic', `clientId=${client.id}`, 'form=llc'],
+      ],
+      [
+        { email: staffEmail('operator') },
+        '/insured',
+        [...sorts(['fullName', 'clientName']), 'page=3&pageSize=7', 'page=10000', 'q=ali', `q=${encodeURIComponent('Алиев')}`, `q=${encodeURIComponent("o'g'li")}`, `clientId=${client.id}&sort=fullName:desc&page=2`],
+      ],
+      [
+        { email: staffEmail('operator') },
+        '/appointments',
+        [
+          ...sorts(['startsAt', 'insuredName', 'clinicName', 'specialty', 'status']),
+          'page=2&pageSize=10',
+          'date=today',
+          `date=${day}`,
+          'date=2026-02-30',
+          'date=garbage',
+          'status=requested,confirmed',
+          `clinicId=${d.clinics[0]!.id}`,
+          `insuredId=${me.id}`,
+          'q=ali',
+          'pageSize=all&sort=insuredName:desc',
+        ],
+      ],
+      [{ email: staffEmail('operator') }, '/clinics', [...sorts(['name', 'legalForm', 'district', 'contractUntil']), 'q=med', 'q=toshkent', 'specialty=dentist', 'form=llc,private_enterprise']],
+      [
+        { email: staffEmail('claims_officer') },
+        '/claims',
+        [
+          ...sorts(['number', 'insuredName', 'clientName', 'category', 'amountClaimed', 'status', 'slaDueAt', 'createdAt', 'reserve']),
+          'page=2&pageSize=20',
+          'status=active',
+          'status=new,review&sort=reserve:desc',
+          'category=dental,outpatient',
+          'overdue=1',
+          'overdue=1&status=review',
+          `clientId=${client.id}`,
+          ...['new', 'review', 'opinion', 'above', 'appeals'].map((t) => `tab=${t}`),
+          'flagged=1',
+          'q=ali',
+          `q=${encodeURIComponent(d.claims[0]!.number.slice(-4))}`,
+        ],
+      ],
+      [
+        { email: staffEmail('admin') },
+        '/audit',
+        ['page=2', 'pageSize=7&page=3', 'action=reveal_pii,open_medical', `actorId=${d.staff[0]!.id}`, `from=${day}`, `to=${day}`, 'from=2026-02-30', 'from=2026-99-99', 'from=bad'],
+      ],
+      [{ email: staffEmail('admin') }, '/assistance', [...sorts(['name', 'legalForm', 'insuredCount', 'clientsCount']), 'form=llc']],
+      [{ email: staffEmail('sales_manager') }, '/deals', [...sorts(['number', 'clientName', 'premium']), 'type=new', `ownerId=${d.deals[0]!.ownerId}`]],
+      [{ email: staffEmail('legal') }, '/contracts', ['q=dms', `q=${encodeURIComponent(client.name.slice(0, 4).toLowerCase())}`, 'status=active,draft', `clientId=${client.id}`, ...sorts(['number', 'total'])]],
+      [{ email: staffEmail('legal') }, '/endorsements', ['', `contractId=${d.contracts[0]!.id}`]],
+      [{ email: staffEmail('legal') }, '/change-requests', ['status=pending', `contractId=${d.contracts[0]!.id}`]],
+      [{ email: staffEmail('doctor_expert') }, '/guarantees', ['', 'scope=all', 'scope=all&status=approved,expired', `clinicId=${d.clinics[0]!.id}&scope=all`]],
+      [{ email: staffEmail('accountant') }, '/registries', ['', 'status=submitted']],
+      [{ email: staffEmail('claims_officer') }, '/rebills', ['', 'status=submitted,paid']],
+      [{ email: staffEmail('doctor_expert') }, '/qa', ['status=all', 'status=done', `assistanceId=${d.assistUsers[0]!.assistanceId}&status=all`]],
+      [{ email: staffEmail('underwriter') }, '/policy-changes', ['status=pending', `clientId=${client.id}`]],
+      [{ email: staffEmail('underwriter') }, '/tasks', ['status=open', 'status=done']],
+      [{ email: staffEmail('sales_manager') }, `/assistance/${d.assistUsers[0]!.assistanceId}/cases`, ['', 'status=open,resolved', 'type=complaint']],
+      [
+        { email: DEMO_HR.email },
+        '/hr/employees',
+        [...sorts(['fullName', 'insuredFrom', 'family', 'appStatus', 'addedAt']), 'page=2&pageSize=5', 'page=3&pageSize=5&sort=family:desc', ...['requests', 'not_in_app', 'recent', 'excluded', 'other'].map((f) => `filter=${f}`), 'q=ali', `q=${encodeURIComponent(someName)}`],
+      ],
+      [
+        { email: DEMO_ASSIST_USERS[0]!.email },
+        '/assist/insured',
+        ['', 'q=ali', `q=${encodeURIComponent(someName)}`, `q=${encodeURIComponent(d.policies[0]!.number)}`, `q=${encodeURIComponent(DEMO_INSURED_PHONE)}`, 'q=90'],
+      ],
+      [{ email: DEMO_ASSIST_USERS[0]!.email }, '/assist/cases', ['', 'sort=number:asc', 'sort=createdAt:desc', 'status=open', 'type=complaint']],
+      [{ email: DEMO_ASSIST_USERS[0]!.email }, '/assist/appointments', ['view=requests', 'view=all']],
+      [{ email: DEMO_ASSIST_USERS[0]!.email }, '/assist/chat', ['']],
+      [{ email: DEMO_ASSIST_USERS[0]!.email }, '/assist/guarantees', ['', 'status=approved,expired']],
+      // (A month of visits is left out: a clinic sees the patient of a closed visit only by name through RLS — «—» —
+      // which the memory store, without RLS, does not imitate; the same with the list as it was.)
+      [{ email: DEMO_CLINIC_USERS[0]!.email }, '/clinic/visits', ['', 'scope=active', 'period=2026-13']],
+      [{ email: DEMO_CLINIC_USERS[0]!.email }, '/clinic/appointments', ['view=requests', `view=schedule&from=${day}&days=7`, 'view=schedule&from=bad']],
+      [{ email: DEMO_CLINIC_USERS[0]!.email }, '/clinic/guarantees', ['', 'status=approved']],
+      [{ email: DEMO_CLINIC_USERS[0]!.email }, '/clinic/registries', ['']],
+    ];
+    const sessions = new Map<string, string>();
+    for (const [who, path, queries] of cases) {
+      const key = JSON.stringify(who);
+      if (!sessions.has(key)) sessions.set(key, await session(who));
+      const sid = sessions.get(key)!;
+      for (const qstr of queries) {
+        const pair = await both(`lists ${key}`, 'GET', qstr ? `${path}?${qstr}` : path, { mem: { session: sid }, pg: { session: sid } });
+        expect(pair.pg.status, `${path}?${qstr}: ${pair.pg.text.slice(0, 200)}`).toBeLessThan(500);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
   it('writes: flows of every portal', async () => {
     const d = createSeed({ now: T });
     const today = new Date(T + 5 * 3600_000).toISOString().slice(0, 10);

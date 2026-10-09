@@ -17,6 +17,8 @@
 | `20261010000100_auth_sessions.sql` | BFF-сессии `public.app_sessions` и шаги входа `public.app_auth_challenges` (RLS без политик — только сервисная роль); очередь синхронизации с Supabase Auth `app.identity_sync` и триггеры на `staff`, `hr_users`, `clinic_users`, `assist_users`, `insured`; Custom Access Token Hook `public.custom_access_token_hook`; `app.job_cleanup_expired()` с очисткой BFF-сессий, шагов входа и выполненных заданий |
 | `20261010000200_files_storage.sql` | у `files` колонки `bucket`, `object_name`, `sha256`, `size_bytes`; приватные бакеты Storage `receipts`, `contract-scans`, `guarantee-attachments`, `documents`, `help-assets` (если схема Storage есть; иначе их создаёт API при старте) |
 
+| `20261012000100_list_queries.sql` | списки в SQL (раздел «Списки в SQL» ниже): коллации `app.ru`, `app.legal_name`; функции `app.search_key`, `app.claim_reserve`, `app.list_client_insured_counts`, `app.assist_policy_ids`; сгенерированные колонки ключей поиска `*_sk` с trigram-индексами; составные индексы списков; политика `insured_select` для ассистанса через `app.assist_policy_ids()` |
+
 Генератор миграций части 2 — `packages/domain/src/store/sql/migrationsAuth.ts` (те же `node scripts/gen-schema.mjs` и
 тест сверки).
 
@@ -87,6 +89,35 @@
   actor_name, actor_id, actor_role, at, id, pos)`; у пользователя автор берётся из claims; `pos` — порядок хранения
   (`-nextval('app.pos_seq')` для записи «в начало»). Работать в READ COMMITTED (цепочка хэшей).
 
+## Списки в SQL (List queries)
+
+Списки отдают страницу, порядок и итог из базы: сервисы строят запрос репозитория
+(`packages/domain/src/store/query.ts`), Postgres-репозиторий превращает его в `WHERE … ORDER BY … LIMIT … OFFSET` и
+`count(*)`, репозиторий в памяти выполняет тот же запрос в JS с тем же результатом (тест соответствия).
+
+- **Порядок.** Термы `{ field, dir, nulls, collate, ifNull }`; строки без значения — в конце в обоих направлениях
+  (`nulls last`), если не сказано иное; последний ключ всегда `_pos` (`ties: 'desc'` — `_pos desc`).
+- **Сравнение текста.** `collate: 'ru'` — `app.ru` (ICU `ru`, как `localeCompare(…, 'ru')`), `collate: 'legal'` —
+  `app.legal_name` (ICU `en-u-ks-level1-ka-shifted`, как `legalNameCollator`: регистр, кавычки и пунктуация не
+  различаются), по умолчанию — `"C"` (кодовые точки). Обе ICU-коллации недетерминированные: равные для ICU строки —
+  ничья, её решает `_pos`.
+- **Поиск.** `{ field: { search: term } }` — подстрока ключа `searchKey` (транслитерация, апострофы, фонетика):
+  колонка `<колонка>_sk text generated always as (app.search_key(<колонка>)) stored`, GIN-индекс `gin_trgm_ops`,
+  условие `LIKE '%ключ%'` (ключ запроса считает API той же функцией JS). Поля с ключами — `LIST_QUERIES` в
+  `schema.ts`. Зашифрованные ПДн (ПИНФЛ, телефон) ищутся только по равенству через `*_hmac`.
+- **Вычисляемые поля** (`store/computed.ts`) — производные значения для фильтров и сортировок: SQL-выражение над
+  строкой (подзапросы идут под RLS читающего; то, что RLS скрыл бы, — через узкие факты `app.*`) и двойник для памяти.
+  Резерв убытка — `app.claim_reserve(history, reserve_history, amount_claimed, amount_approved)`.
+- **Индексы списков** — `LIST_QUERIES[…].indexes`: (колонки фильтра, колонка сортировки с её коллацией, `_pos`),
+  имя `<таблица>_<колонки>_list_idx`.
+- **Страница** — `pageOf()` в `services/list.ts`: `LIMIT pageSize OFFSET (page-1)·pageSize`; `count(*)` не нужен, если
+  страница неполная. Партнёрский API — курсор (смещение) и одна строка сверх страницы.
+- **RLS ассистанса на `insured`** — `policy_id = any((select app.assist_policy_ids())::uuid[])`: массив полисов с
+  доступом (`app.assist_access`) считается один раз на запрос, а не на каждую строку ростера.
+- Новое поле в списке: если по нему ищут — добавить его в `LIST_QUERIES[…].search`; если сортируют по производному
+  значению — вычисляемое поле с двумя определениями и тест в `apps/api/src/listQueries.test.ts`, если у него есть
+  SQL-функция-двойник.
+
 ## Фоновые задачи
 
 Расписания — `packages/domain/src/services/jobs.ts` (UTC). `db`-задачи pg_cron выполняет сам;
@@ -94,6 +125,11 @@
 сервисы — `packages/domain/src/services/jobRunner.ts`; строки берутся `for update skip locked`).
 
 ## Проверка планов
+
+Списки после переноса в SQL (раздел выше): страница застрахованных (`/insured`, 1 547 строк) — `LIMIT 25` по индексу
+`insured_full_name_ru_list_idx` за единицы миллисекунд вместо чтения и расшифровки
+всей таблицы в API; ростер ассистанса — один массив полисов на запрос вместо `app.assist_access` на строку
+(~300–450 мс → десятки мс). Замеры по спискам — `docs/backend/LOAD.md`, «Списки в SQL».
 
 На объёмах seed (1547 застрахованных, 626 убытков) списки под RLS используют индексы: убытки по статусу —
 `claims_status_idx`, застрахованные компании — `insured_client_id_idx`, список HR через `insured_masked` —

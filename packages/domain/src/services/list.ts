@@ -3,6 +3,9 @@
  * (`URLSearchParams`, or anything with `searchParams` such as a URL), not an HTTP request.
  */
 import { LEGAL_FORMS, isLegalForm, legalNameCollator, type LegalFormCode } from '../config/legalForms';
+import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
+import type { Collation, OrderBy, Where } from '../store/query';
+import type { LogTable } from '../store/repo';
 
 export type Qs = URLSearchParams | { searchParams: URLSearchParams };
 /** The search parameters of a query string or a URL. */
@@ -68,6 +71,70 @@ export function filterLegalForm<T>(items: T[], qs: Qs, get: (x: T) => LegalFormC
     const f = get(x);
     return !!f && forms.has(f);
   });
+}
+
+// ---------------------------------------------------------------- lists in SQL (store/query.ts)
+
+/** A sort key of a list: the field (or computed field) it orders by and how text compares. */
+export interface SortKey<T> {
+  field: keyof T & string;
+  /** `ru` for the keys `sortBy` compared with localeCompare, `legal` for names of legal entities. */
+  collate?: Collation;
+  ifNull?: string | number;
+}
+
+/**
+ * `?sort=premium:desc` over an allow-list of keys, as an order of the repositories (the SQL twin of `sortBy`: rows
+ * without a value last, ties in storage order). An unknown key: no order (storage order), as `sortBy` left the rows.
+ */
+export function sortParam<T>(qs: Qs, allowed: Record<string, SortKey<T>>, fallback?: string): OrderBy<T> {
+  const raw = sp(qs).get('sort') ?? fallback ?? '';
+  const [key = '', dir = 'asc'] = raw.split(':');
+  const k = Object.prototype.hasOwnProperty.call(allowed, key) ? allowed[key] : undefined;
+  return k ? [{ ...k, dir: dir === 'desc' ? 'desc' : 'asc' }] : [];
+}
+
+/** `matchesSearch(term, …fields)` as a condition: any of the fields matches the search term. */
+export function searchWhere<T>(term: string, fields: readonly (keyof T & string)[]): Where<T> {
+  return { $or: fields.map((f) => ({ [f]: { search: term } }) as Where<T>) } as unknown as Where<T>;
+}
+
+/** `?form=llc,jsc` as a condition on a legal-form field (no condition when the filter is off). */
+export function legalFormWhere<T>(qs: Qs, field: keyof T & string, key = 'form'): Where<T> {
+  const forms = legalFormsParam(qs, key);
+  return forms ? ({ [field]: { in: [...forms] } } as Where<T>) : ({} as Where<T>);
+}
+
+/** Conditions that must all hold (empty ones dropped). */
+export function allOf<T>(...ws: (Where<T> | null | undefined | false | '')[]): Where<T> {
+  const list = ws.filter((w): w is Where<T> => !!w && Object.keys(w).length > 0);
+  return list.length === 0 ? ({} as Where<T>) : list.length === 1 ? list[0]! : ({ $and: list } as unknown as Where<T>);
+}
+
+/** Matches no row (a filter value that can never match). */
+export const NOTHING = { $or: [] } as const;
+
+/**
+ * A moment as the bound of a `ts` column compared in SQL and in memory alike: `parseIso(x) >= ms` and
+ * `parseIso(x) < ms` (whole seconds stored) hold exactly when `x >= bound` and `x < bound`.
+ */
+export const tsBound = (ms: number): string => tzIso(Math.ceil(ms / 1000) * 1000);
+/** The bound for `parseIso(x) > ms` and `parseIso(x) <= ms` (`x > bound`, `x <= bound`). */
+export const tsFloor = (ms: number): string => tzIso(Math.floor(ms / 1000) * 1000);
+
+/** `[from, to)` of the Tashkent day `day` as bounds of a `ts` column; null when `day` is not a real day. */
+export function dayRange(day: string): { gte: string; lt: string } | null {
+  const from = parseIso(day);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(from) || isoDay(from) !== day) return null;
+  return { gte: tzIso(from), lt: tzIso(from + DAY) };
+}
+
+/** One page of a repository query: `?page=&pageSize=` as LIMIT/OFFSET, the total as COUNT. */
+export async function pageOf<T, X>(repo: LogTable<T, X>, qs: Qs, q: { where?: Where<T & X>; orderBy?: OrderBy<T & X> }): Promise<{ items: T[]; total: number; page: number; pageSize: number }> {
+  const { page, pageSize } = pageParams(qs);
+  const items = await repo.list({ ...q, limit: pageSize, offset: (page - 1) * pageSize });
+  const total = items.length < pageSize && (page === 1 || items.length > 0) ? (page - 1) * pageSize + items.length : await repo.count(q.where);
+  return { items, total, page, pageSize };
 }
 
 /** `?q=` normalised for substring search. */

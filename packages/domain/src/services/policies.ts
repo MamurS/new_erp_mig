@@ -14,6 +14,7 @@ import { contractPricing, pricingProblem } from '../pricing';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ChangeRequestRow, ClientRow, HrUserRow, PolicyChangeRow } from '../store/db';
+import { allOf } from './list';
 import { audit, conflict, DomainError, errorOf, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { currentAssistance, notifyAssistance } from './assistance';
@@ -102,10 +103,13 @@ export async function listPolicyChanges(ctx: AuthCtx, qs: URLSearchParams): Prom
   const status = qs.get('status');
   const clientId = qs.get('clientId');
   const policyId = qs.get('policyId');
-  return (await ctx.repos.policyChanges.list())
-    .filter((c) => (!status || status.split(',').includes(c.status)) && (!clientId || c.clientId === clientId) && (!policyId || c.policyId === policyId))
-    .sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1))
-    .map(toPolicyChange);
+  return (
+    await ctx.repos.policyChanges.list({
+      where: allOf<PolicyChangeRow>(status && { status: { in: status.split(',') as PolicyChangeRow['status'][] } }, clientId && { clientId }, policyId && { policyId }),
+      orderBy: [['requestedAt', 'desc']],
+      ties: 'desc',
+    })
+  ).map(toPolicyChange);
 }
 
 export async function decidePolicyChanges(ctx: AuthCtx, body: unknown): Promise<PolicyChangeDecisionResult> {

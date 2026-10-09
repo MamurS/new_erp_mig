@@ -11,20 +11,24 @@ import { declineAppointmentSchema, staffClaimSchema, transitionSchema } from '@m
 import { can } from '../auth/permissions';
 import { claimTransitions } from '../claims';
 import { isStaffRole } from '../labels';
-import { matchesSearch } from '../lib/searchNormalize';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { ATTACHMENT_MAX_FILES, type UploadedFile } from '../lib/uploads';
 import type { ClaimRow, FileRow } from '../store/db';
+import type { ComputedFields } from '../store/computed';
+import type { Where } from '../store/query';
+
+type ClaimQ = ClaimRow & ComputedFields['claims'];
+/** dashboard.ts ACTIVE_CLAIM: claims still being handled. */
+const ACTIVE_STATUSES = ['new', 'review', 'medical_review'] as const;
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { isUuid, paginate, q, sortBy } from './list';
+import { allOf, dayRange, isUuid, NOTHING, pageOf, q, searchWhere, sortParam, tsBound } from './list';
 import { loadParams } from './params';
 import { findInsured } from './insured';
 import { toClaimDetail, toClaimListItem } from './views';
 import { currentReserve, refreshFlags } from './settlement';
 import { currentAssistance } from './assistance';
 import { FILED_CLAIM_SEQ_FLOOR, nextClaimNumber } from './clinic';
-import { isOverdue } from './dashboard';
 import { checkAttachment } from './uploads';
 
 async function findClaim(ctx: BaseCtx, id: string): Promise<ClaimRow> {
@@ -43,42 +47,42 @@ function requireStaffClaims(user: SessionUser): void {
 export async function listClaims(ctx: AuthCtx, qs: URLSearchParams) {
   requireStaffClaims(ctx.user);
   const now = ctx.now();
-  let list = await ctx.repos.claims.list();
   const status = qs.get('status');
-  if (status === 'active') list = list.filter((c) => ['new', 'review', 'medical_review'].includes(c.status));
-  else if (status) list = list.filter((c) => status.split(',').includes(c.status));
   const category = qs.get('category');
-  if (category) list = list.filter((c) => category.split(',').includes(c.category));
-  if (qs.get('overdue') === '1') list = list.filter((c) => isOverdue(c, now));
   const clientId = qs.get('clientId');
-  if (clientId) list = list.filter((c) => c.clientId === clientId);
-  // Tabs of the claims officer's workplace (LIFECYCLE_SPEC §13).
   const tab = qs.get('tab');
-  if (tab === 'new') list = list.filter((c) => c.status === 'new' && c.handledBy !== 'assistance');
-  else if (tab === 'review') list = list.filter((c) => c.status === 'review' && !c.pendingDecision);
-  else if (tab === 'opinion') list = list.filter((c) => c.status === 'medical_review');
-  else if (tab === 'above') list = list.filter((c) => !!c.pendingDecision);
-  else if (tab === 'appeals') list = list.filter((c) => c.appeal?.status === 'open');
-  if (qs.get('flagged') === '1') list = list.filter((c) => c.flags?.some((f) => !f.dismissed));
   const term = q(qs);
-  if (term) list = list.filter((c) => matchesSearch(term, c.number, c.insuredName, c.clientName, c.externalNumber));
-  const sorted = sortBy(
-    list,
+  const where = allOf<ClaimQ>(
+    status === 'active' ? { status: { in: [...ACTIVE_STATUSES] } } : status && { status: { in: status.split(',') as ClaimRow['status'][] } },
+    category && { category: { in: category.split(',') as ClaimRow['category'][] } },
+    // dashboard.ts isOverdue: active and past the SLA.
+    qs.get('overdue') === '1' && { status: { in: [...ACTIVE_STATUSES] }, slaDueAt: { lt: tsBound(now) } },
+    clientId && { clientId },
+    // Tabs of the claims officer's workplace (LIFECYCLE_SPEC §13).
+    tab === 'new' && { status: 'new', handledBy: { ne: 'assistance' } },
+    tab === 'review' && { status: 'review', hasPendingDecision: false },
+    tab === 'opinion' && { status: 'medical_review' },
+    tab === 'above' && { hasPendingDecision: true },
+    tab === 'appeals' && { appealOpen: true },
+    qs.get('flagged') === '1' && { flagged: true },
+    term && searchWhere<ClaimQ>(term, ['number', 'insuredName', 'clientName', 'externalNumber']),
+  );
+  const orderBy = sortParam<ClaimQ>(
     qs,
     {
-      number: (c) => c.number,
-      insuredName: (c) => c.insuredName,
-      clientName: (c) => c.clientName,
-      category: (c) => c.category,
-      amountClaimed: (c) => c.amountClaimed,
-      status: (c) => c.status,
-      slaDueAt: (c) => parseIso(c.slaDueAt),
-      createdAt: (c) => parseIso(c.createdAt),
-      reserve: (c) => currentReserve(c),
+      number: { field: 'number', collate: 'ru' },
+      insuredName: { field: 'insuredName', collate: 'ru' },
+      clientName: { field: 'clientName', collate: 'ru' },
+      category: { field: 'category', collate: 'ru' },
+      amountClaimed: { field: 'amountClaimed' },
+      status: { field: 'status', collate: 'ru' },
+      slaDueAt: { field: 'slaDueAt' },
+      createdAt: { field: 'createdAt' },
+      reserve: { field: 'reserve' },
     },
     'createdAt:desc',
   );
-  const page = paginate(sorted, qs);
+  const page = await pageOf(ctx.repos.claims, qs, { where, orderBy });
   return { ...page, items: page.items.map(toClaimListItem) };
 }
 
@@ -246,34 +250,40 @@ export async function listAppointments(ctx: AuthCtx, qs: URLSearchParams) {
   const { user } = ctx;
   requirePermission(user, 'appointments.read');
   if (!isStaffRole(user.role)) throw notFound();
-  let list: Appointment[] = await ctx.repos.appointments.list();
   const status = qs.get('status');
-  if (status) list = list.filter((a) => status.split(',').includes(a.status));
   const date = qs.get('date');
-  if (date) {
-    const day = date === 'today' ? isoDay(ctx.now()) : date;
-    list = list.filter((a) => isoDay(parseIso(a.startsAt)) === day);
-  }
   const clinicId = qs.get('clinicId');
-  if (clinicId) list = list.filter((a) => a.clinicId === clinicId);
   const insuredId = qs.get('insuredId');
-  if (insuredId) list = list.filter((a) => a.insuredId === insuredId);
   const term = q(qs);
-  if (term) list = list.filter((a) => matchesSearch(term, a.insuredName, a.clinicName));
-  const sorted = sortBy(
-    list,
+  const where = allOf<Appointment>(
+    status && { status: { in: status.split(',') as Appointment['status'][] } },
+    date && dayWhere(date === 'today' ? isoDay(ctx.now()) : date),
+    clinicId && { clinicId },
+    insuredId && { insuredId },
+    term && searchWhere<Appointment>(term, ['insuredName', 'clinicName']),
+  );
+  const orderBy = sortParam<Appointment>(
     qs,
     {
-      startsAt: (a) => parseIso(a.startsAt),
-      insuredName: (a) => a.insuredName,
-      clinicName: (a) => a.clinicName,
-      specialty: (a) => a.specialty,
-      status: (a) => a.status,
+      startsAt: { field: 'startsAt' },
+      insuredName: { field: 'insuredName', collate: 'ru' },
+      clinicName: { field: 'clinicName', collate: 'ru' },
+      specialty: { field: 'specialty', collate: 'ru' },
+      status: { field: 'status', collate: 'ru' },
     },
     'startsAt:asc',
   );
-  if (qs.get('pageSize') === 'all') return { items: sorted, total: sorted.length, page: 1, pageSize: sorted.length };
-  return paginate(sorted, qs);
+  if (qs.get('pageSize') === 'all') {
+    const items = await ctx.repos.appointments.list({ where, orderBy });
+    return { items, total: items.length, page: 1, pageSize: items.length };
+  }
+  return pageOf(ctx.repos.appointments, qs, { where, orderBy });
+}
+
+/** Appointments starting on the Tashkent day `day` (`isoDay(startsAt) === day`); a value that is not a day matches none. */
+function dayWhere(day: string): Where<Appointment> {
+  const range = dayRange(day);
+  return range ? { startsAt: range } : (NOTHING as Where<Appointment>);
 }
 
 async function staffAppointment(ctx: AuthCtx, id: string): Promise<Appointment> {

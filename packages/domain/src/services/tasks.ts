@@ -23,6 +23,8 @@ import { addWorkdays, canRemind, isActiveRequest, isDueSoon, isOverdue } from '.
 import { randomId } from '../lib/random';
 import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
+import type { Where } from '../store/query';
+import { allOf } from './list';
 import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { dealContract } from './lifecycle';
@@ -253,13 +255,6 @@ export function taskView(t: TaskRow, viewerId: string, now = Date.now()): WorkTa
 const target = (type: TaskSubjectType) => (type === 'client' ? 'client' : type);
 
 /** Requests a person works on: their own and their role's unassigned ones (MIG), their company's (HR). */
-async function tasksFor(ctx: AuthCtx): Promise<TaskRow[]> {
-  const { user } = ctx;
-  if (user.role === 'hr') return ctx.repos.tasks.list({ where: { toRole: 'hr', clientId: user.companyId } });
-  if (isStaffRole(user.role)) return (await ctx.repos.tasks.list({ where: { toRole: user.role } })).filter((t) => !t.assigneeId || t.assigneeId === user.id);
-  return [];
-}
-
 /** The request the person may act on as executor (404 for anyone else: it «does not exist» for them). */
 async function executorTask(ctx: AuthCtx, id: string): Promise<TaskRow> {
   const task = await ctx.repos.tasks.get(id);
@@ -306,10 +301,13 @@ export async function requestHr(ctx: AuthCtx, body: unknown): Promise<WorkTask> 
 export async function listTasks(ctx: AuthCtx, status: string | null): Promise<WorkTask[]> {
   requirePermission(ctx.user, 'tasks.receive', { companyId: ctx.user.companyId });
   await sweepDeadlines(ctx);
-  return (await tasksFor(ctx))
-    .filter((t) => !status || (status === 'open' ? isActiveRequest(t.status) : t.status === status))
-    .slice(0, 100)
-    .map((t) => taskView(t, ctx.user.id, ctx.now()));
+  const { user } = ctx;
+  // The role's pool and the person's own requests (HR: the company's), the status filter and the first 100 in SQL.
+  const mine: Where<TaskRow> | null =
+    user.role === 'hr' ? { toRole: 'hr', clientId: user.companyId } : isStaffRole(user.role) ? { toRole: user.role, $or: [{ assigneeId: { isNull: true } }, { assigneeId: user.id }] } : null;
+  if (!mine) return [];
+  const byStatus: Where<TaskRow> | null = !status ? null : status === 'open' ? { status: { in: ['open', 'in_progress'] } } : { status: status as TaskRow['status'] };
+  return (await ctx.repos.tasks.list({ where: allOf<TaskRow>(mine, byStatus), limit: 100 })).map((t) => taskView(t, user.id, ctx.now()));
 }
 
 /** «Мои запросы»: what the person asked for, all statuses, the newest first. */

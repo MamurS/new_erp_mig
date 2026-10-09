@@ -78,8 +78,8 @@ export async function toInsured(ctx: BaseCtx, i: InsuredRow, P?: ParamsView): Pr
   };
 }
 
-export async function toInsuredListItem(ctx: BaseCtx, i: InsuredRow, user: SessionUser): Promise<InsuredListItem> {
-  const principal = await principalOf(ctx, i);
+export async function toInsuredListItem(ctx: BaseCtx, i: InsuredRow, user: SessionUser, principals?: ReadonlyMap<string, Pick<InsuredRow, 'id' | 'fullName'>>): Promise<InsuredListItem> {
+  const principal = principals ? (i.principalId ? principals.get(i.principalId) : undefined) : await principalOf(ctx, i);
   const base: InsuredListItem = {
     id: i.id,
     fullName: i.fullName,
@@ -98,6 +98,20 @@ export async function toInsuredListItem(ctx: BaseCtx, i: InsuredRow, user: Sessi
     base.birthDateMasked = maskBirthDate(i.birthDate);
   }
   return base;
+}
+
+/** List rows of a page: the employees of family members are read once for the page. */
+export async function toInsuredListItems(ctx: BaseCtx, rows: readonly InsuredRow[], user: SessionUser): Promise<InsuredListItem[]> {
+  const principals = await principalsOf(ctx, rows);
+  const out: InsuredListItem[] = [];
+  for (const i of rows) out.push(await toInsuredListItem(ctx, i, user, principals));
+  return out;
+}
+
+/** The employees (id and name) of the family members among `rows`, as the person's RLS shows them. */
+export async function principalsOf(ctx: BaseCtx, rows: readonly Pick<InsuredRow, 'principalId'>[]): Promise<Map<string, Pick<InsuredRow, 'id' | 'fullName'>>> {
+  const ids = [...new Set(rows.map((i) => i.principalId).filter((x): x is string => !!x))];
+  return new Map((ids.length ? await ctx.repos.insured.select(['id', 'fullName'], { where: { id: { in: ids } } }) : []).map((p) => [p.id, p]));
 }
 
 export async function toInsuredDetail(ctx: BaseCtx, i: InsuredRow, P?: ParamsView): Promise<InsuredDetail> {

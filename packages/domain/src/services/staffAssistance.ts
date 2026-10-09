@@ -14,7 +14,10 @@ import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { AssistanceCaseRow } from '../store/db';
 import { audit, conflict, DomainError, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx, requireStaff } from './kernel';
-import { byLegalForm, byLegalName, filterLegalForm, isUuid, sortBy, type Qs } from './list';
+import { allOf, isUuid, legalFormWhere, sortBy, sortParam, type Qs } from './list';
+import type { ComputedFields } from '../store/computed';
+
+type AssistanceQ = AssistanceCompany & ComputedFields['assistances'];
 import { assistanceName, assistanceOf, claimsFromRebill, ensureQaSample, feeOf, kpiOf, notifyAssistance, rebillStatusAfterReview, syncAssistance } from './assistance';
 import { toRebillSummary, toRebillView } from './assistPortal';
 import { revokeKey, toClientView } from './partnerIntegration';
@@ -87,15 +90,12 @@ async function reportByAssistance(ctx: BaseCtx): Promise<AssistanceReportRow[]> 
 export async function listAssistances(ctx: AuthCtx, qs: Qs): Promise<AssistanceListItem[]> {
   requireStaff(ctx);
   const now = ctx.now();
+  // The filter and the sort by name or form in SQL; the figures of each company (its KPI and counts) are computed
+  // per company, so a sort by a figure is done here — over the few assistance companies MIG has a contract with.
+  const orderBy = sortParam<AssistanceQ>(qs, { name: { field: 'name', collate: 'legal' }, legalForm: { field: 'legalFormOrd' } });
   const items: AssistanceListItem[] = [];
-  for (const a of await ctx.repos.assistances.list()) items.push(await listItem(ctx, a, now));
-  const rows = filterLegalForm(items, qs, (a) => a.legalForm);
-  return sortBy(rows, qs, {
-    name: byLegalName((a) => a.name),
-    legalForm: byLegalForm((a) => a.legalForm),
-    insuredCount: (a) => a.insuredCount,
-    clientsCount: (a) => a.clientsCount,
-  });
+  for (const a of await ctx.repos.assistances.list({ where: legalFormWhere<AssistanceQ>(qs, 'legalForm'), orderBy })) items.push(await listItem(ctx, a, now));
+  return orderBy.length ? items : sortBy(items, qs, { insuredCount: (a) => a.insuredCount, clientsCount: (a) => a.clientsCount });
 }
 
 /** `initialPassword`: the demo password of the first admin (the mock signs in with it). */
@@ -167,11 +167,14 @@ export async function listCases(ctx: AuthCtx, id: UUID, qs: URLSearchParams): Pr
   const a = await assistanceOf(ctx, id);
   const status = qs.get('status');
   const type = qs.get('type');
-  return (await ctx.repos.cases.list({ where: { assistanceId: a.id } }))
-    .filter((c) => (!status || status.split(',').includes(c.status)) && (!type || c.type === type))
-    .sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1))
-    .slice(0, 200)
-    .map(caseOut);
+  return (
+    await ctx.repos.cases.list({
+      where: allOf<AssistanceCaseRow>({ assistanceId: a.id }, status && { status: { in: status.split(',') as AssistanceCaseRow['status'][] } }, type && { type: type as AssistanceCaseRow['type'] }),
+      orderBy: [['createdAt', 'desc']],
+      ties: 'desc',
+      limit: 200,
+    })
+  ).map(caseOut);
 }
 
 export async function resolveComplaint(ctx: AuthCtx, id: UUID, caseId: UUID, body: unknown): Promise<AssistanceCase> {
@@ -265,9 +268,11 @@ export async function listRebills(ctx: AuthCtx, qs: URLSearchParams): Promise<Re
   requireRebillReader(user);
   const status = qs.get('status');
   const assistanceId = qs.get('assistanceId');
-  const list = (await ctx.repos.rebills.list({ where: { status: { ne: 'draft' } } }))
-    .filter((b) => (!status || status.split(',').includes(b.status)) && (!assistanceId || b.assistanceId === assistanceId))
-    .sort((a, b) => ((a.submittedAt ?? '') < (b.submittedAt ?? '') ? 1 : -1));
+  const list = await ctx.repos.rebills.list({
+    where: allOf<Rebill>({ status: { ne: 'draft' } }, status && { status: { in: status.split(',') as Rebill['status'][] } }, assistanceId && { assistanceId }),
+    orderBy: [{ field: 'submittedAt', dir: 'desc', nulls: 'last' }],
+    ties: 'desc',
+  });
   const out: RebillSummary[] = [];
   for (const b of list) out.push(await toRebillSummary(ctx, b));
   return out;
@@ -339,9 +344,11 @@ export async function qaQueue(ctx: AuthCtx, qs: URLSearchParams): Promise<QaSamp
   await ensureQaSample(ctx);
   const status = qs.get('status') ?? 'pending';
   const assistanceId = qs.get('assistanceId');
-  const list = (await ctx.repos.qaSamples.list())
-    .filter((s) => (status === 'all' || (status === 'pending' ? !s.verdict : !!s.verdict)) && (!assistanceId || s.assistanceId === assistanceId))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const list = await ctx.repos.qaSamples.list({
+    where: allOf<QaSample>(status !== 'all' && { verdict: { isNull: status === 'pending' } }, assistanceId && { assistanceId }),
+    orderBy: [['createdAt', 'desc']],
+    ties: 'desc',
+  });
   const out: QaSampleView[] = [];
   for (const s of list) out.push(await qaView(ctx, s));
   return out;

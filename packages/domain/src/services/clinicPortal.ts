@@ -6,7 +6,7 @@
 import Papa from 'papaparse';
 import type { z } from 'zod';
 import { msg, tm } from '@mig/i18n';
-import type { Appointment, CoverageCheckResult, PriceListItem, Registry, RegistryLine, Slot, UUID } from '@mig/contracts';
+import type { Appointment, CoverageCheckResult, PriceListItem, Registry, RegistryLine, Slot, UUID, Visit } from '@mig/contracts';
 import type {
   ClinicDocuments,
   ClinicOverview,
@@ -57,7 +57,8 @@ import {
   type ClinicActor,
 } from './clinic';
 import { audit, conflict, DomainError, forbidden, notFound, requirePermission, validate, type AuthCtx, type BaseCtx } from './kernel';
-import { isUuid } from './list';
+import { allOf, dayRange, isUuid, NOTHING, tsBound, tsFloor } from './list';
+import type { Where } from '../store/query';
 import { checkAttachment } from './uploads';
 import type { UploadedFile as LibUploadedFile } from '../lib/uploads';
 import { loadParams } from './params';
@@ -186,14 +187,24 @@ export async function visits(ctx: AuthCtx, qs: URLSearchParams): Promise<ClinicV
   const scope = qs.get('scope');
   const periodParam = qs.get('period');
   const now = ctx.now();
-  let list = await ctx.repos.visits.list({ where: { clinicId: actor.clinicId } });
-  if (scope === 'active') list = list.filter((v) => parseIso(v.expiresAt) > now);
-  else if (periodParam && /^\d{4}-\d{2}$/.test(periodParam)) list = list.filter((v) => v.openedAt.startsWith(periodParam));
-  else list = list.filter((v) => isoDay(parseIso(v.openedAt)) === isoDay(now));
-  const people = new Map((await ctx.repos.insured.getMany([...new Set(list.map((v) => v.insuredId))])).map((i) => [i.id, i]));
-  return list
-    .sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1))
-    .map((v) => ({ id: v.id, insuredName: people.get(v.insuredId)?.fullName ?? '—', method: v.method, openedAt: v.openedAt, expiresAt: v.expiresAt }));
+  const when: Where<Visit> =
+    scope === 'active'
+      ? { expiresAt: { gt: tsFloor(now) } }
+      : periodParam && /^\d{4}-\d{2}$/.test(periodParam)
+        ? monthWhere(periodParam)
+        : { openedAt: dayRange(isoDay(now))! };
+  const list = await ctx.repos.visits.list({ where: allOf<Visit>({ clinicId: actor.clinicId }, when), orderBy: [['openedAt', 'desc']], ties: 'desc' });
+  const ids = [...new Set(list.map((v) => v.insuredId))];
+  const people = new Map((ids.length ? await ctx.repos.insured.select(['id', 'fullName'], { where: { id: { in: ids } } }) : []).map((i) => [i.id, i]));
+  return list.map((v) => ({ id: v.id, insuredName: people.get(v.insuredId)?.fullName ?? '—', method: v.method, openedAt: v.openedAt, expiresAt: v.expiresAt }));
+}
+
+/** Visits opened in the month `YYYY-MM` (Tashkent time: `openedAt` starts with it); a month that does not exist matches none. */
+function monthWhere(period: string): Where<Visit> {
+  const [y, m] = period.split('-').map(Number) as [number, number];
+  if (m < 1 || m > 12) return NOTHING as Where<Visit>;
+  const next = m === 12 ? `${String(y + 1).padStart(4, '0')}-01` : `${String(y).padStart(4, '0')}-${String(m + 1).padStart(2, '0')}`;
+  return { openedAt: { gte: `${period}-01T00:00:00+05:00`, lt: `${next}-01T00:00:00+05:00` } };
 }
 
 export async function visitCoverage(ctx: AuthCtx, id: UUID): Promise<CoverageCheckResult> {
@@ -206,16 +217,19 @@ export async function visitCoverage(ctx: AuthCtx, id: UUID): Promise<CoverageChe
 export async function appointments(ctx: AuthCtx, qs: URLSearchParams): Promise<(Appointment & { overdue: boolean })[]> {
   const actor = requireClinic(ctx, 'clinic.appointments.manage');
   const view = qs.get('view') ?? 'requests';
-  let list = await ctx.repos.appointments.list({ where: { clinicId: actor.clinicId } });
+  let list: Appointment[];
   if (view === 'requests') {
-    list = list.filter((a) => a.status === 'requested').sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    list = await ctx.repos.appointments.list({ where: { clinicId: actor.clinicId, status: 'requested' }, orderBy: [['createdAt', 'asc']] });
   } else {
     const from = qs.get('from') ?? isoDay(ctx.now());
     const days = Math.min(14, Math.max(1, Number(qs.get('days')) || 1));
     const fromMs = parseIso(from);
-    list = list
-      .filter((a) => (a.status === 'confirmed' || a.status === 'requested' || a.status === 'completed') && parseIso(a.startsAt) >= fromMs && parseIso(a.startsAt) < fromMs + days * DAY)
-      .sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1));
+    list = Number.isNaN(fromMs)
+      ? []
+      : await ctx.repos.appointments.list({
+          where: { clinicId: actor.clinicId, status: { in: ['confirmed', 'requested', 'completed'] }, startsAt: { gte: tsBound(fromMs), lt: tsBound(fromMs + days * DAY) } },
+          orderBy: [['startsAt', 'asc']],
+        });
   }
   const P = await loadParams(ctx);
   const now = ctx.now();
@@ -263,9 +277,11 @@ export async function answerAppointment(ctx: AuthCtx, kind: AppointmentAnswer, i
 export async function listGuarantees(ctx: AuthCtx, status: string | null): Promise<GuaranteeView[]> {
   const actor = requireClinic(ctx, 'guarantees.read');
   const P = await loadParams(ctx);
-  const list = (await ctx.repos.guarantees.list({ where: { clinicId: actor.clinicId } }))
-    .filter((g) => !status || status.split(',').includes(g.status))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const list = await ctx.repos.guarantees.list({
+    where: allOf<GuaranteeRow>({ clinicId: actor.clinicId }, status && { status: { in: status.split(',') as GuaranteeRow['status'][] } }),
+    orderBy: [['createdAt', 'desc']],
+    ties: 'desc',
+  });
   const out: GuaranteeView[] = [];
   for (const g of list) out.push(await toGuaranteeView(ctx, g, P));
   return out;
@@ -314,9 +330,15 @@ export async function priceList(ctx: AuthCtx, visitId: string | null): Promise<P
 
 export async function listRegistries(ctx: AuthCtx): Promise<RegistrySummary[]> {
   const actor = requireClinic(ctx, 'registries.submit');
-  const list = (await ctx.repos.registries.list({ where: { clinicId: actor.clinicId } })).sort((a, b) =>
-    a.period === b.period ? ((a.submittedAt ?? '9') < (b.submittedAt ?? '9') ? 1 : -1) : a.period < b.period ? 1 : -1,
-  );
+  // The newest period first; within a period drafts (not submitted yet) first, then the latest submitted.
+  const list = await ctx.repos.registries.list({
+    where: { clinicId: actor.clinicId },
+    orderBy: [
+      ['period', 'desc'],
+      { field: 'submittedAt', dir: 'desc', nulls: 'first' },
+    ],
+    ties: 'desc',
+  });
   const out: RegistrySummary[] = [];
   for (const r of list) out.push(await toRegistrySummary(ctx, r));
   return out;

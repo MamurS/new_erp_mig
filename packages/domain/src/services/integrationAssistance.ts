@@ -32,7 +32,9 @@ import { loadParams, type ParamsView } from './params';
 import { assistanceOf, authorityLimitOf, linesOf, requireAssistanceScope, requireInsuredOf, rosterOf, subStatus, subTotals, upsertDraftRebill } from './assistance';
 import { respondToAppointment, toGuaranteeLetter } from './clinic';
 import { appointmentsOf, changeCase, decideAsAssistance, decideLine, disputeRebillLine, lettersOf, openCase, overdueAppointmentOf, recordPayment, registriesOf, submitRebill, type AppointmentAnswerKind } from './assistPortal';
-import { ApiProblem, apiNotFound, page, toIntegrationAppointment, type ApiCallCtx } from './integrationKit';
+import { ApiProblem, apiNotFound, page, pageWindow, toIntegrationAppointment, windowPage, type ApiCallCtx } from './integrationKit';
+import { NOTHING, tsBound } from './list';
+import type { Where } from '../store/query';
 import { limitsFor } from './views';
 
 /** The assistance of the key (it must exist) and the actor of its audit entries. */
@@ -80,15 +82,21 @@ export async function roster(c: ApiCallCtx) {
   const { assistanceId } = await partner(c);
   const q = validate(rosterQuery, Object.fromEntries(c.query));
   const since = q.updatedSince ? parseIso(q.updatedSince) : 0;
-  const policies = new Map((await c.repos.policies.list()).map((p) => [p.id, p]));
   const P = await loadParams(c);
-  const people = (await rosterOf(c, assistanceId))
-    // Exclusions change a person after they were added: the latest change counts.
-    .map((i) => ({ i, updatedAt: i.updatedAt ?? i.addedAt }))
-    .filter((x) => parseIso(x.updatedAt) >= since)
-    .sort((a, b) => (a.i.fullName < b.i.fullName ? -1 : 1));
+  // Exclusions change a person after they were added: the latest change counts (`updatedAt ?? addedAt >= since`).
+  const changed: Where<InsuredRow> | undefined = Number.isNaN(since)
+    ? (NOTHING as Where<InsuredRow>)
+    : since
+      ? { $or: [{ updatedAt: { gte: tsBound(since) } }, { updatedAt: { isNull: true }, addedAt: { gte: tsBound(since) } }] }
+      : undefined;
+  const rows = await rosterOf(c, assistanceId, { where: changed, orderBy: [['fullName', 'asc']], ...pageWindow(q.cursor, q.limit) });
   // Limits are computed for the requested page only (the rest of the item does not depend on them).
-  const { items: pageOf, nextCursor } = page(people, q.cursor, q.limit);
+  const { items: pageOf, nextCursor } = windowPage(
+    rows.map((i) => ({ i, updatedAt: i.updatedAt ?? i.addedAt })),
+    q.cursor,
+    q.limit,
+  );
+  const policies = new Map((await c.repos.policies.getMany([...new Set(pageOf.map((x) => x.i.policyId))])).map((p) => [p.id, p]));
   const items = [];
   for (const { i, updatedAt } of pageOf) {
     const p = policies.get(i.policyId)!;
@@ -141,10 +149,7 @@ export async function updateCase(c: ApiCallCtx) {
 export async function listAppointments(c: ApiCallCtx) {
   const { assistanceId } = await partner(c);
   const q = validate(assistAppointmentQuery, Object.fromEntries(c.query));
-  const items = (await appointmentsOf(c, assistanceId))
-    .filter((a) => !q.status || a.status === q.status)
-    .sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1))
-    .map(toIntegrationAppointment);
+  const items = (await appointmentsOf(c, assistanceId, { where: q.status ? { status: q.status } : {}, orderBy: [['startsAt', 'asc']] })).map(toIntegrationAppointment);
   return { body: page(items, q.cursor, q.limit) };
 }
 
@@ -163,7 +168,8 @@ export async function answerAppointment(c: ApiCallCtx, kind: AppointmentAnswerKi
 export async function listGuarantees(c: ApiCallCtx) {
   const { assistanceId } = await partner(c);
   const q = validate(guaranteeQuery, Object.fromEntries(c.query));
-  const list = (await lettersOf(c, assistanceId)).filter((g) => !q.status || g.status === q.status).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  // The status after the lazy expiry (lettersOf refreshes every letter it reads).
+  const list = (await lettersOf(c, assistanceId, { orderBy: [['createdAt', 'asc']] })).filter((g) => !q.status || g.status === q.status);
   const items = [];
   for (const g of list) items.push(guaranteeLetter.parse(await toGuaranteeLetter(c, g)));
   return { body: page(items, q.cursor, q.limit) };
@@ -193,10 +199,8 @@ export async function decideGuarantee(c: ApiCallCtx) {
 export async function listRegistries(c: ApiCallCtx) {
   const { assistanceId } = await partner(c);
   const q = validate(registryQuery, Object.fromEntries(c.query));
-  const items = (await registriesOf(c, assistanceId))
-    .map((r) => subRegistry(r, assistanceId))
-    .filter((r) => !q.status || r.status === q.status)
-    .sort((a, b) => ((a.submittedAt ?? '') < (b.submittedAt ?? '') ? -1 : 1));
+  // The status of the company's part of a registry depends on its lines.
+  const items = (await registriesOf(c, assistanceId, { orderBy: [{ field: 'submittedAt', nulls: 'first' }] })).map((r) => subRegistry(r, assistanceId)).filter((r) => !q.status || r.status === q.status);
   return { body: page(items, q.cursor, q.limit) };
 }
 

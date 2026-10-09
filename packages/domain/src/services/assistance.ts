@@ -28,6 +28,8 @@ import { randomId } from '../lib/random';
 import { DAY, tzIso } from '../lib/time';
 import type { ClaimRow, InsuredRow } from '../store/db';
 import type { Routing, VisitPatient } from '../store/facts';
+import type { Query, Where } from '../store/query';
+import { allOf } from './list';
 import { conflict, DomainError, notFound, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, priceListOf } from './clinic';
@@ -113,10 +115,10 @@ export async function requireInsuredOf(ctx: BaseCtx, assistanceId: UUID, insured
   return { i, access };
 }
 
-/** People whose policy is assigned to the assistance today. */
-export async function rosterOf(ctx: BaseCtx, assistanceId: UUID): Promise<InsuredRow[]> {
+/** Policies assigned to the assistance today (the roster's policies). */
+export async function rosterPolicyIds(ctx: BaseCtx, assistanceId: UUID): Promise<UUID[]> {
   // The company's own assignments covering today (an assistance company reads only its own), confirmed by the routing
-  // of each policy (the latest assignment of any company wins); the persons under the reader's RLS.
+  // of each policy (the latest assignment of any company wins).
   const r = ctx.repos;
   const today = todayIso(ctx);
   const own = await r.assignments.list({ where: { assistanceId } });
@@ -125,8 +127,14 @@ export async function rosterOf(ctx: BaseCtx, assistanceId: UUID): Promise<Insure
     if (assistanceOn(own, policyId, today) !== assistanceId) continue;
     if (assistanceOn(await routingOf(ctx, policyId), policyId, today) === assistanceId) policies.push(policyId);
   }
+  return policies;
+}
+
+/** People whose policy is assigned to the assistance today, under the reader's RLS (`q`: more conditions, an order, a page). */
+export async function rosterOf(ctx: BaseCtx, assistanceId: UUID, q: Query<InsuredRow> = {}): Promise<InsuredRow[]> {
+  const policies = await rosterPolicyIds(ctx, assistanceId);
   if (!policies.length) return [];
-  return r.insured.list({ where: { policyId: { in: policies } } });
+  return ctx.repos.insured.list({ ...q, where: allOf<InsuredRow>({ policyId: { in: policies } }, q.where as Where<InsuredRow> | undefined) });
 }
 
 // ---------------------------------------------------------------- payers & price lists
