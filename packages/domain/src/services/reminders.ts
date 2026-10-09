@@ -78,6 +78,16 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
   const now = ctx.now();
   const P = await loadParams(ctx);
   const out = { claims: 0, appeals: 0, guarantees: 0, appointments: 0, cases: 0 };
+  // The recipients of a queue, read once per run.
+  const cache = new Map<string, Promise<UUID[]>>();
+  const once = (key: string, read: () => Promise<UUID[]>) => {
+    let ids = cache.get(key);
+    if (!ids) cache.set(key, (ids = read()));
+    return ids;
+  };
+  const ofRole = (role: StaffRole) => once(role, () => staffOfRole(ctx, role));
+  const ofAssistance = (id: UUID, roles: readonly AssistanceRole[]) =>
+    once(`${id}:${roles.join()}`, () => assistUsersOf(ctx, id, roles));
 
   // Claims MIG settles (the assistance settles its own outside MIG's queues).
   const claims = (await ctx.repos.claims.list()).filter((c) => c.handledBy !== 'assistance');
@@ -90,7 +100,7 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
       const sent = await notifyOnce(
         ctx,
         { job: SLA, subject: `claim:${c.id}`, occurrence: `${c.slaDueAt}:${role}` },
-        [{ ids: await staffOfRole(ctx, role), link: `/staff/claims/${c.id}` }],
+        [{ ids: await ofRole(role), link: `/staff/claims/${c.id}` }],
         text,
       );
       if (sent) out.claims += 1;
@@ -101,7 +111,7 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
     const sent = await notifyOnce(
       ctx,
       { job: SLA, subject: `appeal:${c.id}`, occurrence: c.appeal.at },
-      [{ ids: await staffOfRole(ctx, 'claims_officer'), link: `/staff/claims/${c.id}` }],
+      [{ ids: await ofRole('claims_officer'), link: `/staff/claims/${c.id}` }],
       msg('next.notify.slaAppeal', { number: c.number }),
     );
     if (sent) out.appeals += 1;
@@ -113,10 +123,10 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
     const byAssistance = !!g.assistanceId && !g.escalated;
     const to = byAssistance
       ? {
-          ids: await assistUsersOf(ctx, g.assistanceId!, ['asst_doctor']),
+          ids: await ofAssistance(g.assistanceId!, ['asst_doctor']),
           link: `/assist/guarantees/${g.id}`,
         }
-      : { ids: await staffOfRole(ctx, 'doctor_expert'), link: '/staff/guarantees' };
+      : { ids: await ofRole('doctor_expert'), link: '/staff/guarantees' };
     const sent = await notifyOnce(
       ctx,
       {
@@ -137,10 +147,11 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
     const assignments = await ctx.repos.assignments.list();
     const clinics = new Map((await ctx.repos.clinics.list()).map((c) => [c.id, c]));
     const people = new Map(
-      (await ctx.repos.insured.getMany([...new Set(requested.map((a) => a.insuredId))])).map((i) => [
-        i.id,
-        i,
-      ]),
+      (
+        await ctx.repos.insured.select(['id', 'policyId'], {
+          where: { id: { in: [...new Set(requested.map((a) => a.insuredId))] } },
+        })
+      ).map((i) => [i.id, i]),
     );
     for (const a of requested) {
       // A request whose time has passed is no longer a reminder (the queues drop it an hour after).
@@ -149,8 +160,8 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
       const person = people.get(a.insuredId);
       const assistanceId = person ? assistanceOn(assignments, person.policyId, today) : null;
       const to = assistanceId
-        ? { ids: await assistUsersOf(ctx, assistanceId, ['asst_operator']), link: '/assist/appointments' }
-        : { ids: await staffOfRole(ctx, 'operator'), link: '/staff/appointments?status=requested' };
+        ? { ids: await ofAssistance(assistanceId, ['asst_operator']), link: '/assist/appointments' }
+        : { ids: await ofRole('operator'), link: '/staff/appointments?status=requested' };
       const sent = await notifyOnce(
         ctx,
         { job: SLA, subject: `appointment:${a.id}`, occurrence: a.createdAt },
@@ -162,7 +173,7 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
   }
 
   // Assistance cases past their SLA: the company's operators and doctors, and MIG's operators who watch the SLA.
-  const migOperators = await staffOfRole(ctx, 'operator');
+  const migOperators = await ofRole('operator');
   for (const c of await ctx.repos.cases.list({ where: { status: { ne: 'resolved' } } })) {
     if (parseIso(c.slaDueAt) >= now) continue;
     const sent = await notifyOnce(
@@ -170,7 +181,7 @@ export async function slaReminders(ctx: BaseCtx): Promise<Record<string, number>
       { job: SLA, subject: `case:${c.id}`, occurrence: c.slaDueAt },
       [
         {
-          ids: await assistUsersOf(ctx, c.assistanceId, ['asst_operator', 'asst_doctor']),
+          ids: await ofAssistance(c.assistanceId, ['asst_operator', 'asst_doctor']),
           link: `/assist/cases/${c.id}`,
         },
         { ids: migOperators, link: `/staff/assistance/${c.assistanceId}` },
