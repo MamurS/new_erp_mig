@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 
 import { GoTrue } from './auth/gotrue';
 import { createPool } from './db';
+import { supabaseStorage } from './files/storage';
 import { readEnv } from './env';
 import { identitySync } from './jobs/identity';
 import { createWorker } from './jobs/worker';
@@ -23,7 +24,8 @@ const identity = identitySync({
   inviteRedirectTo: env.inviteRedirectTo,
   log: serverLog,
 });
-const worker = createWorker({ pool, crypto: env.crypto, identity, log: serverLog });
+const storage = supabaseStorage({ url: env.supabaseUrl, serviceKey: env.serviceKey });
+const worker = createWorker({ pool, crypto: env.crypto, identity, storage, log: serverLog });
 worker.start();
 // The worker's own timer is unref'd (inside the API it must not keep the process alive); alone, the process has
 // nothing else to wait for and would exit at once: this handle keeps it running until a signal. It also refreshes

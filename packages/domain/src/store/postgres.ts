@@ -537,9 +537,9 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
   }
 
   /**
-   * `files.get` brings the bytes from the blob store (only there: lists never load bytes). A removed row leaves
-   * its object behind (the request may still roll back); such objects are never served, since every download
-   * goes through a row the person may see.
+   * `files.get` brings the bytes from the blob store (only there: lists never load bytes). A removed row queues
+   * its object for deletion (trigger → `app.storage_gc`, deleted by the API worker once the transaction commits);
+   * until then it is never served, since every download goes through a row the person may see.
    */
   function filesWithBlobs(files: Table<Rec, PropertyKey>, blobs: BlobStore): Table<Rec, PropertyKey> {
     return {

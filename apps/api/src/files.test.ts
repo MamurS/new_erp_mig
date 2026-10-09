@@ -15,6 +15,7 @@ import { devAesPiiCrypto } from '@mig/domain/store/piiAes';
 import { DEMO_HR, DEMO_INSURED_PHONE, DEMO_SPOUSE_PHONE, DEMO_STAFF } from '@mig/seed/credentials';
 import { createSeed } from '@mig/seed/seed';
 import { buildApp } from './app';
+import { storageGc } from './files/gc';
 import { peekJwt } from './auth/jwt';
 import { SESSION_COOKIE } from './auth/cookies';
 import { serverDeps } from './deps';
@@ -270,6 +271,53 @@ describe.skipIf(!hasDb || !hasSupabase)('files: uploads, Storage, downloads and 
       expect((await api.call('GET', `/files/${fileId}/link`, { session: op })).status).toBe(200);
       expect((await api.call('GET', `/files/${fileId}/link`)).status).toBe(401);
       expect((await api.call('GET', '/files/not-a-uuid/link', { session: op })).status).toBe(404);
+    });
+  });
+  describe('Storage objects follow their rows (the collector)', () => {
+    const logs: { msg: string; data?: Record<string, unknown> }[] = [];
+    const gc = () => storageGc({ pool, storage: stack.storage, log: (msg, data) => logs.push({ msg, ...(data ? { data } : {}) }) });
+
+    it('a removed file row queues its object; the next pass deletes it from Storage', async () => {
+      const owner = await signIn({ phone: DEMO_INSURED_PHONE });
+      const r = await api.call('POST', '/me/claims', {
+        session: owner,
+        raw: await receiptForm([{ bytes: jpegWithExif(11), name: 'gc.jpg', type: 'image/jpeg' }]),
+      });
+      const fileId = (await attachmentOf((r.body as { id: string }).id)).id;
+      expect(await stack.storage.get('receipts', fileId)).not.toBeNull();
+      await pool.query(`delete from public.files where id = $1`, [fileId]);
+      const queued = await pool.query(`select bucket, object_name::text as name from app.storage_gc where object_name = $1::uuid`, [fileId]);
+      expect(queued.rows).toEqual([{ bucket: 'receipts', name: fileId }]);
+      const pass = await gc().drain();
+      expect(pass.removed).toBeGreaterThanOrEqual(1);
+      expect(await stack.storage.get('receipts', fileId)).toBeNull();
+      expect((await pool.query(`select 1 from app.storage_gc where object_name = $1::uuid`, [fileId])).rowCount).toBe(0);
+      // Running it again does nothing (idempotent).
+      expect((await gc().drain()).removed).toBe(0);
+    });
+
+    it('an object still pointed at by a row is kept even if queued', async () => {
+      const live = (await pool.query(`select bucket, object_name::text as name from public.files where object_name is not null limit 1`)).rows[0] as { bucket: string; name: string };
+      await pool.query(`insert into app.storage_gc (bucket, object_name) values ($1, $2::uuid)`, [live.bucket, live.name]);
+      await gc().drain();
+      expect(await stack.storage.get(live.bucket as 'receipts', live.name)).not.toBeNull();
+    });
+
+    it('the daily sweep deletes orphans older than a day and reports it; young objects and objects with rows stay', async () => {
+      const orphan = '0000aaaa-0000-4000-8000-00000000a001';
+      const young = '0000aaaa-0000-4000-8000-00000000a002';
+      await stack.storage.put('documents', orphan, new TextEncoder().encode('%PDF-1.4 orphan'), 'application/pdf');
+      await stack.storage.put('documents', young, new TextEncoder().encode('%PDF-1.4 young'), 'application/pdf');
+      await pool.query(`update storage.objects set created_at = now() - interval '2 days' where bucket_id = 'documents' and name = $1`, [orphan]);
+      logs.length = 0;
+      const res = await gc().sweepOrphans();
+      expect(res.removed).toBeGreaterThanOrEqual(1);
+      expect(await stack.storage.get('documents', orphan)).toBeNull();
+      expect(await stack.storage.get('documents', young)).not.toBeNull();
+      expect(logs.find((l) => l.msg === 'storage gc: orphan sweep')?.data).toMatchObject({ removed: res.removed });
+      const rowed = (await pool.query(`select bucket, object_name::text as name from public.files where object_name is not null limit 1`)).rows[0] as { bucket: string; name: string };
+      expect(await stack.storage.get(rowed.bucket as 'receipts', rowed.name)).not.toBeNull();
+      await stack.storage.remove('documents', young);
     });
   });
 });

@@ -97,6 +97,6 @@ export async function assemble(
   app.addHook('onClose', async () => {
     await side.end();
   });
-  const worker = env.worker === 'inline' ? createWorker({ pool, crypto: env.crypto, identity, log, now }) : null;
+  const worker = env.worker === 'inline' ? createWorker({ pool, crypto: env.crypto, identity, storage, log, now }) : null;
   return { app, pool, storage, identity, sms, worker, demo };
 }
