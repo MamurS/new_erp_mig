@@ -23,9 +23,10 @@ import { addWorkdays, canRemind, isActiveRequest, isDueSoon, isOverdue } from '.
 import { randomId } from '../lib/random';
 import { isoDay } from '../lib/time';
 import type { NotificationRow, TaskRow } from '../store/db';
-import { asSystem, audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
+import { audit, conflict, forbidden, notFound, requirePermission, tzIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
 import { dealContract } from './lifecycle';
+import { completeTasks } from './system/consequences';
 
 export interface SubjectRefs {
   clientId: string;
@@ -246,26 +247,6 @@ export function taskView(t: TaskRow, viewerId: string, now = Date.now()): WorkTa
   return { ...rest, overdue: isOverdue(t, now), byMe: t.createdById === viewerId };
 }
 
-/**
- * The action was done: open requests about it (for this deal, contract or client) close and their authors
- * are notified. Returns how many were closed.
- */
-export async function completeTasks(person: BaseCtx, actions: TaskAction | readonly TaskAction[], refs: { dealId?: string; contractId?: string; clientId?: string }, byName: string): Promise<number> {
-  // A step of the pipeline done closes the requests about it, whoever did it (requests of other roles too).
-  const ctx = asSystem(person, 'a step done closes the open requests about it (requests of any role)');
-  const list = typeof actions === 'string' ? [actions] : actions;
-  let n = 0;
-  for (const task of await ctx.repos.tasks.list({ where: { status: { in: ['open', 'in_progress'] }, action: { in: list } } })) {
-    const about =
-      (refs.contractId && (task.contractId === refs.contractId || (task.subjectType === 'contract' && task.subjectId === refs.contractId))) ||
-      (refs.dealId && task.subjectType === 'deal' && task.subjectId === refs.dealId) ||
-      (refs.clientId && task.clientId === refs.clientId && task.subjectType === 'client');
-    if (!about) continue;
-    await closeTask(ctx, task, byName);
-    n += 1;
-  }
-  return n;
-}
 
 // ---------- endpoints ----------
 
@@ -422,3 +403,5 @@ export async function pipeline(ctx: AuthCtx, clientId: string): Promise<ClientPi
   // The deal, the contract and the invoice of a client the person reads (app.fact_client_pipeline).
   return ctx.repos.facts.clientPipeline(clientId);
 }
+
+export { completeTasks };

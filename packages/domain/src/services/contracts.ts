@@ -40,7 +40,7 @@ import type { ChangeRequestRow } from '../store/db';
 import { byLegalForm, byLegalName, filterLegalForm, q as searchTerm, sortBy } from './list';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
-import { saveInvoiceStatus } from './clocks';
+import { saveInvoiceStatus } from './system/clocks';
 import { assistanceName } from './assistance';
 import { personFor } from './family';
 import { afterSigning, checklistInput, clientRow, contractOf, createEndorsement, dealEvent, dealKp, dealOf, endorsementLines, endorsementSummary, latestQuote, moveDeal, pendingRequests, refreshContract, refreshInvoice, signatories, toChangeRequest } from './lifecycle';

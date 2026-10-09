@@ -22,18 +22,17 @@ import {
   feeFor,
   LIMIT_OF_SERVICE,
   payerOn,
-  qaSample,
-  rebillChecks,
-} from '../assistance';
+  rebillChecks } from '../assistance';
 import { registryStatusAfterReview } from '../clinics';
 import { randomId } from '../lib/random';
-import { DAY, isoDay, tzIso } from '../lib/time';
+import { DAY, tzIso } from '../lib/time';
 import type { ClaimRow, InsuredRow } from '../store/db';
 import type { Routing, VisitPatient } from '../store/facts';
-import { asSystem, conflict, DomainError, notFound, todayIso, type BaseCtx } from './kernel';
+import { conflict, DomainError, notFound, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, priceListOf } from './clinic';
 import { limitsFor } from './views';
+import { ensureQaSample } from './system/clocks';
 
 
 /**
@@ -383,30 +382,6 @@ export async function kpiOf(ctx: BaseCtx, a: AssistanceCompany, now = ctx.now())
   };
 }
 
-/** Adds this month's 5% sample of the assistance's decisions to the MIG queue (deterministic, idempotent). */
-export async function ensureQaSample(person: BaseCtx, now = person.now()): Promise<void> {
-  // The monthly quality-control sample: a job run on read.
-  const ctx = asSystem(person, 'monthly quality-control sample of assistance decisions');
-  const r = ctx.repos;
-  const P = await loadParams(ctx);
-  const month = isoDay(now).slice(0, 7);
-  const known = new Set((await r.qaSamples.list()).map((s) => s.subject.id));
-  const registries = await r.registries.list();
-  for (const a of await r.assistances.list()) {
-    const decisions: { id: UUID; type: 'guarantee' | 'registry_line'; label: string; at: string }[] = [
-      ...(await r.guarantees.list({ where: { assistanceId: a.id, decidedBy: 'assistance' } }))
-        .filter((g) => (g.decidedAt ?? g.createdAt).startsWith(month))
-        .map((g) => ({ id: g.id, type: 'guarantee' as const, label: g.number, at: g.decidedAt ?? g.createdAt })),
-      ...registries
-        .filter((x) => (x.submittedAt ?? '').startsWith(month))
-        .flatMap((x) => x.lines.filter((l) => l.payer === a.id && l.status === 'accepted').map((l) => ({ id: l.id, type: 'registry_line' as const, label: `${x.period}: ${l.serviceName}`, at: x.submittedAt! }))),
-    ];
-    for (const x of qaSample(decisions, month, P.dmsParam('qaSampleShare'))) {
-      if (known.has(x.id)) continue;
-      await r.qaSamples.insert({ id: randomId(), assistanceId: a.id, subject: { type: x.type, id: x.id, label: x.label }, createdAt: tzIso(now) }, { at: 'start' });
-    }
-  }
-}
 
 // ---------------------------------------------------------------- webhooks
 
@@ -422,3 +397,5 @@ export const monthOf = (iso: string) => iso.slice(0, 7);
 export function authorityLimitOf(a: Pick<AssistanceCompany, 'contract'>, P: ParamsView): number {
   return a.contract.guaranteeAuthorityLimit ?? P.dmsParam('assistanceGuaranteeAuthority');
 }
+
+export { ensureQaSample };

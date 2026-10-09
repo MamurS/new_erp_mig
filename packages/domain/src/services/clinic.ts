@@ -19,9 +19,7 @@ import type {
   Slot,
   Specialty,
   UUID,
-  Visit,
-  WebhookEvent,
-} from '@mig/contracts';
+  Visit } from '@mig/contracts';
 import type { GuaranteeView, RegistrySummary, RegistryView } from '@mig/contracts/dto';
 import { assistanceOn } from '../assistance';
 import {
@@ -42,11 +40,12 @@ import { at, DAY, isoDay, parseIso, startOfDay, tzIso } from '../lib/time';
 import { signWebhook } from '../lib/webhook';
 import { PROGRAMS } from '../programs';
 import type { ClaimRow, GuaranteeRow, InsuredRow, WebhookDeliveryRow, WebhookEndpointRow } from '../store/db';
-import { asSystem, audit, conflict, DomainError, insuredLabel, notFound, type BaseCtx } from './kernel';
+import { audit, conflict, DomainError, insuredLabel, notFound, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { saveGuaranteeExpiry } from './clocks';
+import { saveGuaranteeExpiry } from './system/clocks';
 import { coverageBriefOf, limitsFor } from './limits';
 import { insuredOfVisit, payerName, payerOfLine, routingOf } from './assistance';
+import { emitWebhook } from './system/outbox';
 
 /** Who performs a clinic action: a cabinet user or an API key of the clinic. */
 export interface ClinicActor {
@@ -68,7 +67,7 @@ export async function clinicOf(ctx: BaseCtx, clinicId: UUID): Promise<Clinic> {
 }
 
 /** Keeps the newest `max` rows of a newest-first table (the mock kept its arrays short). */
-async function trimNewest(table: { list(q: { offset: number }): Promise<{ id: UUID }[]>; removeWhere(w: { id: { in: UUID[] } }): Promise<number> }, max: number): Promise<void> {
+export async function trimNewest(table: { list(q: { offset: number }): Promise<{ id: UUID }[]>; removeWhere(w: { id: { in: UUID[] } }): Promise<number> }, max: number): Promise<void> {
   const extra = await table.list({ offset: max });
   if (extra.length) await table.removeWhere({ id: { in: extra.map((r) => r.id) } });
 }
@@ -527,34 +526,6 @@ export async function attemptDelivery(delivery: WebhookDeliveryRow, endpoint: We
   return delivery;
 }
 
-/** Thin events only: id, type, time and the object id — no personal or medical data. */
-export async function emitWebhook(person: BaseCtx, clinicId: UUID, event: WebhookEvent, objectId: UUID, only?: WebhookEndpointRow): Promise<WebhookDeliveryRow[]> {
-  // The outbox: the partner's endpoints and the delivery log are the system's, whoever caused the event.
-  const ctx = asSystem(person, 'webhook outbox: endpoints of the partner an event concerns, the delivery log');
-  const endpoints = only ? [only] : (await ctx.repos.webhooks.list({ where: { clinicId, active: true } })).filter((w) => w.events.includes(event));
-  const out: WebhookDeliveryRow[] = [];
-  for (const ep of endpoints) {
-    const body = JSON.stringify({ id: randomId(), type: event, createdAt: tzIso(ctx.now()), objectId });
-    const delivery: WebhookDeliveryRow = {
-      id: randomId(),
-      endpointId: ep.id,
-      clinicId,
-      event,
-      status: 'retrying',
-      attempts: 0,
-      lastAttemptAt: tzIso(ctx.now()),
-      objectId,
-      body,
-      signature: '',
-    };
-    await ctx.repos.webhookDeliveries.insert(delivery, { at: 'start' });
-    await attemptDelivery(delivery, ep, ctx.now());
-    await ctx.repos.webhookDeliveries.put(delivery);
-    out.push(delivery);
-  }
-  await trimNewest(ctx.repos.webhookDeliveries, 1000);
-  return out;
-}
 
 /** Free 30-minute slots of a clinic on a day (fictional, deterministic per clinic and date), up to 60 days ahead. */
 export function clinicSlots(clinic: Pick<Clinic, 'id'>, date: string, now: number): Slot[] {
@@ -572,3 +543,5 @@ export function clinicSlots(clinic: Pick<Clinic, 'id'>, date: string, now: numbe
   }
   return out;
 }
+
+export { emitWebhook };
