@@ -12,7 +12,7 @@ import { DAY, isoDay, parseIso } from '../lib/time';
 import { PROGRAMS } from '../programs';
 import { canApproveDecision } from '../settlement';
 import type { ClaimRow, ClientRow, InsuredRow } from '../store/db';
-import { asSystem, systemRepos, todayIso, type BaseCtx } from './kernel';
+import { asSystem, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
 import { limitExtras } from './assistance';
 import { currentReserve, reserveTimeline } from './settlement';
@@ -20,12 +20,12 @@ import { ageLimits, familyBrief, payoutCardOf, principalOf } from './family';
 
 /** Insured people of a client (employees and family members, each person counts). */
 export async function insuredCountFor(ctx: BaseCtx, clientId: string): Promise<number> {
-  return systemRepos(ctx, 'insured count of a client (an aggregate)').insured.count({ clientId, status: 'active' });
+  return ctx.repos.facts.clientInsuredCount(clientId);
 }
 
 /** Legal form of a client (rows that show the client by name carry it next to the name). */
 export async function clientLegalFormOf(ctx: BaseCtx, clientId: string | null | undefined): Promise<LegalFormCode | undefined> {
-  return clientId ? (await systemRepos(ctx, 'legal form shown next to a client\'s name').clients.get(clientId))?.legalForm : undefined;
+  return clientId ? ctx.repos.facts.clientLegalForm(clientId) : undefined;
 }
 
 /** Legal form of a clinic. */

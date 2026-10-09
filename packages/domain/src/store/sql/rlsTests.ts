@@ -18,14 +18,15 @@ import { TABLES, type TableSpec } from '../schema';
 import { keyColumn, lit, physicalColumns } from './physical';
 import { ALL_ROLES, OPS, cached, grantExpression, groupOf, roleAllowed, rolePredicate, type Op } from './rls';
 import type { SqlFile } from './migrations';
+import { privilegedFile } from './factsTests';
 
-interface Identity {
+export interface Identity {
   role: Role;
   label: string;
   claims: Record<string, unknown>;
 }
 
-const FIX = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+export const FIX = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 /** A user of every role, taken from the seed. */
 export function identities(db: Db): Identity[] {
@@ -70,7 +71,7 @@ export function familyEmployee(db: Db) {
   return e;
 }
 
-const HELPERS = `-- Helpers (created inside the test transaction, rolled back with it).
+export const HELPERS = `-- Helpers (created inside the test transaction, rolled back with it).
 create extension if not exists pgtap with schema extensions;
 create schema if not exists tests;
 
@@ -524,6 +525,7 @@ export function buildRlsTests(db: Db): (SqlFile & { count: number })[] {
   add('01_scenarios_test.sql', scenariosFile(db, ids));
   add('02_audit_jobs_test.sql', auditFile(db, ids));
   add('03_auth_storage_test.sql', authStorageFile(db, ids));
+  add('04_privileged_test.sql', privilegedFile(db, ids));
   for (const id of ids) add(`10_rls_${snake(id.role)}_test.sql`, matrixFile(db, ids, id));
   return files;
 }

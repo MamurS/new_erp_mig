@@ -32,6 +32,8 @@ import { TABLES, sequenceName, type TableSpec } from './schema';
 import { fieldMapping, keyColumn, physicalColumns, type FieldMapping } from './sql/physical';
 import { qi } from './columns';
 import { maskCard } from '../lib/mask';
+import { genericFacts } from './facts';
+import { pgFacts } from './postgresFacts';
 
 export interface SqlResult {
   rows: Record<string, unknown>[];
@@ -622,6 +624,8 @@ export function postgresRepos(session: SqlSession, o: PgReposOptions): Repos {
     },
   };
 
-  return { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one'>), aiRebillFlags, statementKeys, seq, one };
+  const base: Omit<Repos, 'facts'> = { ...(out as Omit<Repos, 'aiRebillFlags' | 'statementKeys' | 'seq' | 'one' | 'facts'>), aiRebillFlags, statementKeys, seq, one };
+  // Narrow facts: the system computes them itself; a person asks the SQL functions of store/sql/facts.ts.
+  return { ...base, facts: priv ? genericFacts(base) : pgFacts(session, crypto) };
 }
 

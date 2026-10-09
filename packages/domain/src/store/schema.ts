@@ -599,9 +599,9 @@ export const TABLES: readonly TableSpec[] = [
     {
       indexes: ['clientId'],
       access: {
-        select: { actions: ['clients.read', 'contracts.read', 'kp.read', 'invoices.read'], staff: ALL, hr: HR_CLIENT },
+        select: { actions: ['clients.read', 'contracts.read', 'kp.read', 'invoices.read', 'policies.read'], staff: ALL, hr: HR_CLIENT },
         ...rw(STAFF_READ('kp.create', 'kp.send', 'contracts.draft', 'contracts.sign_mig', 'migration.manage', 'clients.write')),
-        note: 'Documents of a client: MIG staff and the own company’s HR.',
+        note: 'Documents of a client: MIG staff (also the policy card of policies.read) and the own company’s HR.',
       },
     },
   ),

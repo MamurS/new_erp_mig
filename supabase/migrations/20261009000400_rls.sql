@@ -207,12 +207,12 @@ create policy invoices_update on public.invoices for update to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['payments.record', 'contracts.draft', 'contracts.sign_mig', 'endorsements.manage']::text[]))));
 grant select, insert, update on public.invoices to authenticated;
 
--- documents: Documents of a client: MIG staff and the own company’s HR.
+-- documents: Documents of a client: MIG staff (also the policy card of policies.read) and the own company’s HR.
 alter table public.documents enable row level security;
 create policy documents_select on public.documents for select to authenticated
   using ((select app.active()) and (
-      ((select app.is_staff()) and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read']::text[])))
-      or ((select app.role()) = 'hr' and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read']::text[])) and (client_id = (select app.company_id())))
+      ((select app.is_staff()) and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read', 'policies.read']::text[])))
+      or ((select app.role()) = 'hr' and (select app.can_any(array['clients.read', 'contracts.read', 'kp.read', 'invoices.read', 'policies.read']::text[])) and (client_id = (select app.company_id())))
     ));
 create policy documents_insert on public.documents for insert to authenticated
   with check ((select app.active()) and ((select app.is_staff()) and (select app.can_any(array['kp.create', 'kp.send', 'contracts.draft', 'contracts.sign_mig', 'migration.manage', 'clients.write']::text[]))));

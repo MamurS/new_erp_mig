@@ -11,6 +11,7 @@ import { META_COLUMNS, LOG_ID, hasSecrets, indexColumn, keyColumn, lit, physical
 import { ALL_ROLES, ASSIST_ROLES, CLINIC_ROLES, OPS, STAFF_ROLES, cached, grantExpression } from './rls';
 import { CLEANUP_STATEMENTS, cleanupFunction } from './cleanup';
 import { authMigrations } from './migrationsAuth';
+import { factsMigration } from './facts';
 
 export interface SqlFile {
   name: string;
@@ -541,6 +542,7 @@ export function buildMigrations(): SqlFile[] {
     { name: '20261009000500_audit.sql', sql: audit() },
     { name: '20261009000600_jobs.sql', sql: jobs() },
     ...authMigrations(),
+    { name: '20261011000100_app_facts.sql', sql: factsMigration() },
   ];
 }
 
