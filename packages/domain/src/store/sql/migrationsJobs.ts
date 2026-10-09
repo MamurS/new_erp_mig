@@ -28,19 +28,34 @@ export const JOBS_CLEANUP_STATEMENTS: readonly string[] = [
 
 const command = (j: (typeof JOBS)[number]) => (j.runner === 'db' ? j.sql! : j.service!);
 
-/** `update` statements bringing `app.job_catalog` (registered by step 3) to the current job list. */
+/**
+ * Statements bringing `app.job_catalog` (registered by step 3) and pg_cron to the current job list: a changed command
+ * or description updates the catalog; a changed schedule also re-registers the job in pg_cron (`cron.schedule` with
+ * the same name replaces it). A job new since step 3 needs its own registration: not part of this migration.
+ */
 function catalogUpdates(): string[] {
   const out: string[] = [];
+  const reschedule: string[] = [];
   for (const j of JOBS) {
     const was = JOBS_STEP3.find((x) => x.name === j.name);
-    // A new job or a new schedule needs its own pg_cron registration: not part of this migration.
-    if (!was || was.cron !== j.cron || was.runner !== j.runner)
-      throw new Error(`Job ${j.name}: a new job or schedule needs a new migration`);
-    if (command(was) === command(j) && was.description === j.description) continue;
+    if (!was || was.runner !== j.runner) throw new Error(`Job ${j.name}: a new job or runner needs a new migration`);
+    if (command(was) === command(j) && was.description === j.description && was.cron === j.cron) continue;
     out.push(
-      `update app.job_catalog set command = ${lit(command(j))}, description = ${lit(j.description)} where name = ${lit(j.name)};`,
+      `update app.job_catalog set cron = ${lit(j.cron)}, command = ${lit(command(j))}, description = ${lit(j.description)} where name = ${lit(j.name)};`,
     );
+    if (was.cron !== j.cron) {
+      const cmd = j.runner === 'db' ? j.sql! : `select app.enqueue_job(${lit(j.name)})`;
+      reschedule.push(`    perform cron.schedule(${lit(`mig:${j.name}`)}, ${lit(j.cron)}, ${lit(cmd)});`);
+    }
   }
+  if (reschedule.length)
+    out.push(`do $do$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+${reschedule.join('\n')}
+  end if;
+end
+$do$;`);
   return out;
 }
 
@@ -81,7 +96,7 @@ revoke execute on function app.job_cleanup_expired() from public, authenticated;
 -- Audit entries of the job's lifecycle transitions (and of the same transitions on read).
 ${enumWidening(JOB_ACTIONS_MIGRATION).join('\n')}
 
--- The catalog follows services/jobs.ts (the schedules are unchanged).
+-- The catalog and the pg_cron schedules follow services/jobs.ts.
 ${catalogUpdates().join('\n')}
 `;
 }

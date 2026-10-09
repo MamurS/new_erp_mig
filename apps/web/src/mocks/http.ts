@@ -10,6 +10,7 @@ import { mockConfig } from './config';
 import { mockCookie, saveSessions, scheduleSaveDb, setMockCookie } from './persist';
 import { DomainError as HttpError, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import { resolveSession } from '@mig/domain/services/session';
+import { edoEvents, timeClocks } from '@mig/domain/services/lifecycle';
 import { memoryRepos } from '@mig/domain/store/memory';
 import { routeRequest } from '@mig/domain/http/request';
 import { hasCsrfHeader, readCookie } from '@mig/domain/http/csrf';
@@ -96,6 +97,23 @@ function isMutation(method: string): boolean {
   return method !== 'GET' && method !== 'HEAD';
 }
 
+/*
+ * The date clocks (contracts coming into force and expiring, policies, guarantee letters, invoice statuses) are a
+ * background job in the API (services/jobs.ts `contract-lifecycle`); reads show the stored state. The mock has no
+ * scheduler: it runs the same job before a request once the clock moved by a minute or more — also after a jump of
+ * the page's clock (e2e `fastForward`), as the API's demo clock runs the job on a jump.
+ */
+let clocksAt: number | null = null;
+async function runDueClocks(): Promise<boolean> {
+  // The EDO operator is polled before every request, as the API's worker polls it every pass.
+  const signed = (await edoEvents(baseCtx())) > 0;
+  const now = Date.now();
+  if (clocksAt !== null && now >= clocksAt && now - clocksAt < 60_000) return signed;
+  clocksAt = now;
+  await timeClocks(baseCtx());
+  return true;
+}
+
 /**
  * Wraps a handler with latency, the CSRF rule, failure injection, error mapping and persistence.
  * `csrf`: the request must carry `X-Requested-With: mig-web` (403 otherwise), as on the API.
@@ -118,7 +136,9 @@ export function route(
         { status: 500 },
       );
     }
+    let clocked = false;
     try {
+      clocked = await runDueClocks();
       const out = await fn({ request, params, url, startedAt });
       if (out instanceof Response) return out;
       if (out === undefined) return new HttpResponse(null, { status: 204 });
@@ -133,7 +153,7 @@ export function route(
     } finally {
       const d = db();
       saveSessions(d);
-      if (isMutation(request.method) || opts.writes) scheduleSaveDb(db);
+      if (isMutation(request.method) || opts.writes || clocked) scheduleSaveDb(db);
     }
   };
 }

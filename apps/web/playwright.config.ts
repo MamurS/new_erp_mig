@@ -60,6 +60,8 @@ const apiServer = (port: number): WebServer => ({
       APP_ENV: 'ci',
       // The test MFA mode (000000, demo factors, «Войти как…»): off unless asked for (apps/api/src/env.ts).
       ALLOW_TEST_TOTP: 'true',
+      // The worker polls the EDO operator every pass: a short pause keeps «signed in EDO» within seconds.
+      WORKER_INTERVAL_MS: '2000',
       HOST: '0.0.0.0',
       PORT: String(port),
       DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',

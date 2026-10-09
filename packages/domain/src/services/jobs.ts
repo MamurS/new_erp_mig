@@ -56,10 +56,10 @@ export const JOBS: readonly JobSpec[] = [
   },
   {
     name: 'contract-lifecycle',
-    cron: '5 19 * * *',
+    cron: '*/15 * * * *',
     runner: 'api',
-    service: 'lifecycle.contractLifecycle',
-    description: 'Contracts entering into force, contracts and policies expiring after the end date; audited (00:05 Tashkent).',
+    service: 'lifecycle.timeClocks',
+    description: 'Every state that changes with the date: contracts (EDO events, entering into force, expiry) and policies expiring, audited; approved guarantee letters past their validity; invoice statuses by due date (every 15 minutes; reads show the stored state).',
   },
   {
     name: 'child-age-limit',

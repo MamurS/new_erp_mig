@@ -15,7 +15,7 @@
  */
 import { openRenewalDeals } from './deals';
 import type { BaseCtx } from './kernel';
-import { contractLifecycle } from './lifecycle';
+import { timeClocks } from './lifecycle';
 import { ageLimitTasks, salesReminders, slaReminders } from './reminders';
 import { sweepDeadlines } from './tasks';
 import { JOBS } from './jobs';
@@ -36,8 +36,8 @@ export const API_JOBS: Readonly<Record<string, (ctx: BaseCtx) => Promise<JobSumm
   'sales-reminders': async (ctx) => salesReminders(ctx),
   /** The renewal deal `renewalLeadDays` before the client's policy ends, once per policy. */
   'renewal-deals': async (ctx) => ({ renewalDeals: await openRenewalDeals(ctx) }),
-  /** Contracts coming into force, contracts and policies expiring (audited, once each). */
-  'contract-lifecycle': async (ctx) => contractLifecycle(ctx),
+  /** Every state that changes with the date: contracts, policies, guarantee letters, invoices (once each). */
+  'contract-lifecycle': async (ctx) => timeClocks(ctx),
   /** A request to the underwriter per child at the age limit (no automatic exclusion), once per child and limit. */
   'child-age-limit': async (ctx) => ({ ageLimitRequests: await ageLimitTasks(ctx) }),
 };

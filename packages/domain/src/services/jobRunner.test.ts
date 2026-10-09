@@ -274,17 +274,15 @@ describe('background jobs (memory)', () => {
     c.params.endDate = isoDay(T + 30 * DAY);
     const policiesBefore = d.policies.length;
 
-    expect(await runApiJob(ctx, 'contract-lifecycle')).toEqual({
-      activated: 0,
-      contractsExpired: 0,
-      policiesExpired: 0,
-    });
+    await runApiJob(ctx, 'contract-lifecycle');
     setNow(T + 2 * DAY);
     expect((await runApiJob(ctx, 'contract-lifecycle')).activated).toBe(1);
     expect(await runApiJob(ctx, 'contract-lifecycle')).toEqual({
       activated: 0,
       contractsExpired: 0,
       policiesExpired: 0,
+      guaranteesExpired: 0,
+      invoicesUpdated: 0,
     });
     const active = d.contracts.find((x) => x.id === c.id)!;
     expect(active.status).toBe('active');
@@ -305,6 +303,8 @@ describe('background jobs (memory)', () => {
       activated: 0,
       contractsExpired: 0,
       policiesExpired: 0,
+      guaranteesExpired: 0,
+      invoicesUpdated: 0,
     });
     expect(d.contracts.find((x) => x.id === c.id)!.status).toBe('expired');
     expect(d.policies.find((p) => p.id === active.policyId)!.status).toBe('expired');
@@ -316,6 +316,26 @@ describe('background jobs (memory)', () => {
     expect(d.audit.filter((a) => a.action === 'policy_expired' && a.targetId === standalone.id)).toHaveLength(
       1,
     );
+  });
+
+  it('contract-lifecycle: guarantee letters past their validity expire and invoice statuses follow the date, once', async () => {
+    const { d, ctx, setNow } = setup();
+    await runApiJob(ctx, 'contract-lifecycle');
+    const g = d.guarantees.find((x) => x.status === 'approved' && x.validUntil)!;
+    const inv = d.invoices.find((x) => x.status === 'unpaid')!;
+    expect(g).toBeDefined();
+    expect(inv).toBeDefined();
+    // Past both dates: the letter's validity and the invoice's due date.
+    const later = Math.max(Date.parse(`${g.validUntil}T12:00:00+05:00`), Date.parse(`${inv.dueDate}T12:00:00+05:00`)) + 2 * DAY;
+    setNow(later);
+    const out = await runApiJob(ctx, 'contract-lifecycle');
+    expect(out.guaranteesExpired).toBeGreaterThanOrEqual(1);
+    expect(out.invoicesUpdated).toBeGreaterThanOrEqual(1);
+    expect(d.guarantees.find((x) => x.id === g.id)!.status).toBe('expired');
+    expect(d.invoices.find((x) => x.id === inv.id)!.status).toBe('overdue');
+    const again = await runApiJob(ctx, 'contract-lifecycle');
+    expect(again.guaranteesExpired).toBe(0);
+    expect(again.invoicesUpdated).toBe(0);
   });
 
   it('child-age-limit: one request to the underwriter per child and limit, no exclusion', async () => {

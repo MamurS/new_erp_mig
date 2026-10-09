@@ -47,6 +47,8 @@ export interface ApiEnv {
   inviteRedirectTo?: string;
   /** `inline` (the worker runs in the API process) or `off` (a separate `dist/worker.js`). */
   worker: 'inline' | 'off';
+  /** WORKER_INTERVAL_MS: the pause between the worker's passes (default 10 s; e2e use a shorter one). */
+  workerIntervalMs?: number;
 }
 
 function piiCrypto(env: NodeJS.ProcessEnv, prod: boolean): AesPiiCrypto {
@@ -107,5 +109,6 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     insecureDevCookie: env.INSECURE_DEV_COOKIE === '1',
     ...(env.INVITE_REDIRECT_URL ? { inviteRedirectTo: env.INVITE_REDIRECT_URL } : {}),
     worker: env.WORKER === 'off' ? 'off' : 'inline',
+    ...(Number(env.WORKER_INTERVAL_MS) >= 500 ? { workerIntervalMs: Number(env.WORKER_INTERVAL_MS) } : {}),
   };
 }

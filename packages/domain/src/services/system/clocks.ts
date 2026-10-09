@@ -6,21 +6,16 @@
  * MIG, an invoice read by HR), so the save is the system's. Privileged access: this folder (services/system/) is on
  * the allowlist of the lint rule against it (eslint.config.js).
  */
-import type { Contract, Invoice, Policy, Rebill, UUID } from '@mig/contracts';
+import type { Contract, Policy, Rebill, UUID } from '@mig/contracts';
 import { qaSample } from '../../assistance';
 import { activationDate, addSignature } from '../../contracts';
 import { randomId } from '../../lib/random';
 import { isoDay, tzIso } from '../../lib/time';
 import { actorOf, asSystem, audit, systemRepos, todayIso, type AuditActor, type BaseCtx } from '../kernel';
 import { loadParams } from '../params';
-import { activateContract, dealEvent, edoArrived, edoClientSignature, reload } from '../lifecycle';
+import { activateContract, dealEvent, edoArrived, edoClientSignature, refreshInvoice, reload } from '../lifecycle';
 import { afterSigning } from './consequences';
 
-
-/** An approved letter past its validity is saved as expired. */
-export async function saveGuaranteeExpiry(ctx: BaseCtx, id: string): Promise<void> {
-  await systemRepos(ctx, 'guarantee status by time (the lazy server clock, a job run on read)').guarantees.update(id, { status: 'expired' });
-}
 
 /**
  * A rebill whose automatic checks, fee and totals changed since it was saved (MIG's data moved on) is saved
@@ -28,11 +23,6 @@ export async function saveGuaranteeExpiry(ctx: BaseCtx, id: string): Promise<voi
  */
 export async function saveRecomputedRebill(ctx: BaseCtx, b: Rebill): Promise<void> {
   await systemRepos(ctx, 'rebill: the recomputed checks, fee and totals (a job run on read)').rebills.put(b);
-}
-
-/** The status of an invoice by date (overdue, paid) is saved. */
-export async function saveInvoiceStatus(ctx: BaseCtx, id: string, status: Invoice['status']): Promise<void> {
-  await systemRepos(ctx, 'invoice status by date (the lazy server clock, a job run on read)').invoices.update(id, { status });
 }
 
 /**
@@ -120,6 +110,51 @@ export async function contractLifecycle(person: BaseCtx): Promise<{ activated: n
     if (await expirePolicy(ctx, p, actorOf(person))) out.policiesExpired += 1;
   }
   return out;
+}
+
+/**
+ * Signatures that arrived from the EDO operator (the demo operator answers 3 seconds after the send; a real operator
+ * is polled the same way): the API worker runs this on every pass (about every 10 seconds), the mock before a
+ * request. Only contracts with a document waiting for the client's EDO signature are touched. Returns how many
+ * contracts got a signature.
+ */
+export async function edoEvents(person: BaseCtx): Promise<number> {
+  const ctx = asSystem(person, 'signatures arriving from the EDO operator (a job of the worker)');
+  const now = ctx.now();
+  const r = ctx.repos;
+  const waiting = await r.contracts.list({ where: { status: { in: ['sent', 'signing', 'signed', 'active'] } } });
+  const endorsements = await r.endorsements.list({ where: { status: { in: ['sent', 'signing'] } } });
+  let n = 0;
+  for (const c of waiting) {
+    if (!edoArrived(c.signing, now) && !endorsements.some((e) => e.contractId === c.id && edoArrived(e.signing, now))) continue;
+    await refreshContract(ctx, c, now);
+    n += 1;
+  }
+  return n;
+}
+
+/**
+ * The background job `contract-lifecycle` (every 15 minutes): every state that changes with the date alone is saved
+ * here and only here — reads (lists and cards) show what is stored. Contracts (EDO events, coming into force, expiry)
+ * and policies (contractLifecycle), approved guarantee letters past their validity, invoice statuses by their due
+ * date. Each step changes only the rows whose state is due, so a second run changes nothing.
+ */
+export async function timeClocks(person: BaseCtx): Promise<{ activated: number; contractsExpired: number; policiesExpired: number; guaranteesExpired: number; invoicesUpdated: number }> {
+  const lifecycle = await contractLifecycle(person);
+  const ctx = asSystem(person, 'the background job of the date clocks: guarantee letters and invoices');
+  const today = todayIso(ctx);
+  const due = await ctx.repos.guarantees.list({ where: { status: 'approved', validUntil: { lt: today } } });
+  for (const g of due) await ctx.repos.guarantees.update(g.id, { status: 'expired' });
+  let invoicesUpdated = 0;
+  for (const inv of await ctx.repos.invoices.list({ where: { status: { ne: 'paid' } } })) {
+    const before = inv.status;
+    refreshInvoice(inv, today);
+    if (inv.status !== before) {
+      await ctx.repos.invoices.update(inv.id, { status: inv.status });
+      invoicesUpdated += 1;
+    }
+  }
+  return { ...lifecycle, guaranteesExpired: due.length, invoicesUpdated };
 }
 
 /** Adds this month's 5% sample of the assistance's decisions to the MIG queue (deterministic, idempotent). */

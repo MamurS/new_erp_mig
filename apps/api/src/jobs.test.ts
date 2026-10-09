@@ -342,7 +342,7 @@ describe.skipIf(!hasDb || !hasSupabase)('background jobs', () => {
     clock = T + 2 * 86_400_000;
     const [first, second] = await twice('contract-lifecycle');
     expect(first.activated).toBe(1);
-    expect(second).toEqual({ activated: 0, contractsExpired: 0, policiesExpired: 0 });
+    expect(second).toEqual({ activated: 0, contractsExpired: 0, policiesExpired: 0, guaranteesExpired: 0, invoicesUpdated: 0 });
     expect(await n(`select count(*)::int as n from public.policies where contract_id = $1`, [c.id])).toBe(1);
     expect(
       await n(
@@ -354,7 +354,7 @@ describe.skipIf(!hasDb || !hasSupabase)('background jobs', () => {
     const [later, again] = await twice('contract-lifecycle');
     expect(later.contractsExpired).toBe(1);
     expect(later.policiesExpired).toBeGreaterThan(0);
-    expect(again).toEqual({ activated: 0, contractsExpired: 0, policiesExpired: 0 });
+    expect(again).toEqual({ activated: 0, contractsExpired: 0, policiesExpired: 0, guaranteesExpired: 0, invoicesUpdated: 0 });
     expect(
       (await pool.query(`select status from public.contracts where id = $1`, [c.id])).rows[0].status,
     ).toBe('expired');
@@ -410,5 +410,45 @@ describe.skipIf(!hasDb || !hasSupabase)('background jobs', () => {
     ).toBe(1);
     expect(await n(`select count(*)::int as n from app.job_marks where job = 't'`)).toBe(1);
     await pool.query(`delete from app.test_phone_codes where phone like '99890777990%'`);
+  });
+  it('reads show the stored state: lists and cards write nothing; the date clocks job applies what is due', async () => {
+    const yesterday = isoDay(Date.now() - 86_400_000);
+    const g = (await pool.query(`update public.guarantees set status = 'approved', valid_until = $1 where id = (select id from public.guarantees where status in ('approved', 'requested') order by id limit 1) returning id`, [yesterday])).rows[0].id as string;
+    const inv = (await pool.query(`update public.invoices set status = 'unpaid', paid = 0, due_date = $1 where id = (select id from public.invoices where contract_id is not null order by id limit 1) returning id`, [yesterday])).rows[0].id as string;
+    const snapshot = async () =>
+      (
+        await pool.query(
+          `select (select md5(string_agg(t::text, ',' order by t.id)) from public.contracts t) as contracts,
+                  (select md5(string_agg(t::text, ',' order by t.id)) from public.invoices t) as invoices,
+                  (select md5(string_agg(t::text, ',' order by t.id)) from public.guarantees t) as guarantees,
+                  (select md5(string_agg(t::text, ',' order by t.id)) from public.policies t) as policies,
+                  (select count(*) from public.audit_log) as audit`,
+        )
+      ).rows[0] as Record<string, string>;
+    const sales = await signInAs(api, { email: DEMO_STAFF.find((x) => x.role === 'sales_manager')!.email }, SESSION_COOKIE);
+    const accountant = await signInAs(api, { email: DEMO_STAFF.find((x) => x.role === 'accountant')!.email }, SESSION_COOKIE);
+    const doctor = await signInAs(api, { email: DEMO_STAFF.find((x) => x.role === 'doctor_expert')!.email }, SESSION_COOKIE);
+    // After the sign-ins (they are audited): the reads below must not write anything.
+    const before = await snapshot();
+    const deals = (await api.call('GET', '/deals', { session: sales })).body as { id: string }[];
+    const contracts = (await api.call('GET', '/contracts', { session: sales })).body as { id: string }[];
+    expect(deals.length).toBeGreaterThan(0);
+    expect(contracts.length).toBeGreaterThan(0);
+    for (const x of deals) expect((await api.call('GET', `/deals/${x.id}`, { session: sales })).status).toBe(200);
+    for (const x of contracts) expect((await api.call('GET', `/contracts/${x.id}`, { session: sales })).status).toBe(200);
+    expect((await api.call('GET', '/invoices', { session: accountant })).status).toBe(200);
+    expect((await api.call('GET', '/guarantees', { session: doctor })).status).toBe(200);
+    expect(await snapshot()).toEqual(before);
+    expect((await pool.query(`select status from public.guarantees where id = $1`, [g])).rows[0].status).toBe('approved');
+    expect((await pool.query(`select status from public.invoices where id = $1`, [inv])).rows[0].status).toBe('unpaid');
+
+    const out = (await worker.runJob('contract-lifecycle')) as JobSummary;
+    expect(out.guaranteesExpired).toBeGreaterThanOrEqual(1);
+    expect(out.invoicesUpdated).toBeGreaterThanOrEqual(1);
+    expect((await pool.query(`select status from public.guarantees where id = $1`, [g])).rows[0].status).toBe('expired');
+    expect((await pool.query(`select status from public.invoices where id = $1`, [inv])).rows[0].status).toBe('overdue');
+    const again = (await worker.runJob('contract-lifecycle')) as JobSummary;
+    expect(again.guaranteesExpired).toBe(0);
+    expect(again.invoicesUpdated).toBe(0);
   });
 });

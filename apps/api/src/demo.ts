@@ -96,7 +96,7 @@ function parse<T>(schema: ZodType<T>, body: unknown): T | null {
   return r.success ? r.data : null;
 }
 
-export function registerDemoControls(app: FastifyInstance, o: { pool: pg.Pool; controls: DemoControls; log?: (msg: string, data?: Record<string, unknown>) => void }): void {
+export function registerDemoControls(app: FastifyInstance, o: { pool: pg.Pool; controls: DemoControls; runClocks?: () => Promise<unknown>; log?: (msg: string, data?: Record<string, unknown>) => void }): void {
   const { controls } = o;
   const json = (reply: import('fastify').FastifyReply, status: number, body: unknown) => reply.code(status).type('application/json').send(JSON.stringify(body));
   const csrf = (h: Record<string, unknown>) => h[CSRF_HEADER] === CSRF_VALUE;
@@ -145,6 +145,9 @@ export function registerDemoControls(app: FastifyInstance, o: { pool: pg.Pool; c
     const body = parse(demoClockSchema, request.body);
     if (!body) return json(reply, 400, BAD);
     await controls.set({ offsetMs: 'offsetMs' in body ? body.offsetMs : Math.min(MAX_CLOCK_OFFSET, controls.offsetMs + body.advanceMs) });
+    // The date clocks are a background job (services/jobs.ts `contract-lifecycle`, every 15 minutes): a jump of the
+    // test clock runs it at once, as the schedule would have on the way (contracts coming into force, invoices overdue).
+    await o.runClocks?.();
     return json(reply, 200, { now: controls.now(), offsetMs: controls.offsetMs });
   });
 }

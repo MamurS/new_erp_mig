@@ -34,7 +34,7 @@ import type { StaffRow } from '../store/db';
 import { allOf, byLegalForm, byLegalName, filterLegalForm, sortBy } from './list';
 import { audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, SYSTEM_ACTOR, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, refreshContract, staffName, toContractSummary, toDealView } from './lifecycle';
+import { checklistInput, clientRow, dealContract, dealEvent, dealKp, dealOf, latestQuote, moveDeal, staffName, toContractSummary, toDealView } from './lifecycle';
 import { completeTasks, notify } from './tasks';
 import { toClient } from './views';
 import { openRenewalDeal } from './system/consequences';
@@ -374,7 +374,6 @@ export async function createLead(ctx: AuthCtx, body: unknown): Promise<DealView>
 export async function listDeals(ctx: AuthCtx, qs: URLSearchParams): Promise<DealView[]> {
   const user = requireMig(ctx);
   readDeals(user);
-  for (const c of await ctx.repos.contracts.list()) await refreshContract(ctx, c);
   const owner = qs.get('ownerId');
   const type = qs.get('type');
   const list = await ctx.repos.deals.list({ where: allOf<Deal>(owner && { ownerId: owner }, (type === 'new' || type === 'renewal') && { type }) });
@@ -398,8 +397,6 @@ export async function getDeal(ctx: AuthCtx, id: string): Promise<DealCard> {
   const user = requireMig(ctx);
   readDeals(user);
   const deal = await dealOf(ctx, id);
-  const c = await dealContract(ctx, deal.id);
-  if (c) await refreshContract(ctx, c);
   return dealCard(ctx, deal.id);
 }
 
