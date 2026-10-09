@@ -31,7 +31,7 @@ import { devFactorId, devTotpSecret, totpCode } from '@mig/domain/auth/devMfa';
 import { APP_METADATA_KEYS, appMetadataOf, authPhone, sameAppMetadata } from '@mig/domain/auth/identity';
 import { idleLimitsFor } from '@mig/domain/auth/home';
 import type { RouteRequest } from '@mig/domain/http/request';
-import { audit, notFound, unauthorized, validate, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
+import { audit, DomainError, notFound, unauthorized, validate, type AuthCtx, type BaseCtx } from '@mig/domain/services/kernel';
 import {
   checkLock,
   findAccount,
@@ -396,6 +396,14 @@ export function bffAuth(o: BffOptions): AuthAdapter {
   }
 
   /** A wrong code: counted on the challenge and for the lockout; the challenge dies after the attempt limit. */
+  /**
+   * A rate limit of Supabase Auth per address (a whole office behind one IP): «try again in a minute» — never counted as
+   * a wrong password or code of the account (that would lock people who typed everything right).
+   */
+  function throwIfBusy(e: AuthApiError): void {
+    if (e.status === 429) throw new DomainError(429, 'rate_limited', 'srv.auth.busy');
+  }
+
   async function wrongCode(sql: Sql, base: BaseCtx, id: string, c: ChallengeRec): Promise<never> {
     const P = await loadParams(base);
     const attempts = c.attempts + 1;
@@ -434,9 +442,13 @@ export function bffAuth(o: BffOptions): AuthAdapter {
         tokens = await o.gotrue.passwordGrant(email, password, meta.ip);
       } catch (e) {
         if (!(e instanceof AuthApiError) || e.status >= 500) throw e;
+        throwIfBusy(e);
       }
     }
     if (!account || !tokens || tokens.user.id !== account.id) return passwordFailed(base, P, key, email);
+    // The account itself is locked by wrong codes (brute force of the second factor): said only to whoever knows the
+    // password, before a new code is asked for. Per account, not per IP: an office behind one address is not affected.
+    await checkLock(base, P, `challenge:${account.id}`);
     let factorId =
       tokens.user.factors?.find((f) => f.factor_type === 'totp' && f.status === 'verified')?.id ?? null;
     let enrollment: { uri: string; secret: string } | null = null;
@@ -504,7 +516,10 @@ export function bffAuth(o: BffOptions): AuthAdapter {
       const ch = await o.gotrue.challenge(access, c.factor_id, meta.ip);
       tokens = await o.gotrue.verifyFactor(access, c.factor_id, ch.id, effective, meta.ip);
     } catch (e) {
-      if (e instanceof AuthApiError && e.status < 500) return wrongCode(sql, base, challengeId, c);
+      if (e instanceof AuthApiError && e.status < 500) {
+        throwIfBusy(e);
+        return wrongCode(sql, base, challengeId, c);
+      }
       throw e;
     }
     await sql.query(`delete from public.app_auth_challenges where id_hash = $1`, [
@@ -574,7 +589,10 @@ export function bffAuth(o: BffOptions): AuthAdapter {
       const effective = o.testMfa && code === DEMO_CODE ? ((await o.testPhoneCodes?.take(number)) ?? code) : code;
       tokens = await o.gotrue.verifyPhoneOtp(number, effective, meta.ip);
     } catch (e) {
-      if (e instanceof AuthApiError && e.status < 500) return wrongCode(sql, base, challengeId, c);
+      if (e instanceof AuthApiError && e.status < 500) {
+        throwIfBusy(e);
+        return wrongCode(sql, base, challengeId, c);
+      }
       throw e;
     }
     await sql.query(`delete from public.app_auth_challenges where id_hash = $1`, [

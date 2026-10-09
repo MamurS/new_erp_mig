@@ -602,7 +602,8 @@ An assistance company serves the insured persons of the clients assigned to it, 
 
 <!-- audience: staff assist -->
 
-- **Cases (call centre):** the operator finds the insured person by search (full name, policy number or the whole phone number — a part of the number does not find anyone: phones are stored encrypted), creates a case of the required type — appointment, consultation, guarantee letter, complaint, emergency — and handles it until resolved with deadline control.
+- **Cases (call centre):** the operator finds the insured person by search (full name, policy number or the whole phone number), creates a case of the required type — appointment, consultation, guarantee letter, complaint, emergency — and handles it until resolved with deadline control.
+- **Search by the last 4 digits of the phone** — when the caller remembers only the end of the number: “Insured persons” → “Find by the last 4 digits of the phone” → the last 4 digits **and** a part of the full name (3+ letters) or the birth date → “Find”. The digits alone are not enough; only the insured persons of your clients are searched, at most 20. Every such search is recorded in the audit log (the system keeps only the fact of the search and the number found — not the digits, the name or the date).
 - **Appointments and escalations** from clinics that did not answer in time.
 - **Guarantee letters:** the assistance doctor decides within the authority from the contract; above it — “Escalate to MIG” with their own opinion.
 - **Clinic sub-registers:** reviewing lines, answering disputes, recording payments to clinics.

@@ -22,6 +22,8 @@ export const v: Translation<typeof Ru> = {
   'v.emailRequired': 'Enter an email',
   'v.emailInvalid': 'Invalid email',
   'v.passwordRequired': 'Enter the password',
+  'v.phoneTail': 'The last 4 digits of the phone',
+  'v.phoneTailMore': 'Add a part of the full name (3+ letters) or the birth date',
   'v.passwordMin': 'At least 12 characters',
   'v.passwordMax': 'At most 128 characters',
   'v.passwordWeak': 'Use letters and digits',

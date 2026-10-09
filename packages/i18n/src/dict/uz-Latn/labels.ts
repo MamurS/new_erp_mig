@@ -120,6 +120,7 @@ export const labels: Translation<typeof Ru> = {
   'labels.audit.contract_activated': 'Shartnoma kuchga kirdi',
   'labels.audit.invitation_sent': 'Taklifnoma yuborildi',
   'labels.audit.invitation_accepted': 'Taklifnoma orqali parol oʻrnatildi',
+  'labels.audit.insured_phone_tail_search': 'Telefonning oxirgi raqamlari boʻyicha qidiruv',
   'labels.audit.contract_terminated': 'Shartnoma bekor qilindi',
   'labels.audit.contract_expired': 'Shartnoma muddati tugadi',
   'labels.audit.policy_expired': 'Polis muddati tugadi',

@@ -1,7 +1,7 @@
 /* Queries of the assistance portal (/api/assist/...) and of the MIG assistance screens (ASSISTANCE_SPEC §6–7). */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import type { assistanceCreateSchema, assistGuaranteeDecisionSchema, assistGuaranteeRequestSchema, caseCreateSchema } from '@mig/contracts/forms';
+import type { assistanceCreateSchema, assistGuaranteeDecisionSchema, assistGuaranteeRequestSchema, assistPhoneTailSchema, caseCreateSchema } from '@mig/contracts/forms';
 import type { MedicalRecordEntry } from '@mig/contracts';
 import { request } from '../client';
 import * as S from '@mig/contracts/schemas';
@@ -36,6 +36,9 @@ function useAssistMutation<V, R>(fn: (v: V) => Promise<R>) {
 // ---------------- portal ----------------
 export const useAssistOverview = () => useQuery({ queryKey: ak.overview, queryFn: () => request('/assist/overview', { schema: A.overview }) });
 export const useAssistInsured = (q: string) => useQuery({ queryKey: ak.insured(q), queryFn: () => request('/assist/insured', { query: { q }, schema: A.insuredItems }) });
+/** The search by the last 4 digits of the phone (with a part of the name or the birth date): POST, audited, not cached. */
+export const usePhoneTailSearch = () =>
+  useMutation({ mutationFn: (v: z.input<typeof assistPhoneTailSchema>) => request('/assist/insured/phone-tail', { method: 'POST', body: v, schema: A.insuredItems }) });
 export const useAssistPerson = (id: string) => useQuery({ queryKey: ak.person(id), queryFn: () => request(`/assist/insured/${id}`, { schema: A.insuredDetail }), retry: false });
 export const useAssistReveal = () =>
   useMutation({

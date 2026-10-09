@@ -22,6 +22,8 @@ export const v: Translation<typeof Ru> = {
   'v.emailRequired': 'Email kiriting',
   'v.emailInvalid': 'Email notoʻgʻri',
   'v.passwordRequired': 'Parolni kiriting',
+  'v.phoneTail': 'Telefonning oxirgi 4 raqami',
+  'v.phoneTailMore': 'F.I.Sh. qismini (kamida 3 harf) yoki tugʻilgan sanani qoʻshing',
   'v.passwordMin': 'Kamida 12 ta belgi',
   'v.passwordMax': 'Koʻpi bilan 128 ta belgi',
   'v.passwordWeak': 'Harflar va raqamlar kerak',

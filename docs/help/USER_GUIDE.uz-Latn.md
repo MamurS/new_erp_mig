@@ -602,8 +602,9 @@ Assistans oʻziga biriktirilgan mijozlarning sugʻurtalanganlariga xizmat koʻrs
 
 <!-- audience: staff assist -->
 
-- **Murojaatlar (qoʻngʻiroqlar markazi):** operator sugʻurtalangan shaxsni qidiruv orqali topadi (F.I.Sh., polis raqami yoki toʻliq telefon raqami — raqamning bir qismi boʻyicha topilmaydi: telefonlar shifrlangan holda saqlanadi), kerakli turdagi murojaatni yaratadi — qabul, maslahat, kafolat xati, shikoyat, shoshilinch holat — va uni muddat nazorati bilan hal boʻlguncha olib boradi.
+- **Murojaatlar (qoʻngʻiroqlar markazi):** operator sugʻurtalangan shaxsni qidiruv orqali topadi (F.I.Sh., polis raqami yoki toʻliq telefon raqami), kerakli turdagi murojaatni yaratadi — qabul, maslahat, kafolat xati, shikoyat, shoshilinch holat — va uni muddat nazorati bilan hal boʻlguncha olib boradi.
 - Vaqtida javob bermagan klinikalardan **qabullar va eskalatsiyalar**.
+- **Telefonning oxirgi 4 raqami boʻyicha qidiruv** — qoʻngʻiroq qiluvchi raqamning faqat oxirini eslasa: «Sugʻurtalanganlar» → «Telefonning oxirgi 4 raqami boʻyicha topish» → oxirgi 4 raqam **va** F.I.Sh. qismi (kamida 3 harf) yoki tugʻilgan sana → «Topish». Faqat raqamlar yetarli emas; faqat mijozlaringizning sugʻurtalanganlari orasida, 20 tadan koʻp emas. Har bir bunday qidiruv audit jurnaliga yoziladi (tizim faqat qidiruv faktini va topilganlar sonini saqlaydi — raqamlar, F.I.Sh. va sanani emas).
 - **Kafolat xatlari:** assistans shifokori shartnomadagi vakolatlar doirasida hal qiladi; yuqori boʻlsa — oʻz xulosasi bilan «MIGga yuborish».
 - **Klinikalarning quyi reyestrlari:** qatorlarni tekshirish, eʼtirozlarga javob berish, klinikalarga toʻlovni belgilash.
 - Sugʻurtalanganlarning assistans ustidan shikoyatlari MIG kuratoriga ham koʻrinadi.

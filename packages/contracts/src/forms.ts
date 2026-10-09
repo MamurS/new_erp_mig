@@ -427,6 +427,17 @@ export const qaReviewSchema = z
   });
 export const assignmentSchema = z.object({ assistanceId: uuid.nullable(), from: isoDateInput });
 export const assistUserInviteSchema = z.object({ email: emailInput, fullName: text(3, 120), role: assistRole });
+/**
+ * The search of an assistance operator by the last 4 digits of the phone: only together with a part of the name (at
+ * least 3 letters) or the birth date (POST: none of it goes into a URL).
+ */
+export const assistPhoneTailSchema = z
+  .object({
+    tail: z.string().trim().regex(/^\d{4}$/, msg('v.phoneTail')),
+    name: z.string().trim().max(100).optional().default(''),
+    birthDate: z.union([z.literal(''), isoDateInput]).optional().default(''),
+  })
+  .refine((v) => v.name.replace(/[^\p{L}]/gu, '').length >= 3 || v.birthDate !== '', { path: ['name'], message: msg('v.phoneTailMore') });
 export const assistUserPatchSchema = z
   .object({ role: assistRole.optional(), active: z.boolean().optional() })
   .refine((v) => v.role !== undefined || v.active !== undefined, msg('v.nothingToChange'));

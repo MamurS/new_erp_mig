@@ -36,6 +36,7 @@ export const srv: Translation<typeof Ru> = {
   'srv.auditChainBroken': 'Audit log: the chain of entries is broken, a check is needed',
   'srv.auth.invalidCode': 'Invalid or expired code',
   'srv.auth.invalidCreds': 'Invalid email or password',
+  'srv.auth.busy': 'Too many sign-ins from your address. Wait a minute and try again',
   'srv.auth.locked': 'Too many attempts. Sign-in is blocked for {minutes} min',
   'srv.auth.smsCode': 'MIG DMS: your sign-in code is {code}. Do not share it with anyone.',
   'srv.authority.alreadyPending': 'A change for this employee is already awaiting confirmation',
