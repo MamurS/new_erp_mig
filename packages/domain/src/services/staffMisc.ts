@@ -113,7 +113,8 @@ export async function slots(ctx: AuthCtx, id: string, dateParam: string | null):
   if (!clinic) throw notFound();
   const date = dateParam ?? isoDay(ctx.now());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
-  const taken = new Set((await ctx.repos.appointments.list({ where: { clinicId: clinic.id, status: { notIn: ['cancelled', 'declined'] } } })).map((a) => a.startsAt));
+  // Taken by anyone — appointments of other people are hidden from the reader: only their times (app.fact_taken_slots).
+  const taken = new Set(await ctx.repos.facts.takenSlots(clinic.id));
   // Slots passed by the clinic MIS (PUT /slots) win; API-mode clinics always count as «from the clinic system».
   const fromMis = (await ctx.repos.misSlots.list({ where: { clinicId: clinic.id } })).filter((s) => isoDay(parseIso(s.startsAt)) === date);
   const list: Slot[] = fromMis.length ? fromMis.map((s) => ({ clinicId: clinic.id, startsAt: s.startsAt, fromClinicSystem: true })) : clinicSlots(clinic, date, ctx.now());

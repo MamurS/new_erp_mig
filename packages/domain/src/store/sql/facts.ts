@@ -44,6 +44,16 @@ interface FactFn {
 const auditJson = (a: string, withReason = true) =>
   `jsonb_strip_nulls(jsonb_build_object('id', ${a}.id, 'at', ${tsText(`${a}."at"`)}, 'actorId', ${a}.actor_id, 'actorName', ${a}.actor_name, 'actorRole', ${a}.actor_role, 'action', ${a}.action, 'targetType', ${a}.target_type, 'targetId', ${a}.target_id, 'targetLabel', ${a}.target_label,${withReason ? ` 'reason', ${a}.reason,` : ''} 'assistanceId', ${a}.assistance_id))`;
 
+/**
+ * Who may check a person's coverage and limits: MIG staff who read cards, claims or coverage; the insured person for
+ * the persons whose medical data they see (self, children, adults who consented); a clinic that had a visit of the
+ * person; an assistance company that served the person's policy. Never HR (it sees no medical data).
+ */
+const COVERAGE_CHECKER = (p: string) => `(app.is_staff() and (select app.can_any(array['insured.read', 'claims.read', 'ai.coverage.mig']::text[])))
+      or (app.role() = 'insured' and ${p} = any(app.my_person_ids()))
+      or (app.is_clinic() and exists (select 1 from public.visits v where v.insured_id = ${p} and v.clinic_id = app.clinic_id()))
+      or (app.is_assist() and exists (select 1 from public.insured i join public.assignments a on a.policy_id = i.policy_id where i.id = ${p} and a.assistance_id = app.assistance_id()))`;
+
 const CLIENT_READER = (p: string) => `(select app.can('clients.read')) and ${visible('clients', 'id', p)}`;
 
 export const FACT_FUNCTIONS: readonly FactFn[] = [
@@ -164,6 +174,150 @@ export const FACT_FUNCTIONS: readonly FactFn[] = [
     volatility: 'volatile',
     body: `update public.clients set log = jsonb_build_array(jsonb_build_object('at', p_entry ->> 'at', 'text', p_entry ->> 'text')) || coalesce(log, '[]'::jsonb) where id = p_client;`,
     comment: 'A line at the top of the activity log of a client after an action on a request: MIG staff, HR of the own company (who may not update the client).',
+  },  {
+    sig: 'fact_redeem_card_token(p_short_code text, p_token text, p_now bigint)',
+    returns: 'jsonb',
+    gate: `app.is_clinic() and (select app.can('clinic.check_patient'))`,
+    volatility: 'volatile',
+    body: `declare
+    r public.card_tokens;
+  begin
+    if p_short_code is not null then
+      select * into r from public.card_tokens t where t.short_code = p_short_code order by t._pos limit 1 for update;
+    else
+      select * into r from public.card_tokens t where t.token = p_token order by t._pos limit 1 for update;
+    end if;
+    if r.token is not null and r.used_at is not null then
+      return jsonb_build_object('status', 'used');
+    end if;
+    if r.token is null or r.expires_at < p_now then
+      return jsonb_build_object('status', 'stale');
+    end if;
+    update public.card_tokens set used_at = p_now where token = r.token;
+    return jsonb_build_object('status', 'ok', 'insuredId', r.insured_id);
+  end;`,
+    comment: 'Redeems a card code shown at the desk once (a clinic checking a patient): only the person id, or used/stale. The clinic never reads card tokens.',
+  },
+  {
+    sig: 'fact_match_policy_pinfl(p_number text, p_pinfl_hmac bytea)',
+    returns: 'uuid',
+    gate: `app.is_clinic() and (select app.can('clinic.check_patient'))`,
+    body: `return (select i.id from public.insured i
+      where i.policy_id = (select p.id from public.policies p where upper(p.number) = upper(p_number) order by p._pos limit 1)
+        and i.pinfl_hmac = p_pinfl_hmac and i.status = 'active' order by i._pos limit 1);`,
+    comment: 'The active person of a policy number and a PINFL (search HMAC) before a visit exists: a clinic checking a patient gets only the id (rate-limited and audited by the API).',
+  },
+  {
+    sig: 'fact_visit_patient(p_visit uuid)',
+    returns: 'jsonb',
+    gate: visible('visits', 'id', 'p_visit'),
+    body: `return (select jsonb_build_object('id', i.id, 'fullName', i.full_name, 'policyId', i.policy_id)
+      from public.visits v join public.insured i on i.id = v.insured_id where v.id = p_visit);`,
+    comment: 'Name and policy of the patient of a visit the caller sees, also after the visit closed (registry lines, payer routing).',
+  },
+  {
+    sig: 'fact_visit_policy_period(p_visit uuid)',
+    returns: 'jsonb',
+    gate: visible('visits', 'id', 'p_visit'),
+    body: `return (select jsonb_build_object('startDate', p.start_date::text, 'endDate', p.end_date::text)
+      from public.visits v join public.insured i on i.id = v.insured_id join public.policies p on p.id = i.policy_id where v.id = p_visit);`,
+    comment: 'Term of the policy of the patient of a visit the caller sees (registry line checks of the clinic).',
+  },
+  {
+    sig: 'fact_policy_routing(p_policy uuid)',
+    returns: 'jsonb',
+    gate: `app.is_staff()
+      or (app.role() = 'insured' and p_policy = app.my_policy_id())
+      or (app.role() = 'hr' and exists (select 1 from public.policies p where p.id = p_policy and p.client_id = app.company_id()))
+      or (app.is_clinic() and exists (select 1 from public.visits v join public.insured i on i.id = v.insured_id where v.clinic_id = app.clinic_id() and i.policy_id = p_policy))
+      or (app.is_assist() and exists (select 1 from public.assignments a where a.policy_id = p_policy and a.assistance_id = app.assistance_id()))`,
+    body: `return (select coalesce(jsonb_agg(jsonb_build_object('policyId', a.policy_id, 'assistanceId', a.assistance_id, 'from', a."from"::text)
+        || case when a."to" is null then '{}'::jsonb else jsonb_build_object('to', a."to"::text) end order by a._pos), '[]'::jsonb)
+      from public.assignments a where a.policy_id = p_policy);`,
+    comment: 'Which assistance company serves a policy from which date (no author): MIG staff; the insured person and HR of the policy; a clinic that had a patient of it; an assistance company that served it.',
+  },
+  {
+    sig: 'fact_file_kind(p_file uuid)',
+    returns: 'text',
+    gate: 'true',
+    body: `return (select case when f.guarantee_id is not null then 'guarantee' else 'other' end from public.files f where f.id = p_file);`,
+    comment: 'Whether a file exists and is a guarantee-letter attachment: the download answers 403 or 404 for a file hidden by RLS exactly as the mock (never the file).',
+  },  {
+    sig: 'fact_limit_sums(p_insured uuid, p_mode text, p_today date, p_claim_to_limit jsonb, p_limit_of_service jsonb)',
+    returns: 'jsonb',
+    gate: COVERAGE_CHECKER('p_insured'),
+    volatility: 'volatile',
+    body: `declare
+    i public.insured;
+    v_from date;
+    v_program text;
+    v_pool uuid[];
+    v_used jsonb;
+    v_reserved jsonb;
+  begin
+    select * into i from public.insured x where x.id = p_insured;
+    if i.id is null then
+      return null;
+    end if;
+    select p.start_date, p.program into v_from, v_program from public.policies p where p.id = i.policy_id;
+    if p_mode = 'individual' then
+      v_pool := array[i.id];
+    else
+      select coalesce(array_agg(x.id), '{}') into v_pool from public.insured x
+        where x.policy_id = i.policy_id and coalesce(x.principal_id, x.id) = coalesce(i.principal_id, i.id);
+    end if;
+    -- The lazy clock: an approved letter of the pool past its validity expires.
+    update public.guarantees g set status = 'expired'
+      where g.insured_id = any(v_pool) and g.status = 'approved' and g.valid_until is not null and g.valid_until < p_today;
+    with used as (
+      select p_claim_to_limit ->> c.category as cat, coalesce(c.amount_approved, c.amount_claimed)::numeric as amount
+        from public.claims c
+        where c.insured_id = any(v_pool) and c.status in ('approved', 'to_pay', 'paid') and (v_from is null or c.service_date >= v_from - 7)
+      union all
+      select m.key, m.value::numeric from public.insured x cross join lateral jsonb_each_text(coalesce(x.migrated_used, '{}'::jsonb)) as m(key, value)
+        where x.id = any(v_pool)
+      union all
+      select p_limit_of_service ->> coalesce(pi.category, 'outpatient'), (l.e ->> 'amount')::numeric
+        from public.registries reg
+        cross join lateral jsonb_array_elements(coalesce(reg.lines, '[]'::jsonb)) as l(e)
+        join public.visits v on v.id::text = l.e ->> 'visitId' and v.insured_id = any(v_pool)
+        left join lateral (select it.e ->> 'category' as category from public.price_lists pl cross join lateral jsonb_array_elements(coalesce(pl.items, '[]'::jsonb)) with ordinality as it(e, n)
+          where pl.clinic_id = reg.clinic_id and it.e ->> 'code' = l.e ->> 'serviceCode' order by it.n limit 1) pi on true
+        where l.e ->> 'status' = 'accepted' and coalesce(l.e ->> 'payer', 'mig') <> 'mig'
+          and (v_from is null or (l.e ->> 'serviceDate')::date >= v_from - 7)
+          and not exists (select 1 from public.claims c2 where c2.insured_id = v.insured_id and c2.registry_line_id::text = l.e ->> 'id'
+            and c2.status in ('approved', 'to_pay', 'paid'))
+    )
+    select coalesce(jsonb_object_agg(u.cat, u.total), '{}'::jsonb) into v_used from (select cat, sum(amount) as total from used group by cat) u;
+    select coalesce(jsonb_object_agg(r.cat, r.total), '{}'::jsonb) into v_reserved from (
+      select p_limit_of_service ->> coalesce(pi.category, 'outpatient') as cat, sum(coalesce(g.approved_amount, g.estimated_cost)) as total
+        from public.guarantees g
+        left join lateral (select it.e ->> 'category' as category from public.price_lists pl cross join lateral jsonb_array_elements(coalesce(pl.items, '[]'::jsonb)) with ordinality as it(e, n)
+          where pl.clinic_id = g.clinic_id and it.e ->> 'code' = g.service_code order by it.n limit 1) pi on true
+        where g.insured_id = any(v_pool) and g.status = 'approved'
+        group by 1) r;
+    return jsonb_build_object('program', v_program, 'used', v_used, 'reserved', v_reserved);
+  end;`,
+    comment: 'Used and reserved sums of the limits of a person by category, and the program (no claims, letters or lines): whoever may check the person. An approved letter of the pool past its validity expires (lazy clock).',
+  },
+  {
+    sig: 'fact_coverage_brief(p_insured uuid)',
+    returns: 'jsonb',
+    gate: COVERAGE_CHECKER('p_insured'),
+    body: `return (select jsonb_build_object(
+        'person', jsonb_strip_nulls(jsonb_build_object('id', i.id, 'status', i.status, 'insuredFrom', i.insured_from::text, 'excludedFrom', i.excluded_from::text)),
+        'policy', (select jsonb_build_object('id', p.id, 'number', p.number, 'program', p.program, 'startDate', p.start_date::text, 'endDate', p.end_date::text, 'status', p.status)
+          from public.policies p where p.id = i.policy_id))
+      from public.insured i where i.id = p_insured);`,
+    comment: 'Term, program and status of the policy and the person’s own dates (the coverage answer): whoever may check the person.',
+  },
+  {
+    sig: 'fact_taken_slots(p_clinic uuid)',
+    returns: 'jsonb',
+    gate: `not app.is_clinic() or p_clinic = app.clinic_id()`,
+    body: `return (select coalesce(jsonb_agg(${tsText('a.starts_at')} order by a._pos), '[]'::jsonb)
+      from public.appointments a where a.clinic_id = p_clinic and a.status not in ('cancelled', 'declined'));`,
+    comment: 'Start times of the live appointments of a clinic, whoever booked them (no person): free slots for every signed-in role; a clinic only its own.',
   },
 ];
 

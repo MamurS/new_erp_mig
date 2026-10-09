@@ -6,6 +6,7 @@
  */
 import type { Role } from '@mig/contracts';
 import type { Db } from '../db';
+import { devAesPiiCrypto } from '../piiAes';
 import { lit } from './physical';
 import { FIX as FIX_ID, HELPERS, type Identity } from './rlsTests';
 
@@ -51,6 +52,19 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
   const clinicAdmin = who('clinic_admin');
   const adminClinic = String((clinicAdmin.claims.app_metadata as Record<string, string>).clinic_id);
   const otherClinic = db.clinics.find((x) => x.id !== adminClinic)!;
+  const reg = who('clinic_registrar');
+  const regClinic = String((reg.claims.app_metadata as Record<string, string>).clinic_id);
+  const regVisit = db.visits.find((v) => v.clinicId === regClinic)!;
+  const foreignVisit = db.visits.find((v) => v.clinicId !== regClinic)!;
+  const checkPolicy = db.policies.find((p) => p.id === me.policyId)!;
+  const asstOp = who('asst_operator');
+  const asstId = String((asstOp.claims.app_metadata as Record<string, string>).assistance_id);
+  const servedPolicy = db.assignments.find((a) => a.assistanceId === asstId)!.policyId;
+  const unservedPolicy = db.policies.find((p) => !db.assignments.some((a) => a.policyId === p.id && a.assistanceId === asstId))!;
+  const unservedPerson = db.insured.find((i) => i.policyId === unservedPolicy.id && !db.visits.some((v) => v.insuredId === i.id && v.clinicId === regClinic))!;
+  const anyFile = db.files.find((f) => !f.guaranteeId)!;
+  const pinflHmacHex = Buffer.from(devAesPiiCrypto({ deterministic: true }).hmacSync(me.pinfl)).toString('hex');
+  const MAPS = `${lit(JSON.stringify({ medicines: 'medicines', doctor_visit: 'outpatient', diagnostics: 'outpatient', dental: 'dental', inpatient: 'inpatient' }))}, ${lit(JSON.stringify({ outpatient: 'outpatient', diagnostics_advanced: 'outpatient', dental: 'dental', medicines: 'medicines', inpatient: 'inpatient' }))}`;
   const order = `array['lead', 'census', 'quote', 'kp_sent', 'kp_accepted', 'contract_draft', 'contract_review', 'contract_sent', 'signing', 'awaiting_payment', 'active']`;
   const lines: string[] = [
     '-- app.fact_client_insured_count: whoever sees the client',
@@ -124,6 +138,48 @@ export function privilegedFile(db: Db, ids: Identity[]): { sql: string; count: n
     `select is(${valueAs(hr, `select app.fact_append_client_log('${hrCompany}', '{"at": "2026-01-01T00:00:00+05:00", "text": "x"}')::text`)}, '', 'client log: HR of the own company');`,
     `select is(${valueAs(hr, `select app.fact_append_client_log('${otherClient.id}', '{"at": "2026-01-01T00:00:00+05:00", "text": "x"}')::text`)}, 'denied', 'client log: HR of another company is refused');`,
     `select is(${valueAs(who('clinic_admin'), `select app.fact_append_client_log('${otherClient.id}', '{"at": "2026-01-01T00:00:00+05:00", "text": "x"}')::text`)}, 'denied', 'client log: a clinic is refused');`,
+    '-- app.fact_redeem_card_token / app.fact_match_policy_pinfl: a clinic checking a patient, nobody else',
+    `insert into public.card_tokens (token, short_code, insured_id, expires_at) values ('t-redeem', 'EEEE5555', '${me.id}', (extract(epoch from now()) * 1000)::bigint + 600000);`,
+    `select is(${valueAs(reg, `select app.fact_redeem_card_token('EEEE5555', null, (extract(epoch from now()) * 1000)::bigint) ->> 'insuredId'`)}, '${me.id}', 'card code: the clinic gets only the person id');`,
+    `update public.card_tokens set used_at = 1 where token = 't-redeem';`,
+    `select is(${valueAs(reg, `select app.fact_redeem_card_token('EEEE5555', null, (extract(epoch from now()) * 1000)::bigint) ->> 'status'`)}, 'used', 'card code: a second use is refused');`,
+    `select is(${valueAs(reg, `select app.fact_redeem_card_token(null, 'no-such-token-0000', (extract(epoch from now()) * 1000)::bigint) ->> 'status'`)}, 'stale', 'card code: an unknown code is stale');`,
+    `select is(${valueAs(who('operator'), `select app.fact_redeem_card_token('EEEE5555', null, 0)::text`)}, 'denied', 'card code: MIG staff do not redeem codes');`,
+    `select is(${valueAs(who('insured'), `select app.fact_redeem_card_token('EEEE5555', null, 0)::text`)}, 'denied', 'card code: the insured person does not redeem codes');`,
+    `select is(${valueAs(reg, `select app.fact_match_policy_pinfl(${lit(checkPolicy.number.toLowerCase())}, '\\x${pinflHmacHex}')::text`)}, '${me.id}', 'policy and PINFL: the clinic gets the person id (any case of the number)');`,
+    `select is(${valueAs(reg, `select app.fact_match_policy_pinfl(${lit(checkPolicy.number)}, '\\x00')::text`)}, null, 'policy and PINFL: a wrong PINFL matches nobody');`,
+    `select is(${valueAs(hr, `select app.fact_match_policy_pinfl(${lit(checkPolicy.number)}, '\\x00')::text`)}, 'denied', 'policy and PINFL: HR is refused');`,
+    '-- app.fact_visit_patient / app.fact_visit_policy_period: visits the caller sees',
+    `select is(${valueAs(reg, `select app.fact_visit_patient('${regVisit.id}') ->> 'id'`)}, '${regVisit.insuredId}', 'visit patient: the clinic of the visit, also after it closed');`,
+    `select is(${valueAs(reg, `select (app.fact_visit_patient('${regVisit.id}') ? 'pinfl')::text`)}, 'false', 'visit patient: only the name and the policy');`,
+    `select is(${valueAs(reg, `select app.fact_visit_patient('${foreignVisit.id}')::text`)}, 'denied', 'visit patient: not a visit of another clinic');`,
+    `select is(${valueAs(reg, `select app.fact_visit_policy_period('${regVisit.id}') ->> 'endDate'`)}, (select p.end_date::text from public.insured i join public.policies p on p.id = i.policy_id where i.id = '${regVisit.insuredId}'), 'visit policy period: the term of the patient’s policy');`,
+    `select is(${valueAs(reg, `select app.fact_visit_policy_period('${foreignVisit.id}')::text`)}, 'denied', 'visit policy period: not of another clinic’s visit');`,
+    `select is(${valueAs(who('insured'), `select app.fact_visit_patient('${regVisit.id}')::text`)}, 'denied', 'visit patient: the insured person is refused');`,
+    '-- app.fact_policy_routing: whoever deals with the policy',
+    `select is(${valueAs(who('insured'), `select jsonb_array_length(app.fact_policy_routing('${me.policyId}'))`)}, (select count(*)::text from public.assignments where policy_id = '${me.policyId}'), 'routing: the insured person of the own policy');`,
+    `select is(${valueAs(who('insured'), `select app.fact_policy_routing('${unservedPolicy.id}')::text`)}, ${unservedPolicy.id === me.policyId ? `(select app.fact_policy_routing('${unservedPolicy.id}')::text)` : `'denied'`}, 'routing: not another policy of the insured person');`,
+    `select is(${valueAs(asstOp, `select jsonb_array_length(app.fact_policy_routing('${servedPolicy}'))`)}, (select count(*)::text from public.assignments where policy_id = '${servedPolicy}'), 'routing: an assistance company of a policy it served (all companies of it)');`,
+    `select is(${valueAs(asstOp, `select app.fact_policy_routing('${unservedPolicy.id}')::text`)}, 'denied', 'routing: not of a policy the company never served');`,
+    `select is(${valueAs(asstOp, `select bool_and(not (x ? 'setById') and not (x ? 'setAt'))::text from jsonb_array_elements(app.fact_policy_routing('${servedPolicy}')) x`)}, 'true', 'routing: no author of the assignment');`,
+    '-- app.fact_file_kind: whether a file exists, never the file',
+    `select is(${valueAs(hr, `select app.fact_file_kind('${anyFile.id}')`)}, 'other', 'file kind: a hidden file answers only its kind');`,
+    `select is(${valueAs(hr, `select app.fact_file_kind(gen_random_uuid())`)}, null, 'file kind: a missing file');`,
+    '-- app.fact_limit_sums / app.fact_coverage_brief: whoever may check the person, sums only',
+    `select is(${valueAs(who('insured'), `select (app.fact_limit_sums('${me.id}', 'individual', current_date, ${MAPS}) ? 'used')::text`)}, 'true', 'limit sums: the insured person of self');`,
+    `select is(${valueAs(who('insured'), `select (select string_agg(k, ',' order by k) from jsonb_object_keys(app.fact_limit_sums('${me.id}', 'family_shared', current_date, ${MAPS})) k)`)}, 'program,reserved,used', 'limit sums: only the program and the sums');`,
+    `select is(${valueAs(who('insured'), `select app.fact_limit_sums('${stranger.id}', 'individual', current_date, ${MAPS})::text`)}, 'denied', 'limit sums: not of a person of another family');`,
+    `select is(${valueAs(reg, `select (app.fact_limit_sums('${regVisit.insuredId}', 'individual', current_date, ${MAPS}) ? 'used')::text`)}, 'true', 'limit sums: a clinic that had a visit of the person');`,
+    `select is(${valueAs(reg, `select app.fact_limit_sums('${unservedPerson.id}', 'individual', current_date, ${MAPS})::text`)}, 'denied', 'limit sums: a clinic without a visit of the person is refused');`,
+    `select is(${valueAs(hr, `select app.fact_limit_sums('${me.id}', 'individual', current_date, ${MAPS})::text`)}, 'denied', 'limit sums: HR never (no medical data), also of the own company');`,
+    `select is(${valueAs(who('sales_manager'), `select app.fact_limit_sums('${me.id}', 'individual', current_date, ${MAPS})::text`)}, 'denied', 'limit sums: a MIG role without cards, claims or coverage is refused');`,
+    `select is(${valueAs(asstOp, `select app.fact_coverage_brief('${unservedPerson.id}')::text`)}, 'denied', 'coverage brief: an assistance company that never served the policy is refused');`,
+    `select is(${valueAs(who('operator'), `select app.fact_coverage_brief('${me.id}') -> 'policy' ->> 'number'`)}, ${lit(checkPolicy.number)}, 'coverage brief: the policy of the person');`,
+    `select is(${valueAs(who('operator'), `select (app.fact_coverage_brief('${me.id}') -> 'person' ? 'fullName')::text`)}, 'false', 'coverage brief: no name or identity data');`,
+    '-- app.fact_taken_slots: times of live appointments, no person',
+    `select is(${valueAs(who('insured'), `select jsonb_array_length(app.fact_taken_slots('${regClinic}'))`)}, (select count(*)::text from public.appointments where clinic_id = '${regClinic}' and status not in ('cancelled', 'declined')), 'taken slots: the insured person sees every taken time of a clinic');`,
+    `select is(${valueAs(who('insured'), `select coalesce(bool_and(jsonb_typeof(x) = 'string'), true)::text from jsonb_array_elements(app.fact_taken_slots('${regClinic}')) x`)}, 'true', 'taken slots: only the times');`,
+    `select is(${valueAs(reg, `select app.fact_taken_slots('${otherClinic.id === regClinic ? adminClinic : otherClinic.id}')::text`)}, ${otherClinic.id === regClinic && adminClinic === regClinic ? `(select 'x')` : `'denied'`}, 'taken slots: a clinic only of its own');`,
     `select is(tests.value_as('{}'::jsonb, 'select app.fact_client_legal_form(''${otherClient.id}'')'), 'denied', 'no claims: every fact is refused');`,
   ];
   const asserts = lines.filter((l) => /^select (is|ok|throws_ok)\(/.test(l));

@@ -7,9 +7,14 @@
  * in the system repositories of the API (`genericFacts`). The services keep their logic: a fact returns the
  * minimal rows in storage order and the service picks, sorts and sums exactly as before.
  */
-import type { AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, UUID } from '@mig/contracts';
+import type { AssistanceAssignment, AuditAction, AuditEntry, ClaimCategory, ClaimStatus, DealStage, LimitCategory, PolicyStatus, PriceListItem, ProgramCode, UUID } from '@mig/contracts';
+import type { InsuredRow } from './db';
+import { LIMIT_OF_SERVICE } from '../assistance';
+import { CLAIM_TO_LIMIT } from '../claims';
+import type { LimitMode } from '../config/dmsParameters';
+import { limitPoolOf } from '../family';
 import type { LegalFormCode } from '../config/legalForms';
-import { parseIso } from '../lib/time';
+import { DAY, parseIso } from '../lib/time';
 import type { Repos } from './repo';
 
 /** Anonymous figures of one claim (no number, person, provider or diagnosis). */
@@ -64,9 +69,59 @@ export interface Facts {
   pushClinicEvent(row: { id: UUID; clinicId: UUID; at: string; text: string }): Promise<void>;
   /** A line at the top of a client's activity log (a request acted on). */
   appendClientLog(clientId: UUID, entry: { at: string; text: string }): Promise<void>;
+  /**
+   * A card code shown at a clinic desk (the short code or the QR token): redeemed once — `used` when it was redeemed
+   * before, `stale` when it is unknown or expired.
+   */
+  redeemCardToken(code: { shortCode: string } | { token: string }, nowMs: number): Promise<{ status: 'ok'; insuredId: UUID } | { status: 'used' | 'stale' }>;
+  /** The active person of the policy with this number (any case) and PINFL, before a visit exists. */
+  matchPolicyPinfl(policyNumber: string, pinfl: string): Promise<UUID | null>;
+  /** The patient of a visit (also after it closed): only the name and the policy. */
+  visitPatient(visitId: UUID): Promise<VisitPatient | null>;
+  /** Term of the policy of a visit's patient (the registry line checks of the clinic). */
+  visitPolicyPeriod(visitId: UUID): Promise<{ startDate: string; endDate: string } | null>;
+  /** Which assistance company serves a policy from which date (routing), in storage order. */
+  policyRouting(policyId: UUID): Promise<Routing[]>;
+  /** Whether a file exists and whether it is a guarantee-letter attachment (403 or 404 for a hidden file). */
+  fileKind(fileId: UUID): Promise<'guarantee' | 'other' | null>;
+  /**
+   * Used and reserved sums of a person's limits by category (claims of the limit pool, the transferred consumption,
+   * registry lines accepted by an assistance, approved guarantee letters) and the program of the policy; an approved
+   * letter of the pool past its validity is saved as expired on the way (the lazy clock). Only the sums.
+   */
+  limitSums(insuredId: UUID, mode: LimitMode, today: string): Promise<LimitSums | null>;
+  /** The coverage facts of a person: the term and program of the policy, the person's own dates and status. */
+  coverageBrief(insuredId: UUID): Promise<CoverageBrief | null>;
+  /** Start times of the live appointments of a clinic (booked by anyone): a free slot is one not taken. */
+  takenSlots(clinicId: UUID): Promise<string[]>;
 }
 
+export interface LimitSums {
+  program: ProgramCode | null;
+  used: Record<LimitCategory, number>;
+  reserved: Record<LimitCategory, number>;
+}
+
+export interface CoverageBrief {
+  person: { id: UUID; status: InsuredRow['status']; insuredFrom: string; excludedFrom?: string };
+  policy: { id: UUID; number: string; program: ProgramCode; startDate: string; endDate: string; status: PolicyStatus } | null;
+}
+
+/** Claim statuses whose amount counts as used limit. */
+export const PAID_LIKE_STATUSES = ['approved', 'to_pay', 'paid'] as const;
+
+export interface VisitPatient {
+  id: UUID;
+  fullName: string;
+  policyId: UUID;
+}
+
+/** An assignment as routing reads it. */
+export type Routing = Pick<AssistanceAssignment, 'policyId' | 'assistanceId' | 'from' | 'to'>;
+
 type Base = Omit<Repos, 'facts'>;
+
+const zeroLimits = (): Record<LimitCategory, number> => ({ outpatient: 0, dental: 0, medicines: 0, inpatient: 0 });
 
 /** Events a clinic cabinet keeps (the mock kept its arrays short). */
 export const CLINIC_EVENTS_KEPT = 500;
@@ -133,6 +188,92 @@ export function genericFacts(r: Base): Facts {
     async appendClientLog(clientId, entry) {
       const client = await r.clients.get(clientId);
       if (client) await r.clients.update(client.id, { log: [entry, ...(client.log ?? [])] });
+    },
+    async redeemCardToken(code, nowMs) {
+      const row = 'shortCode' in code ? await r.cardTokens.first({ where: { shortCode: code.shortCode } }) : await r.cardTokens.get(code.token);
+      if (row?.usedAt) return { status: 'used' };
+      if (!row || row.expiresAt < nowMs) return { status: 'stale' };
+      await r.cardTokens.update(row.token, { usedAt: nowMs });
+      return { status: 'ok', insuredId: row.insuredId };
+    },
+    async matchPolicyPinfl(policyNumber, pinfl) {
+      const policy = (await r.policies.list()).find((p) => p.number.toUpperCase() === policyNumber.toUpperCase());
+      const person = policy ? await r.insured.first({ where: { policyId: policy.id, pinfl, status: 'active' } }) : null;
+      return person?.id ?? null;
+    },
+    async visitPatient(visitId) {
+      const v = await r.visits.get(visitId);
+      const i = v ? await r.insured.get(v.insuredId) : null;
+      return i ? { id: i.id, fullName: i.fullName, policyId: i.policyId } : null;
+    },
+    async visitPolicyPeriod(visitId) {
+      const v = await r.visits.get(visitId);
+      const i = v ? await r.insured.get(v.insuredId) : null;
+      const p = i ? await r.policies.get(i.policyId) : null;
+      return p ? { startDate: p.startDate, endDate: p.endDate } : null;
+    },
+    async policyRouting(policyId) {
+      return (await r.assignments.list({ where: { policyId } })).map((a) => ({ policyId: a.policyId, assistanceId: a.assistanceId, from: a.from, ...(a.to ? { to: a.to } : {}) }));
+    },
+    async fileKind(fileId) {
+      const f = await r.files.get(fileId);
+      return f ? (f.guaranteeId ? 'guarantee' : 'other') : null;
+    },
+    async takenSlots(clinicId) {
+      return (await r.appointments.list({ where: { clinicId, status: { notIn: ['cancelled', 'declined'] } } })).map((a) => a.startsAt);
+    },
+    async limitSums(insuredId, mode, today) {
+      const i = await r.insured.get(insuredId);
+      if (!i) return null;
+      const policy = await r.policies.get(i.policyId);
+      const fromMs = policy ? parseIso(policy.startDate) : 0;
+      const used = zeroLimits();
+      const reserved = zeroLimits();
+      const pool = new Set(mode === 'individual' ? [i.id] : limitPoolOf(i, await r.insured.list({ where: { policyId: i.policyId } }), mode));
+      for (const c of await r.claims.list({ where: { insuredId: { in: [...pool] }, status: { in: [...PAID_LIKE_STATUSES] } } })) {
+        if (parseIso(c.serviceDate) < fromMs - 7 * DAY) continue;
+        used[CLAIM_TO_LIMIT[c.category]] += c.amountApproved ?? c.amountClaimed;
+      }
+      const prices = new Map<UUID, PriceListItem[]>();
+      const categoryOf = async (clinicId: UUID, code: string): Promise<LimitCategory> => {
+        let list = prices.get(clinicId);
+        if (!list) prices.set(clinicId, (list = (await r.priceLists.get(clinicId))?.items ?? []));
+        return LIMIT_OF_SERVICE[list.find((p) => p.code === code)?.category ?? 'outpatient'];
+      };
+      for (const person of await r.insured.list({ where: { id: { in: [...pool] } } })) {
+        // Used before the transfer from the previous system (as of the migration date) counts too.
+        for (const [cat, amount] of Object.entries(person.migratedUsed ?? {}) as [LimitCategory, number][]) used[cat] += amount;
+        // Approved guarantee letters reserve the limit (one past its validity expires: the lazy clock saves it).
+        for (const g of await r.guarantees.list({ where: { insuredId: person.id } })) {
+          if (g.status === 'approved' && g.validUntil && g.validUntil < today) {
+            g.status = 'expired';
+            await r.guarantees.update(g.id, { status: g.status });
+          }
+          if (g.status !== 'approved') continue;
+          reserved[await categoryOf(g.clinicId, g.serviceCode)] += g.approvedAmount ?? g.estimatedCost;
+        }
+        // Lines accepted by an assistance count as used until a claim of the line exists (ASSISTANCE_SPEC §13.6).
+        const visits = new Set((await r.visits.list({ where: { insuredId: person.id } })).map((v) => v.id));
+        if (!visits.size) continue;
+        const claimed = new Set((await r.claims.list({ where: { insuredId: person.id, registryLineId: { isNull: false }, status: { in: [...PAID_LIKE_STATUSES] } } })).filter((c) => c.registryLineId).map((c) => c.registryLineId));
+        for (const reg of await r.registries.list()) {
+          for (const l of reg.lines) {
+            if (!l.visitId || !visits.has(l.visitId) || l.status !== 'accepted' || (l.payer ?? 'mig') === 'mig' || claimed.has(l.id)) continue;
+            if (parseIso(l.serviceDate) < fromMs - 7 * DAY) continue;
+            used[await categoryOf(reg.clinicId, l.serviceCode)] += l.amount;
+          }
+        }
+      }
+      return { program: policy?.program ?? null, used, reserved };
+    },
+    async coverageBrief(insuredId) {
+      const i = await r.insured.get(insuredId);
+      if (!i) return null;
+      const p = await r.policies.get(i.policyId);
+      return {
+        person: { id: i.id, status: i.status, insuredFrom: i.insuredFrom, ...(i.excludedFrom ? { excludedFrom: i.excludedFrom } : {}) },
+        policy: p ? { id: p.id, number: p.number, program: p.program, startDate: p.startDate, endDate: p.endDate, status: p.status } : null,
+      };
     },
   };
 }

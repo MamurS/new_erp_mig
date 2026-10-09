@@ -40,6 +40,7 @@ import type { ChangeRequestRow } from '../store/db';
 import { byLegalForm, byLegalName, filterLegalForm, q as searchTerm, sortBy } from './list';
 import { asSystem, audit, conflict, DomainError, errorOf, forbidden, notFound, requirePermission, systemRepos, todayIso, validate, type AuthCtx, type BaseCtx } from './kernel';
 import { loadParams } from './params';
+import { saveInvoiceStatus } from './clocks';
 import { assistanceName } from './assistance';
 import { personFor } from './family';
 import { afterSigning, checklistInput, clientRow, contractOf, createEndorsement, dealEvent, dealKp, dealOf, endorsementLines, endorsementSummary, latestQuote, moveDeal, pendingRequests, refreshContract, refreshInvoice, signatories, signatoryOption, toChangeRequest } from './lifecycle';
@@ -120,7 +121,7 @@ const signerForClient = (c: Contract) => c.params.clientSignatory.name;
 async function freshInvoice(ctx: BaseCtx, inv: Invoice): Promise<Invoice> {
   const before = inv.status;
   refreshInvoice(inv, todayIso(ctx));
-  if (inv.status !== before) await systemRepos(ctx, 'invoice status by date (the lazy server clock, a job run on read)').invoices.update(inv.id, { status: inv.status });
+  if (inv.status !== before) await saveInvoiceStatus(ctx, inv.id, inv.status);
   return inv;
 }
 

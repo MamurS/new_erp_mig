@@ -2,12 +2,15 @@
  * The narrow facts (store/facts.ts) of a person in the API: each method calls its SQL function of schema `app`
  * (store/sql/facts.ts) as the person — the function checks the permission and returns only the value.
  */
+import type { LimitCategory, ProgramCode } from '@mig/contracts';
+import { LIMIT_OF_SERVICE } from '../assistance';
+import { CLAIM_TO_LIMIT } from '../claims';
 import type { LegalFormCode } from '../config/legalForms';
 import type { Facts } from './facts';
 import type { PiiCrypto } from './pii';
 import type { Sql } from './postgres';
 
-export function pgFacts(sql: Sql, _crypto: PiiCrypto): Facts {
+export function pgFacts(sql: Sql, crypto: PiiCrypto): Facts {
   const one = async <T>(text: string, params: readonly unknown[]): Promise<T> => (await sql.query(`select ${text} as v`, params)).rows[0]?.v as T;
   return {
     async clientInsuredCount(clientId) {
@@ -45,6 +48,49 @@ export function pgFacts(sql: Sql, _crypto: PiiCrypto): Facts {
     },
     async appendClientLog(clientId, entry) {
       await one('app.fact_append_client_log($1::uuid, $2::jsonb)', [clientId, JSON.stringify(entry)]);
+    },
+    async redeemCardToken(code, nowMs) {
+      const out = await one<{ status: 'ok' | 'used' | 'stale'; insuredId?: string }>('app.fact_redeem_card_token($1::text, $2::text, $3::bigint)', [
+        'shortCode' in code ? code.shortCode : null,
+        'token' in code ? code.token : null,
+        nowMs,
+      ]);
+      return out.status === 'ok' ? { status: 'ok', insuredId: out.insuredId! } : { status: out.status };
+    },
+    async matchPolicyPinfl(policyNumber, pinfl) {
+      return (await one<string | null>('app.fact_match_policy_pinfl($1::text, $2::bytea)', [policyNumber, await crypto.hmac(pinfl)])) ?? null;
+    },
+    async visitPatient(visitId) {
+      return (await one('app.fact_visit_patient($1::uuid)', [visitId])) ?? null;
+    },
+    async visitPolicyPeriod(visitId) {
+      return (await one('app.fact_visit_policy_period($1::uuid)', [visitId])) ?? null;
+    },
+    async policyRouting(policyId) {
+      return one('app.fact_policy_routing($1::uuid)', [policyId]);
+    },
+    async fileKind(fileId) {
+      return (await one<'guarantee' | 'other' | null>('app.fact_file_kind($1::uuid)', [fileId])) ?? null;
+    },
+    async takenSlots(clinicId) {
+      return one('app.fact_taken_slots($1::uuid)', [clinicId]);
+    },
+    async limitSums(insuredId, mode, today) {
+      const out = await one<{ program: ProgramCode | null; used: Partial<Record<LimitCategory, number | string>>; reserved: Partial<Record<LimitCategory, number | string>> } | null>(
+        'app.fact_limit_sums($1::uuid, $2::text, $3::date, $4::jsonb, $5::jsonb)',
+        [insuredId, mode, today, JSON.stringify(CLAIM_TO_LIMIT), JSON.stringify(LIMIT_OF_SERVICE)],
+      );
+      if (!out) return null;
+      const all = (x: Partial<Record<LimitCategory, number | string>>): Record<LimitCategory, number> => ({
+        outpatient: Number(x.outpatient ?? 0),
+        dental: Number(x.dental ?? 0),
+        medicines: Number(x.medicines ?? 0),
+        inpatient: Number(x.inpatient ?? 0),
+      });
+      return { program: out.program, used: all(out.used), reserved: all(out.reserved) };
+    },
+    async coverageBrief(insuredId) {
+      return (await one('app.fact_coverage_brief($1::uuid)', [insuredId])) ?? null;
     },
   };
 }

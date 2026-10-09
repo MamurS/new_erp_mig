@@ -8,9 +8,7 @@ import type {
   AssistanceAssignment,
   AssistanceCompany,
   AssistanceKpi,
-  LimitCategory,
   Payer,
-  PriceListItem,
   Rebill,
   RebillLine,
   Registry,
@@ -32,16 +30,21 @@ import { registryStatusAfterReview } from '../clinics';
 import { randomId } from '../lib/random';
 import { DAY, isoDay, parseIso, tzIso } from '../lib/time';
 import type { ClaimRow, InsuredRow } from '../store/db';
+import type { Routing, VisitPatient } from '../store/facts';
 import { asSystem, conflict, DomainError, notFound, systemRepos, todayIso, type BaseCtx } from './kernel';
 import { loadParams, type ParamsView } from './params';
-import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, priceListOf, refreshStoredGuarantee } from './clinic';
-import { limitsFor, PAID_LIKE_STATUSES } from './views';
+import { CATEGORY_TO_CLAIM_OF_SERVICE, clinicOf, emitWebhook, nextClaimNumber, priceListOf } from './clinic';
+import { limitsFor } from './views';
 
 
-/** Assignments of one policy (every rule of ../assistance.ts looks at one policy at a time). */
-/** Assignments of one policy (`undefined`: of every policy): routing reads them whoever asks. */
-export const assignmentsOf = (ctx: BaseCtx, policyId?: UUID): Promise<AssistanceAssignment[]> =>
-  systemRepos(ctx, 'routing: which assistance company serves a policy on a date').assignments.list(policyId ? { where: { policyId } } : {});
+/**
+ * Assignments the person reads (`undefined`: of every policy): MIG staff read all of them, an assistance company its
+ * own — enough for its scope (assistanceScope looks only at the company's own periods).
+ */
+export const assignmentsOf = (ctx: BaseCtx, policyId?: UUID): Promise<AssistanceAssignment[]> => ctx.repos.assignments.list(policyId ? { where: { policyId } } : {});
+
+/** Routing of one policy — which company serves it from which date, of every company (app.fact_policy_routing). */
+export const routingOf = (ctx: BaseCtx, policyId: UUID): Promise<Routing[]> => ctx.repos.facts.policyRouting(policyId);
 
 export async function assistanceOf(ctx: BaseCtx, id: UUID): Promise<AssistanceCompany> {
   const a = await ctx.repos.assistances.get(id);
@@ -55,7 +58,7 @@ export async function assistanceName(ctx: BaseCtx, id: UUID | null | undefined):
 
 /** Assistance company serving the policy today (null — MIG). */
 export async function currentAssistance(ctx: BaseCtx, policyId: UUID): Promise<UUID | null> {
-  return assistanceOn(await assignmentsOf(ctx, policyId), policyId, todayIso(ctx));
+  return assistanceOn(await routingOf(ctx, policyId), policyId, todayIso(ctx));
 }
 
 /** Keeps the cached `assistanceId` of policies and clients in line with the assignments for today. */
@@ -123,17 +126,22 @@ export async function rosterOf(ctx: BaseCtx, assistanceId: UUID): Promise<Insure
 
 // ---------------------------------------------------------------- payers & price lists
 
-export async function insuredOfVisit(ctx: BaseCtx, visitId: UUID | undefined): Promise<InsuredRow | undefined> {
-  // The payer of a service follows the patient of the visit, also after the visit closed.
-  const r = systemRepos(ctx, 'payer of a service: the patient of a visit and their policy');
-  const v = visitId ? await r.visits.get(visitId) : null;
-  return v ? ((await r.insured.get(v.insuredId)) ?? undefined) : undefined;
+export async function insuredOfVisit(ctx: BaseCtx, visitId: UUID | undefined): Promise<VisitPatient | undefined> {
+  // The payer of a service follows the patient of the visit, also after the visit closed: its name and policy only
+  // (app.fact_visit_patient — a clinic sees a patient only while a visit is open).
+  return visitId ? ((await ctx.repos.facts.visitPatient(visitId)) ?? undefined) : undefined;
+}
+
+/** The whole row of a visit's patient, for the system's own bookkeeping (its context reads every table). */
+async function patientRowOf(sys: BaseCtx, visitId: UUID | undefined): Promise<InsuredRow | undefined> {
+  const v = visitId ? await sys.repos.visits.get(visitId) : null;
+  return v ? ((await sys.repos.insured.get(v.insuredId)) ?? undefined) : undefined;
 }
 
 /** Payer of a registry line: the assistance of the policy on the service date, otherwise MIG (§5.3). */
 export async function payerOfLine(ctx: BaseCtx, line: Pick<RegistryLine, 'visitId' | 'serviceDate'>): Promise<Payer> {
   const who = await insuredOfVisit(ctx, line.visitId);
-  return who ? payerOn(await assignmentsOf(ctx, who.policyId), who.policyId, line.serviceDate) : 'mig';
+  return who ? payerOn(await routingOf(ctx, who.policyId), who.policyId, line.serviceDate) : 'mig';
 }
 
 export async function payerName(ctx: BaseCtx, payer: Payer | undefined): Promise<string> {
@@ -169,40 +177,6 @@ export function settleRegistry(r: Registry, now = Date.now()): void {
 // ---------------------------------------------------------------- limits
 
 const PAID_LIKE_REBILL = new Set(['approved', 'to_pay', 'paid']);
-/**
- * Parts of the limit that are not claims yet: approved guarantee letters (reserve) and registry lines
- * accepted by an assistance that are not in an accepted rebill yet (used). One pass, so a line accepted
- * together with its letter moves the amount from the reserve to the used part atomically (§13.6).
- */
-export async function limitExtras(ctx: BaseCtx, i: InsuredRow, fromMs: number): Promise<{ reserved: Record<LimitCategory, number>; used: Record<LimitCategory, number> }> {
-  const r = ctx.repos;
-  const zero = (): Record<LimitCategory, number> => ({ outpatient: 0, dental: 0, medicines: 0, inpatient: 0 });
-  const reserved = zero();
-  const used = zero();
-  const lists = new Map<UUID, PriceListItem[]>();
-  const categoryOf = async (clinicId: UUID, code: string): Promise<LimitCategory> => {
-    let list = lists.get(clinicId);
-    if (!list) lists.set(clinicId, (list = await priceListOf(ctx, clinicId)));
-    const svc = list.find((p) => p.code === code);
-    return LIMIT_OF_SERVICE[svc?.category ?? 'outpatient'];
-  };
-  for (const g of await r.guarantees.list({ where: { insuredId: i.id } })) {
-    await refreshStoredGuarantee(ctx, g);
-    if (g.status !== 'approved') continue;
-    reserved[await categoryOf(g.clinicId, g.serviceCode)] += g.approvedAmount ?? g.estimatedCost;
-  }
-  const visits = new Set((await r.visits.list({ where: { insuredId: i.id } })).map((v) => v.id));
-  if (!visits.size) return { reserved, used };
-  const claimed = new Set((await r.claims.list({ where: { insuredId: i.id, registryLineId: { isNull: false }, status: { in: PAID_LIKE_STATUSES } } })).filter((c) => c.registryLineId).map((c) => c.registryLineId));
-  for (const reg of await r.registries.list()) {
-    for (const l of reg.lines) {
-      if (!l.visitId || !visits.has(l.visitId) || l.status !== 'accepted' || (l.payer ?? 'mig') === 'mig' || claimed.has(l.id)) continue;
-      if (parseIso(l.serviceDate) < fromMs - 7 * DAY) continue;
-      used[await categoryOf(reg.clinicId, l.serviceCode)] += l.amount;
-    }
-  }
-  return { reserved, used };
-}
 
 // ---------------------------------------------------------------- rebills
 
@@ -232,7 +206,7 @@ export async function checksFor(person: BaseCtx, rebill: Pick<Rebill, 'id' | 'as
   const found = await findRegistryLine(ctx, line.registryLineId);
   if (!found) return [{ code: 'not_paid_to_clinic', message: msg('srv.rebill.registryLineNotFound') }];
   const { r, l } = found;
-  const who = await insuredOfVisit(ctx, l.visitId);
+  const who = await patientRowOf(ctx, l.visitId);
   const policy = who ? await ctx.repos.policies.get(who.policyId) : null;
   const svc = (await priceListOf(ctx, r.clinicId)).find((p) => p.code === l.serviceCode);
   const contract = (await priceListOf(ctx, r.clinicId, rebill.assistanceId)).find((p) => p.code === l.serviceCode);
@@ -250,7 +224,7 @@ export async function checksFor(person: BaseCtx, rebill: Pick<Rebill, 'id' | 'as
     accepted: l.status === 'accepted',
     paidToClinic: !!l.payment,
     policyActive,
-    assigned: !!policy && payerOn(await assignmentsOf(ctx, policy.id), policy.id, l.serviceDate) === rebill.assistanceId,
+    assigned: !!policy && payerOn(await routingOf(ctx, policy.id), policy.id, l.serviceDate) === rebill.assistanceId,
     amount: l.amount,
     limitLeft,
     requiresGuarantee: !!svc?.requiresGuarantee,
@@ -362,7 +336,7 @@ export async function claimsFromRebill(person: BaseCtx, b: Rebill, actorName: st
   for (const line of b.lines) {
     if (line.status !== 'accepted' || (await r.claims.exists({ registryLineId: line.registryLineId }))) continue;
     const found = await findRegistryLine(ctx, line.registryLineId);
-    const who = found ? await insuredOfVisit(ctx, found.l.visitId) : undefined;
+    const who = found ? await patientRowOf(ctx, found.l.visitId) : undefined;
     if (!found || !who) continue;
     const svc = (await priceListOf(ctx, found.r.clinicId)).find((p) => p.code === found.l.serviceCode);
     const claim: ClaimRow = {
