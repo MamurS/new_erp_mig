@@ -20,7 +20,7 @@
     "@mig/i18n": "*",
     "@mig/seed": "*",
     "fastify": "^5.6.1",
-    "nodemailer": "^10.0.16",
+    "nodemailer": "^10.1.0",
     "pg": "^8.16.3",
     "sharp": "^0.35.5"
   },
