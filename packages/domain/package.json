@@ -10,7 +10,7 @@
   "dependencies": {
     "@mig/contracts": "*",
     "@mig/i18n": "*",
-    "papaparse": "^5.7.0",
+    "papaparse": "^5.7.1",
     "zod": "^3.25.76"
   }
 }
